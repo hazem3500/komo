@@ -76,6 +76,48 @@ it("rejects unsafe endpoint schemes and embedded credentials before mounting", (
   expect(document.body.children).toHaveLength(0);
 });
 
+it("lets reviewers dismiss and restore the toolbar, and supports hidden initialization", () => {
+  controller = initComments({ ...options, onboarding: undefined });
+  const host = [...document.body.children].find(
+    (node) => node.shadowRoot,
+  ) as HTMLElement;
+  const toolbar = host.shadowRoot!.querySelector<HTMLElement>(".toolbar")!;
+  const dismiss = host.shadowRoot!.querySelector<HTMLButtonElement>(
+    '[data-menu-item="dismiss"]',
+  )!;
+  expect(toolbar.style.display).not.toBe("none");
+  dismiss.click();
+  expect(toolbar.style.display).toBe("none");
+  const reopen = new KeyboardEvent("keydown", {
+    key: "K",
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  document.dispatchEvent(reopen);
+  expect(reopen.defaultPrevented).toBe(true);
+  expect(toolbar.style.display).not.toBe("none");
+  controller.destroy();
+
+  document.body.replaceChildren();
+  sessionStorage.clear();
+  controller = initComments({
+    ...options,
+    onboarding: undefined,
+    project: "hidden-fixture",
+    showToolbar: false,
+  });
+  const hiddenHost = [...document.body.children].find(
+    (node) => node.shadowRoot,
+  ) as HTMLElement;
+  const hiddenToolbar = hiddenHost.shadowRoot!.querySelector<HTMLElement>(
+    ".toolbar",
+  )!;
+  expect(hiddenToolbar.style.display).toBe("none");
+  controller.open();
+  expect(hiddenToolbar.style.display).not.toBe("none");
+});
+
 it("clears private cached feedback and identity immediately on another tab's logout", async () => {
   const { CommentsApi } = await import("../src/api");
   const config = { ...options, onboarding: undefined };

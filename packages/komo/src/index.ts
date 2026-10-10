@@ -179,7 +179,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     expanded = !!options.onboarding,
     mode = false,
     commentMode = false,
-    hidden = false,
+    hidden = options.showToolbar === false,
+    toolbarDismissed = options.showToolbar === false,
     account = !!options.onboarding,
     pending = false,
     refreshing = false,
@@ -575,6 +576,15 @@ export function initComments(options: CommentsOptions): CommentsController {
   // True while reopening a remembered sidebar on load: skip the open motion.
   let restoring = false;
   const openKey = `branch-comments:open:${options.project}:${options.repo}`;
+  const toolbarDismissKey = `branch-comments:toolbar-dismissed:${options.project}:${options.repo}`;
+  try {
+    if (sessionStorage.getItem(toolbarDismissKey) === "1") {
+      toolbarDismissed = true;
+      hidden = true;
+    }
+  } catch {
+    /* Keep the dismissal in memory when session storage is blocked. */
+  }
   let searchOpen = false;
   let dockMotion: ReturnType<typeof animate> | undefined;
   let edgeMotions: ReturnType<typeof animate>[] = [];
@@ -2052,6 +2062,29 @@ export function initComments(options: CommentsOptions): CommentsController {
     mode = false;
     render();
   }
+  function dismissToolbar() {
+    dismiss();
+    if (expanded) toggleExpanded(false);
+    mode = false;
+    hidden = true;
+    toolbarDismissed = true;
+    try {
+      sessionStorage.setItem(toolbarDismissKey, "1");
+    } catch {
+      /* Keep the dismissal in memory when session storage is blocked. */
+    }
+    render();
+  }
+  function restoreToolbar() {
+    toolbarDismissed = false;
+    hidden = false;
+    try {
+      sessionStorage.removeItem(toolbarDismissKey);
+    } catch {
+      /* The toolbar remains visible for this page session. */
+    }
+    render();
+  }
   function selectThread(thread: Thread) {
     commentMode = false;
     clearTimeout(accountOpenTimer);
@@ -2106,6 +2139,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
   function renderToolbar() {
+    toolbar.style.display = toolbarDismissed ? "none" : "";
     presence.update();
     const { dockCenter: viewportCenter } = reviewLayout(
       window.innerWidth,
@@ -2232,6 +2266,12 @@ export function initComments(options: CommentsOptions): CommentsController {
         icon: glyph(copiedPrompt === "all" ? "check" : "copy"),
         showInBar: false,
         onSelect: () => run(() => copyPrompt("all")),
+      },
+      {
+        id: "dismiss",
+        label: "Hide komo toolbar · Shift+K",
+        icon: glyph("close"),
+        onSelect: dismissToolbar,
       },
       {
         id: "visibility",
@@ -4911,6 +4951,19 @@ export function initComments(options: CommentsOptions): CommentsController {
         return;
       }
       if (
+        toolbarDismissed &&
+        event.key.toLowerCase() === "k" &&
+        event.shiftKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !typing
+      ) {
+        event.preventDefault();
+        restoreToolbar();
+        return;
+      }
+      if (
         options.onboarding ||
         typing ||
         event.metaKey ||
@@ -5190,6 +5243,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     },
     open() {
       if (destroyed) return;
+      restoreToolbar();
       toggleExpanded(true);
     },
     close() {
