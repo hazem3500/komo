@@ -118,6 +118,67 @@ it("lets reviewers dismiss and restore the toolbar, and supports hidden initiali
   expect(hiddenToolbar.style.display).not.toBe("none");
 });
 
+it("dismisses the active Design overlay without intercepting host clicks", async () => {
+  controller = initComments({ ...options, onboarding: undefined });
+  const host = [...document.body.children].find(
+    (node) => node.shadowRoot,
+  ) as HTMLElement;
+  const root = host.shadowRoot!;
+  const toolbar = root.querySelector<HTMLElement>(".toolbar")!;
+  const design = root.querySelector<HTMLButtonElement>(
+    '[data-menu-item="design"]',
+  )!;
+  design.click();
+
+  for (let i = 0; i < 20; i++) {
+    const inspector = root.querySelector<HTMLElement>(".design-inspector");
+    if (inspector?.getAttribute("aria-hidden") === "false") break;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  const inspector = root.querySelector<HTMLElement>(".design-inspector")!;
+  expect(inspector.getAttribute("aria-hidden")).toBe("false");
+
+  const hostButton = document.createElement("button");
+  document.body.append(hostButton);
+  const hostClick = vi.fn();
+  hostButton.addEventListener("click", hostClick);
+  const capturedClick = new MouseEvent("click", {
+    bubbles: true,
+    cancelable: true,
+  });
+  hostButton.dispatchEvent(capturedClick);
+  expect(capturedClick.defaultPrevented).toBe(true);
+  expect(hostClick).not.toHaveBeenCalled();
+
+  const dismiss = root.querySelector<HTMLButtonElement>(
+    '[data-menu-item="dismiss"]',
+  )!;
+  expect(dismiss.getAttribute("aria-label")).toBe(
+    "Dismiss Komo · Shift+K to restore",
+  );
+  dismiss.click();
+  expect(toolbar.style.display).toBe("none");
+  expect(inspector.getAttribute("aria-hidden")).toBe("true");
+
+  const restoredClick = new MouseEvent("click", {
+    bubbles: true,
+    cancelable: true,
+  });
+  hostButton.dispatchEvent(restoredClick);
+  expect(restoredClick.defaultPrevented).toBe(false);
+  expect(hostClick).toHaveBeenCalledOnce();
+
+  document.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "K",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  expect(toolbar.style.display).not.toBe("none");
+});
+
 it("clears private cached feedback and identity immediately on another tab's logout", async () => {
   const { CommentsApi } = await import("../src/api");
   const config = { ...options, onboarding: undefined };

@@ -2111,9 +2111,16 @@ export function initComments(options: CommentsOptions): CommentsController {
     render();
   }
   function dismissToolbar() {
+    // Hide the complete review surface and stop Design mode from capturing
+    // page interaction. Keep its runtime preview edits, but not its selection
+    // overlay; Shift+K or controller.open() can restore Komo for this tab.
+    designReturnToComments = false;
+    designActive = false;
+    designController?.setActive(false);
     dismiss();
     if (expanded) toggleExpanded(false);
     mode = false;
+    commentMode = false;
     hidden = true;
     toolbarDismissed = true;
     try {
@@ -2323,7 +2330,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       },
       {
         id: "dismiss",
-        label: "Hide komo toolbar · Shift+K",
+        label: "Dismiss Komo · Shift+K to restore",
         icon: glyph("close"),
         onSelect: dismissToolbar,
       },
