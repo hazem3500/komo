@@ -40,6 +40,7 @@ import {
 } from "./drawer-expand-motion.js";
 import { recordEmoji } from "./emoji-history.js";
 import { reactionPicker } from "./reaction-picker.js";
+import { appendMessageLinks } from "./message-links.js";
 import { animate } from "motion";
 import { actionMenu, selectionMenu } from "./action-menu.js";
 import {
@@ -3364,7 +3365,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       return item;
     }
     const content = el("div", "message-content");
-    content.append(el("p", "message-text", comment.body));
+    const message = el("p", "message-text");
+    appendMessageLinks(message, comment.body);
+    content.append(message);
     if (comment.body !== "[Comment deleted]") {
       const reaction = button(
         "Add reaction",
