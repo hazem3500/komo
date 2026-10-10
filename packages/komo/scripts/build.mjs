@@ -39,6 +39,7 @@ const result = await build({
     "src/setup.ts",
     "src/agent-prompt.ts",
     "src/react.ts",
+    "src/design-mode.ts",
   ],
   outdir: "dist",
   bundle: true,
@@ -69,7 +70,7 @@ const result = await build({
       },
     },
   ],
-  external: ["react", "react-dom", "emoji-regex"],
+  external: ["react", "react-dom", "emoji-regex", "./design-mode.js"],
 });
 // Compress the emitted modules without changing their split boundaries or exports.
 // Preserve framework directives ("use client") and linked license notices.

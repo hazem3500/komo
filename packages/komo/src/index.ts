@@ -48,7 +48,6 @@ import {
   reviewLayout,
 } from "./review-layout.js";
 import { createToolbar, type ToolbarItem } from "./lazy-toolbar.js";
-import { createDesignMode } from "./design-mode.js";
 import { canonicalPage } from "./page.js";
 import { ApiError, CommentsApi } from "./api.js";
 import { connectionIssue, type ConnectionIssue } from "./connection-issue.js";
@@ -190,7 +189,12 @@ export function initComments(options: CommentsOptions): CommentsController {
   let threads: Thread[] = [],
     selected: string | null = null,
     draft: Anchor | null = null;
-  let designController: ReturnType<typeof createDesignMode> | null = null;
+  type DesignController = {
+    setActive(value: boolean): void;
+    destroy(): void;
+  };
+  let designController: DesignController | null = null;
+  let designControllerPromise: Promise<DesignController | null> | null = null;
   const optimistic = new OptimisticQueue<Thread[]>(
     [],
     (next) => {
@@ -1426,7 +1430,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       account = false;
     }
     designActive = value;
-    designController?.setActive(value);
+    if (value) {
+      void ensureDesignController().then((controller) => controller?.setActive(designActive));
+    } else designController?.setActive(false);
     render();
   }
   let mobileEnterFrame = 0;
@@ -4499,23 +4505,45 @@ export function initComments(options: CommentsOptions): CommentsController {
         .find((element) => element !== host && !host.contains(element)) ?? null
     );
   }
-  designController = createDesignMode({
-    root: shadow,
-    host,
-    targetAt(x, y) {
-      const target = siteElementAt(x, y);
-      return target && target !== surface && surface.contains(target) ? target : null;
-    },
-    onComment(element) {
-      setDesignMode(false);
-      const rect = element.getBoundingClientRect();
-      composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-    },
-    onExit() {
-      designActive = false;
-      renderToolbar();
-    },
-  });
+  function ensureDesignController() {
+    if (designController) return Promise.resolve(designController);
+    if (!designControllerPromise) {
+      designControllerPromise = import("./design-mode.js")
+        .then(({ createDesignMode }) => {
+          const controller = createDesignMode({
+            root: shadow,
+            host,
+            targetAt(x, y) {
+              const target = siteElementAt(x, y);
+              return target && target !== surface && surface.contains(target) ? target : null;
+            },
+            onComment(element) {
+              setDesignMode(false);
+              const rect = element.getBoundingClientRect();
+              composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+            },
+            onExit() {
+              designActive = false;
+              renderToolbar();
+            },
+          });
+          if (destroyed) {
+            controller.destroy();
+            return null;
+          }
+          designController = controller;
+          controller.setActive(designActive);
+          return controller;
+        })
+        .catch(() => {
+          designActive = false;
+          renderToolbar();
+          return null;
+        })
+        .finally(() => { designControllerPromise = null; });
+    }
+    return designControllerPromise;
+  }
   function indicatorPoint(
     pin: HTMLElement,
     fallback: { x: number; y: number },

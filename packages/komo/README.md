@@ -73,13 +73,15 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 ## Features
 
 - Point and area comments anchored to page elements.
-- Design mode for temporary typography, color, spacing, border, and layout previews; copy the resulting CSS or attach a comment to the selected element.
+- On-demand design mode for temporary typography, color, spacing, border, and layout previews; copy the resulting CSS or attach a comment to the selected element.
 - Replies, reactions, author-only editing, resolution, and undo.
 - Searchable sidebar, draggable dock, and Google or guest profiles.
 - Copy open feedback with selectors, source paths, page URLs, replies, and geometry into an agent.
 - Hosted Cloudflare storage, or your own Worker/D1 or Node/PostgreSQL service.
 
 Design mode edits the rendered page only. Preview styles are temporary, reset when the page refreshes, and are restored when the Komo widget is destroyed. Use **Copy CSS** to apply a rule in your site stylesheet; Komo does not write source files. The inspector can select an iframe as one element but cannot edit its isolated contents. Elements inside open or closed shadow roots are not traversed; select the component host instead.
+
+The design inspector loads as a separate optional browser chunk when Design mode is first opened, so the default widget load does not pay its bundle cost. The package size check measures this chunk separately from the core bundle.
 
 Design mode takes interaction cues from established design tools: select a visible element, keep its controls contextual, and make each change easy to reverse. Figma places editable layer properties and file-local styles or variables beside the selected layer; its Dev Mode provides inspection and measurements. pen.dev pairs an IDE design-mode toggle with a canvas, layer list, contextual property panel, and undo/redo. OpenPencil synchronizes layer-tree and canvas selection and offers contextual typography/layout controls, variables, and undoable operations.
 

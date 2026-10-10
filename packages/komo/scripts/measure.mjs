@@ -15,6 +15,7 @@ const result = await build({
   minify: true,
   format: "esm",
   metafile: true,
+  external: ["./design-mode.js"],
 });
 const outputs = result.metafile.outputs;
 const entry = Object.keys(outputs).find(
@@ -47,7 +48,8 @@ const [pack] = JSON.parse(
 );
 const report = {
   initial: await sizes(initial),
-  allFeatures: await sizes(Object.keys(outputs)),
+  coreFeatures: await sizes(Object.keys(outputs)),
+  optionalDesignMode: await sizes(new Set(["dist/design-mode.js"])),
   package: {
     tarball: pack.size,
     unpacked: pack.unpackedSize,
@@ -59,5 +61,7 @@ await writeFile(
   resolve(directory, "report.json"),
   JSON.stringify(report, null, 2)
 );
-if (report.initial.gzip > 100_000 || report.allFeatures.gzip > 196_000)
-  throw new Error("komo exceeds its production consumer bundle budget.");
+if (report.initial.gzip > 100_000 || report.coreFeatures.gzip > 196_000)
+  throw new Error("komo exceeds its core production consumer bundle budget.");
+if (report.optionalDesignMode.gzip > 6_000)
+  throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
