@@ -58,6 +58,13 @@ describe("design mode preview inspector", () => {
     expect(button.style.color).toBe("rgb(255, 0, 0)");
   });
 
+  it("moves keyboard focus into the inspector when Design mode opens", () => {
+    expect(shadow.activeElement).toBe(
+      shadow.querySelector<HTMLButtonElement>(".design-inspector__close"),
+    );
+    expect(shadow.querySelector(".design-inspector__mark svg")).not.toBeNull();
+  });
+
   it("lets keyboard users select a focused page element without activating it", () => {
     button.focus();
     const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true });
@@ -115,5 +122,69 @@ describe("design mode preview inspector", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     expect(controller.active).toBe(false);
     expect(exited).toBe(1);
+  });
+
+  it("keeps a slider gesture and precision input synchronized with one Undo", () => {
+    button.style.fontSize = "18px";
+    pointer("pointerdown", button);
+    const slider = shadow.querySelector<HTMLInputElement>('[aria-label="Font size slider"]')!;
+    const value = shadow.querySelector<HTMLInputElement>('[data-property="font-size"]')!;
+    slider.dispatchEvent(new Event("focus"));
+    for (const size of [24, 30, 36]) {
+      slider.value = String(size);
+      slider.dispatchEvent(new Event("input"));
+    }
+    slider.dispatchEvent(new Event("change"));
+    expect(value.value).toBe("36");
+    expect(slider.getAttribute("aria-valuetext")).toBe("36 pixels");
+    expect(button.style.fontSize).toBe("36px");
+    const undo = shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button")!;
+    undo.click();
+    expect(button.style.fontSize).toBe("18px");
+    expect(undo.disabled).toBe(true);
+    const precision = shadow.querySelector<HTMLInputElement>('[data-property="font-size"]')!;
+    precision.focus();
+    precision.value = "27";
+    precision.dispatchEvent(new Event("input"));
+    expect(shadow.querySelector<HTMLInputElement>('[aria-label="Font size slider"]')?.value).toBe("27");
+  });
+
+  it("preserves color alpha until edited and rejects invalid CSS colors", () => {
+    button.style.backgroundColor = "rgba(10, 20, 30, 0.4)";
+    pointer("pointerdown", button);
+    const color = shadow.querySelector<HTMLInputElement>('[data-property="background-color"]')!;
+    expect(color.value).toBe("rgba(10, 20, 30, 0.4)");
+    color.focus();
+    color.value = "invalid-color";
+    color.dispatchEvent(new Event("input"));
+    expect(color.getAttribute("aria-invalid")).toBe("true");
+    expect(button.style.backgroundColor).toBe("rgba(10, 20, 30, 0.4)");
+    color.value = "rgba(30, 40, 50, 0.6)";
+    color.dispatchEvent(new Event("input"));
+    expect(button.style.backgroundColor).toBe("rgba(30, 40, 50, 0.6)");
+    expect(color.getAttribute("aria-invalid")).toBe("false");
+  });
+
+  it("keeps collapsed groups closed when the selection changes", async () => {
+    pointer("pointerdown", button);
+    const group = shadow.querySelector<HTMLDetailsElement>(".design-group")!;
+    group.open = false;
+    group.dispatchEvent(new Event("toggle"));
+    pointer("pointerdown", button);
+    expect(shadow.querySelector<HTMLDetailsElement>(".design-group")?.open).toBe(false);
+  });
+
+  it("suppresses page link activation only while Design mode is active", () => {
+    const link = document.createElement("a");
+    link.href = "#destination";
+    page.append(link);
+    const click = () => {
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true, composed: true });
+      link.dispatchEvent(event);
+      return event;
+    };
+    expect(click().defaultPrevented).toBe(true);
+    controller.setActive(false);
+    expect(click().defaultPrevented).toBe(false);
   });
 });

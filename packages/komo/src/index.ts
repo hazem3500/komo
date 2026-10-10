@@ -181,6 +181,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     commentMode = false,
     hidden = false,
     designActive = false,
+    designReturnToComments = false,
+    designReturnScrollTop = 0,
     account = !!options.onboarding,
     pending = false,
     refreshing = false,
@@ -1422,9 +1424,22 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     render();
   }
-  function setDesignMode(value: boolean) {
+  function restoreCommentsAfterDesign() {
+    if (!designReturnToComments) return;
+    designReturnToComments = false;
+    toggleExpanded(true);
+    requestAnimationFrame(() => {
+      const list = sidebar.querySelector<HTMLElement>(".list");
+      if (list) list.scrollTop = designReturnScrollTop;
+      sidebar.querySelector<HTMLButtonElement>(".design-mode-trigger")?.focus({ preventScroll: true });
+    });
+  }
+  function setDesignMode(value: boolean, returnToComments = false) {
     if (options.onboarding || !!draft) return;
     if (value) {
+      designReturnToComments = returnToComments;
+      if (returnToComments)
+        designReturnScrollTop = sidebar.querySelector<HTMLElement>(".list")?.scrollTop ?? 0;
       setMode(false);
       if (expanded) toggleExpanded(false);
       account = false;
@@ -1432,7 +1447,10 @@ export function initComments(options: CommentsOptions): CommentsController {
     designActive = value;
     if (value) {
       void ensureDesignController().then((controller) => controller?.setActive(designActive));
-    } else designController?.setActive(false);
+    } else {
+      designController?.setActive(false);
+      restoreCommentsAfterDesign();
+    }
     render();
   }
   let mobileEnterFrame = 0;
@@ -2219,7 +2237,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       {
         id: "design",
         label: "Design mode · preview styles",
-        icon: glyph("edit"),
+        icon: glyph("brush"),
         onSelect: () => setDesignMode(!designActive),
       },
       {
@@ -2855,6 +2873,12 @@ export function initComments(options: CommentsOptions): CommentsController {
           () => setSearch(true),
           "icon sidebar-search-trigger",
           "search",
+        ),
+        button(
+          "Design mode",
+          () => setDesignMode(true, true),
+          "icon design-mode-trigger",
+          "brush",
         ),
         button("Close sidebar", () => toggleExpanded(false), "icon", "close"),
       );
@@ -4518,6 +4542,7 @@ export function initComments(options: CommentsOptions): CommentsController {
               return target && target !== surface && surface.contains(target) ? target : null;
             },
             onComment(element) {
+              designReturnToComments = false;
               setDesignMode(false);
               const rect = element.getBoundingClientRect();
               composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
@@ -4525,6 +4550,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             onExit() {
               designActive = false;
               renderToolbar();
+              restoreCommentsAfterDesign();
             },
           });
           if (destroyed) {

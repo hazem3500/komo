@@ -1,3 +1,6 @@
+import { designModeStyles } from "./design-mode-styles.js";
+import { icon } from "./dom.js";
+
 export interface DesignModeOptions {
   root: ShadowRoot;
   host: HTMLElement;
@@ -44,6 +47,8 @@ const fields: Field[] = [
 ];
 
 function toHex(value: string): string {
+  if (/^#[\da-f]{6}$/i.test(value)) return value;
+  if (/^#[\da-f]{3}$/i.test(value)) return `#${[...value.slice(1)].map((char) => char + char).join("")}`;
   const match = value.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
   if (!match) return "#000000";
   return `#${match.slice(1, 4).map((part) => Number(part).toString(16).padStart(2, "0")).join("")}`;
@@ -70,7 +75,7 @@ function cssSelector(element: Element): string {
 
 function valueFor(field: Field, element: HTMLElement): string {
   const value = getComputedStyle(element).getPropertyValue(field.property).trim();
-  if (field.kind === "color") return toHex(value);
+  if (field.kind === "color") return value || "transparent";
   if (field.kind === "length") {
     const match = value.match(/^(-?\d+(?:\.\d+)?)px$/);
     return match ? String(Number(match[1])) : "0";
@@ -80,6 +85,11 @@ function valueFor(field: Field, element: HTMLElement): string {
 
 function inputValue(field: Field, control: HTMLInputElement | HTMLSelectElement): string | null {
   const value = control.value.trim();
+  if (field.kind === "color") {
+    const style = document.createElement("span").style;
+    style.color = value;
+    return style.color ? value : null;
+  }
   if (field.kind === "length") {
     if (!value) return null;
     const number = Number(value);
@@ -94,6 +104,8 @@ function inputValue(field: Field, control: HTMLInputElement | HTMLSelectElement)
 }
 
 export function createDesignMode(options: DesignModeOptions) {
+  const style = document.createElement("style");
+  style.textContent = designModeStyles;
   const panel = document.createElement("aside");
   panel.className = "design-inspector";
   panel.setAttribute("role", "dialog");
@@ -104,6 +116,10 @@ export function createDesignMode(options: DesignModeOptions) {
   outline.setAttribute("aria-hidden", "true");
   const heading = document.createElement("div");
   heading.className = "design-inspector__heading";
+  const mark = document.createElement("span");
+  mark.className = "design-inspector__mark";
+  mark.setAttribute("aria-hidden", "true");
+  mark.append(icon("brush"));
   const title = document.createElement("div");
   title.className = "design-inspector__target";
   const subtitle = document.createElement("small");
@@ -112,7 +128,13 @@ export function createDesignMode(options: DesignModeOptions) {
   close.className = "design-inspector__close";
   close.setAttribute("aria-label", "Exit design mode");
   close.textContent = "×";
-  heading.append(title, subtitle, close);
+  const identity = document.createElement("div");
+  identity.className = "design-inspector__identity";
+  const eyebrow = document.createElement("span");
+  eyebrow.className = "design-inspector__eyebrow";
+  eyebrow.textContent = "Design";
+  identity.append(eyebrow, title, subtitle);
+  heading.append(mark, identity, close);
 
   const controls = document.createElement("div");
   controls.className = "design-inspector__controls";
@@ -135,7 +157,7 @@ export function createDesignMode(options: DesignModeOptions) {
   comment.textContent = "Comment on element";
   actions.append(undo, reset, copy, comment);
   panel.append(heading, controls, status, actions);
-  options.root.append(outline, panel);
+  options.root.append(style, outline, panel);
 
   let active = false;
   let selected: HTMLElement | null = null;
@@ -147,6 +169,7 @@ export function createDesignMode(options: DesignModeOptions) {
   const starts = new WeakMap<HTMLInputElement | HTMLSelectElement, Original>();
   const pending = new WeakMap<HTMLInputElement | HTMLSelectElement, Edit>();
   const listeners = new AbortController();
+  const collapsed = new Set<string>(["Layout", "Border"]);
 
   function setProperty(element: HTMLElement, property: string, value: string) {
     element.style.setProperty(property, value);
@@ -162,6 +185,7 @@ export function createDesignMode(options: DesignModeOptions) {
   function preview(field: Field, control: HTMLInputElement | HTMLSelectElement) {
     if (!selected) return;
     const value = inputValue(field, control);
+    control.setAttribute("aria-invalid", String(value === null));
     if (value === null) return;
     remember(selected, field.property);
     setProperty(selected, field.property, value);
@@ -211,13 +235,16 @@ export function createDesignMode(options: DesignModeOptions) {
         control.append(option);
       }
     } else if (field.kind === "color") {
-      control.type = "color";
+      control.type = "text";
+      control.autocomplete = "off";
+      control.spellcheck = false;
     } else if (field.kind === "length") {
       control.type = "number";
       control.min = String(field.min ?? 0);
       control.max = String(field.max ?? 1000);
       control.step = String(field.step ?? 1);
       control.setAttribute("inputmode", "decimal");
+      control.title = `${field.label} in pixels`;
     } else {
       control.type = "text";
       control.placeholder = field.placeholder ?? "";
@@ -227,16 +254,57 @@ export function createDesignMode(options: DesignModeOptions) {
     control.dataset.property = field.property;
     control.setAttribute("aria-label", field.label);
     control.value = valueFor(field, element);
-    control.addEventListener("focus", () => starts.set(control, {
+    if (control instanceof HTMLSelectElement && !control.value) {
+      const current = document.createElement("option");
+      current.value = current.textContent = valueFor(field, element);
+      control.prepend(current);
+      control.value = current.value;
+    }
+    const start = () => starts.set(control, {
       value: element.style.getPropertyValue(field.property),
       priority: element.style.getPropertyPriority(field.property),
-    }));
+    });
+    control.addEventListener("focus", start);
     control.addEventListener("input", () => {
       preview(field, control);
       commit(field, control, false);
     });
     control.addEventListener("change", () => commit(field, control));
-    label.append(caption, control);
+    label.append(caption);
+    if (field.kind === "length" || field.kind === "color") {
+      const dial = document.createElement("input");
+      dial.type = field.kind === "length" ? "range" : "color";
+      dial.setAttribute("aria-label", `${field.label} ${field.kind === "length" ? "slider" : "picker"}`);
+      dial.min = String(field.min ?? 0);
+      dial.max = String(field.max ?? 1000);
+      dial.step = String(field.step ?? 1);
+      dial.value = field.kind === "color" ? toHex(control.value) : control.value;
+      const sync = () => {
+        dial.value = field.kind === "color" ? toHex(control.value) : control.value;
+        if (field.kind === "length") {
+          const fill = (Number(dial.value) - Number(dial.min)) / (Number(dial.max) - Number(dial.min));
+          dial.style.setProperty("--fill", `${fill * 100}%`);
+          dial.setAttribute("aria-valuetext", `${dial.value} pixels`);
+        }
+      };
+      sync();
+      dial.addEventListener("pointerdown", start);
+      dial.addEventListener("focus", start);
+      dial.addEventListener("input", () => {
+        control.value = dial.value;
+        preview(field, control);
+        commit(field, control, false);
+        sync();
+      });
+      dial.addEventListener("change", () => commit(field, control));
+      control.addEventListener("input", sync);
+      control.addEventListener("keydown", (event) => {
+        if (event instanceof KeyboardEvent && event.key === "Enter") control.blur();
+      });
+      label.append(dial);
+      label.classList.add(field.kind === "length" ? "design-field--dial" : "design-field--color");
+    }
+    label.append(control);
     return label;
   }
   function renderControls() {
@@ -255,7 +323,23 @@ export function createDesignMode(options: DesignModeOptions) {
     subtitle.textContent = selected instanceof HTMLIFrameElement
       ? "Frame only · contents are isolated"
       : (selected.classList.length ? `.${[...selected.classList].slice(0, 2).join(".")}` : "Live page preview");
-    for (const field of fields) controls.append(fieldControl(field, selected));
+    for (const [name, start, end] of [
+      ["Color", 0, 2], ["Typography", 2, 6], ["Layout", 6, 10], ["Border", 10, 14],
+    ] as const) {
+      const group = document.createElement("details");
+      group.className = "design-group";
+      group.open = !collapsed.has(name);
+      const summary = document.createElement("summary");
+      summary.textContent = name;
+      group.append(summary);
+      for (const field of fields.slice(start, end)) group.append(fieldControl(field, selected));
+      group.addEventListener("toggle", () => {
+        if (!group.isConnected) return;
+        if (group.open) collapsed.delete(name);
+        else collapsed.add(name);
+      });
+      controls.append(group);
+    }
   }
   function outlineFor(element: HTMLElement | null, kind: "hover" | "selected") {
     if (!active || !element?.isConnected) {
@@ -312,6 +396,12 @@ export function createDesignMode(options: DesignModeOptions) {
     event.stopImmediatePropagation();
     select(element);
   }
+  function onClick(event: MouseEvent) {
+    if (!active || event.composedPath().includes(options.host)) return;
+    // Cancelling pointerdown alone does not cancel a link's click navigation.
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
   function onKey(event: KeyboardEvent) {
     if (active && (event.key === "Enter" || event.key === " ") && !event.composedPath().includes(options.host)) {
       const focused = document.activeElement;
@@ -336,6 +426,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (value) {
       renderControls();
       outlineFor(selected, "selected");
+      close.focus({ preventScroll: true });
     }
   }
 
@@ -390,6 +481,7 @@ export function createDesignMode(options: DesignModeOptions) {
   });
   document.addEventListener("pointermove", onMove, { capture: true, signal: listeners.signal });
   document.addEventListener("pointerdown", onDown, { capture: true, signal: listeners.signal });
+  document.addEventListener("click", onClick, { capture: true, signal: listeners.signal });
   document.addEventListener("keydown", onKey, { capture: true, signal: listeners.signal });
   window.addEventListener("scroll", scheduleOutline, { capture: true, passive: true, signal: listeners.signal });
   window.addEventListener("resize", scheduleOutline, { passive: true, signal: listeners.signal });
@@ -408,6 +500,7 @@ export function createDesignMode(options: DesignModeOptions) {
       }
       panel.remove();
       outline.remove();
+      style.remove();
     },
   };
 }
