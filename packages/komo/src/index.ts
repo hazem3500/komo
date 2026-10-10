@@ -125,6 +125,14 @@ export function initComments(options: CommentsOptions): CommentsController {
     options.repo,
     options.branch,
   ]);
+  const toolbarKey = `branch-comments:toolbar-hidden:${options.project}:${options.repo}`;
+  let toolbarHidden = options.showToolbar === false;
+  try {
+    if (options.showToolbar !== false)
+      toolbarHidden = localStorage.getItem(toolbarKey) === "1";
+  } catch {
+    /* Storage may be unavailable on embedded previews. */
+  }
   const current = instances.get(document);
   if (current) {
     if (current.scope !== scope)
@@ -435,6 +443,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   const replies = new Map<string, string>();
   const host = el("div");
   host.dataset.branchComments = "";
+  host.hidden = toolbarHidden;
   host.dataset.sidebar = compactSidebar
     ? "mobile"
     : edgeSidebar
@@ -2034,6 +2043,40 @@ export function initComments(options: CommentsOptions): CommentsController {
     presence.show();
     presence.update();
   }
+  function setToolbarHidden(value: boolean, persist = true) {
+    if (destroyed) return;
+    toolbarHidden = value;
+    host.hidden = value;
+    if (persist)
+      try {
+        if (value) localStorage.setItem(toolbarKey, "1");
+        else localStorage.removeItem(toolbarKey);
+      } catch {
+        /* The current visibility still changes when storage is blocked. */
+      }
+  }
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      const target = event.target;
+      const editing =
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.matches("input, textarea, select, [role='textbox']"));
+      if (
+        !editing &&
+        event.altKey &&
+        event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        event.key.toLowerCase() === "k"
+      ) {
+        event.preventDefault();
+        setToolbarHidden(false);
+      }
+    },
+    { signal: abort.signal },
+  );
   function dismiss() {
     commentMode = false;
     clearTimeout(accountOpenTimer);
@@ -2204,6 +2247,15 @@ export function initComments(options: CommentsOptions): CommentsController {
             : `View all comments · ${threads.filter((t) => !t.resolved).length} open`,
         icon: glyph("expand"),
         onSelect: () => toggleExpanded(!expanded),
+      },
+      {
+        id: "dismiss-toolbar",
+        label: "Hide Komo toolbar · Alt+Shift+K to restore",
+        icon: glyph("close"),
+        onSelect: () => {
+          toggleExpanded(false);
+          setToolbarHidden(true);
+        },
       },
       {
         id: "account",
@@ -5193,6 +5245,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     },
     open() {
       if (destroyed) return;
+      setToolbarHidden(false);
       toggleExpanded(true);
     },
     close() {
