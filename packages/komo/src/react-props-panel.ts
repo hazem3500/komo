@@ -162,7 +162,7 @@ export function createElementTokenControl(
       if (applyTokenToElement(source, element, token, property, { recordHistory: false }))
         onEdit(before, element.style.getPropertyValue(property), token.path);
     } else {
-      const control = row.parentElement?.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-property="${CSS.escape(property)}"]`);
+      const control = row.parentElement?.querySelector<HTMLInputElement | HTMLSelectElement>("[data-property]");
       const value = control?.value ?? getComputedStyle(element).getPropertyValue(property).trim();
       const cssValue = control?.type === "number" && value.trim() !== "" ? `${value}px` : value;
       element.style.setProperty(property, cssValue);
@@ -174,6 +174,32 @@ export function createElementTokenControl(
   row.append(caption, select);
   update();
   return row;
+}
+
+export function attachStyleTokenControls<T extends { property: string; kind?: string }>(
+  element: HTMLElement,
+  fields: readonly T[],
+  container: HTMLElement,
+  onEdit: (field: T, input: HTMLInputElement | HTMLSelectElement, before: string) => void,
+  styleRoot?: ShadowRoot,
+  valueFor?: (field: T, element: HTMLElement) => string,
+  toHex?: (value: string) => string,
+): void {
+  for (const field of fields) {
+    const label = [...container.querySelectorAll<HTMLElement>("[data-field-property]")]
+      .find((candidate) => candidate.dataset.fieldProperty === field.property);
+    if (!label || label.querySelector(".design-token-binding")) continue;
+    const input = label.querySelector<HTMLInputElement | HTMLSelectElement>("[data-property]");
+    if (!input) continue;
+    const control = createElementTokenControl(element, field.property,
+      (before) => {
+        onEdit(field, input, before);
+        if (valueFor) input.value = valueFor(field, element);
+        const dial = label.querySelector<HTMLInputElement>('input[type="range"],input[type="color"]');
+        if (dial) dial.value = field.kind === "color" && toHex ? toHex(input.value) : input.value;
+      }, styleRoot);
+    if (control) label.append(control);
+  }
 }
 
 /** Shared theme editing stays secondary; per-element token choice lives on each knob. */

@@ -176,7 +176,7 @@ export function applyTokenToElement(
     initialPriority: priorBinding?.initialPriority ?? priority,
     mode: "token",
   });
-  element.style.setProperty(property, after);
+  element.style.setProperty(property, after, priority);
   if (options.recordHistory === false) return true;
   const edit: TokenEdit = { kind: "element", element, property, before, priority, after };
   const edits = history.get(source) ?? [];

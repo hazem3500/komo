@@ -184,13 +184,10 @@ export function createDesignMode(options: DesignModeOptions) {
   function setProperty(element: HTMLElement, property: string, value: string) {
     element.style.setProperty(property, value);
   }
-  function remember(element: HTMLElement, property: string) {
+  function remember(element: HTMLElement, property: string, value = element.style.getPropertyValue(property), priority = element.style.getPropertyPriority(property)) {
     let values = originals.get(element);
     if (!values) originals.set(element, (values = new Map()));
-    if (!values.has(property)) values.set(property, {
-      value: element.style.getPropertyValue(property),
-      priority: element.style.getPropertyPriority(property),
-    });
+    if (!values.has(property)) values.set(property, { value, priority });
   }
   function preview(field: Field, control: HTMLInputElement | HTMLSelectElement) {
     if (!selected) return;
@@ -200,11 +197,6 @@ export function createDesignMode(options: DesignModeOptions) {
     remember(selected, field.property);
     setProperty(selected, field.property, value);
     reactPanelModule?.noteDesignTokenOverride(selected, field.property, value);
-    const binding = controls.querySelector<HTMLElement>(`[data-field-property="${CSS.escape(field.property)}"] .design-token-binding`);
-    if (binding && !value.startsWith("var(")) {
-      binding.dataset.mode = "custom";
-      binding.title = "Custom override · preview only";
-    }
     const original = originals.get(selected)?.get(field.property);
     if (original?.priority) selected.style.setProperty(field.property, value, original.priority);
     let properties = changed.get(selected);
@@ -382,30 +374,14 @@ export function createDesignMode(options: DesignModeOptions) {
           controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined,
         );
         if (panel) controls.append(panel);
-        for (const field of fields) {
-          const label = controls.querySelector<HTMLElement>(`[data-field-property="${CSS.escape(field.property)}"]`);
-          if (!label || label.querySelector(".design-token-binding")) continue;
-          const tokenControl = module.createElementTokenControl(element, field.property, (before, after) => {
-            const beforeState = { value: before, priority: "" };
-            const afterState = { value: after, priority: element.style.getPropertyPriority(field.property) };
-            let prior = originals.get(element);
-            if (!prior) originals.set(element, (prior = new Map()));
-            if (!prior.has(field.property)) prior.set(field.property, beforeState);
-            let values = changed.get(element);
-            if (!values) changed.set(element, (values = new Map()));
-            values.set(field.property, after);
-            if (beforeState.value !== afterState.value) history.push({ kind: "style", element, property: field.property, before: beforeState, after: afterState });
-            const input = label.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-property="${CSS.escape(field.property)}"]`);
-            if (input) input.value = valueFor(field, element);
-            const dial = label.querySelector<HTMLInputElement>('input[type="range"],input[type="color"]');
-            if (dial) dial.value = field.kind === "color" ? toHex(valueFor(field, element)) : valueFor(field, element);
-            status.textContent = "Design token preview · refresh resets";
+        const styleRoot = controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined;
+        module.attachStyleTokenControls(element, fields, controls, (field, input, before) => {
+            remember(element, field.property, before);
+            starts.set(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
+            commit(field, input);
             updateActions();
-          }, controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined);
-          if (tokenControl) label.append(tokenControl);
-        }
+        }, styleRoot, valueFor, toHex);
         const theme = module.createDesignThemePanel(element, () => {
-          status.textContent = "Design token preview · resets on refresh";
           updateActions();
         }, controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined);
         if (theme) controls.append(theme);
