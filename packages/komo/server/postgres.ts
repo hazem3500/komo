@@ -76,11 +76,20 @@ export function postgresDatabase(connectionString: string) {
             new URL("./postgres/001_initial.sql", import.meta.url),
           );
           await client.query(await readFile(path, "utf8"));
-          await client.query("INSERT INTO komo_schema(version) VALUES(1)");
-        } else if (
-          versions.rows.length !== 1 ||
-          versions.rows[0].version !== 1
-        ) {
+          const webhookPath = fileURLToPath(
+            new URL("./postgres/002_project_webhooks.sql", import.meta.url),
+          );
+          await client.query(await readFile(webhookPath, "utf8"));
+          await client.query("INSERT INTO komo_schema(version) VALUES(2)");
+        } else if (versions.rows.length !== 1 || versions.rows[0].version > 2) {
+          throw Error("Unsupported PostgreSQL schema version");
+        } else if (versions.rows[0].version === 1) {
+          const path = fileURLToPath(
+            new URL("./postgres/002_project_webhooks.sql", import.meta.url),
+          );
+          await client.query(await readFile(path, "utf8"));
+          await client.query("UPDATE komo_schema SET version=2 WHERE version=1");
+        } else if (versions.rows[0].version !== 2) {
           throw Error("Unsupported PostgreSQL schema version");
         }
         await client.query("COMMIT");

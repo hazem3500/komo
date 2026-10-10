@@ -326,6 +326,10 @@ Extracted from the komo product at source commit `f57f3521` in the Cloudflare ma
 
 Sign in as the Google owner with `npx @tjcages/komo login`. In the widget, open **Account → Project settings** to manage access, download feedback, clear resolved threads, or delete a hosted project.
 
+Self-hosted Node deployments can also send signed webhooks for new comments, replies, and resolved threads. In **Project settings → Comment webhooks**, enter an HTTPS endpoint and a signing secret of at least 32 characters. Komo encrypts the secret at rest using the `KOMO_WEBHOOK_KEYS` environment variable; generate a 32-byte key with `openssl rand -base64 32` and configure a JSON keyring such as `{"current":"2026-10","keys":{"2026-10":"BASE64_KEY"}}`. Keep the keyring in your secret manager. Cloudflare Worker deployments currently disable webhook delivery because they do not yet have the DNS-pinning egress transport used by the Node adapter.
+
+Each request includes `X-Komo-Event`, `X-Komo-Delivery`, and `X-Komo-Signature: t=<unix-seconds>,v1=<hex-hmac-sha256>`. Verify the HMAC over `<timestamp>.<raw-request-body>` and reject timestamps outside your replay window. Treat `X-Komo-Delivery` as the idempotency key. Komo sends once without retries, does not follow redirects, and never logs secrets or response bodies. Master-key rotation requires replacing each project's signing secret and updating its receiver before removing the old key from the keyring.
+
 ```sh
 npx @tjcages/komo project info
 npx @tjcages/komo project access --access private

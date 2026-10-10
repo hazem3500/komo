@@ -5,6 +5,11 @@ import { googleOwner } from "./workspaces";
 import type { Identity } from "../src/types";
 
 import { digest } from "./digest";
+import {
+  encryptWebhookSecret,
+  validateWebhookUrl,
+  WEBHOOK_EVENTS,
+} from "./webhooks";
 export async function privateAccess(env: Env, project: string) {
   return (
     (
@@ -80,6 +85,80 @@ export async function manageProject(
     return Response.json({ ok: true });
   }
   await googleOwner(env, project, user);
+  if (path === "/project/webhook" && request.method === "GET") {
+    const row = await env.DB.prepare(
+      "SELECT webhook_url,webhook_secret,webhook_events,webhook_enabled FROM project_settings WHERE project=?"
+    )
+      .bind(project)
+      .first<{
+        webhook_url: string | null;
+        webhook_secret: string | null;
+        webhook_events: string | null;
+        webhook_enabled: number | null;
+      }>();
+    return Response.json({
+      url: row?.webhook_url ?? "",
+      events: JSON.parse(row?.webhook_events ?? "[]"),
+      enabled: !!row?.webhook_enabled,
+      secretConfigured: !!row?.webhook_secret,
+      deliveryAvailable:
+        typeof env.KOMO_WEBHOOK_SEND === "function" && !!env.KOMO_WEBHOOK_KEYS,
+      supportedEvents: WEBHOOK_EVENTS,
+    });
+  }
+  if (path === "/project/webhook" && request.method === "PATCH") {
+    const data = await readBody();
+    const current = await env.DB.prepare(
+      "SELECT webhook_url,webhook_secret FROM project_settings WHERE project=?"
+    )
+      .bind(project)
+      .first<{ webhook_url: string | null; webhook_secret: string | null }>();
+    let url: string;
+    try {
+      url = validateWebhookUrl(data.url);
+    } catch (error) {
+      check(false, 400, error instanceof Error ? error.message : "Invalid webhook URL.");
+    }
+    check(Array.isArray(data.events), 400, "Choose webhook events.");
+    const events = [...new Set(data.events)];
+    check(
+      events.length > 0 &&
+        events.every(
+          (event): event is (typeof WEBHOOK_EVENTS)[number] =>
+            typeof event === "string" &&
+            (WEBHOOK_EVENTS as readonly string[]).includes(event)
+        ),
+      400,
+      "Choose supported webhook events."
+    );
+    check(typeof data.enabled === "boolean", 400, "Invalid webhook state.");
+    let secret = current?.webhook_secret ?? null;
+    if (data.secret !== undefined && data.secret !== "") {
+      check(typeof data.secret === "string", 400, "Invalid signing secret.");
+      check(env.KOMO_WEBHOOK_KEYS, 503, "Webhook encryption is not configured on this server.");
+      try {
+        secret = await encryptWebhookSecret(env.KOMO_WEBHOOK_KEYS, project, data.secret);
+      } catch (error) {
+        check(false, 400, error instanceof Error ? error.message : "Invalid signing secret.");
+      }
+    } else if (current?.webhook_url && current.webhook_url !== url) {
+      check(false, 400, "Enter a new signing secret when changing the webhook URL.");
+    }
+    if (data.enabled) {
+      check(
+        typeof env.KOMO_WEBHOOK_SEND === "function" && !!env.KOMO_WEBHOOK_KEYS,
+        503,
+        "Secure webhook delivery is unavailable on this server."
+      );
+      check(secret, 400, "Enter a signing secret before enabling webhooks.");
+    }
+    await env.DB.prepare(
+      "INSERT INTO project_settings(project,access,webhook_url,webhook_secret,webhook_events,webhook_enabled) VALUES(?,COALESCE((SELECT access FROM project_settings WHERE project=?),'public'),?,?,?,?) ON CONFLICT(project) DO UPDATE SET webhook_url=excluded.webhook_url,webhook_secret=excluded.webhook_secret,webhook_events=excluded.webhook_events,webhook_enabled=excluded.webhook_enabled"
+    )
+      .bind(project, project, url, secret, JSON.stringify(events), Number(data.enabled))
+      .run();
+    return Response.json({ ok: true, secretConfigured: !!secret });
+  }
   // `fixed` stays empty for widgets released before every site was removable.
   if (path === "/project/sites" && request.method === "GET")
     return Response.json({

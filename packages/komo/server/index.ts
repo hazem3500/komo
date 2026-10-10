@@ -7,6 +7,10 @@ import {
 import { setupPage } from "./setup-page";
 import setupClient from "./setup-client.txt";
 import {
+  dispatchWebhook,
+  type WebhookEvent,
+} from "./webhooks";
+import {
   projectConfig,
   maintain,
   workspaceConfig,
@@ -67,6 +71,38 @@ const identity = (row: UserRow): Identity => ({
   avatarUrl: row.avatar_url || undefined,
   accentColor: row.accent_color || undefined,
 });
+function webhookEvent(
+  event: WebhookEvent["event"],
+  projectKey: string,
+  repo: string,
+  branch: string,
+  threadId: string,
+  page: string,
+  anchor: string,
+  author: string,
+  body: string | null,
+  origin: string
+): WebhookEvent {
+  let selector = "";
+  try {
+    selector = (JSON.parse(anchor) as { selector?: string }).selector ?? "";
+  } catch {
+    // A malformed stored anchor must not fail the comment request.
+  }
+  return {
+    id: crypto.randomUUID(),
+    event,
+    occurredAt: new Date().toISOString(),
+    projectKey,
+    repo,
+    branch,
+    threadId,
+    pageUrl: new URL(page, origin).toString(),
+    selector,
+    author,
+    body,
+  };
+}
 const json = (data: unknown, status = 200) => Response.json(data, { status });
 const token = () => crypto.randomUUID() + crypto.randomUUID();
 // Sessions should not force reviewers back through sign-in:
@@ -125,6 +161,8 @@ async function body(request: Request): Promise<Record<string, unknown>> {
               ? ["user"]
               : path === "/project/sites"
                 ? ["sites"]
+                : path === "/project/webhook"
+                  ? ["url", "secret", "events", "enabled"]
                 : ["access", "confirm", "threadIds"]
       : ["/auth/google/start", "/auth/github/start"].includes(path)
         ? ["returnOrigin"]
@@ -664,6 +702,7 @@ async function route(
           "/project/export",
           "/project/import",
           "/project/clear-resolved",
+          "/project/webhook",
           "/owner/claim",
           "/config",
           "/me",
@@ -1170,6 +1209,24 @@ async function route(
         config.retainedCommentsPerUser
       ),
     ]);
+    ctx.waitUntil(
+      dispatchWebhook(
+        env,
+        project,
+        webhookEvent(
+          "comment.created",
+          project,
+          repo,
+          branch,
+          id,
+          page,
+          JSON.stringify(anchor),
+          user.name,
+          text,
+          origin || url.origin
+        )
+      ).catch(() => {})
+    );
     return json({ id, commentId: firstCommentId }, 201);
   }
   const match = url.pathname.match(
@@ -1210,6 +1267,7 @@ async function route(
       "Sign in to resolve comments."
     );
     check(typeof data.resolved === "boolean", 400, "Invalid resolved state.");
+    const becameResolved = !thread.resolved && data.resolved;
     await env.DB.prepare(
       "UPDATE threads SET resolved=?,resolved_by=?,updated_at=? WHERE id=?"
     )
@@ -1220,6 +1278,25 @@ async function route(
         threadId
       )
       .run();
+    if (becameResolved)
+      ctx.waitUntil(
+        dispatchWebhook(
+          env,
+          project,
+          webhookEvent(
+            "comment.resolved",
+            project,
+            repo,
+            branch,
+            threadId,
+            thread.page,
+            thread.anchor,
+            user.name,
+            null,
+            origin || url.origin
+          )
+        ).catch(() => {})
+      );
     return json({ ok: true });
   }
   if (
@@ -1248,6 +1325,24 @@ async function route(
       result[0].meta.changes,
       409,
       "This thread has reached 200 comments. Start another thread."
+    );
+    ctx.waitUntil(
+      dispatchWebhook(
+        env,
+        project,
+        webhookEvent(
+          "comment.replied",
+          project,
+          repo,
+          branch,
+          threadId,
+          thread.page,
+          thread.anchor,
+          user.name,
+          text,
+          origin || url.origin
+        )
+      ).catch(() => {})
     );
     return json({ ok: true, id: replyId }, 201);
   }
