@@ -310,6 +310,56 @@ it("connects from the intended site with a one-use Google handoff and project-sc
 });
 
 describe("shared comments against real workerd and SQLite", () => {
+  it("adds normalized thread tags idempotently and returns them in listings", async () => {
+    const call = (
+      path: string,
+      method = "GET",
+      data?: unknown,
+      token?: string
+    ) => request(path, method, data, token, "tags", "owner/site", "test");
+    const guest = await (
+      await call("/auth/guest", "POST", { name: "Tag reviewer" })
+    ).json();
+    const created = await (
+      await call(
+        "/threads",
+        "POST",
+        { page: "/", anchor, body: "Group this feedback" },
+        guest.token,
+      )
+    ).json();
+    const first = await call(
+      `/threads/${created.id}`,
+      "PATCH",
+      { tag: "Navigation" },
+      guest.token
+    );
+    expect(first.status, await first.clone().text()).toBe(200);
+    expect(await first.json()).toEqual({ ok: true, tags: ["navigation"] });
+    const repeated = await call(
+      `/threads/${created.id}`,
+      "PATCH",
+      { tag: "navigation" },
+      guest.token
+    );
+    expect(await repeated.json()).toEqual({ ok: true, tags: ["navigation"] });
+    const listed = await (
+      await call("/threads", "GET")
+    ).json();
+    expect(
+      listed.threads.find((thread: Thread) => thread.id === created.id).tags
+    ).toEqual(["navigation"]);
+    expect(
+      (
+        await call(
+          `/threads/${created.id}`,
+          "PATCH",
+          { tag: "bad/tag" },
+          guest.token
+        )
+      ).status
+    ).toBe(400);
+  });
   it("resolves project-only configuration to the existing repository", async () => {
     const canonical = await request(
       "/threads",
@@ -1464,10 +1514,15 @@ it("runs the agent CLI against the real Worker and persisted threads", async () 
   );
   const threadId = created.data.id;
   expect(created.scope.branch).toBe("shared");
+  await cli("comments", "tag", threadId, "nav");
   const listing = await cli("comments", "list", "--page", "/cli");
   expect(listing.data.threads.map((thread: Thread) => thread.id)).toContain(
     threadId
   );
+  expect(
+    (await cli("comments", "list", "--page", "/cli", "--tag", "nav"))
+      .data.threads.map((thread: Thread) => thread.id)
+  ).toContain(threadId);
   const reply = await cli(
     "comments",
     "reply",

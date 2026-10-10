@@ -77,11 +77,18 @@ export function postgresDatabase(connectionString: string) {
           );
           await client.query(await readFile(path, "utf8"));
           await client.query("INSERT INTO komo_schema(version) VALUES(1)");
-        } else if (
-          versions.rows.length !== 1 ||
-          versions.rows[0].version !== 1
-        ) {
+        } else if (versions.rows.length !== 1 || versions.rows[0].version > 2) {
           throw Error("Unsupported PostgreSQL schema version");
+        }
+        const latest = await client.query<{ version: number }>(
+          "SELECT version FROM komo_schema",
+        );
+        if (latest.rows[0]?.version === 1) {
+          const path = fileURLToPath(
+            new URL("./postgres/002_thread_tags.sql", import.meta.url),
+          );
+          await client.query(await readFile(path, "utf8"));
+          await client.query("INSERT INTO komo_schema(version) VALUES(2)");
         }
         await client.query("COMMIT");
       } catch (error) {

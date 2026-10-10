@@ -257,6 +257,13 @@ small {
   font-size: 11px;
   color: #77766f;
 }
+.tag-list {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent, #bda6ef);
+}
 .page {
   overflow: hidden;
   white-space: nowrap;

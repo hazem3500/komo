@@ -49,6 +49,8 @@ export interface Thread {
   resolvedBy: Identity | null;
   createdAt: number;
   updatedAt: number;
+  /** Reviewer-defined labels used to group related feedback. */
+  tags?: string[];
   comments: Comment[];
 }
 

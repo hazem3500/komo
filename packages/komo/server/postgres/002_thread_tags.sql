@@ -1,0 +1,1 @@
+ALTER TABLE threads ADD COLUMN tags text NOT NULL DEFAULT '[]';
