@@ -74,6 +74,7 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 
 - Point and area comments anchored to page elements.
 - Replies, reactions, author-only editing, resolution, and undo.
+- Safe HTTP(S) links and simple Markdown links in comment messages.
 - Searchable sidebar, draggable dock, and Google or guest profiles.
 - Copy open feedback with selectors, source paths, page URLs, replies, and geometry into an agent.
 - Hosted Cloudflare storage, or your own Worker/D1 or Node/PostgreSQL service.
