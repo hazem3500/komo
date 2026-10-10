@@ -526,15 +526,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       portrait.classList.add("review-avatar");
       return portrait;
     }
-    return icon(
-      id === "browse"
-        ? "pointer"
-        : id === "comment"
-          ? "comment"
-          : id === "design"
-            ? "brush"
-            : "expand",
-    );
+    return icon(id as keyof typeof icons);
   });
   shadow.append(
     style,

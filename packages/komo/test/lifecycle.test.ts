@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { icon } from "../src/dom";
 import { initComments } from "../src/index";
 import type { CommentsController, CommentsOptions } from "../src/types";
 
@@ -85,6 +86,9 @@ it("lets reviewers dismiss and restore the toolbar, and supports hidden initiali
   const dismiss = host.shadowRoot!.querySelector<HTMLButtonElement>(
     '[data-menu-item="dismiss"]',
   )!;
+  expect(dismiss.querySelector("svg")?.outerHTML).toBe(
+    icon("close").outerHTML,
+  );
   expect(toolbar.style.display).not.toBe("none");
   dismiss.click();
   expect(toolbar.style.display).toBe("none");

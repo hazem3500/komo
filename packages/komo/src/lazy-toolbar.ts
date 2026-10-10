@@ -107,7 +107,9 @@ export function createToolbar(
         control.dataset.menuItem = item.id;
         if (item.id === props.activeId)
           control.setAttribute("aria-current", "page");
-        control.replaceChildren(glyph(item.id));
+        control.replaceChildren(
+          glyph("glyph" in item.icon ? item.icon.glyph : item.id),
+        );
         bar.append(control);
       }
       const more = button(
