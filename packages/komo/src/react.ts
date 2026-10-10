@@ -8,6 +8,7 @@ import {
   type InspectableComponent,
   type InspectableScalar,
 } from "./react-inspector.js";
+import { registerDesignTokenSource, type KomoDesignToken } from "./design-tokens.js";
 import type { KomoConfig } from "./config.js";
 import type { CommentsController } from "./types.js";
 
@@ -17,6 +18,7 @@ export type {
   InspectableProp,
   InspectableScalar,
 } from "./react-inspector.js";
+export type { KomoDesignToken, KomoDesignTokenType } from "./design-tokens.js";
 
 function sameConfig(a: KomoConfig, b: KomoConfig): boolean {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<
@@ -127,4 +129,22 @@ export function useKomoInspectable(
     ref: ref.current,
     "data-komo-inspectable": options.component.id,
   };
+}
+
+export interface UseKomoDesignTokensOptions {
+  /** Element that owns the explicitly listed CSS custom properties; defaults to document.documentElement after hydration. */
+  root?: HTMLElement;
+  /** Allowlisted token metadata; Komo never scans arbitrary custom properties. */
+  tokens: readonly KomoDesignToken[];
+  /** Keep disabled outside an explicitly enabled development/demo environment. */
+  enabled?: boolean;
+}
+
+/** Register named CSS-variable tokens for temporary Design mode previews. */
+export function useKomoDesignTokens(options: UseKomoDesignTokensOptions): void {
+  useEffect(() => {
+    if (options.enabled !== true) return;
+    const root = options.root ?? document.documentElement;
+    return registerDesignTokenSource(root, options.tokens);
+  }, [options.root, options.tokens, options.enabled]);
 }

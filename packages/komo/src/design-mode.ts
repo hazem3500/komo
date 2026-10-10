@@ -349,7 +349,7 @@ export function createDesignMode(options: DesignModeOptions) {
       controls.append(group);
     }
     const element = selected;
-    if (element?.closest("[data-komo-inspectable]")) {
+    if (element?.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
       reactPanelPromise ??= import("./react-props-panel.js").then((module) => {
         reactPanelModule = module;
         module.installCommentCapture(comment, () => selected, options.onComment);
@@ -359,12 +359,21 @@ export function createDesignMode(options: DesignModeOptions) {
         throw error;
       });
       void reactPanelPromise.then((module) => {
-        if (!active || selected !== element || controls.querySelector(".design-react-group")) return;
-        const panel = module.createReactPropsPanel(element, () => {
+        if (!active || selected !== element || controls.querySelector(".design-react-group, .design-token-group")) return;
+        const panel = module.createReactPropsPanel(
+          element,
+          () => {
           status.textContent = "React state preview · resets on refresh";
           updateActions();
-        });
+          },
+          controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined,
+        );
         if (panel) controls.append(panel);
+        const tokens = module.createDesignTokensPanel(element, () => {
+          status.textContent = "Design token preview · resets on refresh";
+          updateActions();
+        });
+        if (tokens) controls.append(tokens);
       }).catch(() => {});
     }
   }
@@ -403,8 +412,8 @@ export function createDesignMode(options: DesignModeOptions) {
     updateActions();
   }
   function updateActions() {
-    undo.disabled = history.length === 0 && !(selected && reactPanelModule?.canUndoReactProp(selected));
-    reset.disabled = !selected || !(changed.get(selected)?.size) && !(reactPanelModule?.hasReactPropChanges(selected));
+    undo.disabled = history.length === 0 && !(selected && reactPanelModule?.canUndoReactProp(selected)) && !(selected && reactPanelModule?.canUndoDesignTokenEdit(selected));
+    reset.disabled = !selected || !(changed.get(selected)?.size) && !(reactPanelModule?.hasReactPropChanges(selected)) && !(reactPanelModule?.hasDesignTokenEdit(selected));
     copy.disabled = !selected || !(changed.get(selected)?.size);
     comment.disabled = !selected;
   }
@@ -486,6 +495,7 @@ export function createDesignMode(options: DesignModeOptions) {
   undo.addEventListener("click", () => {
     const edit = history.pop();
     if (!edit) {
+      if (selected) reactPanelModule?.undoDesignTokenEdit(selected);
       if (selected) reactPanelModule?.undoReactProp(selected);
       if (selected) renderControls();
       status.textContent = "React state preview · resets on refresh";
@@ -509,7 +519,8 @@ export function createDesignMode(options: DesignModeOptions) {
     if (!selected) return;
     const values = changed.get(selected);
     const hasReactValues = reactPanelModule?.hasReactPropChanges(selected) ?? false;
-    if (!values?.size && !hasReactValues) return;
+    const hasTokenValues = reactPanelModule?.hasDesignTokenEdit(selected) ?? false;
+    if (!values?.size && !hasReactValues && !hasTokenValues) return;
     for (const property of values?.keys() ?? []) {
       const original = originals.get(selected)?.get(property);
       if (original?.value) selected.style.setProperty(property, original.value, original.priority);
@@ -517,6 +528,7 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     changed.delete(selected);
     if (hasReactValues) reactPanelModule?.resetReactProps(selected);
+    if (hasTokenValues) reactPanelModule?.resetDesignTokenEdits(selected);
     for (let index = history.length - 1; index >= 0; index--)
       if (history[index].element === selected) history.splice(index, 1);
     renderControls();
