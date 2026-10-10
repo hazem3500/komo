@@ -7,11 +7,14 @@ describe("design mode preview inspector", () => {
   let host: HTMLElement;
   let page: HTMLElement;
   let button: HTMLButtonElement;
+  let pointed: HTMLElement;
   let controller: ReturnType<typeof createDesignMode>;
   let exited: number;
   let comments: Element[];
+  let commentProposals: Array<string | undefined>;
 
   function pointer(type: string, target: Element) {
+    if (target instanceof HTMLElement) pointed = target;
     const event = new Event(type, { bubbles: true, cancelable: true, composed: true });
     Object.defineProperties(event, { clientX: { value: 30 }, clientY: { value: 20 }, button: { value: 0 } });
     target.dispatchEvent(event);
@@ -19,20 +22,22 @@ describe("design mode preview inspector", () => {
   }
 
   beforeEach(() => {
-    document.body.innerHTML = '<main><button id="hero">Hello</button><iframe title="Preview"></iframe></main><div id="komo"></div>';
+    document.body.innerHTML = '<main><button id="hero">Hello</button><span id="label">Selected text</span><div id="nested"><strong>Rich</strong> text</div><iframe title="Preview"></iframe></main><div id="komo"></div>';
     page = document.querySelector("main")!;
     button = document.querySelector("#hero")!;
+    pointed = button;
     host = document.querySelector("#komo")!;
     shadow = host.attachShadow({ mode: "open" });
     exited = 0;
     comments = [];
+    commentProposals = [];
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
     vi.stubGlobal("cancelAnimationFrame", () => {});
     controller = createDesignMode({
       root: shadow,
       host,
-      targetAt: () => button,
-      onComment: (element) => comments.push(element),
+      targetAt: () => pointed,
+      onComment: (element, proposal) => { comments.push(element); commentProposals.push(proposal); },
       onExit: () => { exited++; },
     });
     controller.setActive(true);
@@ -56,6 +61,91 @@ describe("design mode preview inspector", () => {
     expect(shadow.querySelector<HTMLElement>(".design-inspector__status")?.textContent).toContain("resets on refresh");
     controller.setActive(false);
     expect(button.style.color).toBe("rgb(255, 0, 0)");
+  });
+
+  it("edits only leaf text inline, keeps pasted markup as text, and supports undo/reset/comment", async () => {
+    const label = document.querySelector<HTMLElement>("#label")!;
+    pointer("pointerdown", label);
+    const edit = shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
+    expect(edit.disabled).toBe(false);
+    edit.click();
+    await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
+    expect(label.getAttribute("contenteditable")).toBe("true");
+    expect(shadow.querySelector<HTMLElement>(".design-inspector__status")?.textContent).toContain("Editing leaf text");
+    expect(document.activeElement).toBe(label);
+
+    const selection = document.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const paste = new Event("paste", { bubbles: true, cancelable: true, composed: true });
+    Object.defineProperty(paste, "clipboardData", { value: { getData: () => "<img src=x onerror=alert(1)>" } });
+    label.dispatchEvent(paste);
+    expect(paste.defaultPrevented).toBe(true);
+    expect(label.childElementCount).toBe(0);
+    expect(label.textContent).toBe("Selected text<img src=x onerror=alert(1)>");
+
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true });
+    label.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(true);
+    expect(label.hasAttribute("contenteditable")).toBe(false);
+    expect(shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:first-child")!.disabled).toBe(false);
+
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:first-child")!.click();
+    expect(label.textContent).toBe("Selected text");
+    edit.click();
+    await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
+    label.textContent = "Reset me";
+    label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
+    label.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:nth-child(2)")!.click();
+    expect(label.textContent).toBe("Selected text");
+
+    edit.click();
+    await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
+    label.textContent = "Comment proposal";
+    label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
+    label.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
+    expect(comments.at(-1)).toBe(label);
+    expect(commentProposals.at(-1)).toContain('"Selected text" → "Comment proposal"');
+  });
+
+  it("keeps nested markup, interactive controls, and private text out of inline editing", async () => {
+    const nested = document.querySelector<HTMLElement>("#nested")!;
+    pointer("pointerdown", nested);
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!.click();
+    await vi.waitFor(() => expect(shadow.querySelector(".design-inspector__status")?.textContent).toContain("stays read-only"));
+    expect(nested.hasAttribute("contenteditable")).toBe(false);
+    pointer("pointerdown", button);
+    const privateEdit = shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
+    privateEdit.click();
+    await vi.waitFor(() => expect(shadow.querySelector(".design-inspector__status")?.textContent).toContain("stays read-only"));
+    expect(button.hasAttribute("contenteditable")).toBe(false);
+    const secret = document.createElement("span");
+    secret.dataset.private = "true";
+    secret.textContent = "do not edit";
+    page.append(secret);
+    pointer("pointerdown", secret);
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!.click();
+    await vi.waitFor(() => expect(shadow.querySelector(".design-inspector__status")?.textContent).toContain("stays read-only"));
+    expect(secret.hasAttribute("contenteditable")).toBe(false);
+  });
+
+  it("Escape cancels an inline edit first, then exits Design mode", async () => {
+    const label = document.querySelector<HTMLElement>("#label")!;
+    pointer("pointerdown", label);
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!.click();
+    await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
+    label.textContent = "Not saved";
+    label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
+    label.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
+    expect(label.textContent).toBe("Selected text");
+    expect(controller.active).toBe(true);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(controller.active).toBe(false);
   });
 
   it("moves keyboard focus into the inspector when Design mode opens", () => {

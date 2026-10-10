@@ -10,6 +10,22 @@ coverage for every React component form or interpret `defaultProps`. The
 component supplies a state callback, so the preview uses React's normal rerender
 path. Komo never reads React Fiber internals or rewrites source files.
 
+The fixture's heading registers `textProp: "text"` for one leaf `<h2>`. This
+opt-in mapping lets Design mode edit that prop through the app's state callback
+and include its before/after value in a proposed comment. Other registered
+components and nested/rich text remain read-only for inline editing unless the
+host maps a separate leaf component explicitly.
+
+The same fixture registers a short, explicit CSS-variable token allowlist. The
+token names and scalar types follow the Design Tokens Format Module 2025.10,
+with CSS-variable bindings and impact selectors supplied by the host. Use
+**Use token on element** to keep a `var(--token)` reference in a local preview,
+or explicitly preview a shared theme value and see the registered selector's
+match count. Both actions are temporary; the shared edit resets on refresh,
+widget destruction, or Reset. Matching selectors are an estimate of scope, not
+a discovery of all CSS consumers. Komo does not import arbitrary DTCG files,
+persist tokens, or write application source.
+
 The demo uses React 19. The adapter uses public hooks, ref callbacks, and state
 updates compatible with the package's React 18.2+ / 19 peer range, but React 18
 has not been exercised in this prototype. In SSR frameworks, call the hook from

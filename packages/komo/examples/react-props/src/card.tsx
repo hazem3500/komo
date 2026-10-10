@@ -8,6 +8,8 @@ export interface PromoCardProps {
   tone: "calm" | "bold" | "quiet";
   compact?: boolean;
   visits: number;
+  /** @komoStyle color */
+  brandColor: string;
   children: ReactNode;
   details: { featured: boolean };
   onActivate: (source: string) => void;
@@ -20,6 +22,7 @@ export function PromoCard({
   tone,
   compact,
   visits,
+  brandColor,
   children,
   details,
   onActivate,
@@ -31,7 +34,7 @@ export function PromoCard({
 }) {
   const inspectable = useKomoInspectable({
     component,
-    props: { title, marker, tone, compact, visits },
+    props: { title, marker, tone, compact, visits, brandColor },
     onChange: onPropsChange,
     enabled: true,
   });
@@ -42,6 +45,7 @@ export function PromoCard({
       data-tone={tone}
       data-compact={String(compact ?? false)}
       data-featured={String(details.featured)}
+      style={{ color: brandColor }}
     >
       <span className="eyebrow">Registered React component</span>
       <h2>{title}</h2>
