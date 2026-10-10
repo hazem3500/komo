@@ -81,6 +81,12 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 
 Design mode edits the rendered page only. Preview styles are temporary, reset when the page refreshes, and are restored when the Komo widget is destroyed. Use **Copy CSS** to apply a rule in your site stylesheet; Komo does not write source files. The inspector can select an iframe as one element but cannot edit its isolated contents. Elements inside open or closed shadow roots are not traversed; select the component host instead.
 
+Design mode takes interaction cues from established design tools: select a visible element, keep its controls contextual, and make each change easy to reverse. Figma places editable layer properties and file-local styles or variables beside the selected layer; its Dev Mode provides inspection and measurements. pen.dev pairs an IDE design-mode toggle with a canvas, layer list, contextual property panel, and undo/redo. OpenPencil synchronizes layer-tree and canvas selection and offers contextual typography/layout controls, variables, and undoable operations.
+
+Komo adapts those patterns to an embedded live page: direct hover/select, a compact inspector, immediate CSS preview, grouped undo/reset, and CSS export. It intentionally does not add a persistent design document, shared token system, or source-code writer. That keeps the feature useful inside a website without implying that browser preview edits have changed application source.
+
+Sources: [Figma layer properties and styles](https://help.figma.com/hc/en-us/articles/360039832014-Design-prototype-and-explore-layer-properties-in-the-right-sidebar), [Figma Dev Mode](https://help.figma.com/hc/en-us/articles/15023124644247-Guide-to-Dev-Mode), [pen.dev installation and IDE design mode](https://docs.pen.dev/getting-started/installation), [pen.dev interface and undo/redo](https://docs.pen.dev/core-concepts/pencil-interface), [OpenPencil features and properties panel](https://openpencil.dev/overview/features), and [OpenPencil layers and selection sync](https://openpencil.dev/user-guide/layers-and-pages).
+
 ## Agent CLI
 
 `komo init` adds the default comment workflow to `AGENTS.md`, preserving existing instructions. For an existing project, run `komo agents setup` from its root. Commit the instructions so every agent uses them.
