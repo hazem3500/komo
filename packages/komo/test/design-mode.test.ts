@@ -26,7 +26,7 @@ describe("design mode preview inspector", () => {
     shadow = host.attachShadow({ mode: "open" });
     exited = 0;
     comments = [];
-    vi.stubGlobal("requestAnimationFrame", () => 1);
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
     vi.stubGlobal("cancelAnimationFrame", () => {});
     controller = createDesignMode({
       root: shadow,
@@ -65,6 +65,27 @@ describe("design mode preview inspector", () => {
     expect(shadow.querySelector(".design-inspector__mark svg")).not.toBeNull();
   });
 
+  it("uses a short open/close transition and hides the closing inspector from assistive tech", () => {
+    const panel = shadow.querySelector<HTMLElement>(".design-inspector")!;
+    expect(panel.dataset.state).toBe("active");
+    expect(panel.getAttribute("aria-hidden")).toBe("false");
+    vi.useFakeTimers();
+    controller.setActive(false);
+    expect(panel.dataset.state).toBe("closing");
+    expect(panel.getAttribute("aria-hidden")).toBe("true");
+    vi.advanceTimersByTime(250);
+    expect(panel.hidden).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("closes immediately when reduced motion is requested", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("prefers-reduced-motion") }));
+    controller.setActive(false);
+    const panel = shadow.querySelector<HTMLElement>(".design-inspector")!;
+    expect(panel.hidden).toBe(true);
+    expect(panel.hasAttribute("data-state")).toBe(false);
+  });
+
   it("lets keyboard users select a focused page element without activating it", () => {
     button.focus();
     const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true });
@@ -86,6 +107,7 @@ describe("design mode preview inspector", () => {
     undo.click();
     expect(button.style.getPropertyValue("font-size")).toBe("18px");
     expect(button.style.getPropertyPriority("font-size")).toBe("important");
+    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__close"));
     input.dispatchEvent(new Event("focus"));
     input.value = "30";
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -93,6 +115,7 @@ describe("design mode preview inspector", () => {
     const reset = [...shadow.querySelectorAll<HTMLButtonElement>(".design-inspector__actions button")].find((item) => item.textContent === "Reset")!;
     reset.click();
     expect(button.style.getPropertyValue("font-size")).toBe("18px");
+    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__close"));
     input.dispatchEvent(new Event("focus"));
     input.value = "30";
     input.dispatchEvent(new Event("input", { bubbles: true }));

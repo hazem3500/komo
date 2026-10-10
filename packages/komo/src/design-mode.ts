@@ -110,6 +110,7 @@ export function createDesignMode(options: DesignModeOptions) {
   panel.className = "design-inspector";
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-label", "Design mode inspector");
+  panel.setAttribute("aria-hidden", "true");
   panel.hidden = true;
   const outline = document.createElement("div");
   outline.className = "design-outline";
@@ -160,6 +161,7 @@ export function createDesignMode(options: DesignModeOptions) {
   options.root.append(style, outline, panel);
 
   let active = false;
+  let closeTimer = 0;
   let selected: HTMLElement | null = null;
   let hovered: HTMLElement | null = null;
   let frame = 0;
@@ -420,13 +422,35 @@ export function createDesignMode(options: DesignModeOptions) {
     }
   }
   function setActive(value: boolean) {
+    window.clearTimeout(closeTimer);
+    closeTimer = 0;
     active = value;
-    panel.hidden = !value;
-    outline.hidden = !value || !selected;
     if (value) {
+      panel.hidden = false;
+      panel.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(() => {
+        if (active) panel.dataset.state = "active";
+      });
+      outline.hidden = !selected;
       renderControls();
       outlineFor(selected, "selected");
       close.focus({ preventScroll: true });
+    } else {
+      outline.hidden = true;
+      panel.setAttribute("aria-hidden", "true");
+      panel.dataset.state = "closing";
+      if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        panel.hidden = true;
+        delete panel.dataset.state;
+      } else {
+        closeTimer = window.setTimeout(() => {
+          closeTimer = 0;
+          if (!active) {
+            panel.hidden = true;
+            delete panel.dataset.state;
+          }
+        }, 250);
+      }
     }
   }
 
@@ -447,6 +471,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (selected === edit.element) renderControls();
     outlineFor(selected ?? hovered, selected ? "selected" : "hover");
     updateActions();
+    (undo.disabled ? close : undo).focus({ preventScroll: true });
   });
   reset.addEventListener("click", () => {
     if (!selected) return;
@@ -463,6 +488,7 @@ export function createDesignMode(options: DesignModeOptions) {
     renderControls();
     outlineFor(selected, "selected");
     updateActions();
+    close.focus({ preventScroll: true });
   });
   copy.addEventListener("click", async () => {
     if (!selected) return;
@@ -490,6 +516,7 @@ export function createDesignMode(options: DesignModeOptions) {
     setActive,
     get active() { return active; },
     destroy() {
+      window.clearTimeout(closeTimer);
       listeners.abort();
       cancelAnimationFrame(frame);
       for (const [element, properties] of originals) {
