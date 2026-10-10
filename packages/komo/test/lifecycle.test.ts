@@ -187,6 +187,38 @@ it("dismisses the active Design overlay without intercepting host clicks", async
   expect(toolbar.style.display).not.toBe("none");
 });
 
+it("keeps the morphing sidebar as the shared surface when entering and leaving Design", async () => {
+  controller = initComments({ ...options, onboarding: undefined });
+  const host = [...document.body.children].find((node) => node.shadowRoot) as HTMLElement;
+  const root = host.shadowRoot!;
+  const toolbar = root.querySelector<HTMLElement>(".toolbar")!;
+  root.querySelector<HTMLButtonElement>('[data-menu-item="design"]')!.click();
+
+  for (let i = 0; i < 20; i++) {
+    const inspector = root.querySelector<HTMLElement>(".design-inspector");
+    if (inspector?.getAttribute("aria-hidden") === "false") break;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  const sidebar = root.querySelector<HTMLElement>(".edge-sidebar, .sidebar") ??
+    [...root.children].find((element) => element.querySelector(".design-inspector")) as HTMLElement;
+  const inspector = root.querySelector<HTMLElement>(".design-inspector")!;
+  expect(toolbar.dataset.hidden).not.toBe("true");
+  expect(toolbar.inert).toBe(true);
+  expect(host.classList.contains("design-active")).toBe(true);
+  expect(inspector.parentElement).toBe(sidebar);
+  expect(inspector.classList.contains("design-inspector--integrated")).toBe(true);
+  expect(sidebar.querySelector<HTMLElement>(".panel")?.inert).toBe(true);
+  expect(sidebar.querySelector<HTMLElement>(".panel")?.hidden).toBe(true);
+
+  inspector.querySelector<HTMLButtonElement>(".design-inspector__close")!.click();
+  expect(root.querySelector<HTMLElement>(".design-inspector")?.getAttribute("aria-hidden")).toBe("true");
+  expect(sidebar.querySelector<HTMLElement>(".panel")?.inert).toBe(false);
+  expect(sidebar.querySelector<HTMLElement>(".panel")?.hidden).toBe(false);
+  expect(toolbar.inert).toBe(false);
+  expect(host.classList.contains("design-active")).toBe(false);
+  expect(toolbar.dataset.hidden).not.toBe("true");
+});
+
 it("clears private cached feedback and identity immediately on another tab's logout", async () => {
   const { CommentsApi } = await import("../src/api");
   const config = { ...options, onboarding: undefined };

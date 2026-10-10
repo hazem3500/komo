@@ -1,20 +1,26 @@
 import { designModeStyles } from "./design-mode-styles.js";
 import { icon } from "./dom.js";
+import type { InlineTextTools } from "./inline-text-editor.js";
 
 export interface DesignModeOptions {
   root: ShadowRoot;
+  /** Optional shared Komo surface. When supplied, the inspector rides the sidebar morph. */
+  panelRoot?: HTMLElement;
   host: HTMLElement;
   targetAt(x: number, y: number): Element | null;
-  onComment(element: Element): void;
+  onComment(element: Element, proposal?: string): void;
   onExit(): void;
 }
 
 type Edit = {
+  kind: "style";
   element: HTMLElement;
   property: string;
   before: Original;
   after: Original;
 };
+
+type TextEdit = { kind: "text"; element: HTMLElement };
 
 type Original = { value: string; priority: string };
 
@@ -32,6 +38,7 @@ type Field = {
 const fields: Field[] = [
   { property: "color", label: "Text color", kind: "color" },
   { property: "background-color", label: "Fill", kind: "color" },
+  { property: "font-family", label: "Font family", kind: "text", placeholder: "system-ui, sans-serif" },
   { property: "font-size", label: "Font size", kind: "length", min: 1, max: 160 },
   { property: "font-weight", label: "Weight", kind: "select", values: ["300", "400", "500", "600", "700", "800"] },
   { property: "line-height", label: "Line height", kind: "text", placeholder: "1.4 or 24px" },
@@ -39,6 +46,7 @@ const fields: Field[] = [
   { property: "display", label: "Layout", kind: "select", values: ["block", "flex", "grid", "inline-flex", "inline-grid"] },
   { property: "gap", label: "Gap", kind: "length", min: 0, max: 200 },
   { property: "padding", label: "Padding", kind: "length", min: 0, max: 200 },
+  { property: "margin", label: "Margin", kind: "length", min: 0, max: 200 },
   { property: "width", label: "Width", kind: "text", placeholder: "auto or 240px" },
   { property: "border-width", label: "Border", kind: "length", min: 0, max: 24 },
   { property: "border-style", label: "Border style", kind: "select", values: ["none", "solid", "dashed", "dotted"] },
@@ -112,6 +120,7 @@ export function createDesignMode(options: DesignModeOptions) {
   panel.setAttribute("aria-label", "Design mode inspector");
   panel.setAttribute("aria-hidden", "true");
   panel.hidden = true;
+  if (options.panelRoot) panel.classList.add("design-inspector--integrated");
   const outline = document.createElement("div");
   outline.className = "design-outline";
   outline.setAttribute("aria-hidden", "true");
@@ -156,33 +165,39 @@ export function createDesignMode(options: DesignModeOptions) {
   const comment = document.createElement("button");
   comment.type = "button";
   comment.textContent = "Comment on element";
-  actions.append(undo, reset, copy, comment);
+  const editText = document.createElement("button");
+  editText.type = "button";
+  editText.textContent = "Edit text";
+  editText.setAttribute("aria-label", "Edit selected text inline");
+  actions.append(undo, reset, copy, editText, comment);
   panel.append(heading, controls, status, actions);
-  options.root.append(style, outline, panel);
+  options.root.append(style, outline);
+  (options.panelRoot ?? options.root).append(panel);
 
   let active = false;
   let closeTimer = 0;
   let selected: HTMLElement | null = null;
   let hovered: HTMLElement | null = null;
+  let textTools: InlineTextTools | null = null;
+  let reactTextPanel: typeof import("./react-props-panel.js") | null = null;
   let frame = 0;
+  let reactPanelModule: typeof import("./react-props-panel.js") | null = null;
+  let reactPanelPromise: Promise<typeof import("./react-props-panel.js")> | null = null;
   const originals = new Map<HTMLElement, Map<string, Original>>();
   const changed = new Map<HTMLElement, Map<string, string>>();
-  const history: Edit[] = [];
   const starts = new WeakMap<HTMLInputElement | HTMLSelectElement, Original>();
   const pending = new WeakMap<HTMLInputElement | HTMLSelectElement, Edit>();
   const listeners = new AbortController();
   const collapsed = new Set<string>(["Layout", "Border"]);
+  const history: Array<Edit | TextEdit> = [];
 
   function setProperty(element: HTMLElement, property: string, value: string) {
     element.style.setProperty(property, value);
   }
-  function remember(element: HTMLElement, property: string) {
+  function remember(element: HTMLElement, property: string, value = element.style.getPropertyValue(property), priority = element.style.getPropertyPriority(property)) {
     let values = originals.get(element);
     if (!values) originals.set(element, (values = new Map()));
-    if (!values.has(property)) values.set(property, {
-      value: element.style.getPropertyValue(property),
-      priority: element.style.getPropertyPriority(property),
-    });
+    if (!values.has(property)) values.set(property, { value, priority });
   }
   function preview(field: Field, control: HTMLInputElement | HTMLSelectElement) {
     if (!selected) return;
@@ -191,6 +206,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (value === null) return;
     remember(selected, field.property);
     setProperty(selected, field.property, value);
+    reactPanelModule?.noteDesignTokenOverride(selected, field.property, value);
     const original = originals.get(selected)?.get(field.property);
     if (original?.priority) selected.style.setProperty(field.property, value, original.priority);
     let properties = changed.get(selected);
@@ -212,7 +228,7 @@ export function createDesignMode(options: DesignModeOptions) {
       pending.delete(control);
     } else if (edit) edit.after = after;
     else {
-      const next = { element: selected, property: field.property, before, after };
+      const next: Edit = { kind: "style", element: selected, property: field.property, before, after };
       history.push(next);
       pending.set(control, next);
     }
@@ -225,6 +241,7 @@ export function createDesignMode(options: DesignModeOptions) {
   function fieldControl(field: Field, element: HTMLElement) {
     const label = document.createElement("label");
     label.className = "design-field";
+    label.dataset.fieldProperty = field.property;
     const caption = document.createElement("span");
     caption.textContent = field.label;
     const control = field.kind === "select"
@@ -314,7 +331,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (!selected) {
       const empty = document.createElement("p");
       empty.className = "design-inspector__empty";
-      empty.textContent = "Hover and click an element, or Tab to it and press Enter, to edit its preview styles.";
+      empty.textContent = "Select an element to preview styles. Leaf text can be edited inline.";
       controls.append(empty);
       title.textContent = "Nothing selected";
       subtitle.textContent = "Click a page element";
@@ -325,8 +342,11 @@ export function createDesignMode(options: DesignModeOptions) {
     subtitle.textContent = selected instanceof HTMLIFrameElement
       ? "Frame only · contents are isolated"
       : (selected.classList.length ? `.${[...selected.classList].slice(0, 2).join(".")}` : "Live page preview");
-    for (const [name, start, end] of [
-      ["Color", 0, 2], ["Typography", 2, 6], ["Layout", 6, 10], ["Border", 10, 14],
+    for (const [name, properties] of [
+      ["Color", ["color", "background-color"]],
+      ["Typography", ["font-family", "font-size", "font-weight", "line-height", "text-align"]],
+      ["Layout", ["display", "gap", "padding", "margin", "width"]],
+      ["Border", ["border-width", "border-style", "border-color", "border-radius"]],
     ] as const) {
       const group = document.createElement("details");
       group.className = "design-group";
@@ -334,13 +354,48 @@ export function createDesignMode(options: DesignModeOptions) {
       const summary = document.createElement("summary");
       summary.textContent = name;
       group.append(summary);
-      for (const field of fields.slice(start, end)) group.append(fieldControl(field, selected));
+      for (const field of fields.filter((item) => (properties as readonly string[]).includes(item.property)))
+        group.append(fieldControl(field, selected));
       group.addEventListener("toggle", () => {
         if (!group.isConnected) return;
         if (group.open) collapsed.delete(name);
         else collapsed.add(name);
       });
       controls.append(group);
+    }
+    const element = selected;
+    if (element?.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
+      reactPanelPromise ??= import("./react-props-panel.js").then((module) => {
+        reactPanelModule = module;
+        module.installCommentCapture(comment, () => selected, options.onComment);
+        return module;
+      }).catch((error: unknown) => {
+        reactPanelPromise = null;
+        throw error;
+      });
+      void reactPanelPromise.then((module) => {
+        if (!active || selected !== element || controls.querySelector(".design-react-group, .design-theme-group")) return;
+        const panel = module.createReactPropsPanel(
+          element,
+          () => {
+          status.textContent = "React state preview · resets on refresh";
+          updateActions();
+          },
+          controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined,
+        );
+        if (panel) controls.append(panel);
+        const styleRoot = controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined;
+        module.attachStyleTokenControls(element, fields, controls, (field, input, before) => {
+            remember(element, field.property, before);
+            starts.set(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
+            commit(field, input);
+            updateActions();
+        }, styleRoot, valueFor, toHex);
+        const theme = module.createDesignThemePanel(element, () => {
+          updateActions();
+        }, controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined);
+        if (theme) controls.append(theme);
+      }).catch(() => {});
     }
   }
   function outlineFor(element: HTMLElement | null, kind: "hover" | "selected") {
@@ -371,6 +426,7 @@ export function createDesignMode(options: DesignModeOptions) {
   }
   function select(element: Element | null) {
     if (!(element instanceof HTMLElement) || element === options.host || options.host.contains(element)) return;
+    if (textTools?.element && textTools.element !== element) finishTextEdit();
     selected = element;
     hovered = element;
     renderControls();
@@ -378,11 +434,37 @@ export function createDesignMode(options: DesignModeOptions) {
     updateActions();
   }
   function updateActions() {
-    undo.disabled = history.length === 0;
-    reset.disabled = !selected || !(changed.get(selected)?.size);
+    undo.disabled = history.length === 0 && !(selected && reactPanelModule?.canUndoReactProp(selected)) && !(selected && reactPanelModule?.canUndoDesignTokenEdit(selected));
+    reset.disabled = !selected || !(changed.get(selected)?.size) && !textTools?.hasChanges(selected) && !(reactPanelModule?.hasReactPropChanges(selected)) && !(reactPanelModule?.hasDesignTokenEdit(selected));
     copy.disabled = !selected || !(changed.get(selected)?.size);
     comment.disabled = !selected;
+    editText.disabled = !!textTools?.busy || !selected;
+    editText.textContent = textTools?.isEditing(selected) ? "Done editing" : "Edit text";
+    editText.setAttribute("aria-label", textTools?.isEditing(selected) ? "Finish inline text editing" : "Edit selected text inline");
   }
+  function finishTextEdit(cancel = false) {
+    textTools?.finish(cancel);
+    updateActions();
+  }
+  editText.addEventListener("click", () => {
+    if (textTools) return;
+    if (!selected) return;
+    status.textContent = "Loading inline text editor…";
+    void import("./inline-text-editor.js").then((module) => {
+      if (textTools || !selected || !active) return;
+      textTools = module.bindInlineTextTools({
+        button: editText,
+        status,
+        selected: () => selected,
+        active: () => active,
+        onChange: updateActions,
+        onCommit(result) {
+          history.push({ kind: "text", element: result });
+        },
+      });
+      void textTools.toggle();
+    }).catch(() => { status.textContent = "Inline text editing is unavailable."; });
+  });
   function onMove(event: PointerEvent) {
     if (!active || event.composedPath().includes(options.host)) return;
     const element = options.targetAt(event.clientX, event.clientY);
@@ -394,6 +476,8 @@ export function createDesignMode(options: DesignModeOptions) {
     if (!active || event.composedPath().includes(options.host)) return;
     const element = options.targetAt(event.clientX, event.clientY);
     if (!(element instanceof HTMLElement) || element === options.host || options.host.contains(element)) return;
+    if (textTools?.element && (element === textTools.element || textTools.element.contains(element))) return;
+    if (textTools?.element) finishTextEdit();
     event.preventDefault();
     event.stopImmediatePropagation();
     select(element);
@@ -405,6 +489,10 @@ export function createDesignMode(options: DesignModeOptions) {
     event.stopImmediatePropagation();
   }
   function onKey(event: KeyboardEvent) {
+    if (textTools?.handleKey(event)) {
+      editText.focus({ preventScroll: true });
+      return;
+    }
     if (active && (event.key === "Enter" || event.key === " ") && !event.composedPath().includes(options.host)) {
       const focused = document.activeElement;
       if (focused instanceof HTMLElement && focused !== document.body && focused !== document.documentElement) {
@@ -422,6 +510,7 @@ export function createDesignMode(options: DesignModeOptions) {
     }
   }
   function setActive(value: boolean) {
+    if (!value && textTools?.element) finishTextEdit();
     window.clearTimeout(closeTimer);
     closeTimer = 0;
     active = value;
@@ -455,14 +544,31 @@ export function createDesignMode(options: DesignModeOptions) {
   }
 
   close.addEventListener("click", () => {
+    if (textTools?.element) finishTextEdit();
     setActive(false);
     options.onExit();
   });
   undo.addEventListener("click", () => {
     const edit = history.pop();
-    if (!edit) return;
+    if (!edit) {
+      if (selected) reactPanelModule?.undoDesignTokenEdit(selected);
+      if (selected) reactPanelModule?.undoReactProp(selected);
+      if (selected) renderControls();
+      status.textContent = "React state preview · resets on refresh";
+      updateActions();
+      (undo.disabled ? close : undo).focus({ preventScroll: true });
+      return;
+    }
+    if (edit.kind === "text") {
+      const element = textTools?.undo() ?? edit.element;
+      if (selected === element) renderControls();
+      updateActions();
+      (undo.disabled ? close : undo).focus({ preventScroll: true });
+      return;
+    }
     if (edit.before.value) edit.element.style.setProperty(edit.property, edit.before.value, edit.before.priority);
     else edit.element.style.removeProperty(edit.property);
+    reactPanelModule?.syncDesignTokenBinding(edit.element, edit.property);
     const values = changed.get(edit.element);
     const original = originals.get(edit.element)?.get(edit.property);
     if (edit.before.value === (original?.value ?? "") && edit.before.priority === (original?.priority ?? "")) values?.delete(edit.property);
@@ -475,14 +581,21 @@ export function createDesignMode(options: DesignModeOptions) {
   });
   reset.addEventListener("click", () => {
     if (!selected) return;
+    if (textTools?.isEditing(selected)) finishTextEdit(true);
     const values = changed.get(selected);
-    if (!values) return;
-    for (const property of values.keys()) {
+    const hasTextValue = textTools?.hasChanges(selected) ?? false;
+    const hasReactValues = reactPanelModule?.hasReactPropChanges(selected) ?? false;
+    const hasTokenValues = reactPanelModule?.hasDesignTokenEdit(selected) ?? false;
+    if (!values?.size && !hasTextValue && !hasReactValues && !hasTokenValues) return;
+    if (hasTextValue) textTools?.reset(selected);
+    for (const property of values?.keys() ?? []) {
       const original = originals.get(selected)?.get(property);
       if (original?.value) selected.style.setProperty(property, original.value, original.priority);
       else selected.style.removeProperty(property);
     }
     changed.delete(selected);
+    if (hasReactValues) reactPanelModule?.resetReactProps(selected);
+    if (hasTokenValues) reactPanelModule?.resetDesignTokenEdits(selected);
     for (let index = history.length - 1; index >= 0; index--)
       if (history[index].element === selected) history.splice(index, 1);
     renderControls();
@@ -503,7 +616,9 @@ export function createDesignMode(options: DesignModeOptions) {
     }
   });
   comment.addEventListener("click", () => {
-    if (selected) options.onComment(selected);
+    if (!selected) return;
+    if (textTools?.isEditing(selected)) finishTextEdit();
+    options.onComment(selected, textTools?.proposal(selected));
   });
   document.addEventListener("pointermove", onMove, { capture: true, signal: listeners.signal });
   document.addEventListener("pointerdown", onDown, { capture: true, signal: listeners.signal });
@@ -514,8 +629,12 @@ export function createDesignMode(options: DesignModeOptions) {
 
   return {
     setActive,
+    mountPanel(parent: HTMLElement) {
+      if (panel.parentElement !== parent) parent.append(panel);
+    },
     get active() { return active; },
     destroy() {
+      if (textTools?.element) finishTextEdit(true);
       window.clearTimeout(closeTimer);
       listeners.abort();
       cancelAnimationFrame(frame);
@@ -525,6 +644,7 @@ export function createDesignMode(options: DesignModeOptions) {
           else element.style.removeProperty(property);
         }
       }
+      textTools?.restoreAll();
       panel.remove();
       outline.remove();
       style.remove();

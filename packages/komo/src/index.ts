@@ -194,6 +194,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     draft: Anchor | null = null;
   type DesignController = {
     setActive(value: boolean): void;
+    mountPanel(parent: HTMLElement): void;
     destroy(): void;
   };
   let designController: DesignController | null = null;
@@ -466,6 +467,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     toolbar = el("div", "toolbar"),
     sidebar = el("div"),
     hints = el("div");
+  sidebar.tabIndex = -1;
   if (edgeSidebar) sidebar.classList.add("edge-sidebar");
   const edgeSensor = el("div", "edge-sidebar-sensor");
   edgeSensor.hidden = true;
@@ -1445,12 +1447,21 @@ export function initComments(options: CommentsOptions): CommentsController {
   function setDesignMode(value: boolean, returnToComments = false) {
     if (options.onboarding || !!draft) return;
     if (value) {
-      designReturnToComments = returnToComments;
-      if (returnToComments)
+      // Keep the shared sidebar open. Its existing drawer morph is the outer
+      // surface transition for both Comments and Design; only the content view
+      // changes while the comment list and selection context stay mounted.
+      designReturnToComments = true;
+      if (returnToComments || expanded)
         designReturnScrollTop = sidebar.querySelector<HTMLElement>(".list")?.scrollTop ?? 0;
       setMode(false);
-      if (expanded) toggleExpanded(false);
+      if (!expanded) toggleExpanded(true);
       account = false;
+      // Move focus out of the Comments view before render marks it hidden.
+      // The Design controller will move focus to its close control once its
+      // optional chunk has loaded.
+      if (sidebar.querySelector(".panel")?.contains(shadow.activeElement)) {
+        sidebar.focus({ preventScroll: true });
+      }
     }
     designActive = value;
     if (value) {
@@ -1575,6 +1586,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     host.style.height = `${viewportHeight}px`;
     host.style.top = "";
     host.classList.toggle("review-open", expanded);
+    host.classList.toggle("design-active", designActive);
     if (useFrame) {
       appliedScale = layout.scale;
       const effective = appliedScale * zoom;
@@ -4581,14 +4593,16 @@ export function initComments(options: CommentsOptions): CommentsController {
         .then(({ createDesignMode }) => {
           const controller = createDesignMode({
             root: shadow,
+            panelRoot: sidebar,
             host,
             targetAt(x, y) {
               const target = siteElementAt(x, y);
               return target && target !== surface && surface.contains(target) ? target : null;
             },
-            onComment(element) {
+            onComment(element, proposal) {
               designReturnToComments = false;
               setDesignMode(false);
+              draftText = proposal ?? "";
               const rect = element.getBoundingClientRect();
               composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
             },
@@ -4810,6 +4824,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   function render() {
     if (destroyed) return;
+    host.classList.toggle("design-active", designActive);
     if (account && !expanded) {
       if (isCompactReview(window.innerWidth, window.innerHeight)) {
         account = false;
@@ -4834,10 +4849,18 @@ export function initComments(options: CommentsOptions): CommentsController {
     hints.replaceChildren();
 
     renderToolbar();
+    toolbar.inert = designActive;
     renderPins();
     renderList();
     renderDialog();
     placeEdgeAccount();
+    const commentsPanel = sidebar.querySelector<HTMLElement>(".panel");
+    if (commentsPanel) {
+      commentsPanel.inert = designActive;
+      commentsPanel.setAttribute("aria-hidden", String(designActive));
+      commentsPanel.hidden = designActive;
+    }
+    if (designActive) designController?.mountPanel(sidebar);
   }
   let drag: {
     x: number;

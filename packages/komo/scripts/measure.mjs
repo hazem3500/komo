@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +18,9 @@ const result = await build({
   external: ["./design-mode.js"],
 });
 const outputs = result.metafile.outputs;
+const inlineTextEditing = (await readdir("dist"))
+  .filter((file) => /^inline-text-editor.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const entry = Object.keys(outputs).find(
   (path) => outputs[path].entryPoint === "dist/index.js"
 );
@@ -50,6 +53,7 @@ const report = {
   initial: await sizes(initial),
   coreFeatures: await sizes(Object.keys(outputs)),
   optionalDesignMode: await sizes(new Set(["dist/design-mode.js"])),
+  optionalInlineTextEditing: await sizes(new Set(inlineTextEditing)),
   package: {
     tarball: pack.size,
     unpacked: pack.unpackedSize,
@@ -63,5 +67,9 @@ await writeFile(
 );
 if (report.initial.gzip > 100_000 || report.coreFeatures.gzip > 196_000)
   throw new Error("komo exceeds its core production consumer bundle budget.");
-if (report.optionalDesignMode.gzip > 6_000)
+// The inline-text feature adds a small button/state bridge to the optional
+// Design mode entry. Its editor remains a separate on-demand chunk below.
+if (report.optionalDesignMode.gzip > 7_000)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
+if (report.optionalInlineTextEditing.gzip > 2_800)
+  throw new Error("komo's on-demand inline text editor chunk exceeds its gzip budget.");
