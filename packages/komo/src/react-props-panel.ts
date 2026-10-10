@@ -31,6 +31,69 @@ export function hasReactPropChanges(element: HTMLElement): boolean {
   return !!originals.get(element)?.size;
 }
 
+export interface ReactTextEditStart {
+  propName: string;
+  before: string;
+}
+
+/** Only an explicit registered textProp can drive a React-rendered inline edit. */
+export function beginReactTextEdit(element: HTMLElement): ReactTextEditStart | null {
+  const component = inspectableFor(element);
+  const propName = component?.definition.textProp;
+  const definition = component?.definition.props.find((prop) => prop.name === propName);
+  if (!component || !propName || definition?.kind !== "string") return null;
+  const before = component.props[propName];
+  if (typeof before !== "string" || before.length > 500) return null;
+  let baseline = originals.get(element);
+  if (!baseline) originals.set(element, (baseline = new Map()));
+  if (!baseline.has(propName)) baseline.set(propName, before);
+  return { propName, before };
+}
+
+/** Preview through the registered React state callback; never mutate React's DOM. */
+export function previewReactTextEdit(
+  element: HTMLElement,
+  propName: string,
+  value: string,
+): boolean {
+  const component = inspectableFor(element);
+  const definition = component?.definition.props.find((prop) => prop.name === propName);
+  if (
+    !component || component.definition.textProp !== propName || definition?.kind !== "string" ||
+    value.length > 500 || !isEditablePropValue(definition, value)
+  ) return false;
+  component.setProps({ ...component.props, [propName]: value });
+  return true;
+}
+
+export function finishReactTextEdit(
+  element: HTMLElement,
+  propName: string,
+  before: string,
+  after: string,
+): void {
+  if (before === after) {
+    const baseline = originals.get(element);
+    if (baseline?.get(propName) === before && !(edits.get(element) ?? []).some((edit) => edit.propName === propName)) {
+      baseline.delete(propName);
+      if (!baseline.size) originals.delete(element);
+    }
+    return;
+  }
+  let elementEdits = edits.get(element);
+  if (!elementEdits) edits.set(element, (elementEdits = []));
+  elementEdits.push({ propName, before, after });
+}
+
+export function cancelReactTextEdit(element: HTMLElement, propName: string, before: string): void {
+  previewReactTextEdit(element, propName, before);
+  const baseline = originals.get(element);
+  if (baseline?.get(propName) === before && !(edits.get(element) ?? []).some((edit) => edit.propName === propName)) {
+    baseline.delete(propName);
+    if (!baseline.size) originals.delete(element);
+  }
+}
+
 export function canUndoReactProp(element: HTMLElement | null): boolean {
   return !!element && !!edits.get(element)?.length;
 }

@@ -13,6 +13,7 @@ const definition: InspectableComponent = {
   name: "PromoCard",
   source: "examples/react-props/src/card.tsx",
   line: 15,
+  textProp: "title",
   props: [
     { name: "title", kind: "string", required: true, typeLabel: "string" },
     { name: "tone", kind: "enum", values: ["calm", "bold"], required: true, typeLabel: '"calm" | "bold"' },
@@ -120,6 +121,39 @@ describe("React props inspector bridge", () => {
     currentInput.value = "Reset me";
     currentInput.dispatchEvent(new Event("change", { bubbles: true }));
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:nth-child(2)")!.click();
+    expect(changes.at(-1)?.title).toBe("A preview title");
+  });
+
+  it("routes an explicitly mapped leaf text edit through React state and includes it in the comment proposal", async () => {
+    controller.destroy();
+    cleanup();
+    card.replaceChildren(document.createTextNode("A preview title"));
+    cleanup = registerInspectableRoot(card, definition, props, (next) => {
+      changes.push(next);
+      card.textContent = String(next.title ?? "");
+    });
+    controller = createDesignMode({
+      root: shadow,
+      host,
+      targetAt: () => card,
+      onComment: (element, proposal) => comments.push({ element, proposal }),
+      onExit: () => {},
+    });
+    controller.setActive(true);
+    pointerDown(card);
+    await vi.waitFor(() => expect(shadow.querySelector(".design-react-group")).not.toBeNull());
+    const edit = shadow.querySelector<HTMLButtonElement>("[aria-label='Edit selected text inline']")!;
+    expect(edit.disabled).toBe(false);
+    edit.click();
+    await vi.waitFor(() => expect(card.getAttribute("contenteditable")).toBe("true"));
+    card.textContent = "Changed in place";
+    card.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
+    expect(changes.at(-1)?.title).toBe("Changed in place");
+    card.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
+
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
+    expect(comments.at(-1)?.proposal).toContain('title: "A preview title" → "Changed in place"');
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:first-child")!.click();
     expect(changes.at(-1)?.title).toBe("A preview title");
   });
 });
