@@ -24,7 +24,16 @@ export interface RegisteredDesignTokenSource {
   tokens: KomoDesignToken[];
   themeEdits: Map<string, { before: string; after: string; inlineBefore: string }>;
   elementOriginals: Map<HTMLElement, Map<string, { value: string; priority: string }>>;
+  elementBindings: Map<HTMLElement, Map<string, ElementTokenBinding>>;
   previousMarker: string | null;
+}
+
+export interface ElementTokenBinding {
+  tokenPath: string;
+  initialValue: string;
+  initialPriority: string;
+  mode: "token" | "custom";
+  customValue?: string;
 }
 
 type TokenEdit =
@@ -68,6 +77,7 @@ export function registerDesignTokenSource(
     tokens: tokens.map((token) => ({ ...token, properties: [...token.properties] })),
     themeEdits: new Map(),
     elementOriginals: new Map(),
+    elementBindings: new Map(),
     previousMarker: root.getAttribute("data-komo-design-tokens"),
   };
   byRoot.set(root, source);
@@ -88,6 +98,7 @@ export function registerDesignTokenSource(
         else element.style.removeProperty(property);
       }
     }
+    source.elementBindings.clear();
     sources.delete(source);
     byRoot.delete(root);
     if (source.previousMarker === null) root.removeAttribute("data-komo-design-tokens");
@@ -147,6 +158,7 @@ export function applyTokenToElement(
   element: HTMLElement,
   token: KomoDesignToken,
   property: string,
+  options: { recordHistory?: boolean } = {},
 ): boolean {
   if (!source.tokens.some((item) => item.path === token.path) || !token.properties.includes(property)) return false;
   let originals = source.elementOriginals.get(element);
@@ -155,7 +167,17 @@ export function applyTokenToElement(
   const before = element.style.getPropertyValue(property);
   const priority = element.style.getPropertyPriority(property);
   const after = `var(${token.cssVariable})`;
+  let bindings = source.elementBindings.get(element);
+  if (!bindings) source.elementBindings.set(element, (bindings = new Map()));
+  const priorBinding = bindings.get(property);
+  bindings.set(property, {
+    tokenPath: token.path,
+    initialValue: priorBinding?.initialValue ?? before,
+    initialPriority: priorBinding?.initialPriority ?? priority,
+    mode: "token",
+  });
   element.style.setProperty(property, after);
+  if (options.recordHistory === false) return true;
   const edit: TokenEdit = { kind: "element", element, property, before, priority, after };
   const edits = history.get(source) ?? [];
   edits.push(edit);
@@ -166,9 +188,59 @@ export function applyTokenToElement(
   return true;
 }
 
+/** Keep the token reference as provenance when the user types a custom override. */
+export function noteElementTokenOverride(
+  source: RegisteredDesignTokenSource,
+  element: HTMLElement,
+  property: string,
+  value: string,
+): void {
+  const binding = source.elementBindings.get(element)?.get(property);
+  if (!binding) return;
+  binding.mode = "custom";
+  binding.customValue = value;
+}
+
+/** Reconcile token provenance after the style editor's undo restores a declaration. */
+export function syncElementTokenBinding(
+  source: RegisteredDesignTokenSource,
+  element: HTMLElement,
+  property: string,
+): void {
+  const binding = source.elementBindings.get(element)?.get(property);
+  if (!binding) return;
+  const value = element.style.getPropertyValue(property);
+  const token = source.tokens.find((item) =>
+    item.path === binding.tokenPath && item.properties.includes(property) && value === `var(${item.cssVariable})`,
+  );
+  if (token) {
+    binding.mode = "token";
+    delete binding.customValue;
+  } else {
+    binding.mode = "custom";
+    binding.customValue = value;
+  }
+}
+
+export function elementTokenBindingFor(
+  source: RegisteredDesignTokenSource,
+  element: HTMLElement,
+  property: string,
+): ElementTokenBinding | null {
+  const binding = source.elementBindings.get(element)?.get(property);
+  return binding ? { ...binding } : null;
+}
+
+export function compatibleTokens(
+  source: RegisteredDesignTokenSource,
+  property: string,
+): KomoDesignToken[] {
+  return source.tokens.filter((token) => token.properties.includes(property));
+}
+
 export function hasDesignTokenChanges(element: HTMLElement): boolean {
   const source = tokenSourceFor(element);
-  return !!source && (source.themeEdits.size > 0 || !!elementEdits.get(element)?.length);
+  return !!source && (source.themeEdits.size > 0 || !!elementEdits.get(element)?.length || !!source.elementBindings.get(element)?.size);
 }
 
 export function canUndoDesignToken(element: HTMLElement | null): boolean {
@@ -213,6 +285,7 @@ export function resetDesignTokens(element: HTMLElement): void {
     else element.style.removeProperty(property);
   }
   source.elementOriginals.delete(element);
+  source.elementBindings.delete(element);
   elementEdits.delete(element);
   history.set(source, (history.get(source) ?? []).filter(
     (edit) => edit.kind === "element" && edit.element !== element,
@@ -223,8 +296,17 @@ export function proposedDesignTokenChanges(element: HTMLElement): string | undef
   const source = tokenSourceFor(element);
   if (!source) return undefined;
   const rows: string[] = [];
+  for (const [property, binding] of source.elementBindings.get(element) ?? []) {
+    const token = source.tokens.find((item) => item.path === binding.tokenPath && item.properties.includes(property));
+    if (!token) continue;
+    if (binding.mode === "token") {
+      rows.push(`Element ${property}: ${binding.initialValue || "(unset)"} → var(${token.cssVariable}) [${token.path}]`);
+    } else {
+      rows.push(`Element ${property}: var(${token.cssVariable}) [${token.path}] → ${binding.customValue || "(unset)"} [custom override]`);
+    }
+  }
   for (const edit of elementEdits.get(element) ?? []) {
-    if (edit.kind !== "element") continue;
+    if (edit.kind !== "element" || source.elementBindings.get(element)?.has(edit.property)) continue;
     const token = source.tokens.find((item) => edit.after === `var(${item.cssVariable})`);
     if (token) rows.push(`Element ${edit.property}: ${edit.before || "(unset)"} → var(${token.cssVariable}) [${token.path}]`);
   }

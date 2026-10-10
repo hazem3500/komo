@@ -78,6 +78,9 @@ export function generateManifest(sourcePath, root) {
           ...(schema.values ? { values: schema.values } : {}),
           required: !(symbol.flags & ts.SymbolFlags.Optional),
           typeLabel: displayType(type, declaration),
+          ...(schema.kind === "string" && ts.getJSDocTags(declaration).some((tag) =>
+            tag.tagName.text === "komoStyle" && ["color", "background-color", "border-color", "font-family", "font-weight", "line-height", "font-size", "gap", "padding", "margin", "border-radius"].includes(String(tag.comment ?? "").trim()),
+          ) ? { styleProperty: String(ts.getJSDocTags(declaration).find((tag) => tag.tagName.text === "komoStyle")?.comment ?? "").trim() } : {}),
         };
       });
       const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));

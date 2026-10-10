@@ -19,11 +19,13 @@ describe("React inspector TypeScript manifest", () => {
       ["tone", "enum", true],
       ["compact", "boolean", false],
       ["visits", "number", true],
+      ["brandColor", "string", true],
       ["children", "unsupported", true],
       ["details", "unsupported", true],
       ["onActivate", "unsupported", true],
     ]);
     expect(component.props.find((prop) => prop.name === "marker")?.values).toEqual(["only"]);
     expect(component.props.find((prop) => prop.name === "tone")?.values).toEqual(["calm", "bold", "quiet"]);
+    expect(component.props.find((prop) => prop.name === "brandColor")?.styleProperty).toBe("color");
   });
 });

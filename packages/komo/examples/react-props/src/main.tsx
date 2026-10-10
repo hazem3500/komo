@@ -20,6 +20,7 @@ function Demo() {
     tone: "calm",
     compact: false,
     visits: 3,
+    brandColor: "var(--color-brand)",
     children: "Edit safe, typed props in Design mode. Unsupported values stay read-only.",
     details: { featured: true },
     onActivate: () => setProps((current) => ({ ...current, visits: current.visits + 1 })),

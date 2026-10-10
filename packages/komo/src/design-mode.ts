@@ -34,6 +34,7 @@ type Field = {
 const fields: Field[] = [
   { property: "color", label: "Text color", kind: "color" },
   { property: "background-color", label: "Fill", kind: "color" },
+  { property: "font-family", label: "Font family", kind: "text", placeholder: "system-ui, sans-serif" },
   { property: "font-size", label: "Font size", kind: "length", min: 1, max: 160 },
   { property: "font-weight", label: "Weight", kind: "select", values: ["300", "400", "500", "600", "700", "800"] },
   { property: "line-height", label: "Line height", kind: "text", placeholder: "1.4 or 24px" },
@@ -41,6 +42,7 @@ const fields: Field[] = [
   { property: "display", label: "Layout", kind: "select", values: ["block", "flex", "grid", "inline-flex", "inline-grid"] },
   { property: "gap", label: "Gap", kind: "length", min: 0, max: 200 },
   { property: "padding", label: "Padding", kind: "length", min: 0, max: 200 },
+  { property: "margin", label: "Margin", kind: "length", min: 0, max: 200 },
   { property: "width", label: "Width", kind: "text", placeholder: "auto or 240px" },
   { property: "border-width", label: "Border", kind: "length", min: 0, max: 24 },
   { property: "border-style", label: "Border style", kind: "select", values: ["none", "solid", "dashed", "dotted"] },
@@ -197,6 +199,12 @@ export function createDesignMode(options: DesignModeOptions) {
     if (value === null) return;
     remember(selected, field.property);
     setProperty(selected, field.property, value);
+    reactPanelModule?.noteDesignTokenOverride(selected, field.property, value);
+    const binding = controls.querySelector<HTMLElement>(`[data-field-property="${CSS.escape(field.property)}"] .design-token-binding`);
+    if (binding && !value.startsWith("var(")) {
+      binding.dataset.mode = "custom";
+      binding.title = "Custom override · preview only";
+    }
     const original = originals.get(selected)?.get(field.property);
     if (original?.priority) selected.style.setProperty(field.property, value, original.priority);
     let properties = changed.get(selected);
@@ -231,6 +239,7 @@ export function createDesignMode(options: DesignModeOptions) {
   function fieldControl(field: Field, element: HTMLElement) {
     const label = document.createElement("label");
     label.className = "design-field";
+    label.dataset.fieldProperty = field.property;
     const caption = document.createElement("span");
     caption.textContent = field.label;
     const control = field.kind === "select"
@@ -331,8 +340,11 @@ export function createDesignMode(options: DesignModeOptions) {
     subtitle.textContent = selected instanceof HTMLIFrameElement
       ? "Frame only · contents are isolated"
       : (selected.classList.length ? `.${[...selected.classList].slice(0, 2).join(".")}` : "Live page preview");
-    for (const [name, start, end] of [
-      ["Color", 0, 2], ["Typography", 2, 6], ["Layout", 6, 10], ["Border", 10, 14],
+    for (const [name, properties] of [
+      ["Color", ["color", "background-color"]],
+      ["Typography", ["font-family", "font-size", "font-weight", "line-height", "text-align"]],
+      ["Layout", ["display", "gap", "padding", "margin", "width"]],
+      ["Border", ["border-width", "border-style", "border-color", "border-radius"]],
     ] as const) {
       const group = document.createElement("details");
       group.className = "design-group";
@@ -340,7 +352,8 @@ export function createDesignMode(options: DesignModeOptions) {
       const summary = document.createElement("summary");
       summary.textContent = name;
       group.append(summary);
-      for (const field of fields.slice(start, end)) group.append(fieldControl(field, selected));
+      for (const field of fields.filter((item) => (properties as readonly string[]).includes(item.property)))
+        group.append(fieldControl(field, selected));
       group.addEventListener("toggle", () => {
         if (!group.isConnected) return;
         if (group.open) collapsed.delete(name);
@@ -359,7 +372,7 @@ export function createDesignMode(options: DesignModeOptions) {
         throw error;
       });
       void reactPanelPromise.then((module) => {
-        if (!active || selected !== element || controls.querySelector(".design-react-group, .design-token-group")) return;
+        if (!active || selected !== element || controls.querySelector(".design-react-group, .design-theme-group")) return;
         const panel = module.createReactPropsPanel(
           element,
           () => {
@@ -369,11 +382,33 @@ export function createDesignMode(options: DesignModeOptions) {
           controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined,
         );
         if (panel) controls.append(panel);
-        const tokens = module.createDesignTokensPanel(element, () => {
+        for (const field of fields) {
+          const label = controls.querySelector<HTMLElement>(`[data-field-property="${CSS.escape(field.property)}"]`);
+          if (!label || label.querySelector(".design-token-binding")) continue;
+          const tokenControl = module.createElementTokenControl(element, field.property, (before, after) => {
+            const beforeState = { value: before, priority: "" };
+            const afterState = { value: after, priority: element.style.getPropertyPriority(field.property) };
+            let prior = originals.get(element);
+            if (!prior) originals.set(element, (prior = new Map()));
+            if (!prior.has(field.property)) prior.set(field.property, beforeState);
+            let values = changed.get(element);
+            if (!values) changed.set(element, (values = new Map()));
+            values.set(field.property, after);
+            if (beforeState.value !== afterState.value) history.push({ kind: "style", element, property: field.property, before: beforeState, after: afterState });
+            const input = label.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-property="${CSS.escape(field.property)}"]`);
+            if (input) input.value = valueFor(field, element);
+            const dial = label.querySelector<HTMLInputElement>('input[type="range"],input[type="color"]');
+            if (dial) dial.value = field.kind === "color" ? toHex(valueFor(field, element)) : valueFor(field, element);
+            status.textContent = "Design token preview · refresh resets";
+            updateActions();
+          }, controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined);
+          if (tokenControl) label.append(tokenControl);
+        }
+        const theme = module.createDesignThemePanel(element, () => {
           status.textContent = "Design token preview · resets on refresh";
           updateActions();
-        });
-        if (tokens) controls.append(tokens);
+        }, controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined);
+        if (theme) controls.append(theme);
       }).catch(() => {});
     }
   }
@@ -505,6 +540,7 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     if (edit.before.value) edit.element.style.setProperty(edit.property, edit.before.value, edit.before.priority);
     else edit.element.style.removeProperty(edit.property);
+    reactPanelModule?.syncDesignTokenBinding(edit.element, edit.property);
     const values = changed.get(edit.element);
     const original = originals.get(edit.element)?.get(edit.property);
     if (edit.before.value === (original?.value ?? "") && edit.before.priority === (original?.priority ?? "")) values?.delete(edit.property);

@@ -81,7 +81,7 @@ describe("React props inspector bridge", () => {
     expect(group).not.toBeNull();
     expect(group.textContent).toContain("PromoCard");
     expect(group.textContent).toContain("examples/react-props/src/card.tsx:15");
-    expect([...shadow.querySelectorAll("style")].some((style) => style.textContent?.includes(".design-token input"))).toBe(true);
+    expect([...shadow.querySelectorAll("style")].some((style) => style.textContent?.includes(".design-token-binding select"))).toBe(true);
     expect(group.querySelector<HTMLInputElement>('[aria-label^="PromoCard onActivate"]')?.disabled).toBe(true);
     expect(group.querySelector<HTMLInputElement>('[aria-label^="PromoCard details"]')?.disabled).toBe(true);
     expect(inspectableFor(title)?.props).not.toHaveProperty("onActivate");

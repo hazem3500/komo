@@ -2,15 +2,20 @@ import {
   inspectableFor,
   isEditablePropValue,
   type InspectableScalar,
+  type InspectableProp,
   type RegisteredInspectableComponent,
 } from "./react-inspector.js";
 import {
   applyTokenToElement,
   canUndoDesignToken,
+  compatibleTokens,
+  elementTokenBindingFor,
   hasDesignTokenChanges,
+  noteElementTokenOverride,
   previewThemeToken,
   proposedDesignTokenChanges,
   resetDesignTokens,
+  syncElementTokenBinding,
   tokenImpactCount,
   tokenSourceFor,
   tokenValue,
@@ -21,7 +26,7 @@ const originals = new Map<HTMLElement, Map<string, InspectableScalar>>();
 const edits = new WeakMap<HTMLElement, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();
 const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
-const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#898680;font-size:10px;overflow-wrap:anywhere}.design-react-field{grid-template-columns:76px minmax(0,1fr);padding:1px 0}.design-react-field input[type=checkbox]{justify-self:end;width:16px;height:16px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.65;cursor:not-allowed}.design-react-type{grid-column:2;color:#77736f;font-size:10px;margin-top:-5px;overflow-wrap:anywhere}.design-react-group .design-react-field{min-height:36px}.design-token{display:grid;gap:6px;padding:8px 0;border-top:1px solid #ffffff12}.design-token__title{display:flex;justify-content:space-between;gap:8px;font-size:11px}.design-token__title small,.design-token__scope{color:#898680;font-size:10px}.design-token__controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.design-token input,.design-token select{min-width:0;height:30px;border:1px solid #ffffff1c;border-radius:7px;background:#252322;color:#f4f0ea;padding:0 8px;font:inherit}.design-token button{min-height:30px;border:1px solid #ffffff1c;border-radius:7px;background:#302d31;color:#eee8f7;padding:0 9px;font:inherit;cursor:pointer}.design-token button:focus-visible,.design-token input:focus-visible,.design-token select:focus-visible{outline:2px solid #bda6ef;outline-offset:2px}.design-token [aria-invalid=true]{border-color:#f17676}`;
+const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#898680;font-size:10px;overflow-wrap:anywhere}.design-react-field{grid-template-columns:76px minmax(0,1fr);padding:1px 0}.design-react-field input[type=checkbox]{justify-self:end;width:16px;height:16px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.65;cursor:not-allowed}.design-react-type{grid-column:2;color:#77736f;font-size:10px;margin-top:-5px;overflow-wrap:anywhere}.design-react-group .design-react-field{min-height:36px}.design-token-binding{grid-column:2/-1;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;color:#898680;font-size:10px;padding:0 0 5px}.design-token-binding select{min-width:0;width:100%;height:25px;border:1px solid #ffffff1c;border-radius:7px;background:#252322;color:#e9e6e1;padding:0 7px;font:10px ui-sans-serif,system-ui,sans-serif}.design-token-binding select:focus-visible{outline:2px solid #bda6ef;outline-offset:2px}.design-token-binding[data-mode=custom]::after{content:'Custom override';grid-column:2;color:#bda6ef;font-size:9px}.design-theme-group{margin-top:4px}.design-theme-token{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:7px 0;border-top:1px solid #ffffff12}.design-theme-token small{grid-column:1/-1;color:#898680;font-size:10px}.design-theme-token input,.design-theme-token button{min-width:0;min-height:28px;border:1px solid #ffffff1c;border-radius:7px;background:#252322;color:#f4f0ea;padding:0 8px;font:10px ui-sans-serif,system-ui,sans-serif}.design-theme-token button{cursor:pointer}.design-theme-token :focus-visible{outline:2px solid #bda6ef;outline-offset:2px}.design-theme-token [aria-invalid=true]{border-color:#f17676}`;
 
 function scalarLabel(value: InspectableScalar): string {
   return value === undefined ? "unset" : JSON.stringify(value) ?? "unset";
@@ -39,9 +44,16 @@ export function proposedReactChanges(element: HTMLElement): string | undefined {
   const baseline = originals.get(element);
   const component = inspectableFor(element);
   if (!baseline?.size || !component) return undefined;
-  const rows = [...baseline].map(
-    ([name, before]) => `- ${name}: ${scalarLabel(before)} → ${scalarLabel(component.props[name])}`,
-  );
+  const source = tokenSourceFor(element);
+  const rows = [...baseline].map(([name, before]) => {
+    const prop = component.definition.props.find((item) => item.name === name);
+    const styleProperty = (prop as (typeof prop & { styleProperty?: string }))?.styleProperty;
+    const after = component.props[name];
+    const token = styleProperty && typeof after === "string"
+      ? source?.tokens.find((item) => item.properties.includes(styleProperty) && after === `var(${item.cssVariable})`)
+      : undefined;
+    return `- ${name}: ${scalarLabel(before)} → ${scalarLabel(after)}${token ? ` [${token.path}]` : " [custom value]"}`;
+  });
   return [
     "Proposed React prop changes (preview only)",
     `Component: ${component.definition.name}`,
@@ -91,51 +103,99 @@ export function resetDesignTokenEdits(element: HTMLElement): void {
   resetDesignTokens(element);
 }
 
-export function createDesignTokensPanel(element: HTMLElement, onEdit: () => void): HTMLElement | null {
+function ensurePanelStyles(styleRoot?: ShadowRoot): void {
+  if (!styleRoot || styledRoots.has(styleRoot)) return;
+  const style = document.createElement("style");
+  style.textContent = panelStyles;
+  styleRoot.append(style);
+  styledRoots.add(styleRoot);
+}
+
+/** Add token references directly to the existing style-property row. */
+export function createElementTokenControl(
+  element: HTMLElement,
+  property: string,
+  onEdit: (before: string, after: string, tokenPath?: string) => void,
+  styleRoot?: ShadowRoot,
+): HTMLElement | null {
+  const source = tokenSourceFor(element);
+  if (!source) return null;
+  const available = compatibleTokens(source, property);
+  if (!available.length) return null;
+  ensurePanelStyles(styleRoot);
+  const row = document.createElement("span");
+  row.className = "design-token-binding";
+  row.setAttribute("data-mode", "custom");
+  const caption = document.createElement("span");
+  caption.textContent = "Style token";
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", `Style token for ${property}`);
+  const custom = document.createElement("option");
+  custom.value = "custom";
+  custom.textContent = "Custom value";
+  select.append(custom);
+  for (const token of available) {
+    const option = document.createElement("option");
+    option.value = token.path;
+    option.textContent = token.path;
+    select.append(option);
+  }
+  const update = () => {
+    const binding = elementTokenBindingFor(source, element, property);
+    const activeToken = available.find((token) =>
+      element.style.getPropertyValue(property) === `var(${token.cssVariable})`,
+    );
+    select.value = activeToken?.path ?? "custom";
+    row.dataset.mode = binding?.mode ?? (activeToken ? "token" : "custom");
+    row.title = binding?.mode === "custom" && binding.tokenPath
+      ? `Custom override of ${binding.tokenPath}`
+      : activeToken ? `Using ${activeToken.path} · preview only` : "Uses a custom value";
+  };
+  const observer = new MutationObserver(update);
+  observer.observe(element, { attributes: true, attributeFilter: ["style"] });
+  const cleanupObserver = new MutationObserver(() => { if (!row.isConnected) { observer.disconnect(); cleanupObserver.disconnect(); } });
+  cleanupObserver.observe(row.ownerDocument, { childList: true, subtree: true });
+  select.addEventListener("change", () => {
+    const before = element.style.getPropertyValue(property);
+    const token = available.find((item) => item.path === select.value);
+    if (token) {
+      if (applyTokenToElement(source, element, token, property, { recordHistory: false }))
+        onEdit(before, element.style.getPropertyValue(property), token.path);
+    } else {
+      const control = row.parentElement?.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-property="${CSS.escape(property)}"]`);
+      const value = control?.value ?? getComputedStyle(element).getPropertyValue(property).trim();
+      const cssValue = control?.type === "number" && value.trim() !== "" ? `${value}px` : value;
+      element.style.setProperty(property, cssValue);
+      noteElementTokenOverride(source, element, property, cssValue);
+      onEdit(before, cssValue);
+    }
+    update();
+  });
+  row.append(caption, select);
+  update();
+  return row;
+}
+
+/** Shared theme editing stays secondary; per-element token choice lives on each knob. */
+export function createDesignThemePanel(element: HTMLElement, onEdit: () => void, styleRoot?: ShadowRoot): HTMLElement | null {
   const source = tokenSourceFor(element);
   if (!source || !source.tokens.length) return null;
+  ensurePanelStyles(styleRoot);
   const group = document.createElement("details");
-  group.className = "design-group design-token-group";
+  group.className = "design-group design-theme-group";
   group.open = false;
   const summary = document.createElement("summary");
-  summary.textContent = "Tokens & theme";
+  summary.textContent = "Edit shared theme values";
   group.append(summary);
-  const intro = document.createElement("small");
-  intro.className = "design-react-source";
-  intro.textContent = "Registered CSS variables · preview only";
-  group.append(intro);
-
+  const note = document.createElement("small");
+  note.className = "design-react-source";
+  note.textContent = "Affects all matching elements · preview only";
+  group.append(note);
   for (const token of source.tokens) {
-    const row = document.createElement("section");
-    row.className = "design-token";
-    const title = document.createElement("div");
-    title.className = "design-token__title";
-    const path = document.createElement("span");
-    path.textContent = token.path;
-    const type = document.createElement("small");
-    type.textContent = token.type;
-    title.append(path, type);
-    row.append(title);
-
-    const selector = document.createElement("select");
-    selector.setAttribute("aria-label", `CSS property for ${token.path}`);
-    for (const property of token.properties) {
-      const option = document.createElement("option");
-      option.value = property;
-      option.textContent = property;
-      selector.append(option);
-    }
-    const assign = document.createElement("button");
-    assign.type = "button";
-    assign.textContent = "Use token on element";
-    assign.addEventListener("click", () => {
-      if (applyTokenToElement(source, element, token, selector.value)) onEdit();
-    });
-    const localControls = document.createElement("div");
-    localControls.className = "design-token__controls";
-    localControls.append(selector, assign);
-    row.append(localControls);
-
+    const row = document.createElement("div");
+    row.className = "design-theme-token";
+    const label = document.createElement("span");
+    label.textContent = token.path;
     const value = document.createElement("input");
     value.type = "text";
     value.autocomplete = "off";
@@ -143,23 +203,29 @@ export function createDesignTokensPanel(element: HTMLElement, onEdit: () => void
     value.setAttribute("aria-label", `Shared theme value for ${token.path}`);
     const preview = document.createElement("button");
     preview.type = "button";
-    preview.textContent = `Preview shared change (${tokenImpactCount(source, token)})`;
+    preview.textContent = "Preview";
+    preview.setAttribute("aria-label", `Preview shared theme change for ${token.path}`);
     preview.addEventListener("click", () => {
       const valid = previewThemeToken(source, token, value.value.trim());
       value.setAttribute("aria-invalid", String(!valid));
       if (valid) onEdit();
     });
-    const themeControls = document.createElement("div");
-    themeControls.className = "design-token__controls";
-    themeControls.append(value, preview);
-    row.append(themeControls);
     const scope = document.createElement("small");
-    scope.className = "design-token__scope";
-    scope.textContent = `Shared preview · ${token.impactSelector} · ${tokenImpactCount(source, token)} matching elements`;
-    row.append(scope);
+    scope.textContent = `${tokenImpactCount(source, token)} matches · ${token.impactSelector}`;
+    row.append(label, value, preview, scope);
     group.append(row);
   }
   return group;
+}
+
+export function noteDesignTokenOverride(element: HTMLElement, property: string, value: string): void {
+  const source = tokenSourceFor(element);
+  if (source) noteElementTokenOverride(source, element, property, value);
+}
+
+export function syncDesignTokenBinding(element: HTMLElement, property: string): void {
+  const source = tokenSourceFor(element);
+  if (source) syncElementTokenBinding(source, element, property);
 }
 
 export function undoReactProp(element: HTMLElement): void {
@@ -241,6 +307,7 @@ export function createReactPropsPanel(
   group.append(source);
 
   for (const prop of component.definition.props) {
+    const styleProperty = (prop as InspectableProp & { styleProperty?: string }).styleProperty;
     const row = document.createElement("label");
     row.className = "design-field design-react-field";
     const caption = document.createElement("span");
@@ -308,6 +375,43 @@ export function createReactPropsPanel(
     type.className = "design-react-type";
     type.textContent = `${prop.typeLabel}${prop.required ? " · required" : " · optional"}`;
     row.append(type);
+    if (prop.kind === "string" && styleProperty) {
+      const tokenSource = tokenSourceFor(element);
+      const tokens = tokenSource ? compatibleTokens(tokenSource, styleProperty) : [];
+      if (tokens.length) {
+        const binding = document.createElement("span");
+        binding.className = "design-token-binding";
+        const caption = document.createElement("span");
+        caption.textContent = "Style token";
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", `Style token for ${prop.name}`);
+        const custom = document.createElement("option");
+        custom.value = "custom";
+        custom.textContent = "Custom value";
+        select.append(custom);
+        for (const token of tokens) {
+          const option = document.createElement("option");
+          option.value = token.path;
+          option.textContent = token.path;
+          select.append(option);
+        }
+        const sync = () => {
+          const active = tokens.find((token) => component.props[prop.name] === `var(${token.cssVariable})`);
+          select.value = active?.path ?? "custom";
+          binding.dataset.mode = active ? "token" : "custom";
+        };
+        select.addEventListener("change", () => {
+          const token = tokens.find((item) => item.path === select.value);
+          const next = token ? `var(${token.cssVariable})` : (typeof component.props[prop.name] === "string" && String(component.props[prop.name]).startsWith("var(")
+            ? element.ownerDocument.defaultView?.getComputedStyle(element).getPropertyValue(styleProperty).trim() ?? ""
+            : typeof component.props[prop.name] === "string" ? component.props[prop.name] as string : "");
+          if (recordChange(element, component, prop.name, next, control, onEdit)) sync();
+        });
+        binding.append(caption, select);
+        row.append(binding);
+        sync();
+      }
+    }
     group.append(row);
   }
   return group;

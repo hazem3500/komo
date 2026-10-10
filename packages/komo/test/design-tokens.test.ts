@@ -12,7 +12,7 @@ import {
   tokenSourceFor,
   undoDesignToken,
 } from "../src/design-tokens.js";
-import { createDesignTokensPanel, installCommentCapture } from "../src/react-props-panel.js";
+import { createDesignThemePanel, createElementTokenControl, installCommentCapture, noteDesignTokenOverride } from "../src/react-props-panel.js";
 import type { KomoDesignToken } from "../src/design-tokens.js";
 
 const tokens: KomoDesignToken[] = [
@@ -61,23 +61,32 @@ describe("explicit design-token preview bridge", () => {
     cleanup();
   });
 
-  it("preserves var references for local use and requires the shared-preview button", () => {
+  it("keeps compatible token choices on the style knob and preserves explicit overrides", async () => {
     document.body.innerHTML = '<main><article class="card" data-theme="brand"></article><div id="komo"></div></main>';
     const root = document.documentElement;
     root.style.setProperty("--brand", "#224466");
     const cleanup = registerDesignTokenSource(root, tokens);
     const card = document.querySelector<HTMLElement>(".card")!;
     const source = tokenSourceFor(card)!;
-    const panel = createDesignTokensPanel(card, () => {})!;
+    const panel = createDesignThemePanel(card, () => {})!;
     const brandValue = panel.querySelector<HTMLInputElement>('[aria-label="Shared theme value for color.brand"]')!;
     brandValue.value = "#abcdef";
     expect(root.style.getPropertyValue("--brand")).toBe("#224466");
-    panel.querySelectorAll<HTMLButtonElement>(".design-token__controls button")[1].click();
+    panel.querySelector<HTMLButtonElement>("button")!.click();
     expect(root.style.getPropertyValue("--brand")).toBe("#abcdef");
-
-    const fresh = createDesignTokensPanel(card, () => {})!;
-    const firstToken = source.tokens[0];
-    expect(applyTokenToElement(source, card, firstToken, "background-color")).toBe(true);
+    const knob = document.createElement("label");
+    knob.dataset.property = "background-color";
+    const value = document.createElement("input");
+    value.dataset.property = "background-color";
+    value.value = "#abcdef";
+    knob.append(value);
+    document.body.append(knob);
+    const tokenControl = createElementTokenControl(card, "background-color", () => {})!;
+    knob.append(tokenControl);
+    const chooser = tokenControl.querySelector<HTMLSelectElement>("select")!;
+    expect([...chooser.options].map((item) => item.value)).toEqual(["custom", "color.brand"]);
+    chooser.value = "color.brand";
+    chooser.dispatchEvent(new Event("change"));
     expect(card.style.getPropertyValue("background-color")).toBe("var(--brand)");
     expect(proposedDesignTokenChanges(card)).toContain("Element background-color: (unset) → var(--brand) [color.brand]");
     const comment = document.createElement("button");
@@ -85,7 +94,13 @@ describe("explicit design-token preview bridge", () => {
     installCommentCapture(comment, () => card, onComment);
     comment.click();
     expect(onComment.mock.calls[0]?.[1]).toContain("var(--brand) [color.brand]");
-    expect(fresh.textContent).toContain("Tokens & theme");
+    expect(tokenControl.textContent).toContain("Style token");
+    expect(tokenControl.dataset.mode).toBe("token");
+    value.value = "#345678";
+    card.style.setProperty("background-color", value.value);
+    noteDesignTokenOverride(card, "background-color", value.value);
+    await vi.waitFor(() => expect(tokenControl.dataset.mode).toBe("custom"));
+    expect(proposedDesignTokenChanges(card)).toContain("[custom override]");
     resetDesignTokens(card);
     expect(card.style.getPropertyValue("background-color")).toBe("");
     cleanup();
@@ -106,8 +121,8 @@ describe("explicit design-token preview bridge", () => {
     const event = new Event("pointerdown", { bubbles: true, cancelable: true, composed: true });
     Object.defineProperties(event, { clientX: { value: 20 }, clientY: { value: 20 }, button: { value: 0 } });
     card.dispatchEvent(event);
-    await vi.waitFor(() => expect(shadow.querySelector(".design-token-group")).not.toBeNull());
-    expect(shadow.querySelector(".design-token-group")?.textContent).toContain("color.brand");
+    await vi.waitFor(() => expect(shadow.querySelector(".design-theme-group")).not.toBeNull());
+    expect(shadow.querySelector('[aria-label="Style token for color"]')).not.toBeNull();
     controller.destroy();
     cleanup();
   });
