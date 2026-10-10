@@ -526,7 +526,13 @@ export function initComments(options: CommentsOptions): CommentsController {
       return portrait;
     }
     return icon(
-      id === "browse" ? "pointer" : id === "comment" ? "comment" : "expand",
+      id === "browse"
+        ? "pointer"
+        : id === "comment"
+          ? "comment"
+          : id === "design"
+            ? "brush"
+            : "expand",
     );
   });
   shadow.append(
