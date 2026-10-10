@@ -206,7 +206,6 @@ it("keeps the morphing sidebar as the shared surface when entering and leaving D
   expect(toolbar.inert).toBe(true);
   expect(host.classList.contains("design-active")).toBe(true);
   expect(inspector.parentElement).toBe(sidebar);
-  expect(inspector.classList.contains("design-inspector--integrated")).toBe(true);
   expect(sidebar.querySelector<HTMLElement>(".panel")?.inert).toBe(true);
   expect(sidebar.querySelector<HTMLElement>(".panel")?.hidden).toBe(true);
 

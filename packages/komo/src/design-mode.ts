@@ -4,7 +4,7 @@ import type { InlineTextTools } from "./inline-text-editor.js";
 
 export interface DesignModeOptions {
   root: ShadowRoot;
-  /** Optional shared Komo surface. When supplied, the inspector rides the sidebar morph. */
+  /** Shared Komo sidebar surface; the inspector rides its morph. Tests may omit it. */
   panelRoot?: HTMLElement;
   host: HTMLElement;
   targetAt(x: number, y: number): Element | null;
@@ -22,7 +22,7 @@ type Edit = {
 
 type TextEdit = { kind: "text"; element: HTMLElement };
 
-type Original = { value: string; priority: string };
+type Original = { value: string; priority: string; computed?: string };
 
 type Field = {
   property: string;
@@ -60,25 +60,6 @@ function toHex(value: string): string {
   const match = value.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
   if (!match) return "#000000";
   return `#${match.slice(1, 4).map((part) => Number(part).toString(16).padStart(2, "0")).join("")}`;
-}
-
-function cssSelector(element: Element): string {
-  if (element.id) return `#${CSS.escape(element.id)}`;
-  const parts: string[] = [];
-  let current: Element | null = element;
-  while (current && current !== document.body && parts.length < 6) {
-    const classes = [...current.classList].slice(0, 2).map((name) => `.${CSS.escape(name)}`).join("");
-    const siblings = current.parentElement
-      ? [...current.parentElement.children].filter((child) => child.tagName === current!.tagName)
-      : [];
-    parts.unshift(`${current.tagName.toLowerCase()}${classes}:nth-of-type(${siblings.indexOf(current) + 1})`);
-    if (current.parentElement?.id) {
-      parts.unshift(`#${CSS.escape(current.parentElement.id)}`);
-      break;
-    }
-    current = current.parentElement;
-  }
-  return parts.join(" > ");
 }
 
 function valueFor(field: Field, element: HTMLElement): string {
@@ -120,7 +101,6 @@ export function createDesignMode(options: DesignModeOptions) {
   panel.setAttribute("aria-label", "Design mode inspector");
   panel.setAttribute("aria-hidden", "true");
   panel.hidden = true;
-  if (options.panelRoot) panel.classList.add("design-inspector--integrated");
   const outline = document.createElement("div");
   outline.className = "design-outline";
   outline.setAttribute("aria-hidden", "true");
@@ -137,14 +117,19 @@ export function createDesignMode(options: DesignModeOptions) {
   close.type = "button";
   close.className = "design-inspector__close";
   close.setAttribute("aria-label", "Exit design mode");
-  close.textContent = "×";
+  close.append(icon("close"));
+  // Compact screens only: fold the sheet so page elements under it stay reachable.
+  const fold = document.createElement("button");
+  fold.type = "button";
+  fold.className = "design-inspector__fold";
+  fold.append(icon("chevron"));
   const identity = document.createElement("div");
   identity.className = "design-inspector__identity";
   const eyebrow = document.createElement("span");
   eyebrow.className = "design-inspector__eyebrow";
   eyebrow.textContent = "Design";
   identity.append(eyebrow, title, subtitle);
-  heading.append(mark, identity, close);
+  heading.append(mark, identity, fold, close);
 
   const controls = document.createElement("div");
   controls.className = "design-inspector__controls";
@@ -179,7 +164,6 @@ export function createDesignMode(options: DesignModeOptions) {
   let selected: HTMLElement | null = null;
   let hovered: HTMLElement | null = null;
   let textTools: InlineTextTools | null = null;
-  let reactTextPanel: typeof import("./react-props-panel.js") | null = null;
   let frame = 0;
   let reactPanelModule: typeof import("./react-props-panel.js") | null = null;
   let reactPanelPromise: Promise<typeof import("./react-props-panel.js")> | null = null;
@@ -191,13 +175,23 @@ export function createDesignMode(options: DesignModeOptions) {
   const collapsed = new Set<string>(["Layout", "Border"]);
   const history: Array<Edit | TextEdit> = [];
 
-  function setProperty(element: HTMLElement, property: string, value: string) {
-    element.style.setProperty(property, value);
-  }
   function remember(element: HTMLElement, property: string, value = element.style.getPropertyValue(property), priority = element.style.getPropertyPriority(property)) {
     let values = originals.get(element);
     if (!values) originals.set(element, (values = new Map()));
-    if (!values.has(property)) values.set(property, { value, priority });
+    if (!values.has(property)) values.set(property, { value, priority, computed: getComputedStyle(element).getPropertyValue(property).trim() });
+  }
+  function track(element: HTMLElement, property: string) {
+    let values = changed.get(element);
+    if (!values) changed.set(element, (values = new Map()));
+    const value = element.style.getPropertyValue(property);
+    if (value === (originals.get(element)?.get(property)?.value ?? "")) values.delete(property);
+    else values.set(property, value);
+    if (!values.size) changed.delete(element);
+    outlineFor(selected, "selected");
+  }
+  function restore(element: HTMLElement, property: string, original?: Original) {
+    if (original?.value) element.style.setProperty(property, original.value, original.priority);
+    else element.style.removeProperty(property);
   }
   function preview(field: Field, control: HTMLInputElement | HTMLSelectElement) {
     if (!selected) return;
@@ -205,14 +199,10 @@ export function createDesignMode(options: DesignModeOptions) {
     control.setAttribute("aria-invalid", String(value === null));
     if (value === null) return;
     remember(selected, field.property);
-    setProperty(selected, field.property, value);
+    // Record token provenance before the override hides the page's own reference.
     reactPanelModule?.noteDesignTokenOverride(selected, field.property, value);
-    const original = originals.get(selected)?.get(field.property);
-    if (original?.priority) selected.style.setProperty(field.property, value, original.priority);
-    let properties = changed.get(selected);
-    if (!properties) changed.set(selected, (properties = new Map()));
-    properties.set(field.property, value);
-    outlineFor(selected, "selected");
+    selected.style.setProperty(field.property, value, originals.get(selected)?.get(field.property)?.priority);
+    track(selected, field.property);
     updateActions();
   }
   function commit(field: Field, control: HTMLInputElement | HTMLSelectElement, final = true) {
@@ -365,35 +355,25 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     const element = selected;
     if (element?.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
-      reactPanelPromise ??= import("./react-props-panel.js").then((module) => {
-        reactPanelModule = module;
-        module.installCommentCapture(comment, () => selected, options.onComment);
-        return module;
-      }).catch((error: unknown) => {
+      reactPanelPromise ??= import("./react-props-panel.js").then((module) => reactPanelModule = module).catch((error: unknown) => {
         reactPanelPromise = null;
         throw error;
       });
       void reactPanelPromise.then((module) => {
         if (!active || selected !== element || controls.querySelector(".design-react-group, .design-theme-group")) return;
-        const panel = module.createReactPropsPanel(
-          element,
-          () => {
+        const styleRoot = options.root;
+        const panel = module.createReactPropsPanel(element, () => {
           status.textContent = "React state preview · resets on refresh";
           updateActions();
-          },
-          controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined,
-        );
+        }, styleRoot);
         if (panel) controls.append(panel);
-        const styleRoot = controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined;
         module.attachStyleTokenControls(element, fields, controls, (field, input, before) => {
-            remember(element, field.property, before);
-            starts.set(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
-            commit(field, input);
-            updateActions();
+          remember(element, field.property, before);
+          track(element, field.property);
+          starts.set(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
+          commit(field, input);
         }, styleRoot, valueFor, toHex);
-        const theme = module.createDesignThemePanel(element, () => {
-          updateActions();
-        }, controls.getRootNode() instanceof ShadowRoot ? controls.getRootNode() as ShadowRoot : undefined);
+        const theme = module.createDesignThemePanel(element, updateActions, styleRoot);
         if (theme) controls.append(theme);
       }).catch(() => {});
     }
@@ -425,7 +405,7 @@ export function createDesignMode(options: DesignModeOptions) {
     });
   }
   function select(element: Element | null) {
-    if (!(element instanceof HTMLElement) || element === options.host || options.host.contains(element)) return;
+    if (!(element instanceof HTMLElement) || options.host.contains(element)) return;
     if (textTools?.element && textTools.element !== element) finishTextEdit();
     selected = element;
     hovered = element;
@@ -433,12 +413,35 @@ export function createDesignMode(options: DesignModeOptions) {
     outlineFor(element, "selected");
     updateActions();
   }
+  function compact() {
+    return typeof matchMedia === "function" && matchMedia("(max-width:520px)").matches;
+  }
+  function setFolded(value: boolean) {
+    panel.toggleAttribute("data-folded", value && compact());
+    fold.setAttribute("aria-expanded", String(!panel.hasAttribute("data-folded")));
+    fold.setAttribute("aria-label", panel.hasAttribute("data-folded") ? "Expand inspector" : "Collapse inspector");
+  }
+  /** On compact screens the inspector is a bottom sheet; keep the selection above it. */
+  function reveal(element: HTMLElement) {
+    setFolded(false);
+    if (!compact()) return;
+    requestAnimationFrame(() => {
+      const rect = element.getBoundingClientRect();
+      const limit = panel.getBoundingClientRect().top - 12;
+      if (rect.top >= 12 && rect.bottom <= limit) return;
+      window.scrollBy({
+        top: rect.top - Math.max(12, (limit - rect.height) / 2),
+        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+    });
+  }
   function updateActions() {
     undo.disabled = history.length === 0 && !(selected && reactPanelModule?.canUndoReactProp(selected)) && !(selected && reactPanelModule?.canUndoDesignTokenEdit(selected));
     reset.disabled = !selected || !(changed.get(selected)?.size) && !textTools?.hasChanges(selected) && !(reactPanelModule?.hasReactPropChanges(selected)) && !(reactPanelModule?.hasDesignTokenEdit(selected));
     copy.disabled = !selected || !(changed.get(selected)?.size);
     comment.disabled = !selected;
-    editText.disabled = !!textTools?.busy || !selected;
+    // Nested markup is never editable; the editor checks privacy and interactivity on use.
+    editText.disabled = !!textTools?.busy || !selected?.isConnected || selected.childElementCount > 0;
     editText.textContent = textTools?.isEditing(selected) ? "Done editing" : "Edit text";
     editText.setAttribute("aria-label", textTools?.isEditing(selected) ? "Finish inline text editing" : "Edit selected text inline");
   }
@@ -468,14 +471,14 @@ export function createDesignMode(options: DesignModeOptions) {
   function onMove(event: PointerEvent) {
     if (!active || event.composedPath().includes(options.host)) return;
     const element = options.targetAt(event.clientX, event.clientY);
-    if (!(element instanceof HTMLElement) || element === options.host || options.host.contains(element)) return;
+    if (!(element instanceof HTMLElement) || options.host.contains(element)) return;
     hovered = element;
     if (!selected) outlineFor(hovered, "hover");
   }
   function onDown(event: PointerEvent) {
     if (!active || event.composedPath().includes(options.host)) return;
     const element = options.targetAt(event.clientX, event.clientY);
-    if (!(element instanceof HTMLElement) || element === options.host || options.host.contains(element)) return;
+    if (!(element instanceof HTMLElement) || options.host.contains(element)) return;
     if (textTools?.element && (element === textTools.element || textTools.element.contains(element))) return;
     if (textTools?.element) finishTextEdit();
     event.preventDefault();
@@ -487,18 +490,21 @@ export function createDesignMode(options: DesignModeOptions) {
     // Cancelling pointerdown alone does not cancel a link's click navigation.
     event.preventDefault();
     event.stopImmediatePropagation();
+    // Unfold and scroll only once the tap has finished, so the sheet never lands under the finger.
+    if (selected) reveal(selected);
   }
   function onKey(event: KeyboardEvent) {
     if (textTools?.handleKey(event)) {
       editText.focus({ preventScroll: true });
       return;
     }
-    if (active && (event.key === "Enter" || event.key === " ") && !event.composedPath().includes(options.host)) {
+    if (active && !textTools?.element && (event.key === "Enter" || event.key === " ") && !event.composedPath().includes(options.host)) {
       const focused = document.activeElement;
       if (focused instanceof HTMLElement && focused !== document.body && focused !== document.documentElement) {
         event.preventDefault();
         event.stopImmediatePropagation();
         select(focused);
+        reveal(focused);
         return;
       }
     }
@@ -522,6 +528,7 @@ export function createDesignMode(options: DesignModeOptions) {
       });
       outline.hidden = !selected;
       renderControls();
+      setFolded(!selected);
       outlineFor(selected, "selected");
       close.focus({ preventScroll: true });
     } else {
@@ -543,6 +550,7 @@ export function createDesignMode(options: DesignModeOptions) {
     }
   }
 
+  fold.addEventListener("click", () => setFolded(!panel.hasAttribute("data-folded")));
   close.addEventListener("click", () => {
     if (textTools?.element) finishTextEdit();
     setActive(false);
@@ -551,31 +559,21 @@ export function createDesignMode(options: DesignModeOptions) {
   undo.addEventListener("click", () => {
     const edit = history.pop();
     if (!edit) {
-      if (selected) reactPanelModule?.undoDesignTokenEdit(selected);
-      if (selected) reactPanelModule?.undoReactProp(selected);
-      if (selected) renderControls();
+      if (selected) {
+        reactPanelModule?.undoDesignTokenEdit(selected);
+        reactPanelModule?.undoReactProp(selected);
+        renderControls();
+      }
       status.textContent = "React state preview · resets on refresh";
-      updateActions();
-      (undo.disabled ? close : undo).focus({ preventScroll: true });
-      return;
+    } else if (edit.kind === "text") {
+      if (selected === (textTools?.undo() ?? edit.element)) renderControls();
+    } else {
+      restore(edit.element, edit.property, edit.before);
+      reactPanelModule?.syncDesignTokenBinding(edit.element, edit.property);
+      track(edit.element, edit.property);
+      if (selected === edit.element) renderControls();
+      outlineFor(selected ?? hovered, selected ? "selected" : "hover");
     }
-    if (edit.kind === "text") {
-      const element = textTools?.undo() ?? edit.element;
-      if (selected === element) renderControls();
-      updateActions();
-      (undo.disabled ? close : undo).focus({ preventScroll: true });
-      return;
-    }
-    if (edit.before.value) edit.element.style.setProperty(edit.property, edit.before.value, edit.before.priority);
-    else edit.element.style.removeProperty(edit.property);
-    reactPanelModule?.syncDesignTokenBinding(edit.element, edit.property);
-    const values = changed.get(edit.element);
-    const original = originals.get(edit.element)?.get(edit.property);
-    if (edit.before.value === (original?.value ?? "") && edit.before.priority === (original?.priority ?? "")) values?.delete(edit.property);
-    else values?.set(edit.property, edit.before.value);
-    if (!values?.size) changed.delete(edit.element);
-    if (selected === edit.element) renderControls();
-    outlineFor(selected ?? hovered, selected ? "selected" : "hover");
     updateActions();
     (undo.disabled ? close : undo).focus({ preventScroll: true });
   });
@@ -588,11 +586,7 @@ export function createDesignMode(options: DesignModeOptions) {
     const hasTokenValues = reactPanelModule?.hasDesignTokenEdit(selected) ?? false;
     if (!values?.size && !hasTextValue && !hasReactValues && !hasTokenValues) return;
     if (hasTextValue) textTools?.reset(selected);
-    for (const property of values?.keys() ?? []) {
-      const original = originals.get(selected)?.get(property);
-      if (original?.value) selected.style.setProperty(property, original.value, original.priority);
-      else selected.style.removeProperty(property);
-    }
+    for (const property of values?.keys() ?? []) restore(selected, property, originals.get(selected)?.get(property));
     changed.delete(selected);
     if (hasReactValues) reactPanelModule?.resetReactProps(selected);
     if (hasTokenValues) reactPanelModule?.resetDesignTokenEdits(selected);
@@ -603,22 +597,32 @@ export function createDesignMode(options: DesignModeOptions) {
     updateActions();
     close.focus({ preventScroll: true });
   });
-  copy.addEventListener("click", async () => {
-    if (!selected) return;
-    const values = changed.get(selected);
-    if (!values?.size) return;
-    const css = `${cssSelector(selected)} {\n${[...values].map(([property, value]) => `  ${property}: ${value};`).join("\n")}\n}`;
-    try {
-      await navigator.clipboard.writeText(css);
-      status.textContent = "CSS copied · apply it in your site stylesheet";
-    } catch {
-      status.textContent = css;
-    }
+  const exporter = () => import("./design-export.js");
+  copy.addEventListener("click", () => {
+    const element = selected;
+    const values = element ? changed.get(element) : undefined;
+    if (!element || !values?.size) return;
+    void exporter().then(async ({ cssText }) => {
+      const css = cssText(element, values);
+      try {
+        await navigator.clipboard.writeText(css);
+        status.textContent = "CSS copied · apply it in your site stylesheet";
+      } catch {
+        status.textContent = css;
+      }
+    });
   });
   comment.addEventListener("click", () => {
-    if (!selected) return;
-    if (textTools?.isEditing(selected)) finishTextEdit();
-    options.onComment(selected, textTools?.proposal(selected));
+    const element = selected;
+    if (!element) return;
+    if (textTools?.isEditing(element)) finishTextEdit();
+    void exporter().then(({ designProposal }) => options.onComment(element, designProposal(
+      element,
+      changed.get(element),
+      (property) => originals.get(element)?.get(property)?.computed,
+      reactPanelModule?.tokenBoundProperties(element),
+      [textTools?.proposal(element), reactPanelModule?.proposedDesignChanges(element)],
+    )), () => { status.textContent = "Comment unavailable · try again"; });
   });
   document.addEventListener("pointermove", onMove, { capture: true, signal: listeners.signal });
   document.addEventListener("pointerdown", onDown, { capture: true, signal: listeners.signal });
@@ -638,12 +642,8 @@ export function createDesignMode(options: DesignModeOptions) {
       window.clearTimeout(closeTimer);
       listeners.abort();
       cancelAnimationFrame(frame);
-      for (const [element, properties] of originals) {
-        for (const [property, original] of properties) {
-          if (original.value) element.style.setProperty(property, original.value, original.priority);
-          else element.style.removeProperty(property);
-        }
-      }
+      for (const [element, properties] of originals)
+        for (const [property, original] of properties) restore(element, property, original);
       textTools?.restoreAll();
       panel.remove();
       outline.remove();

@@ -197,25 +197,36 @@ export function canEditLeafText(element: HTMLElement): boolean {
   return true;
 }
 
-function plainTextAtCaret(element: HTMLElement, text: string) {
-  const selection = document.getSelection();
-  if (!selection?.rangeCount) return;
-  const range = selection.getRangeAt(0);
-  if (!element.contains(range.commonAncestorContainer)) return;
+function caretOffset(element: HTMLElement): number {
   const current = element.textContent ?? "";
-  const offset = range.startContainer === element
+  const selection = document.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  if (!range || !element.contains(range.commonAncestorContainer)) return -1;
+  return range.startContainer === element
     ? Math.min([...element.childNodes].slice(0, range.startOffset).reduce((sum, node) => sum + (node.textContent?.length ?? 0), 0), current.length)
     : range.startContainer.nodeType === Node.TEXT_NODE
       ? Math.min(range.startOffset, current.length)
       : current.length;
-  const insertion = text.slice(0, Math.max(0, 500 - current.length));
-  element.textContent = current.slice(0, offset) + insertion + current.slice(offset);
+}
+
+function placeCaret(element: HTMLElement, offset: number) {
   const node = element.firstChild;
-  if (!node) return;
-  range.setStart(node, offset + insertion.length);
+  const selection = document.getSelection();
+  if (!node || !selection) return;
+  const range = document.createRange();
+  range.setStart(node, Math.min(offset, node.textContent?.length ?? 0));
   range.collapse(true);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function plainTextAtCaret(element: HTMLElement, text: string) {
+  const offset = caretOffset(element);
+  if (offset < 0) return;
+  const current = element.textContent ?? "";
+  const insertion = text.slice(0, Math.max(0, 500 - current.length));
+  element.textContent = current.slice(0, offset) + insertion + current.slice(offset);
+  placeCaret(element, offset + insertion.length);
 }
 
 export async function startInlineTextEditor(
@@ -249,11 +260,18 @@ export async function startInlineTextEditor(
     }
   }
 
+  // React replaces the edited text when it rerenders, which drops the caret to
+  // the start; put it back where the person was typing.
+  let caret = -1;
+  const keepCaret = new MutationObserver(() => {
+    if (caret >= 0) placeCaret(element, caret);
+  });
   const input = () => {
     if (element.childElementCount) element.textContent = element.textContent ?? "";
     if ((element.textContent ?? "").length > 500) element.textContent = (element.textContent ?? "").slice(0, 500);
-    if (reactText && bridge && !bridge.previewReactTextEdit(element, reactText.propName, element.textContent ?? "")) {
-      element.textContent = before;
+    if (reactText && bridge) {
+      caret = caretOffset(element);
+      if (!bridge.previewReactTextEdit(element, reactText.propName, element.textContent ?? "")) element.textContent = before;
     }
   };
   const paste = (event: ClipboardEvent) => {
@@ -262,7 +280,10 @@ export async function startInlineTextEditor(
     input();
   };
   const drop = (event: DragEvent) => event.preventDefault();
+  // The browser's own insertion is observed before "input"; only restore after it.
+  element.addEventListener("beforeinput", () => { caret = -1; }, { signal: listeners.signal });
   element.addEventListener("input", input, { signal: listeners.signal });
+  if (reactText) keepCaret.observe(element, { childList: true, characterData: true, subtree: true });
   element.addEventListener("paste", paste, { signal: listeners.signal });
   element.addEventListener("drop", drop, { signal: listeners.signal });
   element.setAttribute("contenteditable", "true");
@@ -285,6 +306,7 @@ export async function startInlineTextEditor(
       if (finished) return;
       finished = true;
       listeners.abort();
+      keepCaret.disconnect();
       if (element.childElementCount) element.textContent = element.textContent ?? "";
       const after = (element.textContent ?? "").slice(0, 500);
       restoreAttributes();
