@@ -3,6 +3,8 @@ import { icon } from "./dom.js";
 
 export interface DesignModeOptions {
   root: ShadowRoot;
+  /** Optional shared Komo surface. When supplied, the inspector rides the sidebar morph. */
+  panelRoot?: HTMLElement;
   host: HTMLElement;
   targetAt(x: number, y: number): Element | null;
   onComment(element: Element): void;
@@ -112,6 +114,7 @@ export function createDesignMode(options: DesignModeOptions) {
   panel.setAttribute("aria-label", "Design mode inspector");
   panel.setAttribute("aria-hidden", "true");
   panel.hidden = true;
+  if (options.panelRoot) panel.classList.add("design-inspector--integrated");
   const outline = document.createElement("div");
   outline.className = "design-outline";
   outline.setAttribute("aria-hidden", "true");
@@ -158,7 +161,8 @@ export function createDesignMode(options: DesignModeOptions) {
   comment.textContent = "Comment on element";
   actions.append(undo, reset, copy, comment);
   panel.append(heading, controls, status, actions);
-  options.root.append(style, outline, panel);
+  options.root.append(style, outline);
+  (options.panelRoot ?? options.root).append(panel);
 
   let active = false;
   let closeTimer = 0;
@@ -514,6 +518,9 @@ export function createDesignMode(options: DesignModeOptions) {
 
   return {
     setActive,
+    mountPanel(parent: HTMLElement) {
+      if (panel.parentElement !== parent) parent.append(panel);
+    },
     get active() { return active; },
     destroy() {
       window.clearTimeout(closeTimer);
