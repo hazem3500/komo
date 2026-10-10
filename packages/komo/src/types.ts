@@ -75,6 +75,8 @@ export interface CommentsOptions {
   /** Public project key registered in the API configuration. */
   project: string;
   enabled?: boolean;
+  /** Hide the toolbar until controller.open() or Shift+K is used. Defaults to true. */
+  showToolbar?: boolean;
   /**
    * Sidebar presentation when the review opens. "edge" (default) is a floating,
    * draggable sidebar that parks off and peeks from the viewport edge while

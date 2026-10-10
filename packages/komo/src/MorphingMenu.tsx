@@ -124,6 +124,8 @@ export function MorphingMenu({
   const selected = activeId ?? selection;
   const expanded = view.kind !== "collapsed";
   const barItems = items.filter((item) => item.showInBar !== false);
+  const dismissItem = barItems.find((item) => item.id === "dismiss");
+  const primaryBarItems = barItems.filter((item) => item.id !== "dismiss");
   const groups = items.filter((item) => item.children?.length);
 
   function hideTooltip() {
@@ -543,7 +545,7 @@ export function MorphingMenu({
             }, HOVER_GRACE_PERIOD);
           }}
         >
-          {barItems.map((item) => control(item, true))}
+          {primaryBarItems.map((item) => control(item, true))}
           <motion.button
             layout="position"
             transition={reducedMotion ? { duration: 0 } : spring}
@@ -570,6 +572,7 @@ export function MorphingMenu({
           >
             <ChevronSelectorVertical aria-hidden="true" />
           </motion.button>
+          {dismissItem && control(dismissItem, true)}
         </div>
         <div
           id={`${id}-main`}

@@ -179,7 +179,11 @@ export function initComments(options: CommentsOptions): CommentsController {
     expanded = !!options.onboarding,
     mode = false,
     commentMode = false,
-    hidden = false,
+    hidden = options.showToolbar === false,
+    toolbarDismissed = options.showToolbar === false,
+    designActive = false,
+    designReturnToComments = false,
+    designReturnScrollTop = 0,
     account = !!options.onboarding,
     pending = false,
     refreshing = false,
@@ -188,6 +192,13 @@ export function initComments(options: CommentsOptions): CommentsController {
   let threads: Thread[] = [],
     selected: string | null = null,
     draft: Anchor | null = null;
+  type DesignController = {
+    setActive(value: boolean): void;
+    mountPanel(parent: HTMLElement): void;
+    destroy(): void;
+  };
+  let designController: DesignController | null = null;
+  let designControllerPromise: Promise<DesignController | null> | null = null;
   const optimistic = new OptimisticQueue<Thread[]>(
     [],
     (next) => {
@@ -456,6 +467,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     toolbar = el("div", "toolbar"),
     sidebar = el("div"),
     hints = el("div");
+  sidebar.tabIndex = -1;
   if (edgeSidebar) sidebar.classList.add("edge-sidebar");
   const edgeSensor = el("div", "edge-sidebar-sensor");
   edgeSensor.hidden = true;
@@ -516,9 +528,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       portrait.classList.add("review-avatar");
       return portrait;
     }
-    return icon(
-      id === "browse" ? "pointer" : id === "comment" ? "comment" : "expand",
-    );
+    return icon(id as keyof typeof icons);
   });
   shadow.append(
     style,
@@ -575,6 +585,15 @@ export function initComments(options: CommentsOptions): CommentsController {
   // True while reopening a remembered sidebar on load: skip the open motion.
   let restoring = false;
   const openKey = `branch-comments:open:${options.project}:${options.repo}`;
+  const toolbarDismissKey = `branch-comments:toolbar-dismissed:${options.project}:${options.repo}`;
+  try {
+    if (sessionStorage.getItem(toolbarDismissKey) === "1") {
+      toolbarDismissed = true;
+      hidden = true;
+    }
+  } catch {
+    /* Keep the dismissal in memory when session storage is blocked. */
+  }
   let searchOpen = false;
   let dockMotion: ReturnType<typeof animate> | undefined;
   let edgeMotions: ReturnType<typeof animate>[] = [];
@@ -1387,6 +1406,10 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   function setMode(value: boolean) {
     if (options.onboarding) return;
+    if (designActive) {
+      designActive = false;
+      designController?.setActive(false);
+    }
     commentMode = value;
     if (expanded) toggleExpanded(false);
     const restore = value ? (parkedDraft ?? recoveredDrafts.shift()) : null;
@@ -1408,6 +1431,44 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (value) {
       selected = null;
       draft = null;
+    }
+    render();
+  }
+  function restoreCommentsAfterDesign() {
+    if (!designReturnToComments) return;
+    designReturnToComments = false;
+    toggleExpanded(true);
+    requestAnimationFrame(() => {
+      const list = sidebar.querySelector<HTMLElement>(".list");
+      if (list) list.scrollTop = designReturnScrollTop;
+      sidebar.querySelector<HTMLButtonElement>(".design-mode-trigger")?.focus({ preventScroll: true });
+    });
+  }
+  function setDesignMode(value: boolean, returnToComments = false) {
+    if (options.onboarding || !!draft) return;
+    if (value) {
+      // Keep the shared sidebar open. Its existing drawer morph is the outer
+      // surface transition for both Comments and Design; only the content view
+      // changes while the comment list and selection context stay mounted.
+      designReturnToComments = true;
+      if (returnToComments || expanded)
+        designReturnScrollTop = sidebar.querySelector<HTMLElement>(".list")?.scrollTop ?? 0;
+      setMode(false);
+      if (!expanded) toggleExpanded(true);
+      account = false;
+      // Move focus out of the Comments view before render marks it hidden.
+      // The Design controller will move focus to its close control once its
+      // optional chunk has loaded.
+      if (sidebar.querySelector(".panel")?.contains(shadow.activeElement)) {
+        sidebar.focus({ preventScroll: true });
+      }
+    }
+    designActive = value;
+    if (value) {
+      void ensureDesignController().then((controller) => controller?.setActive(designActive));
+    } else {
+      designController?.setActive(false);
+      restoreCommentsAfterDesign();
     }
     render();
   }
@@ -1525,6 +1586,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     host.style.height = `${viewportHeight}px`;
     host.style.top = "";
     host.classList.toggle("review-open", expanded);
+    host.classList.toggle("design-active", designActive);
     if (useFrame) {
       appliedScale = layout.scale;
       const effective = appliedScale * zoom;
@@ -2052,6 +2114,36 @@ export function initComments(options: CommentsOptions): CommentsController {
     mode = false;
     render();
   }
+  function dismissToolbar() {
+    // Hide the complete review surface and stop Design mode from capturing
+    // page interaction. Keep its runtime preview edits, but not its selection
+    // overlay; Shift+K or controller.open() can restore Komo for this tab.
+    designReturnToComments = false;
+    designActive = false;
+    designController?.setActive(false);
+    dismiss();
+    if (expanded) toggleExpanded(false);
+    mode = false;
+    commentMode = false;
+    hidden = true;
+    toolbarDismissed = true;
+    try {
+      sessionStorage.setItem(toolbarDismissKey, "1");
+    } catch {
+      /* Keep the dismissal in memory when session storage is blocked. */
+    }
+    render();
+  }
+  function restoreToolbar() {
+    toolbarDismissed = false;
+    hidden = false;
+    try {
+      sessionStorage.removeItem(toolbarDismissKey);
+    } catch {
+      /* The toolbar remains visible for this page session. */
+    }
+    render();
+  }
   function selectThread(thread: Thread) {
     commentMode = false;
     clearTimeout(accountOpenTimer);
@@ -2106,6 +2198,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
   function renderToolbar() {
+    toolbar.style.display = toolbarDismissed ? "none" : "";
     presence.update();
     const { dockCenter: viewportCenter } = reviewLayout(
       window.innerWidth,
@@ -2193,6 +2286,12 @@ export function initComments(options: CommentsOptions): CommentsController {
         onSelect: () => setMode(!commentMode),
       },
       {
+        id: "design",
+        label: "Design mode · preview styles",
+        icon: glyph("brush"),
+        onSelect: () => setDesignMode(!designActive),
+      },
+      {
         id: "comments",
         label: options.onboarding
           ? expanded
@@ -2234,6 +2333,12 @@ export function initComments(options: CommentsOptions): CommentsController {
         onSelect: () => run(() => copyPrompt("all")),
       },
       {
+        id: "dismiss",
+        label: "Dismiss Komo · Shift+K to restore",
+        icon: glyph("close"),
+        onSelect: dismissToolbar,
+      },
+      {
         id: "visibility",
         label: hidden ? "Show comment pins" : "Hide comment pins",
         icon: glyph("comment"),
@@ -2273,6 +2378,8 @@ export function initComments(options: CommentsOptions): CommentsController {
               : "bottom")),
       activeId: account
         ? "account"
+        : designActive
+          ? "design"
         : commentMode
           ? "comment"
           : expanded
@@ -2823,6 +2930,12 @@ export function initComments(options: CommentsOptions): CommentsController {
           () => setSearch(true),
           "icon sidebar-search-trigger",
           "search",
+        ),
+        button(
+          "Design mode",
+          () => setDesignMode(true, true),
+          "icon design-mode-trigger",
+          "brush",
         ),
         button("Close sidebar", () => toggleExpanded(false), "icon", "close"),
       );
@@ -4473,6 +4586,49 @@ export function initComments(options: CommentsOptions): CommentsController {
         .find((element) => element !== host && !host.contains(element)) ?? null
     );
   }
+  function ensureDesignController() {
+    if (designController) return Promise.resolve(designController);
+    if (!designControllerPromise) {
+      designControllerPromise = import("./design-mode.js")
+        .then(({ createDesignMode }) => {
+          const controller = createDesignMode({
+            root: shadow,
+            panelRoot: sidebar,
+            host,
+            targetAt(x, y) {
+              const target = siteElementAt(x, y);
+              return target && target !== surface && surface.contains(target) ? target : null;
+            },
+            onComment(element, proposal) {
+              designReturnToComments = false;
+              setDesignMode(false);
+              draftText = proposal ?? "";
+              const rect = element.getBoundingClientRect();
+              composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+            },
+            onExit() {
+              designActive = false;
+              renderToolbar();
+              restoreCommentsAfterDesign();
+            },
+          });
+          if (destroyed) {
+            controller.destroy();
+            return null;
+          }
+          designController = controller;
+          controller.setActive(designActive);
+          return controller;
+        })
+        .catch(() => {
+          designActive = false;
+          renderToolbar();
+          return null;
+        })
+        .finally(() => { designControllerPromise = null; });
+    }
+    return designControllerPromise;
+  }
   function indicatorPoint(
     pin: HTMLElement,
     fallback: { x: number; y: number },
@@ -4668,6 +4824,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   function render() {
     if (destroyed) return;
+    host.classList.toggle("design-active", designActive);
     if (account && !expanded) {
       if (isCompactReview(window.innerWidth, window.innerHeight)) {
         account = false;
@@ -4692,10 +4849,18 @@ export function initComments(options: CommentsOptions): CommentsController {
     hints.replaceChildren();
 
     renderToolbar();
+    toolbar.inert = designActive;
     renderPins();
     renderList();
     renderDialog();
     placeEdgeAccount();
+    const commentsPanel = sidebar.querySelector<HTMLElement>(".panel");
+    if (commentsPanel) {
+      commentsPanel.inert = designActive;
+      commentsPanel.setAttribute("aria-hidden", String(designActive));
+      commentsPanel.hidden = designActive;
+    }
+    if (designActive) designController?.mountPanel(sidebar);
   }
   let drag: {
     x: number;
@@ -4911,6 +5076,19 @@ export function initComments(options: CommentsOptions): CommentsController {
         return;
       }
       if (
+        toolbarDismissed &&
+        event.key.toLowerCase() === "k" &&
+        event.shiftKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !typing
+      ) {
+        event.preventDefault();
+        restoreToolbar();
+        return;
+      }
+      if (
         options.onboarding ||
         typing ||
         event.metaKey ||
@@ -5121,6 +5299,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (destroyed) return;
       destroyed = true;
       polling?.stop();
+      designController?.destroy();
       api.cancelReads();
       stopLayoutMotion();
       disposeHeaderTip?.();
@@ -5190,6 +5369,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     },
     open() {
       if (destroyed) return;
+      restoreToolbar();
       toggleExpanded(true);
     },
     close() {

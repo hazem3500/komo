@@ -63,6 +63,7 @@
     "build:setup": "esbuild src/setup-browser.ts --bundle --format=esm --minify --outfile=server/setup-client.txt",
     "size": "node scripts/measure.mjs",
     "bench": "node scripts/bench.mjs",
+    "demo:react-props": "node examples/react-props/build.mjs",
     "test:package": "pnpm run build && node scripts/check-package.mjs",
     "build:node": "esbuild server/node.ts --bundle --platform=node --format=esm --packages=external --loader:.txt=text --outfile=dist/node.mjs && mkdir -p dist/postgres && cp server/postgres/*.sql dist/postgres/"
   },

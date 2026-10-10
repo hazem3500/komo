@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { icon } from "../src/dom";
 import { initComments } from "../src/index";
 import type { CommentsController, CommentsOptions } from "../src/types";
 
@@ -74,6 +75,148 @@ it("rejects unsafe endpoint schemes and embedded credentials before mounting", (
       "HTTPS API endpoint",
     );
   expect(document.body.children).toHaveLength(0);
+});
+
+it("lets reviewers dismiss and restore the toolbar, and supports hidden initialization", () => {
+  controller = initComments({ ...options, onboarding: undefined });
+  const host = [...document.body.children].find(
+    (node) => node.shadowRoot,
+  ) as HTMLElement;
+  const toolbar = host.shadowRoot!.querySelector<HTMLElement>(".toolbar")!;
+  const dismiss = host.shadowRoot!.querySelector<HTMLButtonElement>(
+    '[data-menu-item="dismiss"]',
+  )!;
+  const barOrder = [...host.shadowRoot!.querySelectorAll<HTMLElement>(
+    ".morphing-menu__bar [data-menu-item]",
+  )].map((item) => item.dataset.menuItem);
+  expect(barOrder.slice(-2)).toEqual(["more", "dismiss"]);
+  expect(dismiss.querySelector("svg")?.outerHTML).toBe(
+    icon("close").outerHTML,
+  );
+  expect(toolbar.style.display).not.toBe("none");
+  dismiss.click();
+  expect(toolbar.style.display).toBe("none");
+  const reopen = new KeyboardEvent("keydown", {
+    key: "K",
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  document.dispatchEvent(reopen);
+  expect(reopen.defaultPrevented).toBe(true);
+  expect(toolbar.style.display).not.toBe("none");
+  controller.destroy();
+
+  document.body.replaceChildren();
+  sessionStorage.clear();
+  controller = initComments({
+    ...options,
+    onboarding: undefined,
+    project: "hidden-fixture",
+    showToolbar: false,
+  });
+  const hiddenHost = [...document.body.children].find(
+    (node) => node.shadowRoot,
+  ) as HTMLElement;
+  const hiddenToolbar = hiddenHost.shadowRoot!.querySelector<HTMLElement>(
+    ".toolbar",
+  )!;
+  expect(hiddenToolbar.style.display).toBe("none");
+  controller.open();
+  expect(hiddenToolbar.style.display).not.toBe("none");
+});
+
+it("dismisses the active Design overlay without intercepting host clicks", async () => {
+  controller = initComments({ ...options, onboarding: undefined });
+  const host = [...document.body.children].find(
+    (node) => node.shadowRoot,
+  ) as HTMLElement;
+  const root = host.shadowRoot!;
+  const toolbar = root.querySelector<HTMLElement>(".toolbar")!;
+  const design = root.querySelector<HTMLButtonElement>(
+    '[data-menu-item="design"]',
+  )!;
+  design.click();
+
+  for (let i = 0; i < 20; i++) {
+    const inspector = root.querySelector<HTMLElement>(".design-inspector");
+    if (inspector?.getAttribute("aria-hidden") === "false") break;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  const inspector = root.querySelector<HTMLElement>(".design-inspector")!;
+  expect(inspector.getAttribute("aria-hidden")).toBe("false");
+
+  const hostButton = document.createElement("button");
+  document.body.append(hostButton);
+  const hostClick = vi.fn();
+  hostButton.addEventListener("click", hostClick);
+  const capturedClick = new MouseEvent("click", {
+    bubbles: true,
+    cancelable: true,
+  });
+  hostButton.dispatchEvent(capturedClick);
+  expect(capturedClick.defaultPrevented).toBe(true);
+  expect(hostClick).not.toHaveBeenCalled();
+
+  const dismiss = root.querySelector<HTMLButtonElement>(
+    '[data-menu-item="dismiss"]',
+  )!;
+  expect(dismiss.getAttribute("aria-label")).toBe(
+    "Dismiss Komo · Shift+K to restore",
+  );
+  dismiss.click();
+  expect(toolbar.style.display).toBe("none");
+  expect(inspector.getAttribute("aria-hidden")).toBe("true");
+
+  const restoredClick = new MouseEvent("click", {
+    bubbles: true,
+    cancelable: true,
+  });
+  hostButton.dispatchEvent(restoredClick);
+  expect(restoredClick.defaultPrevented).toBe(false);
+  expect(hostClick).toHaveBeenCalledOnce();
+
+  document.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "K",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  expect(toolbar.style.display).not.toBe("none");
+});
+
+it("keeps the morphing sidebar as the shared surface when entering and leaving Design", async () => {
+  controller = initComments({ ...options, onboarding: undefined });
+  const host = [...document.body.children].find((node) => node.shadowRoot) as HTMLElement;
+  const root = host.shadowRoot!;
+  const toolbar = root.querySelector<HTMLElement>(".toolbar")!;
+  root.querySelector<HTMLButtonElement>('[data-menu-item="design"]')!.click();
+
+  for (let i = 0; i < 20; i++) {
+    const inspector = root.querySelector<HTMLElement>(".design-inspector");
+    if (inspector?.getAttribute("aria-hidden") === "false") break;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  const sidebar = root.querySelector<HTMLElement>(".edge-sidebar, .sidebar") ??
+    [...root.children].find((element) => element.querySelector(".design-inspector")) as HTMLElement;
+  const inspector = root.querySelector<HTMLElement>(".design-inspector")!;
+  expect(toolbar.dataset.hidden).not.toBe("true");
+  expect(toolbar.inert).toBe(true);
+  expect(host.classList.contains("design-active")).toBe(true);
+  expect(inspector.parentElement).toBe(sidebar);
+  expect(inspector.classList.contains("design-inspector--integrated")).toBe(true);
+  expect(sidebar.querySelector<HTMLElement>(".panel")?.inert).toBe(true);
+  expect(sidebar.querySelector<HTMLElement>(".panel")?.hidden).toBe(true);
+
+  inspector.querySelector<HTMLButtonElement>(".design-inspector__close")!.click();
+  expect(root.querySelector<HTMLElement>(".design-inspector")?.getAttribute("aria-hidden")).toBe("true");
+  expect(sidebar.querySelector<HTMLElement>(".panel")?.inert).toBe(false);
+  expect(sidebar.querySelector<HTMLElement>(".panel")?.hidden).toBe(false);
+  expect(toolbar.inert).toBe(false);
+  expect(host.classList.contains("design-active")).toBe(false);
+  expect(toolbar.dataset.hidden).not.toBe("true");
 });
 
 it("clears private cached feedback and identity immediately on another tab's logout", async () => {
