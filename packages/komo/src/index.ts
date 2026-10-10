@@ -4599,9 +4599,10 @@ export function initComments(options: CommentsOptions): CommentsController {
               const target = siteElementAt(x, y);
               return target && target !== surface && surface.contains(target) ? target : null;
             },
-            onComment(element) {
+            onComment(element, proposal) {
               designReturnToComments = false;
               setDesignMode(false);
+              draftText = proposal ?? "";
               const rect = element.getBoundingClientRect();
               composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
             },

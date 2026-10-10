@@ -63,5 +63,8 @@ await writeFile(
 );
 if (report.initial.gzip > 100_000 || report.coreFeatures.gzip > 196_000)
   throw new Error("komo exceeds its core production consumer bundle budget.");
-if (report.optionalDesignMode.gzip > 6_000)
+// The React prop inspector is emitted as a separate lazy module. Its 300-byte
+// integration bridge lives in this optional entry; core consumer bytes remain
+// unchanged, so retain a small, explicit allowance for that capability.
+if (report.optionalDesignMode.gzip > 6_400)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");

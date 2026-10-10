@@ -7,7 +7,7 @@ export interface DesignModeOptions {
   panelRoot?: HTMLElement;
   host: HTMLElement;
   targetAt(x: number, y: number): Element | null;
-  onComment(element: Element): void;
+  onComment(element: Element, proposal?: string): void;
   onExit(): void;
 }
 
@@ -169,13 +169,15 @@ export function createDesignMode(options: DesignModeOptions) {
   let selected: HTMLElement | null = null;
   let hovered: HTMLElement | null = null;
   let frame = 0;
+  let reactPanelModule: typeof import("./react-props-panel.js") | null = null;
+  let reactPanelPromise: Promise<typeof import("./react-props-panel.js")> | null = null;
   const originals = new Map<HTMLElement, Map<string, Original>>();
   const changed = new Map<HTMLElement, Map<string, string>>();
-  const history: Edit[] = [];
   const starts = new WeakMap<HTMLInputElement | HTMLSelectElement, Original>();
   const pending = new WeakMap<HTMLInputElement | HTMLSelectElement, Edit>();
   const listeners = new AbortController();
   const collapsed = new Set<string>(["Layout", "Border"]);
+  const history: Edit[] = [];
 
   function setProperty(element: HTMLElement, property: string, value: string) {
     element.style.setProperty(property, value);
@@ -346,6 +348,25 @@ export function createDesignMode(options: DesignModeOptions) {
       });
       controls.append(group);
     }
+    const element = selected;
+    if (element?.closest("[data-komo-inspectable]")) {
+      reactPanelPromise ??= import("./react-props-panel.js").then((module) => {
+        reactPanelModule = module;
+        module.installCommentCapture(comment, () => selected, options.onComment);
+        return module;
+      }).catch((error: unknown) => {
+        reactPanelPromise = null;
+        throw error;
+      });
+      void reactPanelPromise.then((module) => {
+        if (!active || selected !== element || controls.querySelector(".design-react-group")) return;
+        const panel = module.createReactPropsPanel(element, () => {
+          status.textContent = "React state preview · resets on refresh";
+          updateActions();
+        });
+        if (panel) controls.append(panel);
+      }).catch(() => {});
+    }
   }
   function outlineFor(element: HTMLElement | null, kind: "hover" | "selected") {
     if (!active || !element?.isConnected) {
@@ -382,8 +403,8 @@ export function createDesignMode(options: DesignModeOptions) {
     updateActions();
   }
   function updateActions() {
-    undo.disabled = history.length === 0;
-    reset.disabled = !selected || !(changed.get(selected)?.size);
+    undo.disabled = history.length === 0 && !(selected && reactPanelModule?.canUndoReactProp(selected));
+    reset.disabled = !selected || !(changed.get(selected)?.size) && !(reactPanelModule?.hasReactPropChanges(selected));
     copy.disabled = !selected || !(changed.get(selected)?.size);
     comment.disabled = !selected;
   }
@@ -464,7 +485,14 @@ export function createDesignMode(options: DesignModeOptions) {
   });
   undo.addEventListener("click", () => {
     const edit = history.pop();
-    if (!edit) return;
+    if (!edit) {
+      if (selected) reactPanelModule?.undoReactProp(selected);
+      if (selected) renderControls();
+      status.textContent = "React state preview · resets on refresh";
+      updateActions();
+      (undo.disabled ? close : undo).focus({ preventScroll: true });
+      return;
+    }
     if (edit.before.value) edit.element.style.setProperty(edit.property, edit.before.value, edit.before.priority);
     else edit.element.style.removeProperty(edit.property);
     const values = changed.get(edit.element);
@@ -480,13 +508,15 @@ export function createDesignMode(options: DesignModeOptions) {
   reset.addEventListener("click", () => {
     if (!selected) return;
     const values = changed.get(selected);
-    if (!values) return;
-    for (const property of values.keys()) {
+    const hasReactValues = reactPanelModule?.hasReactPropChanges(selected) ?? false;
+    if (!values?.size && !hasReactValues) return;
+    for (const property of values?.keys() ?? []) {
       const original = originals.get(selected)?.get(property);
       if (original?.value) selected.style.setProperty(property, original.value, original.priority);
       else selected.style.removeProperty(property);
     }
     changed.delete(selected);
+    if (hasReactValues) reactPanelModule?.resetReactProps(selected);
     for (let index = history.length - 1; index >= 0; index--)
       if (history[index].element === selected) history.splice(index, 1);
     renderControls();
