@@ -90,8 +90,16 @@ export function createToolbar(
         props.edge === "left" || props.edge === "right",
       );
       nav.dataset.alignEnd = String(!!props.alignEnd);
-      const items = props.items.filter((item) => item.showInBar !== false);
-      nav.style.setProperty("--mm-count", String(items.length + 1));
+      const items = props.items.filter(
+        (item) => item.showInBar !== false && item.id !== "dismiss",
+      );
+      const dismissItem = props.items.find(
+        (item) => item.showInBar !== false && item.id === "dismiss",
+      );
+      nav.style.setProperty(
+        "--mm-count",
+        String(items.length + 1 + Number(!!dismissItem)),
+      );
       const shell = el("div", "morphing-menu__shell"),
         bar = el("div", "morphing-menu__bar");
       for (const item of items) {
@@ -131,6 +139,22 @@ export function createToolbar(
       more.setAttribute("aria-expanded", "false");
       more.replaceChildren(icon("drawer"));
       bar.append(more);
+      if (dismissItem) {
+        const dismiss = button(
+          dismissItem.label,
+          () => {
+            dismissItem.onSelect?.();
+            void load();
+          },
+          "morphing-menu__shortcut",
+        );
+        dismiss.title = dismissItem.label;
+        dismiss.dataset.menuItem = dismissItem.id;
+        dismiss.replaceChildren(
+          glyph("glyph" in dismissItem.icon ? dismissItem.icon.glyph : dismissItem.id),
+        );
+        bar.append(dismiss);
+      }
       shell.append(bar);
       nav.append(shell);
       element.replaceChildren(nav);
