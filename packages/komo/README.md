@@ -50,6 +50,8 @@ initKomo({
 });
 ```
 
+Reviewers can hide the toolbar from its × control; `Alt+Shift+K` restores it, and `controller.open()` restores it while opening the sidebar. The choice is remembered per project and repository. Set `showToolbar: false` to start hidden on every page load.
+
 ### React
 
 With React 18.2 or 19, call the hook once near your app root:
