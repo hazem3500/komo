@@ -73,10 +73,13 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 ## Features
 
 - Point and area comments anchored to page elements.
+- Design mode for temporary typography, color, spacing, border, and layout previews; copy the resulting CSS or attach a comment to the selected element.
 - Replies, reactions, author-only editing, resolution, and undo.
 - Searchable sidebar, draggable dock, and Google or guest profiles.
 - Copy open feedback with selectors, source paths, page URLs, replies, and geometry into an agent.
 - Hosted Cloudflare storage, or your own Worker/D1 or Node/PostgreSQL service.
+
+Design mode edits the rendered page only. Preview styles are temporary, reset when the page refreshes, and are restored when the Komo widget is destroyed. Use **Copy CSS** to apply a rule in your site stylesheet; Komo does not write source files. The inspector can select an iframe as one element but cannot edit its isolated contents. Elements inside open or closed shadow roots are not traversed; select the component host instead.
 
 ## Agent CLI
 

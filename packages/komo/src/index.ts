@@ -48,6 +48,7 @@ import {
   reviewLayout,
 } from "./review-layout.js";
 import { createToolbar, type ToolbarItem } from "./lazy-toolbar.js";
+import { createDesignMode } from "./design-mode.js";
 import { canonicalPage } from "./page.js";
 import { ApiError, CommentsApi } from "./api.js";
 import { connectionIssue, type ConnectionIssue } from "./connection-issue.js";
@@ -180,6 +181,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     mode = false,
     commentMode = false,
     hidden = false,
+    designActive = false,
     account = !!options.onboarding,
     pending = false,
     refreshing = false,
@@ -188,6 +190,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   let threads: Thread[] = [],
     selected: string | null = null,
     draft: Anchor | null = null;
+  let designController: ReturnType<typeof createDesignMode> | null = null;
   const optimistic = new OptimisticQueue<Thread[]>(
     [],
     (next) => {
@@ -1387,6 +1390,10 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   function setMode(value: boolean) {
     if (options.onboarding) return;
+    if (designActive) {
+      designActive = false;
+      designController?.setActive(false);
+    }
     commentMode = value;
     if (expanded) toggleExpanded(false);
     const restore = value ? (parkedDraft ?? recoveredDrafts.shift()) : null;
@@ -1409,6 +1416,17 @@ export function initComments(options: CommentsOptions): CommentsController {
       selected = null;
       draft = null;
     }
+    render();
+  }
+  function setDesignMode(value: boolean) {
+    if (options.onboarding || !!draft) return;
+    if (value) {
+      setMode(false);
+      if (expanded) toggleExpanded(false);
+      account = false;
+    }
+    designActive = value;
+    designController?.setActive(value);
     render();
   }
   let mobileEnterFrame = 0;
@@ -2193,6 +2211,12 @@ export function initComments(options: CommentsOptions): CommentsController {
         onSelect: () => setMode(!commentMode),
       },
       {
+        id: "design",
+        label: "Design mode · preview styles",
+        icon: glyph("edit"),
+        onSelect: () => setDesignMode(!designActive),
+      },
+      {
         id: "comments",
         label: options.onboarding
           ? expanded
@@ -2273,6 +2297,8 @@ export function initComments(options: CommentsOptions): CommentsController {
               : "bottom")),
       activeId: account
         ? "account"
+        : designActive
+          ? "design"
         : commentMode
           ? "comment"
           : expanded
@@ -4473,6 +4499,23 @@ export function initComments(options: CommentsOptions): CommentsController {
         .find((element) => element !== host && !host.contains(element)) ?? null
     );
   }
+  designController = createDesignMode({
+    root: shadow,
+    host,
+    targetAt(x, y) {
+      const target = siteElementAt(x, y);
+      return target && target !== surface && surface.contains(target) ? target : null;
+    },
+    onComment(element) {
+      setDesignMode(false);
+      const rect = element.getBoundingClientRect();
+      composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    },
+    onExit() {
+      designActive = false;
+      renderToolbar();
+    },
+  });
   function indicatorPoint(
     pin: HTMLElement,
     fallback: { x: number; y: number },
@@ -5121,6 +5164,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (destroyed) return;
       destroyed = true;
       polling?.stop();
+      designController?.destroy();
       api.cancelReads();
       stopLayoutMotion();
       disposeHeaderTip?.();
