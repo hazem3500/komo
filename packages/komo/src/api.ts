@@ -74,6 +74,12 @@ function threadList(value: unknown): value is Thread[] {
             identity(c.author) &&
             Number.isFinite(c.createdAt) &&
             (c.editedAt === null || Number.isFinite(c.editedAt)) &&
+            (!('tags' in c) ||
+              (Array.isArray(c.tags) &&
+                c.tags.length <= 20 &&
+                c.tags.every((tag) =>
+                  typeof tag === 'string' && /^[a-z0-9][a-z0-9_-]{0,31}$/.test(tag),
+                ))) &&
             c.reactions &&
             typeof c.reactions === "object" &&
             !Array.isArray(c.reactions) &&

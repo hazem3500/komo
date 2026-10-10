@@ -204,8 +204,10 @@ export async function manageProject(
         "SELECT c.id,c.thread_id,c.user_id,c.body,c.created_at,c.edited_at FROM comments c JOIN threads t ON t.id=c.thread_id WHERE t.project=? ORDER BY c.id",
       reactions:
         "SELECT r.* FROM reactions r JOIN comments c ON c.id=r.comment_id JOIN threads t ON t.id=c.thread_id WHERE t.project=? ORDER BY r.comment_id,r.user_id,r.emoji",
+      comment_tags:
+        "SELECT ct.comment_id,ct.tag,ct.user_id,ct.created_at FROM comment_tags ct JOIN comments c ON c.id=ct.comment_id JOIN threads t ON t.id=c.thread_id WHERE t.project=? ORDER BY ct.comment_id,ct.tag",
       users:
-        "SELECT DISTINCT u.id,u.name,u.verified,u.avatar_url,u.accent_color FROM users u WHERE u.id IN (SELECT c.user_id FROM comments c JOIN threads t ON t.id=c.thread_id WHERE t.project=?) OR u.id IN (SELECT resolved_by FROM threads WHERE project=?) OR u.id IN (SELECT r.user_id FROM reactions r JOIN comments c ON c.id=r.comment_id JOIN threads t ON t.id=c.thread_id WHERE t.project=?) ORDER BY u.id",
+        "SELECT DISTINCT u.id,u.name,u.verified,u.avatar_url,u.accent_color FROM users u WHERE u.id IN (SELECT c.user_id FROM comments c JOIN threads t ON t.id=c.thread_id WHERE t.project=?) OR u.id IN (SELECT resolved_by FROM threads WHERE project=?) OR u.id IN (SELECT r.user_id FROM reactions r JOIN comments c ON c.id=r.comment_id JOIN threads t ON t.id=c.thread_id WHERE t.project=?) OR u.id IN (SELECT ct.user_id FROM comment_tags ct JOIN comments c ON c.id=ct.comment_id JOIN threads t ON t.id=c.thread_id WHERE t.project=?) ORDER BY u.id",
     };
     check(Object.hasOwn(queries, table), 400, "Invalid export table.");
     const offset = Number(url.searchParams.get("offset") ?? 0);
@@ -220,7 +222,7 @@ export async function manageProject(
         "SELECT COALESCE((SELECT version FROM export_revisions WHERE project=?),0) AS version"
       ).bind(project),
       table === "users"
-        ? stmt.bind(project, project, project, offset)
+        ? stmt.bind(project, project, project, project, offset)
         : stmt.bind(project, offset),
     ]);
     const revision = (versionResult.results[0] as { version: number }).version;

@@ -30,6 +30,7 @@ const actions = {
   delete: "Delete your message: delete THREAD_ID COMMENT_ID",
   react:
     "Set your reaction: react THREAD_ID COMMENT_ID --emoji EMOJI [--remove]",
+  tag: "Tag a comment: tag COMMENT_ID TAG [--remove]",
   move: "Move a thread: move THREAD_ID --anchor-file FILE",
 };
 export const agentCommands = [
@@ -50,6 +51,8 @@ Agent commands:
   komo comments get ID       Read a thread with all replies and context
   komo comments prompt       Export open feedback as an agent prompt
   komo comments reply ID --body "Fixed; verified on mobile."
+  komo comments tag COMMENT_ID nav
+  komo comments list --tag nav
   komo comments resolve ID   Resolve after verification
   komo comments reopen ID    Reopen a thread
   komo agents setup          Install the default workflow in AGENTS.md
@@ -91,6 +94,7 @@ function parse(args) {
     "--body-file",
     "--anchor-file",
     "--emoji",
+    "--tag",
     "--limit",
     "--offset",
   ]);
@@ -448,7 +452,9 @@ export async function runAgent(
           ? 4
           : ["get", "reply", "resolve", "reopen", "move"].includes(action)
             ? 3
-            : 2
+            : action === "tag"
+              ? 4
+              : 2
         : 1;
   if (positional.length > expected)
     throw Error("Unexpected positional arguments. Run komo --help.");
@@ -535,6 +541,11 @@ export async function runAgent(
             (thread) =>
               status === "all" || thread.resolved === (status === "resolved")
           );
+          const byTag = flags.tag
+            ? filtered.filter((thread) =>
+                thread.comments.some((comment) => comment.tags?.includes(flags.tag))
+              )
+            : filtered;
           const limit = Number(flags.limit ?? 50),
             offset = Number(flags.offset ?? 0);
           if (
@@ -546,10 +557,10 @@ export async function runAgent(
           )
             throw Error("Use --limit 1–250 and a nonnegative --offset.");
           data = {
-            threads: filtered.slice(offset, offset + limit),
-            total: filtered.length,
+            threads: byTag.slice(offset, offset + limit),
+            total: byTag.length,
             nextOffset:
-              offset + limit < filtered.length ? offset + limit : null,
+              offset + limit < byTag.length ? offset + limit : null,
           };
         }
       }
@@ -574,7 +585,24 @@ export async function runAgent(
         data = await request(thread, "PATCH", {
           anchor: { ...(await anchorFile(flags, cwd)), unstacked: true },
         });
-      else {
+      else if (action === "tag") {
+        const commentId = id(positional[2], "comment");
+        const tag = positional[3];
+        if (!tag || !/^[a-z0-9][a-z0-9_-]{0,31}$/.test(tag))
+          throw Error(
+            "Use a lowercase tag slug of 1–32 letters, numbers, hyphens, or underscores."
+          );
+        const containing = (await listThreads(request)).find((item) =>
+          item.comments.some((comment) => comment.id === commentId)
+        );
+        if (!containing)
+          throw Error("Comment not found in this project and branch.");
+        data = await request(
+          `threads/${id(containing.id)}/comments/${commentId}/tags`,
+          "POST",
+          { tag, active: !flags.remove }
+        );
+      } else {
         const comment = `${thread}/comments/${id(commentId, "comment")}`;
         if (action === "edit")
           data = await request(comment, "PATCH", {

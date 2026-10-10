@@ -150,6 +150,28 @@ export async function importProject(
           "INSERT OR IGNORE INTO reactions(comment_id,user_id,emoji) VALUES(?,?,?) RETURNING comment_id"
         ).bind(comment, await id(row.user_id, true), row.emoji)
       );
+    } else if (kind === "comment_tags") {
+      const comment = await id(row.comment_id),
+        author = await id(row.user_id, true);
+      check(
+        await env.DB.prepare(
+          "SELECT c.id FROM comments c JOIN threads t ON t.id=c.thread_id WHERE c.id=? AND t.project=?"
+        )
+          .bind(comment, project)
+          .first(),
+        400,
+        "Import the comment first."
+      );
+      check(
+        typeof row.tag === "string" && /^[a-z0-9][a-z0-9_-]{0,31}$/.test(row.tag),
+        400,
+        "Invalid comment tag."
+      );
+      statements.push(
+        env.DB.prepare(
+          "INSERT OR IGNORE INTO comment_tags(comment_id,tag,user_id,created_at) VALUES(?,?,?,?) RETURNING comment_id"
+        ).bind(comment, row.tag, author, time(row.created_at))
+      );
     } else check(false, 400, "Unknown import table.");
   }
   const results = await env.DB.batch(statements);

@@ -60,6 +60,14 @@ type CommentRow = {
   created_at: number;
   edited_at: number | null;
 };
+const commentTag = (value: unknown) => {
+  check(
+    typeof value === "string" && /^[a-z0-9][a-z0-9_-]{0,31}$/.test(value),
+    400,
+    "Tags must be lowercase slugs of 1–32 letters, numbers, hyphens, or underscores."
+  );
+  return value as string;
+};
 const identity = (row: UserRow): Identity => ({
   id: row.id,
   name: row.name,
@@ -142,6 +150,8 @@ async function body(request: Request): Promise<Record<string, unknown>> {
                     ? ["name"]
                     : path.endsWith("/reactions")
                       ? ["emoji", "active"]
+                      : path.endsWith("/tags")
+                        ? ["tag", "active"]
                       : path === "/me"
                         ? ["name", "avatarUrl", "accentColor"]
                         : path === "/threads"
@@ -1080,6 +1090,11 @@ async function route(
     )
       .bind(...ids)
       .all<{ comment_id: string; user_id: string; emoji: string }>();
+    const tags = await env.DB.prepare(
+      `SELECT ct.comment_id,ct.tag FROM comment_tags ct JOIN comments c ON c.id=ct.comment_id WHERE c.thread_id IN (${placeholders}) ORDER BY ct.tag`
+    )
+      .bind(...ids)
+      .all<{ comment_id: string; tag: string }>();
     const commentsByThread = new Map<string, CommentRow[]>();
     for (const comment of comments.results) {
       const group = commentsByThread.get(comment.thread_id) ?? [];
@@ -1091,6 +1106,12 @@ async function route(
       const group = reactionsByComment.get(reaction.comment_id) ?? {};
       (group[reaction.emoji] ??= []).push(reaction.user_id);
       reactionsByComment.set(reaction.comment_id, group);
+    }
+    const tagsByComment = new Map<string, string[]>();
+    for (const { comment_id, tag } of tags.results) {
+      const group = tagsByComment.get(comment_id) ?? [];
+      group.push(tag);
+      tagsByComment.set(comment_id, group);
     }
     const threads: Thread[] = rows.results.map((row) => ({
       id: row.id,
@@ -1119,6 +1140,7 @@ async function route(
         createdAt: c.created_at,
         editedAt: c.edited_at,
         reactions: reactionsByComment.get(c.id) ?? {},
+        tags: tagsByComment.get(c.id) ?? [],
       })),
     }));
     if (url.searchParams.get("authors") === "1") {
@@ -1173,10 +1195,10 @@ async function route(
     return json({ id, commentId: firstCommentId }, 201);
   }
   const match = url.pathname.match(
-    /^\/threads\/([\w:-]{1,100})(?:\/comments(?:\/([\w:-]{1,100})(?:\/(reactions))?)?)?$/
+    /^\/threads\/([\w:-]{1,100})(?:\/comments(?:\/([\w:-]{1,100})(?:\/(reactions|tags))?)?)?$/
   );
   check(match, 404, "Not found.");
-  const [, threadId, commentId, reaction] = match;
+  const [, threadId, commentId, action] = match;
   const thread = await env.DB.prepare(
     "SELECT * FROM threads WHERE id=? AND project=? AND repo=? AND branch=?"
   )
@@ -1258,7 +1280,50 @@ async function route(
     .bind(commentId, threadId)
     .first<CommentRow>();
   check(comment, 404, "Comment not found.");
-  if (reaction && request.method === "POST") {
+  if (action === "tags" && request.method === "POST") {
+    check(
+      user.verified || comment.user_id === user.id,
+      403,
+      "Only the comment author or a signed-in reviewer can change tags."
+    );
+    const data = await body(request);
+    const tag = commentTag(data.tag);
+    check(typeof data.active === "boolean", 400, "Invalid tag state.");
+    if (data.active) {
+      const existing = await env.DB.prepare(
+        "SELECT tag FROM comment_tags WHERE comment_id=? AND tag=?"
+      )
+        .bind(commentId, tag)
+        .first();
+      if (!existing) {
+        const count = await env.DB.prepare(
+          "SELECT COUNT(*) AS count FROM comment_tags WHERE comment_id=?"
+        )
+          .bind(commentId)
+          .first<{ count: number }>();
+        check(
+          (count?.count ?? 0) < 20,
+          409,
+          "A comment can have at most 20 tags."
+        );
+      }
+    }
+    await env.DB.batch([
+      data.active
+        ? env.DB.prepare(
+            "INSERT OR IGNORE INTO comment_tags(comment_id,tag,user_id,created_at) VALUES(?,?,?,?)"
+          ).bind(commentId, tag, user.id, now)
+        : env.DB.prepare(
+            "DELETE FROM comment_tags WHERE comment_id=? AND tag=?"
+          ).bind(commentId, tag),
+      env.DB.prepare("UPDATE threads SET updated_at=? WHERE id=?").bind(
+        now,
+        threadId
+      ),
+    ]);
+    return json({ ok: true });
+  }
+  if (action === "reactions" && request.method === "POST") {
     const data = await body(request);
     check(
       isEmoji(data.emoji) && typeof data.active === "boolean",
@@ -1288,7 +1353,7 @@ async function route(
     return json({ ok: true });
   }
   check(
-    !reaction && comment.user_id === user.id,
+    !action && comment.user_id === user.id,
     403,
     "Only the author can change this comment."
   );

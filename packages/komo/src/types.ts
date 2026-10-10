@@ -39,6 +39,7 @@ export interface Comment {
   createdAt: number;
   editedAt: number | null;
   reactions: Record<string, string[]>;
+  tags?: string[];
 }
 
 export interface Thread {

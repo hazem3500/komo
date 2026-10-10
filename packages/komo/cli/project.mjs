@@ -31,7 +31,7 @@ export async function runProject(action, flags, request, config, cwd) {
       tables: {},
     };
     let revision;
-    for (const table of ["users", "threads", "comments", "reactions"]) {
+    for (const table of ["users", "threads", "comments", "reactions", "comment_tags"]) {
       snapshot.tables[table] = [];
       let offset = 0;
       do {
@@ -67,7 +67,7 @@ export async function runProject(action, flags, request, config, cwd) {
     )
       throw Error("Use a version 1 komo export.");
     let imported = 0;
-    for (const kind of ["users", "threads", "comments", "reactions"]) {
+    for (const kind of ["users", "threads", "comments", "reactions", "comment_tags"]) {
       if (!Array.isArray(snapshot.tables[kind]))
         throw Error(`Missing ${kind} table.`);
       let records = [];

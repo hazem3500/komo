@@ -133,6 +133,16 @@ run(
     expect(
       (
         await request(
+          `/threads/${first.data.id}/comments/${first.data.commentId}/tags`,
+          "POST",
+          { tag: "architecture", active: true },
+          reviewer.data.token,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(
           `/threads/${first.data.id}`,
           "PATCH",
           { resolved: true },
@@ -143,6 +153,7 @@ run(
     const listed = await request("/threads");
     expect(listed.data.threads[0].resolved).toBe(true);
     expect(listed.data.threads[0].comments).toHaveLength(2);
+    expect(listed.data.threads[0].comments[0].tags).toEqual(["architecture"]);
     expect(typeof listed.data.threads[0].createdAt).toBe("number");
     expect(typeof listed.data.revision).toBe("number");
     const deleted = await db

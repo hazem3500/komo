@@ -105,7 +105,7 @@ For an existing inline installation, pass `--project YOUR_PROJECT_KEY --origin h
 | --- | --- |
 | `komo schema` | JSON command reference for agents; no sign-in needed. |
 | `komo whoami` | Show the current reviewer and project scope. |
-| `komo comments list` | Open threads as JSON; `--status open\|resolved\|all`, `--page`, `--limit 1–250`, `--offset`. Default page size: 50. |
+| `komo comments list` | Open threads as JSON; `--status open\|resolved\|all`, `--page`, `--tag TAG`, `--limit 1–250`, `--offset`. Default page size: 50. |
 | `komo comments get THREAD_ID` | Full thread, replies, selector, source reference, and anchor. |
 | `komo comments prompt` | The UI’s open-feedback prompt as Markdown; optional `--page` and `--json`. |
 | `komo comments reply THREAD_ID --body TEXT` | Add a reply as the signed-in reviewer. |
@@ -115,6 +115,7 @@ For an existing inline installation, pass `--project YOUR_PROJECT_KEY --origin h
 | `komo comments edit THREAD_ID COMMENT_ID --body TEXT` | Edit your own message. |
 | `komo comments delete THREAD_ID COMMENT_ID` | Delete your own message. |
 | `komo comments react THREAD_ID COMMENT_ID --emoji EMOJI` | Set your reaction; `--remove` removes it. |
+| `komo comments tag COMMENT_ID TAG` | Group a comment with a lowercase tag slug; `--remove` removes the tag. |
 | `komo comments move THREAD_ID --anchor-file FILE` | Move an indicator and keep it outside automatic stacks. |
 
 `--body-file FILE` reads a message from disk; `--body-file -` reads stdin. Use one body source. Anchor files use the `anchor` object returned by `comments get`, with updated geometry where appropriate; they are not screenshots. The API validates selectors, geometry, permissions, and quotas.

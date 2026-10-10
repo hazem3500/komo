@@ -1352,6 +1352,21 @@ ${morphingMenuStyles}
   padding: 0;
   margin: 3px 0 0;
 }
+.comment-tags {
+  display: flex;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  gap: 4px;
+  margin-left: 32px;
+}
+.comment-tag {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 7px;
+}
 .message-reaction {
   position: relative;
   flex: none;

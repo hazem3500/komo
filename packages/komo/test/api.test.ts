@@ -624,6 +624,22 @@ describe("shared comments against real workerd and SQLite", () => {
     expect(thread.comments[0].id).toBe(createdCommentId);
     expect(thread.page).toBe("/products/workers");
     expect(thread.comments[0].author.name).toBe("Alice");
+    const tag = (value: string, active: boolean, token = alice.token) =>
+      request(
+        `/threads/${id}/comments/${createdCommentId}/tags`,
+        "POST",
+        { tag: value, active },
+        token
+      );
+    expect((await tag("nav", true, bob.token)).status).toBe(403);
+    expect((await tag("Nav", true)).status).toBe(400);
+    expect((await tag("navigation-review", true)).status).toBe(200);
+    expect((await tag("navigation-review", true)).status).toBe(200);
+    thread = (await get())[0];
+    expect(thread.comments[0].tags).toEqual(["navigation-review"]);
+    expect((await (await request("/threads")).json()).threads).toHaveLength(1);
+    expect((await tag("navigation-review", false)).status).toBe(200);
+    expect((await get())[0].comments[0].tags).toEqual([]);
     expect(
       (
         await request(
@@ -1468,6 +1484,10 @@ it("runs the agent CLI against the real Worker and persisted threads", async () 
   expect(listing.data.threads.map((thread: Thread) => thread.id)).toContain(
     threadId
   );
+  await cli("comments", "tag", created.data.commentId, "navigation");
+  const tagged = await cli("comments", "list", "--tag", "navigation");
+  expect(tagged.data.threads.map((thread: Thread) => thread.id)).toContain(threadId);
+  expect((await cli("comments", "list", "--tag", "layout")).data.threads).toHaveLength(0);
   const reply = await cli(
     "comments",
     "reply",
@@ -1493,6 +1513,8 @@ it("runs the agent CLI against the real Worker and persisted threads", async () 
     "No open comments."
   );
   await cli("comments", "reopen", threadId);
+  await cli("comments", "tag", created.data.commentId, "navigation", "--remove");
+  expect((await cli("comments", "list", "--tag", "navigation")).data.threads).toHaveLength(0);
   await cli("comments", "move", threadId, "--anchor-file", "../anchor.json");
   expect((await cli("comments", "get", threadId)).data.anchor.unstacked).toBe(
     true
@@ -1598,6 +1620,15 @@ describe("owner management and private projects", () => {
         })
       ).status
     ).toBe(201);
+    expect(
+      (
+        await call(
+          `/threads/${created.id}/comments/${created.commentId}/tags`,
+          "POST",
+          { tag: "review-later", active: true }
+        )
+      ).status
+    ).toBe(200);
     await call(`/threads/${created.id}`, "PATCH", { resolved: true });
     const snapshot = await (await call("/project/export?table=threads")).json();
     await call(`/threads/${created.id}/comments`, "POST", {
@@ -1611,7 +1642,7 @@ describe("owner management and private projects", () => {
       ).status
     ).toBe(409);
     const tables: Record<string, unknown[]> = {};
-    for (const kind of ["users", "threads", "comments", "reactions"]) {
+    for (const kind of ["users", "threads", "comments", "reactions", "comment_tags"]) {
       const response = await call(`/project/export?table=${kind}`);
       expect(response.status).toBe(200);
       tables[kind] = (await response.json()).rows;
@@ -1657,6 +1688,7 @@ describe("owner management and private projects", () => {
       "New feedback during export",
     ]);
     expect(result.threads[0].comments[0].author.verified).toBe(false);
+    expect(result.threads[0].comments[0].tags).toEqual(["review-later"]);
     const imported = result.threads[0];
     expect(imported.id).toMatch(/^import:/);
     const cliRead = await promisify(execFile)(process.execPath,

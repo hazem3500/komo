@@ -3365,6 +3365,13 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     const content = el("div", "message-content");
     content.append(el("p", "message-text", comment.body));
+    if (comment.tags?.length) {
+      const tags = el("div", "comment-tags");
+      tags.setAttribute("aria-label", "Comment tags");
+      for (const tag of comment.tags)
+        tags.append(el("span", "comment-tag", tag));
+      content.append(tags);
+    }
     if (comment.body !== "[Comment deleted]") {
       const reaction = button(
         "Add reaction",

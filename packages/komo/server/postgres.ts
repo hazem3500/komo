@@ -83,6 +83,14 @@ export function postgresDatabase(connectionString: string) {
         ) {
           throw Error("Unsupported PostgreSQL schema version");
         }
+        await client.query(`CREATE TABLE IF NOT EXISTS comment_tags (
+          comment_id text NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+          tag text NOT NULL,
+          user_id text NOT NULL REFERENCES users(id),
+          created_at bigint NOT NULL,
+          PRIMARY KEY(comment_id,tag)
+        )`);
+        await client.query("CREATE INDEX IF NOT EXISTS comment_tags_lookup ON comment_tags(tag,comment_id)");
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
