@@ -76,6 +76,33 @@ it("rejects unsafe endpoint schemes and embedded credentials before mounting", (
   expect(document.body.children).toHaveLength(0);
 });
 
+
+it("lets reviewers hide and restore the toolbar, and supports hidden initialization", () => {
+  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+  controller = initComments({ ...options, onboarding: undefined, showToolbar: false });
+  const host = [...document.body.children].find((node) => node.shadowRoot)!;
+  expect(host.hidden).toBe(true);
+
+  document.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "k", altKey: true, shiftKey: true, bubbles: true }),
+  );
+  expect(host.hidden).toBe(false);
+  expect(host.shadowRoot?.querySelector('[aria-label="Hide Komo toolbar · Alt+Shift+K to restore"]')).not.toBeNull();
+  host.shadowRoot?.querySelector<HTMLButtonElement>('[aria-label="Hide Komo toolbar · Alt+Shift+K to restore"]')?.click();
+  expect(host.hidden).toBe(true);
+  expect(localStorage.getItem("branch-comments:toolbar-hidden:fixture:fixture")).toBe("1");
+
+  document.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "k", altKey: true, shiftKey: true, bubbles: true }),
+  );
+  expect(host.hidden).toBe(false);
+  expect(localStorage.getItem("branch-comments:toolbar-hidden:fixture:fixture")).toBeNull();
+
+  controller.close();
+  controller.open();
+  expect(host.hidden).toBe(false);
+});
+
 it("clears private cached feedback and identity immediately on another tab's logout", async () => {
   const { CommentsApi } = await import("../src/api");
   const config = { ...options, onboarding: undefined };
