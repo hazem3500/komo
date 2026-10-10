@@ -1,10 +1,18 @@
 import { createElement, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { useKomo, useKomoDesignTokens, type KomoDesignToken } from "../../../src/react.js";
+import { useKomo, useKomoDesignTokens, useKomoInspectable, type InspectableComponent, type InspectableScalar, type KomoDesignToken } from "../../../src/react.js";
 import manifest from "../.generated/manifest.json";
 import { PromoCard, type PromoCardProps } from "./card.js";
 
 const component = manifest.components[0];
+const headlineComponent: InspectableComponent = {
+  id: "demo-headline",
+  name: "DemoHeadline",
+  source: "examples/react-props/src/main.tsx",
+  line: 23,
+  props: [{ name: "text", kind: "string", required: true, typeLabel: "string" }],
+  textProp: "text",
+};
 const themeTokens: KomoDesignToken[] = [
   { path: "color.brand", cssVariable: "--color-brand", type: "color", properties: ["color", "background-color", "border-color"], impactSelector: '.promo-card[data-tone="bold"]' },
   { path: "spacing.card", cssVariable: "--space-card", type: "dimension", properties: ["padding", "gap"], impactSelector: ".promo-card" },
@@ -12,7 +20,18 @@ const themeTokens: KomoDesignToken[] = [
   { path: "radius.card", cssVariable: "--radius-card", type: "dimension", properties: ["border-radius"], impactSelector: ".promo-card" },
 ];
 
+function InlineHeadline({ text, onChange }: { text: string; onChange(next: string): void }) {
+  const inspectable = useKomoInspectable({
+    component: headlineComponent,
+    props: { text },
+    onChange(next: Record<string, InspectableScalar>) { if (typeof next.text === "string") onChange(next.text); },
+    enabled: true,
+  });
+  return <h2 {...inspectable}>{text}</h2>;
+}
+
 function Demo() {
+  const [headline, setHeadline] = useState("Inspect safe props in the flow of a real page.");
   const [props, setProps] = useState<PromoCardProps>({
     title: "A small change, made visible.",
     marker: "only",
@@ -37,9 +56,10 @@ function Demo() {
   return (
     <main>
       <span className="eyebrow">komo · isolated React inspector</span>
-      <h1>Inspect safe props in the flow of a real page.</h1>
+      <InlineHeadline text={headline} onChange={setHeadline} />
       <p className="intro">
-        Open the bottom brush, select the card, and try registered color, spacing,
+        Open the bottom brush, select this heading to try direct text editing, then
+        select the card to try registered color, spacing,
         typography, and radius tokens. Choose “Use token on element” for a local
         reference, or explicitly preview a shared theme change and its affected scope.
       </p>

@@ -80,7 +80,7 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 - Copy open feedback with selectors, source paths, page URLs, replies, and geometry into an agent.
 - Hosted Cloudflare storage, or your own Worker/D1 or Node/PostgreSQL service.
 
-Design mode edits the rendered page only. Preview styles are temporary, reset when the page refreshes, and are restored when the Komo widget is destroyed. Use **Copy CSS** to apply a rule in your site stylesheet; Komo does not write source files. The inspector can select an iframe as one element but cannot edit its isolated contents. Elements inside open or closed shadow roots are not traversed; select the component host instead.
+Design mode edits the rendered page only. Preview styles and inline leaf-text edits are temporary and reset when the page refreshes; styles are restored when the Komo widget is destroyed. Use **Copy CSS** to apply a rule in your site stylesheet; Komo does not write source files. Inline text editing is an explicit **Edit text** action, accepts plain text only, and skips nested/rich markup, interactive controls, private fields, and unmapped React-controlled elements. An explicitly registered React `textProp` routes edits through the app's state callback. The inspector can select an iframe as one element but cannot edit its isolated contents. Elements inside open or closed shadow roots are not traversed; select the component host instead.
 
 The design inspector loads as a separate optional browser chunk when Design mode is first opened, so the default widget load does not pay its bundle cost. The package size check measures this chunk separately from the core bundle.
 
@@ -92,7 +92,7 @@ Design mode also takes interaction cues from established design tools: select a 
 
 React teams can register selected component roots for typed prop previews through the `./react` entry. A build-time TypeScript Compiler API pass generates the prop manifest from an explicitly marked function component and props type; the inspector edits only strings, numbers, booleans, and literal unions. Functions, `ReactNode`, objects, generics, nullable unions, and any unsupported type remain read-only. This metadata is a safe allowlist, not runtime discovery of every React component; `defaultProps` and every React component form are not inferred.
 
-The app provides an `onChange` callback that updates its own state. Komo previews those values through React's normal render cycle, offers undo/reset, and can prefill an explicit comment with the proposed before/after values and source path. Posting still requires the user to submit the comment. Komo never accesses React Fiber internals or writes source files. Preview prop changes reset on refresh. See [`examples/react-props`](./examples/react-props/README.md) for the generated fixture and limitations.
+The app provides an `onChange` callback that updates its own state. Komo previews those values through React's normal render cycle, offers undo/reset, and can prefill an explicit comment with the proposed before/after values and source path. Posting still requires the user to submit the comment. Komo never accesses React Fiber internals or writes source files. Preview prop changes reset on refresh. A component may opt one leaf render into direct text editing by setting `textProp` to the name of an allowed string prop; Komo does not infer which child text belongs to a prop. See [`examples/react-props`](./examples/react-props/README.md) for the generated fixture and limitations.
 
 ### Opt-in design tokens
 

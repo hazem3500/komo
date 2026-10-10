@@ -21,6 +21,8 @@ export interface InspectableComponent {
   source: string;
   line: number;
   props: InspectableProp[];
+  /** Explicitly map a leaf text rendering to one editable string prop. */
+  textProp?: string;
 }
 
 export interface RegisteredInspectableComponent {
@@ -80,6 +82,9 @@ export function registerInspectableRoot(
   props: Record<string, unknown>,
   onChange: (next: Record<string, InspectableScalar>) => void,
 ): () => void {
+  const textProp = definition.textProp && definition.props.some(
+    (prop) => prop.name === definition.textProp && prop.kind === "string",
+  ) ? definition.textProp : undefined;
   const current = safeProps(definition, props);
   const record: RegisteredInspectableComponent = {
     definition,
@@ -97,11 +102,15 @@ export function registerInspectableRoot(
   };
   registered.set(element, record);
   element.dataset.komoInspectable = definition.id;
+  if (textProp) element.dataset.komoTextProp = textProp;
+  else delete element.dataset.komoTextProp;
   return () => {
     if (registered.get(element) !== record) return;
     registered.delete(element);
     if (element.dataset.komoInspectable === definition.id)
       delete element.dataset.komoInspectable;
+    if (element.dataset.komoTextProp === textProp)
+      delete element.dataset.komoTextProp;
   };
 }
 
@@ -118,6 +127,11 @@ export function updateInspectableRoot(
   record.definition = definition;
   record.props = safeProps(definition, props);
   record.onChange = onChange;
+  const textProp = definition.textProp && definition.props.some(
+    (prop) => prop.name === definition.textProp && prop.kind === "string",
+  ) ? definition.textProp : undefined;
+  if (textProp) element.dataset.komoTextProp = textProp;
+  else delete element.dataset.komoTextProp;
 }
 
 /** Find the nearest explicitly registered React component root for a DOM target. */
