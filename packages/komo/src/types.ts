@@ -64,6 +64,20 @@ export interface OnboardingOptions {
   site?: string;
 }
 
+/**
+ * Keyboard shortcuts as a key with optional Ctrl, Alt, Shift, or Meta
+ * modifiers, e.g. "M" or "Shift+J". Set false to disable one. Escape and Tab
+ * are reserved.
+ */
+export interface KomoShortcuts {
+  /** Toggle comment mode. Defaults to "C". */
+  comment?: string | false;
+  /** Return to browsing. Defaults to "V". */
+  browse?: string | false;
+  /** Restore a dismissed toolbar. Defaults to "Shift+K". */
+  restore?: string | false;
+}
+
 export interface CommentsOptions {
   /** Used by the hosted setup screen to reuse the sidebar account UI. */
   onboarding?: OnboardingOptions;
@@ -75,8 +89,10 @@ export interface CommentsOptions {
   /** Public project key registered in the API configuration. */
   project: string;
   enabled?: boolean;
-  /** Hide the toolbar until controller.open() or Shift+K is used. Defaults to true. */
+  /** Hide the toolbar until controller.open() or the restore shortcut is used. Defaults to true. */
   showToolbar?: boolean;
+  /** Override or disable the review keyboard shortcuts. */
+  shortcuts?: KomoShortcuts;
   /**
    * Sidebar presentation when the review opens. "edge" (default) is a floating,
    * draggable sidebar that parks off and peeks from the viewport edge while
