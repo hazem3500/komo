@@ -2168,7 +2168,11 @@ export function initComments(options: CommentsOptions): CommentsController {
     const fromMobileSidebar = compactSidebar && expanded;
     if (fromMobileSidebar) toggleExpanded(false);
     const rect = locateAnchor(thread.anchor);
-    if (!openingPreview && (fromMobileSidebar || !compactSidebar))
+    if (
+      rect.attached &&
+      !openingPreview &&
+      (fromMobileSidebar || !compactSidebar)
+    )
       (framed ? surface : window).scrollBy({
         top:
           (rect.y - (fromMobileSidebar
@@ -2391,6 +2395,14 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
 
   let pinSnapshot = "";
+  // Threads on this page whose element can no longer be found or is not visible.
+  const detachedThreads = new Set<string>();
+  const pageLabel = (thread: Thread) =>
+    thread.page !== page()
+      ? thread.page
+      : detachedThreads.has(thread.id)
+        ? "Not found on page"
+        : "";
   let pinsScrolling = false;
   let pinScrollTimer = 0;
   function renderPins(force = false) {
@@ -2423,6 +2435,15 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
       return { thread, rect, blocked };
     });
+    for (const { thread, rect } of positions) {
+      if (detachedThreads.has(thread.id) === !rect.attached) continue;
+      if (rect.attached) detachedThreads.delete(thread.id);
+      else detachedThreads.add(thread.id);
+      const label = shadow.querySelector(
+        `.thread-item[data-thread="${CSS.escape(thread.id)}"] .page`,
+      );
+      if (label) label.textContent = pageLabel(thread);
+    }
     const snapshot = JSON.stringify([
       selected,
       draft && anchors.locate(draft),
@@ -2448,7 +2469,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       positions.map((position) => [position.thread.id, position]),
     );
     for (const { thread, rect, blocked } of positions) {
-      const group = rect.attached ? stacks.get(thread.id) : undefined;
+      // Never draw a pin at stale page coordinates; the sidebar lists it instead.
+      if (!rect.attached) continue;
+      const group = stacks.get(thread.id);
       const leader = group && measured.get(group[0].id);
       const placement = leader?.rect.attached ? leader : { rect, blocked };
       if (
@@ -3169,8 +3192,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           const reply = thread.comments[index + 1];
           node.textContent = `${reply.author.name} · ${age(reply.createdAt)}`;
         });
-        cached.querySelector(".page")!.textContent =
-          thread.page === page() ? "" : thread.page;
+        cached.querySelector(".page")!.textContent = pageLabel(thread);
         list.append(cached);
         continue;
       }
@@ -3188,7 +3210,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
       const meta = el("div", "meta");
       meta.append(
-        el("span", "page", thread.page === page() ? "" : thread.page),
+        el("span", "page", pageLabel(thread)),
         el(
           "span",
           "",
@@ -4499,6 +4521,8 @@ export function initComments(options: CommentsOptions): CommentsController {
         : anchor
           ? (() => {
               const rect = locateAnchor(anchor);
+              // A detached comment opens centred rather than at stale coordinates.
+              if (!rect.attached) return null;
               const indicator =
                 selected &&
                 pins.querySelector<HTMLElement>(
