@@ -18,6 +18,18 @@ const { styles } = await import(
 const css = (
   await transform(styles, { loader: "css", minify: true, target: "es2022" })
 ).code;
+const designStyleModule = await build({
+  entryPoints: ["src/design-mode-styles.ts"],
+  bundle: true,
+  format: "esm",
+  write: false,
+});
+const { designModeStyles } = await import(
+  `data:text/javascript;base64,${Buffer.from(designStyleModule.outputFiles[0].text).toString("base64")}`
+);
+const designCss = (
+  await transform(designModeStyles, { loader: "css", minify: true, target: "es2022" })
+).code;
 const iconModule = await build({
   entryPoints: ["src/icon-markup.ts"],
   bundle: true,
@@ -65,6 +77,10 @@ const result = await build({
       setup(build) {
         build.onLoad({ filter: /[\\/]src[\\/]styles\.ts$/ }, () => ({
           contents: `export const styles = ${JSON.stringify(css)}`,
+          loader: "js",
+        }));
+        build.onLoad({ filter: /[\\/]src[\\/]design-mode-styles\.ts$/ }, () => ({
+          contents: `export const designModeStyles = ${JSON.stringify(designCss)}`,
           loader: "js",
         }));
       },

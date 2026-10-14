@@ -109,29 +109,43 @@ describe("design mode preview inspector", () => {
     label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
     label.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
-    expect(comments.at(-1)).toBe(label);
+    await vi.waitFor(() => expect(comments.at(-1)).toBe(label));
     expect(commentProposals.at(-1)).toContain('"Selected text" → "Comment proposal"');
   });
 
   it("keeps nested markup, interactive controls, and private text out of inline editing", async () => {
+    const edit = () => shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
+    const status = () => shadow.querySelector(".design-inspector__status")?.textContent;
     const nested = document.querySelector<HTMLElement>("#nested")!;
     pointer("pointerdown", nested);
-    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!.click();
-    await vi.waitFor(() => expect(shadow.querySelector(".design-inspector__status")?.textContent).toContain("stays read-only"));
+    expect(edit().disabled).toBe(true);
+    edit().click();
     expect(nested.hasAttribute("contenteditable")).toBe(false);
     pointer("pointerdown", button);
-    const privateEdit = shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
-    privateEdit.click();
-    await vi.waitFor(() => expect(shadow.querySelector(".design-inspector__status")?.textContent).toContain("stays read-only"));
+    edit().click();
+    await vi.waitFor(() => expect(status()).toContain("stays read-only"));
     expect(button.hasAttribute("contenteditable")).toBe(false);
     const secret = document.createElement("span");
     secret.dataset.private = "true";
     secret.textContent = "do not edit";
     page.append(secret);
     pointer("pointerdown", secret);
-    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!.click();
-    await vi.waitFor(() => expect(shadow.querySelector(".design-inspector__status")?.textContent).toContain("stays read-only"));
+    edit().click();
+    await vi.waitFor(() => expect(status()).toContain("stays read-only"));
     expect(secret.hasAttribute("contenteditable")).toBe(false);
+    pointer("pointerdown", document.querySelector<HTMLElement>("#label")!);
+    expect(edit().disabled).toBe(false);
+  });
+
+  it("lets Space reach the text being edited instead of reselecting it", async () => {
+    const label = document.querySelector<HTMLElement>("#label")!;
+    pointer("pointerdown", label);
+    shadow.querySelector<HTMLButtonElement>("[aria-label='Edit selected text inline']")!.click();
+    await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
+    const space = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true, composed: true });
+    label.dispatchEvent(space);
+    expect(space.defaultPrevented).toBe(false);
+    expect(label.getAttribute("contenteditable")).toBe("true");
   });
 
   it("Escape cancels an inline edit first, then exits Design mode", async () => {
@@ -214,14 +228,14 @@ describe("design mode preview inspector", () => {
     expect(button.style.getPropertyPriority("font-size")).toBe("important");
   });
 
-  it("exits without hijacking clicks outside mode and can hand the target to comments", () => {
+  it("exits without hijacking clicks outside mode and can hand the target to comments", async () => {
     controller.setActive(false);
     const ordinary = pointer("pointerdown", button);
     expect(ordinary.defaultPrevented).toBe(false);
     controller.setActive(true);
     pointer("pointerdown", button);
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
-    expect(comments).toEqual([button]);
+    await vi.waitFor(() => expect(comments).toEqual([button]));
     expect(exited).toBe(0);
   });
 
@@ -299,5 +313,43 @@ describe("design mode preview inspector", () => {
     expect(click().defaultPrevented).toBe(true);
     controller.setActive(false);
     expect(click().defaultPrevented).toBe(false);
+  });
+
+  it("hands plain style and text previews to one comment proposal", async () => {
+    pointer("pointerdown", button);
+    const color = shadow.querySelector<HTMLInputElement>('[data-property="color"]')!;
+    color.dispatchEvent(new Event("focus"));
+    color.value = "#ff0000";
+    color.dispatchEvent(new Event("input", { bubbles: true }));
+    color.dispatchEvent(new Event("change", { bubbles: true }));
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
+    await vi.waitFor(() => expect(comments).toEqual([button]));
+    expect(commentProposals[0]).toContain("Proposed style changes (preview only)");
+    expect(commentProposals[0]).toContain("Target: #hero");
+    expect(commentProposals[0]).toMatch(/- color: .* → rgb\(255, 0, 0\)/);
+  });
+
+  it("folds the compact sheet while picking and keeps the close control rightmost", () => {
+    controller.destroy();
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("max-width"), media: query }));
+    vi.stubGlobal("scrollBy", vi.fn());
+    controller = createDesignMode({ root: shadow, host, targetAt: () => pointed, onComment: () => {}, onExit: () => { exited++; } });
+    controller.setActive(true);
+    const inspector = shadow.querySelector<HTMLElement>(".design-inspector")!;
+    const fold = shadow.querySelector<HTMLButtonElement>(".design-inspector__fold")!;
+    const heading = shadow.querySelector<HTMLElement>(".design-inspector__heading")!;
+    expect(heading.lastElementChild?.getAttribute("aria-label")).toBe("Exit design mode");
+    expect(heading.lastElementChild?.querySelector("svg")).not.toBeNull();
+    expect(inspector.hasAttribute("data-folded")).toBe(true);
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    pointer("pointerdown", button);
+    // The sheet unfolds only after the tap completes, never under the finger.
+    expect(inspector.hasAttribute("data-folded")).toBe(true);
+    pointer("click", button);
+    expect(inspector.hasAttribute("data-folded")).toBe(false);
+    expect(fold.getAttribute("aria-label")).toBe("Collapse inspector");
+    fold.click();
+    expect(inspector.hasAttribute("data-folded")).toBe(true);
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
   });
 });

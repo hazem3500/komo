@@ -126,6 +126,42 @@ it("lets reviewers dismiss and restore the toolbar, and supports hidden initiali
   expect(hiddenToolbar.style.display).not.toBe("none");
 });
 
+it("uses configured shortcut keys and labels", () => {
+  controller = initComments({
+    ...options,
+    onboarding: undefined,
+    shortcuts: { comment: "M", browse: false, restore: "Shift+J" },
+  });
+  const host = [...document.body.children].find(
+    (node) => node.shadowRoot,
+  ) as HTMLElement;
+  const root = host.shadowRoot!;
+  const label = (id: string) =>
+    root.querySelector(`[data-menu-item="${id}"]`)!.getAttribute("aria-label");
+  expect(label("comment")).toBe("Add comment · M");
+  expect(label("browse")).toBe("Browse website");
+  expect(label("dismiss")).toBe("Dismiss Komo · Shift+J to restore");
+  const key = (init: KeyboardEventInit) => {
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    });
+    document.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  expect(key({ key: "c" })).toBe(false);
+  expect(key({ key: "v" })).toBe(false);
+  expect(key({ key: "m" })).toBe(true);
+  const toolbar = root.querySelector<HTMLElement>(".toolbar")!;
+  root.querySelector<HTMLButtonElement>('[data-menu-item="dismiss"]')!.click();
+  expect(toolbar.style.display).toBe("none");
+  expect(key({ key: "K", shiftKey: true })).toBe(false);
+  expect(toolbar.style.display).toBe("none");
+  expect(key({ key: "J", shiftKey: true })).toBe(true);
+  expect(toolbar.style.display).not.toBe("none");
+});
+
 it("dismisses the active Design overlay without intercepting host clicks", async () => {
   controller = initComments({ ...options, onboarding: undefined });
   const host = [...document.body.children].find(
@@ -206,7 +242,6 @@ it("keeps the morphing sidebar as the shared surface when entering and leaving D
   expect(toolbar.inert).toBe(true);
   expect(host.classList.contains("design-active")).toBe(true);
   expect(inspector.parentElement).toBe(sidebar);
-  expect(inspector.classList.contains("design-inspector--integrated")).toBe(true);
   expect(sidebar.querySelector<HTMLElement>(".panel")?.inert).toBe(true);
   expect(sidebar.querySelector<HTMLElement>(".panel")?.hidden).toBe(true);
 

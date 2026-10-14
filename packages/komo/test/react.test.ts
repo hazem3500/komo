@@ -66,6 +66,13 @@ describe("useKomo", () => {
     });
     expect(init).toHaveBeenCalledTimes(2);
   });
+  it("compares inline shortcut options by value", async () => {
+    await render({ project: "test", shortcuts: { comment: "M" } });
+    await render({ project: "test", shortcuts: { comment: "M" } });
+    expect(init).toHaveBeenCalledTimes(1);
+    await render({ project: "test", shortcuts: { comment: "N" } });
+    expect(init).toHaveBeenCalledTimes(2);
+  });
   it("cleans up before remounting changed configuration", async () => {
     await render({ project: "first" });
     await render({ project: "second" });

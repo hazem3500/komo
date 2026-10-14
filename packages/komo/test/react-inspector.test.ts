@@ -102,7 +102,7 @@ describe("React props inspector bridge", () => {
     expect(changes).toHaveLength(1);
 
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
-    expect(comments).toHaveLength(1);
+    await vi.waitFor(() => expect(comments).toHaveLength(1));
     expect(comments[0].element).toBe(title);
     expect(comments[0].proposal).toContain('title: "A preview title" → "A revised preview title"');
     expect(comments[0].proposal).toContain("Source: examples/react-props/src/card.tsx:15");
@@ -152,7 +152,7 @@ describe("React props inspector bridge", () => {
     card.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
 
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
-    expect(comments.at(-1)?.proposal).toContain('title: "A preview title" → "Changed in place"');
+    await vi.waitFor(() => expect(comments.at(-1)?.proposal).toContain('title: "A preview title" → "Changed in place"'));
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:first-child")!.click();
     expect(changes.at(-1)?.title).toBe("A preview title");
   });

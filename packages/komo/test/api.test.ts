@@ -109,6 +109,10 @@ beforeAll(async () => {
     },
   });
   config.vars.KOMO_HOSTED = "true";
+  config.vars.KOMO_WEBHOOK_KEYS = JSON.stringify({
+    current: "test-key",
+    keys: { "test-key": Buffer.alloc(32, 7).toString("base64") },
+  });
   config.vars.GOOGLE_CLIENT_ID = "fixture-client";
   config.vars.GOOGLE_CLIENT_SECRET = "fixture-secret-not-a-real-credential";
   config.d1_databases = [
@@ -213,7 +217,14 @@ beforeAll(async () => {
   worker.stderr?.on("data", (chunk) => (output += String(chunk)));
   for (let i = 0; i < 100; i++) {
     try {
-      if ((await fetch(`http://localhost:${port}/health`)).ok) return;
+      if (
+        (
+          await fetch(`http://localhost:${port}/health`, {
+            signal: AbortSignal.timeout(500),
+          })
+        ).ok
+      )
+        return;
     } catch {
       /* Wait for workerd. */
     }
@@ -310,6 +321,56 @@ it("connects from the intended site with a one-use Google handoff and project-sc
 });
 
 describe("shared comments against real workerd and SQLite", () => {
+  it("adds normalized thread tags idempotently and returns them in listings", async () => {
+    const call = (
+      path: string,
+      method = "GET",
+      data?: unknown,
+      token?: string
+    ) => request(path, method, data, token, "tags", "owner/site", "test");
+    const guest = await (
+      await call("/auth/guest", "POST", { name: "Tag reviewer" })
+    ).json();
+    const created = await (
+      await call(
+        "/threads",
+        "POST",
+        { page: "/", anchor, body: "Group this feedback" },
+        guest.token,
+      )
+    ).json();
+    const first = await call(
+      `/threads/${created.id}`,
+      "PATCH",
+      { tag: "Navigation" },
+      guest.token
+    );
+    expect(first.status, await first.clone().text()).toBe(200);
+    expect(await first.json()).toEqual({ ok: true, tags: ["navigation"] });
+    const repeated = await call(
+      `/threads/${created.id}`,
+      "PATCH",
+      { tag: "navigation" },
+      guest.token
+    );
+    expect(await repeated.json()).toEqual({ ok: true, tags: ["navigation"] });
+    const listed = await (
+      await call("/threads", "GET")
+    ).json();
+    expect(
+      listed.threads.find((thread: Thread) => thread.id === created.id).tags
+    ).toEqual(["navigation"]);
+    expect(
+      (
+        await call(
+          `/threads/${created.id}`,
+          "PATCH",
+          { tag: "bad/tag" },
+          guest.token
+        )
+      ).status
+    ).toBe(400);
+  });
   it("resolves project-only configuration to the existing repository", async () => {
     const canonical = await request(
       "/threads",
@@ -1464,10 +1525,15 @@ it("runs the agent CLI against the real Worker and persisted threads", async () 
   );
   const threadId = created.data.id;
   expect(created.scope.branch).toBe("shared");
+  await cli("comments", "tag", threadId, "nav");
   const listing = await cli("comments", "list", "--page", "/cli");
   expect(listing.data.threads.map((thread: Thread) => thread.id)).toContain(
     threadId
   );
+  expect(
+    (await cli("comments", "list", "--page", "/cli", "--tag", "nav"))
+      .data.threads.map((thread: Thread) => thread.id)
+  ).toContain(threadId);
   const reply = await cli(
     "comments",
     "reply",
@@ -1513,6 +1579,46 @@ describe("owner management and private projects", () => {
     token = "managed-owner",
     project = "managed"
   ) => request(path, method, data, token, "shared", "owner/site", project);
+  it("keeps webhook secrets encrypted and refuses delivery without a secure sender", async () => {
+    const secret = "test-signing-secret-0123456789abcdef";
+    expect((await call("/project/webhook")).status).toBe(200);
+    const saved = await call("/project/webhook", "PATCH", {
+      url: "https://hooks.example.com/komo",
+      secret,
+      events: ["comment.created", "comment.replied"],
+      enabled: false,
+    });
+    expect(saved.status).toBe(200);
+    expect(await saved.text()).not.toContain(secret);
+    const settings = await (await call("/project/webhook")).json();
+    expect(settings).toMatchObject({
+      url: "https://hooks.example.com/komo",
+      events: ["comment.created", "comment.replied"],
+      enabled: false,
+      secretConfigured: true,
+      deliveryAvailable: false,
+    });
+    expect(JSON.stringify(settings)).not.toContain(secret);
+    expect(
+      (
+        await call("/project/webhook", "PATCH", {
+          url: "https://127.0.0.1/hook",
+          secret,
+          events: ["comment.created"],
+          enabled: false,
+        })
+      ).status
+    ).toBe(400);
+    expect(
+      (
+        await call("/project/webhook", "PATCH", {
+          url: "https://hooks.example.com/komo",
+          events: ["comment.created"],
+          enabled: true,
+        })
+      ).status
+    ).toBe(503);
+  });
   it("enforces invitations, rejects other emails and revokes existing sessions", async () => {
     expect(
       (await call("/project", "GET", undefined, "managed-stranger")).status

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDesignMode } from "../src/design-mode.js";
 import {
   applyTokenToElement,
+  declaredTokenFor,
   hasDesignTokenChanges,
   previewThemeToken,
   proposedDesignTokenChanges,
@@ -12,7 +13,7 @@ import {
   tokenSourceFor,
   undoDesignToken,
 } from "../src/design-tokens.js";
-import { createDesignThemePanel, createElementTokenControl, installCommentCapture, noteDesignTokenOverride } from "../src/react-props-panel.js";
+import { createDesignThemePanel, createElementTokenControl, noteDesignTokenOverride } from "../src/react-props-panel.js";
 import type { KomoDesignToken } from "../src/design-tokens.js";
 
 const tokens: KomoDesignToken[] = [
@@ -89,18 +90,13 @@ describe("explicit design-token preview bridge", () => {
     chooser.dispatchEvent(new Event("change"));
     expect(card.style.getPropertyValue("background-color")).toBe("var(--brand)");
     expect(proposedDesignTokenChanges(card)).toContain("Element background-color: (unset) → var(--brand) [color.brand]");
-    const comment = document.createElement("button");
-    const onComment = vi.fn();
-    installCommentCapture(comment, () => card, onComment);
-    comment.click();
-    expect(onComment.mock.calls[0]?.[1]).toContain("var(--brand) [color.brand]");
-    expect(tokenControl.textContent).toContain("Style token");
+    expect(tokenControl.textContent).toContain("Linked to color.brand");
     expect(tokenControl.dataset.mode).toBe("token");
     value.value = "#345678";
     card.style.setProperty("background-color", value.value);
     noteDesignTokenOverride(card, "background-color", value.value);
     await vi.waitFor(() => expect(tokenControl.dataset.mode).toBe("custom"));
-    expect(proposedDesignTokenChanges(card)).toContain("[custom override]");
+    expect(proposedDesignTokenChanges(card)).toContain("#345678 [custom value]");
     resetDesignTokens(card);
     expect(card.style.getPropertyValue("background-color")).toBe("");
     cleanup();
@@ -123,6 +119,83 @@ describe("explicit design-token preview bridge", () => {
     card.dispatchEvent(event);
     await vi.waitFor(() => expect(shadow.querySelector(".design-theme-group")).not.toBeNull());
     expect(shadow.querySelector('[aria-label="Style token for color"]')).not.toBeNull();
+    controller.destroy();
+    cleanup();
+  });
+
+  it("reports a connected token only when the winning declaration references it", () => {
+    document.body.innerHTML = `<style>
+      .card { padding: var(--space-card); gap: 28px; }
+      main .card.loud { padding: var(--space-card, 4px); }
+      .card.plain { padding: 12px; }
+      .card[data-theme='brand'] { background: var(--brand); }
+    </style><main><article class="card"></article><article class="card plain"></article><article class="card loud plain"></article><article class="card forced" data-theme="brand"></article></main>`;
+    const root = document.documentElement;
+    root.style.setProperty("--space-card", "28px");
+    const cleanup = registerDesignTokenSource(root, tokens);
+    const [card, plain, loud, forced] = [...document.querySelectorAll<HTMLElement>(".card")];
+    const source = tokenSourceFor(card)!;
+    expect(declaredTokenFor(source, card, "padding")).toMatchObject({ origin: "stylesheet", token: { path: "spacing.card" } });
+    // A matching computed value is not a token reference.
+    expect(declaredTokenFor(source, card, "gap")).toBeNull();
+    // Higher specificity wins, then source order.
+    expect(declaredTokenFor(source, plain, "padding")).toBeNull();
+    expect(declaredTokenFor(source, loud, "padding")?.token.path).toBe("spacing.card");
+    // Inline declarations win. (jsdom drops rule !important priority; the browser check covers it.)
+    card.style.setProperty("padding", "40px");
+    expect(declaredTokenFor(source, card, "padding")).toBeNull();
+    card.style.setProperty("padding", "var(--space-card)");
+    expect(declaredTokenFor(source, card, "padding")?.origin).toBe("inline");
+    expect(declaredTokenFor(source, forced, "background-color")?.token.path).toBe("color.brand");
+    cleanup();
+  });
+
+  it("keeps stylesheet token provenance through custom overrides and rebinding", async () => {
+    document.body.innerHTML = '<style>.card { padding: var(--space-card); }</style><main><article class="card"></article></main><div id="komo"></div>';
+    const root = document.documentElement;
+    root.style.setProperty("--space-card", "28px");
+    const cleanup = registerDesignTokenSource(root, tokens);
+    const host = document.querySelector<HTMLElement>("#komo")!;
+    const card = document.querySelector<HTMLElement>(".card")!;
+    const shadow = host.attachShadow({ mode: "open" });
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    const proposals: Array<string | undefined> = [];
+    const controller = createDesignMode({ root: shadow, host, targetAt: () => card, onComment: (_, proposal) => proposals.push(proposal), onExit: vi.fn() });
+    controller.setActive(true);
+    const event = new Event("pointerdown", { bubbles: true, cancelable: true, composed: true });
+    Object.defineProperties(event, { clientX: { value: 20 }, clientY: { value: 20 }, button: { value: 0 } });
+    card.dispatchEvent(event);
+    const chooser = await vi.waitFor(() => {
+      const found = shadow.querySelector<HTMLSelectElement>('[aria-label="Style token for padding"]');
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    const row = chooser.closest<HTMLElement>(".design-token-binding")!;
+    expect(chooser.value).toBe("spacing.card");
+    expect(row.dataset.mode).toBe("connected");
+    expect(row.textContent).toContain("Connected from stylesheet");
+    expect(shadow.querySelector('[aria-label="Style token for gap"]')?.closest<HTMLElement>(".design-token-binding")?.dataset.mode).toBe("custom");
+
+    const padding = shadow.querySelector<HTMLInputElement>('input[data-property="padding"]')!;
+    padding.dispatchEvent(new Event("focus"));
+    padding.value = "40";
+    padding.dispatchEvent(new Event("input", { bubbles: true }));
+    padding.dispatchEvent(new Event("change", { bubbles: true }));
+    await vi.waitFor(() => expect(row.dataset.mode).toBe("override"));
+    expect(row.textContent).toContain("Custom override · was spacing.card");
+    expect(chooser.value).toBe("custom");
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
+    await vi.waitFor(() => expect(proposals).toHaveLength(1));
+    expect(proposals[0]).toContain("Element padding: var(--space-card) [spacing.card] → 40px [custom override]");
+    // Token-bound properties are described once, by provenance, not again as raw CSS.
+    expect(proposals[0]).not.toContain("- padding:");
+
+    chooser.value = "spacing.card";
+    chooser.dispatchEvent(new Event("change"));
+    expect(card.style.getPropertyValue("padding")).toBe("");
+    await vi.waitFor(() => expect(row.dataset.mode).toBe("connected"));
+    expect(proposedDesignTokenChanges(card)).toBeUndefined();
     controller.destroy();
     cleanup();
   });

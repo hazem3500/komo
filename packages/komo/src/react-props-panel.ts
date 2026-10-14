@@ -9,12 +9,14 @@ import {
   applyTokenToElement,
   canUndoDesignToken,
   compatibleTokens,
+  declaredTokenFor,
   elementTokenBindingFor,
   hasDesignTokenChanges,
   noteElementTokenOverride,
   previewThemeToken,
   proposedDesignTokenChanges,
   resetDesignTokens,
+  restoreElementProperty,
   syncElementTokenBinding,
   tokenImpactCount,
   tokenSourceFor,
@@ -26,7 +28,7 @@ const originals = new Map<HTMLElement, Map<string, InspectableScalar>>();
 const edits = new WeakMap<HTMLElement, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();
 const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
-const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#898680;font-size:10px;overflow-wrap:anywhere}.design-react-field{grid-template-columns:76px minmax(0,1fr);padding:1px 0}.design-react-field input[type=checkbox]{justify-self:end;width:16px;height:16px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.65;cursor:not-allowed}.design-react-type{grid-column:2;color:#77736f;font-size:10px;margin-top:-5px;overflow-wrap:anywhere}.design-react-group .design-react-field{min-height:36px}.design-token-binding{grid-column:2/-1;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;color:#898680;font-size:10px;padding:0 0 5px}.design-token-binding select{min-width:0;width:100%;height:25px;border:1px solid #ffffff1c;border-radius:7px;background:#252322;color:#e9e6e1;padding:0 7px;font:10px ui-sans-serif,system-ui,sans-serif}.design-token-binding select:focus-visible{outline:2px solid #bda6ef;outline-offset:2px}.design-token-binding[data-mode=custom]::after{content:'Custom override';grid-column:2;color:#bda6ef;font-size:9px}.design-theme-group{margin-top:4px}.design-theme-token{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:7px 0;border-top:1px solid #ffffff12}.design-theme-token small{grid-column:1/-1;color:#898680;font-size:10px}.design-theme-token input,.design-theme-token button{min-width:0;min-height:28px;border:1px solid #ffffff1c;border-radius:7px;background:#252322;color:#f4f0ea;padding:0 8px;font:10px ui-sans-serif,system-ui,sans-serif}.design-theme-token button{cursor:pointer}.design-theme-token :focus-visible{outline:2px solid #bda6ef;outline-offset:2px}.design-theme-token [aria-invalid=true]{border-color:#f17676}`;
+const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#898680;font-size:10px;overflow-wrap:anywhere}.design-react-field{grid-template-columns:76px minmax(0,1fr);padding:1px 0}.design-react-field input[type=checkbox]{justify-self:end;width:16px;height:16px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.65;cursor:not-allowed}.design-react-type{grid-column:2;color:#77736f;font-size:10px;margin-top:-5px;overflow-wrap:anywhere}.design-react-group .design-react-field{min-height:36px}.design-token-binding{grid-column:2/-1;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:2px 8px;margin:-2px 0 6px;color:#898680;font-size:10px}.design-token-binding__caption{display:inline-flex;align-items:center;gap:5px}.design-token-binding__caption::before{content:'';width:7px;height:7px;border:1.5px solid currentColor;border-radius:2px;transform:rotate(45deg)}.design-token-binding select{min-width:0;width:100%;height:26px;border:1px solid #ffffff1c;border-radius:7px;background:#191919;color:#e9e6e1;padding:0 7px;font:11px ui-monospace,monospace}.design-token-binding select:focus-visible{outline:2px solid #bda6ef;outline-offset:2px}.design-token-binding__state{grid-column:2;color:#898680;font-size:10px}.design-token-binding:is([data-mode=token],[data-mode=connected]){color:#c8b5f4}.design-token-binding:is([data-mode=token],[data-mode=connected]) select{border-color:#bda6ef59;background:#bda6ef14;color:#e6dcfb}.design-token-binding[data-mode=override] .design-token-binding__state{color:#e7c27d}.design-field:is([data-token-mode=token],[data-token-mode=connected])>input[data-property]{border-color:#bda6ef40}.design-field[data-token-mode=override]>input[data-property]{border-color:#e7c27d55}.design-theme-group{margin-top:4px}.design-theme-token{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:7px 0;border-top:1px solid #ffffff12}.design-theme-token small{grid-column:1/-1;color:#898680;font-size:10px}.design-theme-token input,.design-theme-token button{min-width:0;min-height:28px;border:1px solid #ffffff1c;border-radius:7px;background:#252322;color:#f4f0ea;padding:0 8px;font:10px ui-sans-serif,system-ui,sans-serif}.design-theme-token button{cursor:pointer}.design-theme-token :focus-visible{outline:2px solid #bda6ef;outline-offset:2px}.design-theme-token [aria-invalid=true]{border-color:#f17676}`;
 
 function scalarLabel(value: InspectableScalar): string {
   return value === undefined ? "unset" : JSON.stringify(value) ?? "unset";
@@ -190,29 +192,42 @@ export function createElementTokenControl(
   row.className = "design-token-binding";
   row.setAttribute("data-mode", "custom");
   const caption = document.createElement("span");
-  caption.textContent = "Style token";
+  caption.className = "design-token-binding__caption";
+  caption.textContent = "Token";
   const select = document.createElement("select");
   select.setAttribute("aria-label", `Style token for ${property}`);
+  const state = document.createElement("small");
+  state.className = "design-token-binding__state";
+  state.setAttribute("aria-live", "polite");
+  const id = `komo-token-${property}-${Math.random().toString(36).slice(2, 8)}`;
+  state.id = id;
+  select.setAttribute("aria-describedby", id);
   const custom = document.createElement("option");
   custom.value = "custom";
   custom.textContent = "Custom value";
   select.append(custom);
   for (const token of available) {
     const option = document.createElement("option");
+    const resolved = tokenValue(source, token);
     option.value = token.path;
-    option.textContent = token.path;
+    option.textContent = resolved ? `${token.path} · ${resolved}` : token.path;
     select.append(option);
   }
   const update = () => {
     const binding = elementTokenBindingFor(source, element, property);
-    const activeToken = available.find((token) =>
-      element.style.getPropertyValue(property) === `var(${token.cssVariable})`,
-    );
-    select.value = activeToken?.path ?? "custom";
-    row.dataset.mode = binding?.mode ?? (activeToken ? "token" : "custom");
-    row.title = binding?.mode === "custom" && binding.tokenPath
-      ? `Custom override of ${binding.tokenPath}`
-      : activeToken ? `Using ${activeToken.path} · preview only` : "Uses a custom value";
+    const declared = binding ? null : declaredTokenFor(source, element, property);
+    const linked = binding?.mode === "token" ? available.find((token) => token.path === binding.tokenPath) : undefined;
+    const active = linked ?? declared?.token;
+    select.value = active?.path ?? "custom";
+    const was = binding?.declaredPath;
+    const mode = linked ? "token" : declared ? "connected" : was ? "override" : "custom";
+    row.dataset.mode = mode;
+    row.parentElement?.setAttribute("data-token-mode", mode);
+    state.textContent = mode === "token"
+      ? was && was !== linked?.path ? `Rebound from ${was} · preview` : `Linked to ${linked?.path} · preview`
+      : mode === "connected"
+        ? `Connected ${declared?.origin === "inline" ? "inline" : "from stylesheet"}`
+        : mode === "override" ? `Custom override · was ${was}` : "Not connected to a token";
   };
   const observer = new MutationObserver(update);
   observer.observe(element, { attributes: true, attributeFilter: ["style"] });
@@ -221,22 +236,36 @@ export function createElementTokenControl(
   select.addEventListener("change", () => {
     const before = element.style.getPropertyValue(property);
     const token = available.find((item) => item.path === select.value);
-    if (token) {
-      if (applyTokenToElement(source, element, token, property, { recordHistory: false }))
-        onEdit(before, element.style.getPropertyValue(property), token.path);
+    const binding = elementTokenBindingFor(source, element, property);
+    if (token && binding && token.path === binding.declaredPath) {
+      // Choosing the page's own token again removes the preview instead of duplicating it inline.
+      restoreElementProperty(source, element, property);
+      onEdit(before, element.style.getPropertyValue(property), token.path);
+    } else if (token) {
+      if (token.path !== declaredTokenFor(source, element, property)?.token.path || binding) {
+        if (applyTokenToElement(source, element, token, property, { recordHistory: false }))
+          onEdit(before, element.style.getPropertyValue(property), token.path);
+      }
     } else {
       const control = row.parentElement?.querySelector<HTMLInputElement | HTMLSelectElement>("[data-property]");
       const value = control?.value ?? getComputedStyle(element).getPropertyValue(property).trim();
       const cssValue = control?.type === "number" && value.trim() !== "" ? `${value}px` : value;
-      element.style.setProperty(property, cssValue);
       noteElementTokenOverride(source, element, property, cssValue);
+      element.style.setProperty(property, cssValue);
       onEdit(before, cssValue);
     }
     update();
   });
-  row.append(caption, select);
+  row.append(caption, select, state);
+  queueMicrotask(update);
   update();
   return row;
+}
+
+/** Properties whose before/after is described by token provenance instead of raw CSS. */
+export function tokenBoundProperties(element: HTMLElement): Set<string> {
+  const source = tokenSourceFor(element);
+  return new Set(source?.elementBindings.get(element)?.keys() ?? []);
 }
 
 export function attachStyleTokenControls<T extends { property: string; kind?: string }>(

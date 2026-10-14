@@ -172,3 +172,37 @@ it("indexes shared target scopes once per pass and revalidates after DOM changes
   expect(anchorPass().resolve(anchors[0])).toBeNull();
   expect(anchorPass().resolve(anchors[1])).toBe(buttons[1]);
 });
+
+describe("changing targets", () => {
+  it("keeps a header attached when a counter disappears from its text", () => {
+    document.body.innerHTML =
+      '<div id="radix-_r_15_"><div><div class="flex header"><span>Get started</span><span class="count">2 / 4</span></div></div></div>';
+    const header = document.querySelector(".header")!;
+    const anchor = capture(header);
+    expect(anchor.text).toBe("Get started 2 / 4");
+    header.querySelector(".count")!.remove();
+    expect(resolveAnchor(anchor)).toBe(header);
+    expect(anchorPass().resolve(anchor)).toBe(header);
+  });
+
+  it("detaches when the selected element now has unrelated text", () => {
+    document.body.innerHTML =
+      '<main><div class="header">Get started 2 / 4</div></main>';
+    const header = document.querySelector(".header")!;
+    const anchor = capture(header);
+    header.textContent = "Billing history";
+    expect(resolveAnchor(anchor)).toBeNull();
+  });
+
+  it("skips generated React and Radix ids when building selectors", () => {
+    for (const id of ["radix-_r_15_", ":r1:", "_r_15_", "«r3»"]) {
+      document.body.innerHTML = `<section data-testid="panel"><div id="${id}"><p>Note</p></div></section>`;
+      const anchor = capture(document.querySelector("p")!);
+      expect(anchor.selector).not.toContain("#");
+      expect(anchor.selector.startsWith('[data-testid="panel"]')).toBe(true);
+      expect(anchor.context?.scope).toBe('[data-testid="panel"]');
+    }
+    document.body.innerHTML = '<div id="settings"><p>Note</p></div>';
+    expect(capture(document.querySelector("p")!).selector).toMatch(/^#settings/);
+  });
+});

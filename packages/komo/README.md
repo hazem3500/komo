@@ -75,8 +75,10 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 - Point and area comments anchored to page elements.
 - On-demand design mode for temporary typography, color, spacing, border, and layout previews; copy the resulting CSS or attach a comment to the selected element.
 - Replies, reactions, author-only editing, resolution, and undo.
+- Safe HTTP(S) links and simple Markdown links in comment messages.
 - Searchable sidebar, draggable dock, and Google or guest profiles.
 - Dismiss the toolbar for the current tab with ×; restore it with Shift+K or `controller.open()`. Set `showToolbar: false` to start hidden.
+- Keyboard shortcuts: C to comment, V to browse, Shift+K to restore. Remap or disable them with `shortcuts`.
 - Copy open feedback with selectors, source paths, page URLs, replies, and geometry into an agent.
 - Hosted Cloudflare storage, or your own Worker/D1 or Node/PostgreSQL service.
 
@@ -98,7 +100,7 @@ The app provides an `onChange` callback that updates its own state. Komo preview
 
 `useKomoDesignTokens` can register a bounded list of named CSS custom properties from a host-owned source. Each entry supplies its token path, DTCG scalar type, CSS variable, eligible element properties, and an explicit selector for the estimated theme-preview scope. Komo does not scan arbitrary computed styles or infer a complete semantic system. The first adapter uses the Design Tokens Format Module 2025.10 naming/type vocabulary; it is not a general DTCG file importer, and composite typography tokens are not editable.
 
-Compatible registered tokens appear inside each existing style control, next to the color, spacing, typography, or radius value they affect. The chooser filters by that control's CSS property; it never guesses a token by name or snaps arbitrary values to a scale. Selecting a token preserves its `var(--token)` reference and stable path in the preview proposal. Choosing **Custom value** deliberately detaches the binding and uses the visible control's current value; Undo and Reset restore the original declaration and token provenance. For registered React components, a build-generated string prop can opt into one allowlisted `styleProperty` mapping (for example `brandColor` → `color`); the token reference then goes through the component's supplied React state callback and stays in the proposed prop diff. Unsupported prop types remain read-only.
+Compatible registered tokens appear inside each existing style control, next to the color, spacing, typography, or radius value they affect. The chooser filters by that control's CSS property; it never guesses a token by name, matches computed values, or snaps arbitrary values to a scale. A control reads **Connected** only when the element's winning declaration (inline, or a same-origin stylesheet rule ranked by `!important`, specificity, and order) references the registered `var(--token)`. Typing a value, or choosing **Custom value**, records a custom override that keeps the original token as provenance; choosing another token rebinds the preview, and choosing the original token again removes the override. The comment proposal lists each change once, with its token before and after. Undo and Reset restore the original declaration and token provenance. Cross-origin stylesheets are skipped (their properties read as not connected), and cascade layers are ranked as if unlayered. For registered React components, a build-generated string prop can opt into one allowlisted `styleProperty` mapping (for example `brandColor` → `color`); the token reference then goes through the component's supplied React state callback and stays in the proposed prop diff. Unsupported prop types remain read-only.
 
 Shared theme edits remain secondary under **Edit shared theme values**. Their explicit Preview action changes the registered variable temporarily and reports the author-declared impact selector/count. This is not a persisted design-system edit; it resets on refresh, widget destruction, or Reset. Selectors are estimates, not proof that every matching element consumes the variable. Both element and shared changes remain previews until the user explicitly submits a comment; Komo does not write CSS or React source. Enable registration only in a trusted development/demo environment, and exclude confidential values from the token list.
 
@@ -137,7 +139,8 @@ For an existing inline installation, pass `--project YOUR_PROJECT_KEY --origin h
 | --- | --- |
 | `komo schema` | JSON command reference for agents; no sign-in needed. |
 | `komo whoami` | Show the current reviewer and project scope. |
-| `komo comments list` | Open threads as JSON; `--status open\|resolved\|all`, `--page`, `--limit 1–250`, `--offset`. Default page size: 50. |
+| `komo comments list` | Open threads as JSON; `--status open\|resolved\|all`, `--page`, `--tag`, `--limit 1–250`, `--offset`. Default page size: 50. |
+| `komo comments tag THREAD_ID TAG` | Add a normalized group tag to a thread. |
 | `komo comments get THREAD_ID` | Full thread, replies, selector, source reference, and anchor. |
 | `komo comments prompt` | The UI’s open-feedback prompt as Markdown; optional `--page` and `--json`. |
 | `komo comments reply THREAD_ID --body TEXT` | Add a reply as the signed-in reviewer. |
@@ -254,7 +257,8 @@ Pass these to `initKomo(config)` from `@tjcages/komo` or `useKomo(config)` from 
 | `page()` | `() => string` | `location.pathname` | Canonical page identifier. |
 | `drawerContainer` | `HTMLElement` | Viewport | Element used to center the drawer before it is dragged. |
 | `autoHideDrawer` | `boolean` | `true` | Set `false` to keep the drawer visible away from the pointer. |
-| `showToolbar` | `boolean` | `true` | Set `false` to keep the toolbar, drawer, and comment pins hidden until `controller.open()` or Shift+K. |
+| `showToolbar` | `boolean` | `true` | Set `false` to keep the toolbar, drawer, and comment pins hidden until `controller.open()` or the restore shortcut. |
+| `shortcuts` | `{ comment?, browse?, restore? }` | `C`, `V`, `Shift+K` | A key with optional `Ctrl`, `Alt`, `Shift`, or `Meta`, such as `"M"` or `"Shift+J"`. Set `false` to disable one. Escape and Tab are reserved. |
 | `sidebar` | `"background" \| "edge"` | `"edge"` | `"edge"` (Floating) is a draggable sidebar that parks off and peeks from the viewport edge while closed. `"background"` (Frame) frames the site and shows the sidebar in the scaled review sheet. Account → Sidebar switches the two; that choice is remembered per project. |
 | `emojiDataSource` | `string` | jsDelivr emoji data 1.8.0 | Full emoji JSON URL; fetched only after “Choose another emoji”. |
 | `pollInterval` | `number` | `4000` | Refresh interval in milliseconds, minimum 2000. |
@@ -358,6 +362,10 @@ Extracted from the komo product at source commit `f57f3521` in the Cloudflare ma
 ## Project management
 
 Sign in as the Google owner with `npx @tjcages/komo login`. In the widget, open **Account → Project settings** to manage access, download feedback, clear resolved threads, or delete a hosted project.
+
+Self-hosted Node deployments can also send signed webhooks for new comments, replies, and resolved threads. In **Project settings → Comment webhooks**, enter an HTTPS endpoint and a signing secret of at least 32 characters. Komo encrypts the secret at rest using the `KOMO_WEBHOOK_KEYS` environment variable; generate a 32-byte key with `openssl rand -base64 32` and configure a JSON keyring such as `{"current":"2026-10","keys":{"2026-10":"BASE64_KEY"}}`. Keep the keyring in your secret manager. Cloudflare Worker deployments currently disable webhook delivery because they do not yet have the DNS-pinning egress transport used by the Node adapter.
+
+Each request includes `X-Komo-Event`, `X-Komo-Delivery`, and `X-Komo-Signature: t=<unix-seconds>,v1=<hex-hmac-sha256>`. Verify the HMAC over `<timestamp>.<raw-request-body>` and reject timestamps outside your replay window. Treat `X-Komo-Delivery` as the idempotency key. Komo sends once without retries, does not follow redirects, and never logs secrets or response bodies. Master-key rotation requires replacing each project's signing secret and updating its receiver before removing the old key from the keyring.
 
 ```sh
 npx @tjcages/komo project info

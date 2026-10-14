@@ -34,6 +34,14 @@ export interface ElementTokenBinding {
   initialPriority: string;
   mode: "token" | "custom";
   customValue?: string;
+  /** Token the element used before Komo changed it, from its inline style or stylesheet. */
+  declaredPath?: string;
+}
+
+/** A token reference the page itself declares for one element property. */
+export interface DeclaredTokenReference {
+  token: KomoDesignToken;
+  origin: "inline" | "stylesheet";
 }
 
 type TokenEdit =
@@ -175,6 +183,7 @@ export function applyTokenToElement(
     initialValue: priorBinding?.initialValue ?? before,
     initialPriority: priorBinding?.initialPriority ?? priority,
     mode: "token",
+    declaredPath: priorBinding ? priorBinding.declaredPath : declaredTokenFor(source, element, property)?.token.path,
   });
   element.style.setProperty(property, after, priority);
   if (options.recordHistory === false) return true;
@@ -195,8 +204,22 @@ export function noteElementTokenOverride(
   property: string,
   value: string,
 ): void {
-  const binding = source.elementBindings.get(element)?.get(property);
-  if (!binding) return;
+  let bindings = source.elementBindings.get(element);
+  let binding = bindings?.get(property);
+  if (!binding) {
+    // Call before the override is written so the page's own reference is still visible.
+    const declared = declaredTokenFor(source, element, property);
+    if (!declared) return;
+    if (!bindings) source.elementBindings.set(element, (bindings = new Map()));
+    binding = {
+      tokenPath: declared.token.path,
+      initialValue: element.style.getPropertyValue(property),
+      initialPriority: element.style.getPropertyPriority(property),
+      mode: "custom",
+      declaredPath: declared.token.path,
+    };
+    bindings.set(property, binding);
+  }
   binding.mode = "custom";
   binding.customValue = value;
 }
@@ -210,6 +233,10 @@ export function syncElementTokenBinding(
   const binding = source.elementBindings.get(element)?.get(property);
   if (!binding) return;
   const value = element.style.getPropertyValue(property);
+  if (value === binding.initialValue && element.style.getPropertyPriority(property) === binding.initialPriority) {
+    source.elementBindings.get(element)?.delete(property);
+    return;
+  }
   const token = source.tokens.find((item) =>
     item.path === binding.tokenPath && item.properties.includes(property) && value === `var(${item.cssVariable})`,
   );
@@ -229,6 +256,123 @@ export function elementTokenBindingFor(
 ): ElementTokenBinding | null {
   const binding = source.elementBindings.get(element)?.get(property);
   return binding ? { ...binding } : null;
+}
+
+/** Shorthands whose declared var() feeds the inspected longhand. */
+const shorthands: Record<string, string[]> = {
+  "background-color": ["background"],
+  "border-color": ["border"],
+  "font-family": ["font"],
+  "font-size": ["font"],
+  "font-weight": ["font"],
+  "line-height": ["font"],
+};
+
+function referencedToken(
+  source: RegisteredDesignTokenSource,
+  property: string,
+  value: string,
+  exact: boolean,
+): KomoDesignToken | undefined {
+  const names = [...value.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]);
+  if (!names.length || (exact && !/^var\(\s*--[\w-]+\s*(?:,[^;{}]*)?\)$/.test(value.trim()))) return undefined;
+  const matches = source.tokens.filter((token) => token.properties.includes(property) && names.includes(token.cssVariable));
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function specificity(selector: string): number {
+  const plain = selector.replace(/:(?:where)\([^)]*\)/g, "").replace(/"[^"]*"|'[^']*'/g, "");
+  const ids = plain.match(/#[\w-]+/g)?.length ?? 0;
+  const classes = plain.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+/g)?.length ?? 0;
+  const types = plain.match(/(?:^|[\s>+~(])[a-z][\w-]*/gi)?.length ?? 0;
+  return ids * 10000 + classes * 100 + types;
+}
+
+function splitSelectors(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (char === "(" || char === "[") depth++;
+    else if (char === ")" || char === "]") depth--;
+    else if (char === "," && depth === 0) {
+      parts.push(text.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts.map((part) => part.trim()).filter(Boolean);
+}
+
+/**
+ * Report the token a property is connected to only when the winning declared
+ * value references it. Equal computed values are never treated as a token.
+ * Cross-origin sheets are skipped; cascade layers and scoping are not ranked.
+ */
+export function declaredTokenFor(
+  source: RegisteredDesignTokenSource,
+  element: HTMLElement,
+  property: string,
+  inline = element.style.getPropertyValue(property),
+  inlinePriority = element.style.getPropertyPriority(property),
+): DeclaredTokenReference | null {
+  const view = element.ownerDocument.defaultView;
+  let best: { value: string; property: string; rank: number; order: number } | null = null;
+  let order = 0;
+  const visit = (rules: CSSRuleList) => {
+    for (const rule of rules) {
+      order++;
+      const media = (rule as CSSMediaRule).media;
+      if (media && view?.matchMedia && media.mediaText && !view.matchMedia(media.mediaText).matches) continue;
+      const style = (rule as CSSStyleRule).style;
+      const selectorText = (rule as CSSStyleRule).selectorText;
+      if (style && selectorText) {
+        for (const name of [property, ...(shorthands[property] ?? [])]) {
+          const value = style.getPropertyValue(name).trim();
+          if (!value) continue;
+          let rank = -1;
+          for (const selector of splitSelectors(selectorText)) {
+            try { if (element.matches(selector)) rank = Math.max(rank, specificity(selector)); }
+            catch { /* Unsupported selectors cannot be ranked. */ }
+          }
+          if (rank < 0) continue;
+          rank += style.getPropertyPriority(name) ? 1e9 : 0;
+          if (!best || rank > best.rank || (rank === best.rank && order >= best.order)) best = { value, property: name, rank, order };
+          break;
+        }
+      }
+      const nested = (rule as CSSGroupingRule).cssRules;
+      if (nested && !style) visit(nested);
+    }
+  };
+  for (const sheet of element.ownerDocument.styleSheets) {
+    try { if (!sheet.disabled) visit(sheet.cssRules); }
+    catch { /* Cross-origin stylesheets are not inspectable. */ }
+  }
+  const winner = best as { value: string; property: string; rank: number } | null;
+  if (inline && !(winner && winner.rank >= 1e9 && !inlinePriority)) {
+    const token = referencedToken(source, property, inline, true);
+    return token ? { token, origin: "inline" } : null;
+  }
+  if (!winner) return null;
+  const token = referencedToken(source, property, winner.value, winner.property === property);
+  return token ? { token, origin: "stylesheet" } : null;
+}
+
+/** Drop Komo's element preview for one property and return to the page's own value. */
+export function restoreElementProperty(
+  source: RegisteredDesignTokenSource,
+  element: HTMLElement,
+  property: string,
+): void {
+  const binding = source.elementBindings.get(element)?.get(property);
+  const original = source.elementOriginals.get(element)?.get(property);
+  const value = binding?.initialValue ?? original?.value ?? "";
+  const priority = binding?.initialPriority ?? original?.priority ?? "";
+  if (value) element.style.setProperty(property, value, priority);
+  else element.style.removeProperty(property);
+  source.elementBindings.get(element)?.delete(property);
 }
 
 export function compatibleTokens(
@@ -299,10 +443,12 @@ export function proposedDesignTokenChanges(element: HTMLElement): string | undef
   for (const [property, binding] of source.elementBindings.get(element) ?? []) {
     const token = source.tokens.find((item) => item.path === binding.tokenPath && item.properties.includes(property));
     if (!token) continue;
+    const declared = source.tokens.find((item) => item.path === binding.declaredPath);
+    const before = declared ? `var(${declared.cssVariable}) [${declared.path}]` : binding.initialValue || "(unset)";
     if (binding.mode === "token") {
-      rows.push(`Element ${property}: ${binding.initialValue || "(unset)"} → var(${token.cssVariable}) [${token.path}]`);
+      if (declared !== token) rows.push(`Element ${property}: ${before} → var(${token.cssVariable}) [${token.path}]${declared ? " [rebind]" : ""}`);
     } else {
-      rows.push(`Element ${property}: var(${token.cssVariable}) [${token.path}] → ${binding.customValue || "(unset)"} [custom override]`);
+      rows.push(`Element ${property}: ${before} → ${binding.customValue || "(unset)"} [${declared ? "custom override" : "custom value"}]`);
     }
   }
   for (const edit of elementEdits.get(element) ?? []) {

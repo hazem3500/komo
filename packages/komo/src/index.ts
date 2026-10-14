@@ -40,6 +40,7 @@ import {
 } from "./drawer-expand-motion.js";
 import { recordEmoji } from "./emoji-history.js";
 import { reactionPicker } from "./reaction-picker.js";
+import { appendMessageLinks } from "./message-links.js";
 import { animate } from "motion";
 import { actionMenu, selectionMenu } from "./action-menu.js";
 import {
@@ -67,6 +68,7 @@ import {
   icons,
   initials,
 } from "./dom.js";
+import { matchesShortcut, resolveShortcuts, withShortcut } from "./shortcuts.js";
 import { styles } from "./styles.js";
 import type {
   Anchor,
@@ -118,6 +120,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     throw new Error(
       "Use an HTTPS API endpoint without credentials; HTTP is allowed on localhost.",
     );
+  const shortcuts = resolveShortcuts(options.shortcuts);
   const scope = JSON.stringify([
     endpoint.href,
     options.project,
@@ -2168,7 +2171,11 @@ export function initComments(options: CommentsOptions): CommentsController {
     const fromMobileSidebar = compactSidebar && expanded;
     if (fromMobileSidebar) toggleExpanded(false);
     const rect = locateAnchor(thread.anchor);
-    if (!openingPreview && (fromMobileSidebar || !compactSidebar))
+    if (
+      rect.attached &&
+      !openingPreview &&
+      (fromMobileSidebar || !compactSidebar)
+    )
       (framed ? surface : window).scrollBy({
         top:
           (rect.y - (fromMobileSidebar
@@ -2275,13 +2282,13 @@ export function initComments(options: CommentsOptions): CommentsController {
     const items: ToolbarItem[] = [
       {
         id: "browse",
-        label: "Browse website · V",
+        label: withShortcut("Browse website", shortcuts.browse),
         icon: glyph("pointer"),
         onSelect: () => setMode(false),
       },
       {
         id: "comment",
-        label: "Add comment · C",
+        label: withShortcut("Add comment", shortcuts.comment),
         icon: glyph("comment"),
         onSelect: () => setMode(!commentMode),
       },
@@ -2334,7 +2341,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       },
       {
         id: "dismiss",
-        label: "Dismiss Komo · Shift+K to restore",
+        label: shortcuts.restore
+          ? `Dismiss Komo · ${shortcuts.restore.label} to restore`
+          : "Dismiss Komo",
         icon: glyph("close"),
         onSelect: dismissToolbar,
       },
@@ -2391,6 +2400,14 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
 
   let pinSnapshot = "";
+  // Threads on this page whose element can no longer be found or is not visible.
+  const detachedThreads = new Set<string>();
+  const pageLabel = (thread: Thread) =>
+    thread.page !== page()
+      ? thread.page
+      : detachedThreads.has(thread.id)
+        ? "Not found on page"
+        : "";
   let pinsScrolling = false;
   let pinScrollTimer = 0;
   function renderPins(force = false) {
@@ -2423,6 +2440,15 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
       return { thread, rect, blocked };
     });
+    for (const { thread, rect } of positions) {
+      if (detachedThreads.has(thread.id) === !rect.attached) continue;
+      if (rect.attached) detachedThreads.delete(thread.id);
+      else detachedThreads.add(thread.id);
+      const label = shadow.querySelector(
+        `.thread-item[data-thread="${CSS.escape(thread.id)}"] .page`,
+      );
+      if (label) label.textContent = pageLabel(thread);
+    }
     const snapshot = JSON.stringify([
       selected,
       draft && anchors.locate(draft),
@@ -2448,7 +2474,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       positions.map((position) => [position.thread.id, position]),
     );
     for (const { thread, rect, blocked } of positions) {
-      const group = rect.attached ? stacks.get(thread.id) : undefined;
+      // Never draw a pin at stale page coordinates; the sidebar lists it instead.
+      if (!rect.attached) continue;
+      const group = stacks.get(thread.id);
       const leader = group && measured.get(group[0].id);
       const placement = leader?.rect.attached ? leader : { rect, blocked };
       if (
@@ -2639,10 +2667,11 @@ export function initComments(options: CommentsOptions): CommentsController {
   let disposeHeaderTip: (() => void) | undefined;
   const dismissedTips = new Set<string>();
   const dismissedTipsKey = "branch-comments:dismissed-tips";
-  const tips = [
+  const tips: [string, string][] = [
     ["copy", "Copy comments for your agent."],
-    ["shortcut", "Press C to comment."],
-  ] as const;
+  ];
+  if (shortcuts.comment)
+    tips.push(["shortcut", `Press ${shortcuts.comment.label} to comment.`]);
   // Empty-state coach marks: persistent tooltips pinned to the buttons they
   // describe. They live on the sidebar so they ride along as it parks/peeks.
   function syncTips(show: boolean) {
@@ -3169,8 +3198,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           const reply = thread.comments[index + 1];
           node.textContent = `${reply.author.name} · ${age(reply.createdAt)}`;
         });
-        cached.querySelector(".page")!.textContent =
-          thread.page === page() ? "" : thread.page;
+        cached.querySelector(".page")!.textContent = pageLabel(thread);
         list.append(cached);
         continue;
       }
@@ -3188,7 +3216,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
       const meta = el("div", "meta");
       meta.append(
-        el("span", "page", thread.page === page() ? "" : thread.page),
+        el("span", "page", pageLabel(thread)),
         el(
           "span",
           "",
@@ -3199,6 +3227,8 @@ export function initComments(options: CommentsOptions): CommentsController {
               : "",
         ),
       );
+      if (thread.tags?.length)
+        meta.append(el("span", "tag-list", thread.tags.join(" · ")));
       card.append(el("p", "preview", first.body), header, meta);
       const item = el("div", "thread-item");
       item.dataset.thread = thread.id;
@@ -3477,7 +3507,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       return item;
     }
     const content = el("div", "message-content");
-    content.append(el("p", "message-text", comment.body));
+    const message = el("p", "message-text");
+    appendMessageLinks(message, comment.body);
+    content.append(message);
     if (comment.body !== "[Comment deleted]") {
       const reaction = button(
         "Add reaction",
@@ -3985,6 +4017,19 @@ export function initComments(options: CommentsOptions): CommentsController {
           ].join("\n"),
         ),
         copy("Copy selector", () => thread.anchor.selector),
+        {
+          label: "Add group tag",
+          icon: "branch",
+          onSelect: () => {
+            const tag = window.prompt("Group tag");
+            if (!tag?.trim()) return;
+            run(() =>
+              mutate(async () => {
+                await api.request(`threads/${thread.id}`, "PATCH", { tag });
+              }),
+            );
+          },
+        },
       ]);
       controls.append(more);
       const resolve = button(
@@ -4499,6 +4544,8 @@ export function initComments(options: CommentsOptions): CommentsController {
         : anchor
           ? (() => {
               const rect = locateAnchor(anchor);
+              // A detached comment opens centred rather than at stale coordinates.
+              if (!rect.attached) return null;
               const indicator =
                 selected &&
                 pins.querySelector<HTMLElement>(
@@ -4602,6 +4649,8 @@ export function initComments(options: CommentsOptions): CommentsController {
             onComment(element, proposal) {
               designReturnToComments = false;
               setDesignMode(false);
+              // The compact sheet would cover the composer, as in setMode().
+              if (compactSidebar && expanded) toggleExpanded(false);
               draftText = proposal ?? "";
               const rect = element.getBoundingClientRect();
               composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
@@ -5075,32 +5124,17 @@ export function initComments(options: CommentsOptions): CommentsController {
         else if (expanded) toggleExpanded(false);
         return;
       }
-      if (
-        toolbarDismissed &&
-        event.key.toLowerCase() === "k" &&
-        event.shiftKey &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !typing
-      ) {
+      if (typing) return;
+      if (toolbarDismissed && matchesShortcut(event, shortcuts.restore)) {
         event.preventDefault();
         restoreToolbar();
         return;
       }
-      if (
-        options.onboarding ||
-        typing ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey
-      )
-        return;
-      if (event.key.toLowerCase() === "c") {
+      if (options.onboarding) return;
+      if (matchesShortcut(event, shortcuts.comment)) {
         event.preventDefault();
         setMode(!commentMode);
-      }
-      if (event.key.toLowerCase() === "v") {
+      } else if (matchesShortcut(event, shortcuts.browse)) {
         event.preventDefault();
         setMode(false);
       }
