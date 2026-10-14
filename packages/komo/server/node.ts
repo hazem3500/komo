@@ -4,6 +4,7 @@ import { isIP } from "node:net";
 import { postgresDatabase } from "./postgres";
 import worker from "./index";
 import { sitePattern } from "./validation";
+import { sendWebhookPinned } from "./node-webhooks";
 
 const databaseUrl = process.env.DATABASE_URL;
 const projects = process.env.PROJECTS;
@@ -48,6 +49,8 @@ const env = {
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ?? "",
   GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID ?? "",
   GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET ?? "",
+  KOMO_WEBHOOK_KEYS: process.env.KOMO_WEBHOOK_KEYS,
+  KOMO_WEBHOOK_SEND: sendWebhookPinned,
 } as unknown as Env;
 const port = Number(process.env.PORT ?? 8080);
 if (!Number.isInteger(port) || port < 1 || port > 65535)

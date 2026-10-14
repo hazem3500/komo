@@ -71,24 +71,31 @@ export function postgresDatabase(connectionString: string) {
         const versions = await client.query<{ version: number }>(
           "SELECT version FROM komo_schema",
         );
-        if (!versions.rows.length) {
-          const path = fileURLToPath(
-            new URL("./postgres/001_initial.sql", import.meta.url),
-          );
-          await client.query(await readFile(path, "utf8"));
-          await client.query("INSERT INTO komo_schema(version) VALUES(1)");
-        } else if (versions.rows.length !== 1 || versions.rows[0].version > 2) {
+        const migrations = [
+          "001_initial.sql",
+          "002_thread_tags.sql",
+          "003_project_webhooks.sql",
+        ];
+        if (
+          versions.rows.length > 1 ||
+          (versions.rows[0]?.version ?? 0) > migrations.length
+        )
           throw Error("Unsupported PostgreSQL schema version");
-        }
-        const latest = await client.query<{ version: number }>(
-          "SELECT version FROM komo_schema",
-        );
-        if (latest.rows[0]?.version === 1) {
+        for (
+          let version = versions.rows[0]?.version ?? 0;
+          version < migrations.length;
+          version++
+        ) {
           const path = fileURLToPath(
-            new URL("./postgres/002_thread_tags.sql", import.meta.url),
+            new URL(`./postgres/${migrations[version]}`, import.meta.url),
           );
           await client.query(await readFile(path, "utf8"));
-          await client.query("INSERT INTO komo_schema(version) VALUES(2)");
+          await client.query(
+            version
+              ? "UPDATE komo_schema SET version=$1"
+              : "INSERT INTO komo_schema(version) VALUES($1)",
+            [version + 1],
+          );
         }
         await client.query("COMMIT");
       } catch (error) {

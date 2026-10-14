@@ -9,6 +9,14 @@ type ProjectDetails = {
   members: { id: string; name: string; email?: string }[];
   invites: { email: string }[];
 };
+type WebhookSettings = {
+  url: string;
+  events: string[];
+  enabled: boolean;
+  secretConfigured: boolean;
+  deliveryAvailable: boolean;
+  supportedEvents: string[];
+};
 export function projectManagement(
   api: CommentsApi,
   workspace?: string,
@@ -136,6 +144,76 @@ export function projectManagement(
     };
     drawAccess();
     content.append(accessLabel);
+    const webhook = await request<WebhookSettings>("/webhook");
+    const webhookPanel = el("details", "project-webhook");
+    webhookPanel.append(el("summary", "", "Comment webhooks"));
+    const webhookDescription = el(
+      "p",
+      "project-help",
+      "Send signed events to your HTTPS endpoint. Signing secrets are encrypted and shown only when entered."
+    );
+    webhookPanel.append(webhookDescription);
+    if (!webhook.deliveryAvailable) {
+      webhookDescription.textContent =
+        "Secure webhook delivery is not available on this server yet.";
+    }
+    const webhookUrlLabel = el("label", "account-name-label", "HTTPS endpoint");
+    const webhookUrl = el("input");
+    webhookUrl.type = "url";
+    webhookUrl.autocomplete = "off";
+    webhookUrl.placeholder = "https://example.com/komo-webhook";
+    webhookUrl.value = webhook.url;
+    webhookUrlLabel.append(webhookUrl);
+    webhookPanel.append(webhookUrlLabel);
+    const webhookSecretLabel = el(
+      "label",
+      "account-name-label",
+      webhook.secretConfigured ? "Replace signing secret" : "Signing secret"
+    );
+    const webhookSecret = el("input");
+    webhookSecret.type = "password";
+    webhookSecret.autocomplete = "new-password";
+    webhookSecret.minLength = 32;
+    webhookSecret.maxLength = 256;
+    webhookSecretLabel.append(webhookSecret);
+    webhookPanel.append(webhookSecretLabel);
+    const eventInputs = new Map<string, HTMLInputElement>();
+    for (const eventName of webhook.supportedEvents) {
+      const label = el("label", "account-name-label", eventName);
+      const checkbox = el("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = webhook.events.includes(eventName);
+      eventInputs.set(eventName, checkbox);
+      label.prepend(checkbox);
+      webhookPanel.append(label);
+    }
+    const webhookEnabledLabel = el("label", "account-name-label", "Enable delivery");
+    const webhookEnabled = el("input");
+    webhookEnabled.type = "checkbox";
+    webhookEnabled.checked = webhook.enabled;
+    webhookEnabled.disabled = !webhook.deliveryAvailable && !webhook.enabled;
+    webhookEnabledLabel.prepend(webhookEnabled);
+    webhookPanel.append(webhookEnabledLabel);
+    webhookPanel.append(
+      button(
+        "Save webhook settings",
+        () =>
+          void action(async () => {
+            await request("/webhook", "PATCH", {
+              url: webhookUrl.value,
+              secret: webhookSecret.value,
+              events: [...eventInputs]
+                .filter(([, input]) => input.checked)
+                .map(([eventName]) => eventName),
+              enabled: webhookEnabled.checked,
+            });
+            webhookSecret.value = "";
+            status.textContent = "Webhook settings saved.";
+          }),
+        "secondary"
+      )
+    );
+    content.append(webhookPanel);
     const emailLabel = el("label", "account-name-label", "Invite someone");
     const email = el("input");
     email.type = "email";

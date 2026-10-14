@@ -23,6 +23,8 @@
     "server/setup-page.ts",
     "server/setup-client.txt",
     "server/project-management.ts",
+    "server/webhooks.ts",
+    "server/node-webhooks.ts",
     "server/import-project.ts",
     "server/digest.ts",
     "server/project-sites.ts"
