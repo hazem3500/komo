@@ -4620,6 +4620,8 @@ export function initComments(options: CommentsOptions): CommentsController {
             onComment(element, proposal) {
               designReturnToComments = false;
               setDesignMode(false);
+              // The compact sheet would cover the composer, as in setMode().
+              if (compactSidebar && expanded) toggleExpanded(false);
               draftText = proposal ?? "";
               const rect = element.getBoundingClientRect();
               composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });

@@ -18,10 +18,11 @@ host maps a separate leaf component explicitly.
 
 The same fixture registers a short, explicit CSS-variable token allowlist. The
 token names and scalar types follow the Design Tokens Format Module 2025.10,
-with CSS-variable bindings and impact selectors supplied by the host. Use
-**Use token on element** to keep a `var(--token)` reference in a local preview,
-or explicitly preview a shared theme value and see the registered selector's
-match count. Both actions are temporary; the shared edit resets on refresh,
+with CSS-variable bindings and impact selectors supplied by the host. Each
+style control reports the token the card's own CSS references, accepts a custom
+override (keeping the original token as provenance), or rebinds to another
+`var(--token)` in a local preview. You can also explicitly preview a shared
+theme value and see the registered selector's match count. Both actions are temporary; the shared edit resets on refresh,
 widget destruction, or Reset. Matching selectors are an estimate of scope, not
 a discovery of all CSS consumers. Komo does not import arbitrary DTCG files,
 persist tokens, or write application source.
