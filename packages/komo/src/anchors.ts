@@ -19,6 +19,8 @@ function unique(selector: string): Element | null {
   const matches = document.querySelectorAll(selector);
   return matches.length === 1 ? matches[0] : null;
 }
+// React useId (":r1:", "«r3»", "_r_15_") and Radix ids change between renders.
+const generatedId = /^radix-|^:r|_r_|«r/;
 function stableFor(element: Element, preferred?: string): string | undefined {
   for (const attr of [
     "data-comment-anchor",
@@ -28,7 +30,12 @@ function stableFor(element: Element, preferred?: string): string | undefined {
     "data-cy",
   ]) {
     const value = element.getAttribute(attr);
-    if (!value || value.length > 500) continue;
+    if (
+      !value ||
+      value.length > 500 ||
+      (attr === "id" && generatedId.test(value))
+    )
+      continue;
     const selector =
       attr === "id"
         ? `#${CSS.escape(value)}`
@@ -140,6 +147,28 @@ function matches(element: Element, anchor: Anchor): boolean {
         (!context.nearby || nearbyFor(element) === context.nearby)))
   );
 }
+function related(saved: string, current: string): boolean {
+  if (saved === current) return true;
+  if (saved && current && (saved.startsWith(current) || current.startsWith(saved)))
+    return true;
+  const before = saved.toLowerCase().split(" ").filter(Boolean);
+  const after = new Set(current.toLowerCase().split(" ").filter(Boolean));
+  const shared = before.filter((word) => after.has(word)).length;
+  return (2 * shared) / (before.length + after.size || 1) >= 0.6;
+}
+/** The stored selector still names the same kind of element; its text changed only slightly. */
+function similar(element: Element, anchor: Anchor): boolean {
+  const context = anchor.context;
+  return (
+    !!context?.tag &&
+    element.tagName.toLowerCase() === context.tag &&
+    (!context.role || element.getAttribute("role") === context.role) &&
+    (!context.classes ||
+      trim(element.getAttribute("class") || "", 200) === context.classes) &&
+    related(trim(anchor.text), textFor(element)) &&
+    (!context.nearby || related(context.nearby, nearbyFor(element)))
+  );
+}
 export function captureAnchor(
   element: Element,
   start: { x: number; y: number },
@@ -209,23 +238,34 @@ export function resolveAnchor(
     const found = anchor.selector ? unique(anchor.selector) : document.body;
     element = target?.isConnected && target === found ? target : found;
     if (element && stableFor(element, anchor.selector)) return element;
-    if (element && !matches(element, anchor)) element = null;
-    const context = anchor.context;
-    if (
-      context?.tag &&
-      (element || context.scope) &&
-      (anchor.text || context.label || context.nearby)
-    ) {
-      const scope = context.scope
-        ? unique(context.scope)
-        : element?.parentElement;
-      element = scope ? find(scope, anchor, !!context.scope) : null;
-    }
+    if (element && !matches(element, anchor))
+      return (
+        findByContext(anchor, find) ??
+        (similar(element, anchor) ? element : null)
+      );
+    if (element || !anchor.context?.scope) return element && confirm(element, anchor, find);
+    element = findByContext(anchor, find);
   } catch {
     // Invalid legacy selectors or ambiguous/missing targets retain their fallback position.
     element = null;
   }
   return element;
+}
+/** Require the matched element to be unique in its scope, or among its siblings when the scope is gone. */
+function confirm(element: Element, anchor: Anchor, find: Search) {
+  const context = anchor.context;
+  if (!context?.tag || !(anchor.text || context.label || context.nearby))
+    return element;
+  const scope = context.scope ? unique(context.scope) : null;
+  if (scope) return find(scope, anchor, true);
+  return element.parentElement ? find(element.parentElement, anchor, false) : null;
+}
+function findByContext(anchor: Anchor, find: Search) {
+  const context = anchor.context;
+  if (!context?.tag || !context.scope || !(anchor.text || context.label || context.nearby))
+    return null;
+  const scope = unique(context.scope);
+  return scope ? find(scope, anchor, true) : null;
 }
 export function locateAnchor(
   anchor: Anchor,
