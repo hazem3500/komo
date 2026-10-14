@@ -65,7 +65,9 @@ await writeFile(
   resolve(directory, "report.json"),
   JSON.stringify(report, null, 2)
 );
-if (report.initial.gzip > 100_000 || report.coreFeatures.gzip > 196_000)
+// Core was 196 KB; links, thread tags, shortcuts, and anchor recovery add ~2 KB.
+// React DOM is the largest core cost and the next place to recover budget.
+if (report.initial.gzip > 100_000 || report.coreFeatures.gzip > 199_000)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
