@@ -68,6 +68,7 @@ import {
   icons,
   initials,
 } from "./dom.js";
+import { matchesShortcut, resolveShortcuts, withShortcut } from "./shortcuts.js";
 import { styles } from "./styles.js";
 import type {
   Anchor,
@@ -119,6 +120,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     throw new Error(
       "Use an HTTPS API endpoint without credentials; HTTP is allowed on localhost.",
     );
+  const shortcuts = resolveShortcuts(options.shortcuts);
   const scope = JSON.stringify([
     endpoint.href,
     options.project,
@@ -2276,13 +2278,13 @@ export function initComments(options: CommentsOptions): CommentsController {
     const items: ToolbarItem[] = [
       {
         id: "browse",
-        label: "Browse website · V",
+        label: withShortcut("Browse website", shortcuts.browse),
         icon: glyph("pointer"),
         onSelect: () => setMode(false),
       },
       {
         id: "comment",
-        label: "Add comment · C",
+        label: withShortcut("Add comment", shortcuts.comment),
         icon: glyph("comment"),
         onSelect: () => setMode(!commentMode),
       },
@@ -2335,7 +2337,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       },
       {
         id: "dismiss",
-        label: "Dismiss Komo · Shift+K to restore",
+        label: shortcuts.restore
+          ? `Dismiss Komo · ${shortcuts.restore.label} to restore`
+          : "Dismiss Komo",
         icon: glyph("close"),
         onSelect: dismissToolbar,
       },
@@ -2640,10 +2644,11 @@ export function initComments(options: CommentsOptions): CommentsController {
   let disposeHeaderTip: (() => void) | undefined;
   const dismissedTips = new Set<string>();
   const dismissedTipsKey = "branch-comments:dismissed-tips";
-  const tips = [
+  const tips: [string, string][] = [
     ["copy", "Copy comments for your agent."],
-    ["shortcut", "Press C to comment."],
-  ] as const;
+  ];
+  if (shortcuts.comment)
+    tips.push(["shortcut", `Press ${shortcuts.comment.label} to comment.`]);
   // Empty-state coach marks: persistent tooltips pinned to the buttons they
   // describe. They live on the sidebar so they ride along as it parks/peeks.
   function syncTips(show: boolean) {
@@ -5095,32 +5100,17 @@ export function initComments(options: CommentsOptions): CommentsController {
         else if (expanded) toggleExpanded(false);
         return;
       }
-      if (
-        toolbarDismissed &&
-        event.key.toLowerCase() === "k" &&
-        event.shiftKey &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !typing
-      ) {
+      if (typing) return;
+      if (toolbarDismissed && matchesShortcut(event, shortcuts.restore)) {
         event.preventDefault();
         restoreToolbar();
         return;
       }
-      if (
-        options.onboarding ||
-        typing ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey
-      )
-        return;
-      if (event.key.toLowerCase() === "c") {
+      if (options.onboarding) return;
+      if (matchesShortcut(event, shortcuts.comment)) {
         event.preventDefault();
         setMode(!commentMode);
-      }
-      if (event.key.toLowerCase() === "v") {
+      } else if (matchesShortcut(event, shortcuts.browse)) {
         event.preventDefault();
         setMode(false);
       }

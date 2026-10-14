@@ -25,6 +25,13 @@ function sameConfig(a: KomoConfig, b: KomoConfig): boolean {
     keyof KomoConfig
   >;
   return [...keys].every((key) => {
+    if (key === "shortcuts") {
+      const before = a.shortcuts ?? {};
+      const after = b.shortcuts ?? {};
+      return (["comment", "browse", "restore"] as const).every((action) =>
+        Object.is(before[action], after[action]),
+      );
+    }
     if (key !== "onboarding") return Object.is(a[key], b[key]);
     const before = a.onboarding;
     const after = b.onboarding;
