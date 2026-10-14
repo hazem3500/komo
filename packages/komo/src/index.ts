@@ -121,6 +121,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       "Use an HTTPS API endpoint without credentials; HTTP is allowed on localhost.",
     );
   const shortcuts = resolveShortcuts(options.shortcuts);
+  const designEnabled = options.features?.designMode !== false;
+  const tagsEnabled = options.features?.tags !== false;
   const scope = JSON.stringify([
     endpoint.href,
     options.project,
@@ -1448,7 +1450,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     });
   }
   function setDesignMode(value: boolean, returnToComments = false) {
-    if (options.onboarding || !!draft) return;
+    if (options.onboarding || !!draft || (value && !designEnabled)) return;
     if (value) {
       // Keep the shared sidebar open. Its existing drawer morph is the outer
       // surface transition for both Comments and Design; only the content view
@@ -2292,12 +2294,16 @@ export function initComments(options: CommentsOptions): CommentsController {
         icon: glyph("comment"),
         onSelect: () => setMode(!commentMode),
       },
-      {
-        id: "design",
-        label: "Design mode · preview styles",
-        icon: glyph("brush"),
-        onSelect: () => setDesignMode(!designActive),
-      },
+      ...(designEnabled
+        ? [
+            {
+              id: "design",
+              label: "Design mode · preview styles",
+              icon: glyph("brush"),
+              onSelect: () => setDesignMode(!designActive),
+            },
+          ]
+        : []),
       {
         id: "comments",
         label: options.onboarding
@@ -2960,12 +2966,16 @@ export function initComments(options: CommentsOptions): CommentsController {
           "icon sidebar-search-trigger",
           "search",
         ),
-        button(
-          "Design mode",
-          () => setDesignMode(true, true),
-          "icon design-mode-trigger",
-          "brush",
-        ),
+        ...(designEnabled
+          ? [
+              button(
+                "Design mode",
+                () => setDesignMode(true, true),
+                "icon design-mode-trigger",
+                "brush",
+              ),
+            ]
+          : []),
         button("Close sidebar", () => toggleExpanded(false), "icon", "close"),
       );
       const selector = el("div", "sidebar-selector");
@@ -3227,7 +3237,7 @@ export function initComments(options: CommentsOptions): CommentsController {
               : "",
         ),
       );
-      if (thread.tags?.length)
+      if (tagsEnabled && thread.tags?.length)
         meta.append(el("span", "tag-list", thread.tags.join(" · ")));
       card.append(el("p", "preview", first.body), header, meta);
       const item = el("div", "thread-item");
@@ -4017,19 +4027,25 @@ export function initComments(options: CommentsOptions): CommentsController {
           ].join("\n"),
         ),
         copy("Copy selector", () => thread.anchor.selector),
-        {
-          label: "Add group tag",
-          icon: "branch",
-          onSelect: () => {
-            const tag = window.prompt("Group tag");
-            if (!tag?.trim()) return;
-            run(() =>
-              mutate(async () => {
-                await api.request(`threads/${thread.id}`, "PATCH", { tag });
-              }),
-            );
-          },
-        },
+        ...(tagsEnabled
+          ? [
+              {
+                label: "Add group tag",
+                icon: "branch" as const,
+                onSelect: () => {
+                  const tag = window.prompt("Group tag");
+                  if (!tag?.trim()) return;
+                  run(() =>
+                    mutate(async () => {
+                      await api.request(`threads/${thread.id}`, "PATCH", {
+                        tag,
+                      });
+                    }),
+                  );
+                },
+              },
+            ]
+          : []),
       ]);
       controls.append(more);
       const resolve = button(
