@@ -45,6 +45,7 @@ type ThreadRow = {
   resolved_by: string | null;
   created_at: number;
   updated_at: number;
+  tags: string;
   resolver_name: string | null;
   resolver_verified: number | null;
 };
@@ -151,7 +152,7 @@ async function body(request: Request): Promise<Record<string, unknown>> {
                             : path.includes("/comments/")
                               ? ["body"]
                               : path.startsWith("/threads/")
-                                ? ["anchor", "resolved"]
+                                ? ["anchor", "resolved", "tag"]
                                 : [];
     check(
       Object.keys(result).every((key) => allowed.includes(key)),
@@ -1096,6 +1097,7 @@ async function route(
       id: row.id,
       page: pagePath(row.page),
       anchor: JSON.parse(row.anchor),
+      tags: parseTags(row.tags),
       resolved: !!row.resolved,
       resolvedBy: row.resolved_by
         ? {
@@ -1185,6 +1187,26 @@ async function route(
   check(thread, 404, "Thread not found on this branch.");
   if (url.pathname === `/threads/${threadId}` && request.method === "PATCH") {
     const data = await body(request);
+    if (data.tag !== undefined) {
+      const tag = string(data.tag, 32, "tag").toLocaleLowerCase("en-US");
+      check(
+        /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,31}$/u.test(tag),
+        400,
+        "Use a tag with up to 32 letters, numbers, spaces, dots, underscores, or hyphens.",
+      );
+      const tags = parseTags(thread.tags);
+      if (!tags.includes(tag)) {
+        check(tags.length < 12, 400, "A thread can have at most 12 tags.");
+        tags.push(tag);
+        tags.sort();
+        await env.DB.prepare(
+          "UPDATE threads SET tags=?,updated_at=? WHERE id=?",
+        )
+          .bind(JSON.stringify(tags), now, threadId)
+          .run();
+      }
+      return json({ ok: true, tags });
+    }
     if (data.anchor !== undefined) {
       const owner = await env.DB.prepare(
         "SELECT user_id FROM comments WHERE thread_id=? ORDER BY created_at,id LIMIT 1"
@@ -1326,6 +1348,17 @@ async function route(
     return json({ ok: true });
   }
   throw new HttpError(405, "Method not allowed.");
+}
+
+function parseTags(value: string | null | undefined): string[] {
+  try {
+    const parsed = JSON.parse(value ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((tag): tag is string => typeof tag === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 export default {
   async scheduled(_event, env, ctx) {

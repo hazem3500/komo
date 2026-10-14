@@ -138,7 +138,8 @@ For an existing inline installation, pass `--project YOUR_PROJECT_KEY --origin h
 | --- | --- |
 | `komo schema` | JSON command reference for agents; no sign-in needed. |
 | `komo whoami` | Show the current reviewer and project scope. |
-| `komo comments list` | Open threads as JSON; `--status open\|resolved\|all`, `--page`, `--limit 1–250`, `--offset`. Default page size: 50. |
+| `komo comments list` | Open threads as JSON; `--status open\|resolved\|all`, `--page`, `--tag`, `--limit 1–250`, `--offset`. Default page size: 50. |
+| `komo comments tag THREAD_ID TAG` | Add a normalized group tag to a thread. |
 | `komo comments get THREAD_ID` | Full thread, replies, selector, source reference, and anchor. |
 | `komo comments prompt` | The UI’s open-feedback prompt as Markdown; optional `--page` and `--json`. |
 | `komo comments reply THREAD_ID --body TEXT` | Add a reply as the signed-in reviewer. |

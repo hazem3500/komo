@@ -3200,6 +3200,8 @@ export function initComments(options: CommentsOptions): CommentsController {
               : "",
         ),
       );
+      if (thread.tags?.length)
+        meta.append(el("span", "tag-list", thread.tags.join(" · ")));
       card.append(el("p", "preview", first.body), header, meta);
       const item = el("div", "thread-item");
       item.dataset.thread = thread.id;
@@ -3988,6 +3990,19 @@ export function initComments(options: CommentsOptions): CommentsController {
           ].join("\n"),
         ),
         copy("Copy selector", () => thread.anchor.selector),
+        {
+          label: "Add group tag",
+          icon: "branch",
+          onSelect: () => {
+            const tag = window.prompt("Group tag");
+            if (!tag?.trim()) return;
+            run(() =>
+              mutate(async () => {
+                await api.request(`threads/${thread.id}`, "PATCH", { tag });
+              }),
+            );
+          },
+        },
       ]);
       controls.append(more);
       const resolve = button(
