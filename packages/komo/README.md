@@ -75,6 +75,7 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 - Point and area comments anchored to page elements.
 - On-demand design mode for temporary typography, color, spacing, border, and layout previews; copy the resulting CSS or attach a comment to the selected element.
 - Replies, reactions, author-only editing, resolution, and undo.
+- Safe HTTP(S) links and simple Markdown links in comment messages.
 - Searchable sidebar, draggable dock, and Google or guest profiles.
 - Dismiss the toolbar for the current tab with ×; restore it with Shift+K or `controller.open()`. Set `showToolbar: false` to start hidden.
 - Copy open feedback with selectors, source paths, page URLs, replies, and geometry into an agent.
