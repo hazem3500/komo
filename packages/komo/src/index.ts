@@ -488,6 +488,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     editText = "";
   let closePicker: ((immediate?: boolean) => void) | undefined;
   let submitAfterIdentity: (() => Promise<void>) | null = null;
+  let focusBack = false;
   let lastPage = page(),
     toastTimer = 0,
     listScrollTimer = 0,
@@ -1825,10 +1826,19 @@ export function initComments(options: CommentsOptions): CommentsController {
     delete toolbar.dataset.edgeOrient;
     if (toolbar.parentElement === sidebar) live.before(toolbar);
   }
-  function placeEdgeAccount() {
-    if (edgeSidebar && account) {
-      if (dialogs.parentElement !== sidebar) sidebar.append(dialogs);
-    } else if (dialogs.parentElement === sidebar) pinPreview.before(dialogs);
+  // An open sidebar shows the selected thread in place of its list; new
+  // comments, the compact sheet and a closed sidebar keep the floating card.
+  function threadPanel() {
+    return selected && !account && !draft && expanded && !compactSidebar && !designActive && !options.onboarding
+      ? sidebar.querySelector<HTMLElement>(".panel")
+      : null;
+  }
+  function placeDialogs(panel: HTMLElement | null) {
+    const parent = panel ?? (edgeSidebar && account ? sidebar : shadow);
+    if (dialogs.parentNode !== parent)
+      parent === shadow ? pinPreview.before(dialogs) : parent.append(dialogs);
+    dialogs.classList.toggle("thread-pane", !!panel);
+    sidebar.querySelector(".panel")?.toggleAttribute("data-thread", !!panel);
   }
   function drawerShell() {
     return (
@@ -2235,6 +2245,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     render();
   }
   function selectThread(thread: Thread) {
+    // Opening from the list keeps keyboard focus in the sidebar.
+    focusBack = !!shadow.activeElement?.matches(":focus-visible") && sidebar.contains(shadow.activeElement);
     commentMode = false;
     clearTimeout(accountOpenTimer);
     accountOpenTimer = 0;
@@ -2989,6 +3001,17 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
   }
   const listItems = new WeakMap<Thread, HTMLElement>();
+  /** A thread's one-line summary, as on its list card. */
+  function summary(node: HTMLElement, body: string) {
+    node.textContent = body;
+    if (designProposal.test(body)) {
+      node.textContent = "Design change";
+      void loadDesignComments().then(({ summarizeDesignComment }) => {
+        node.textContent = summarizeDesignComment(body);
+      });
+    }
+    return node;
+  }
   function renderList() {
     if (options.onboarding) {
       disposeHeaderTip?.();
@@ -3396,13 +3419,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
       if (tagsEnabled && thread.tags?.length)
         meta.append(el("span", "tag-list", thread.tags.map((tag) => `#${tag}`).join(" ")));
-      const preview = el("p", "preview", first.body);
-      if (designProposal.test(first.body)) {
-        preview.textContent = "Design change";
-        void loadDesignComments().then(({ summarizeDesignComment }) => {
-          preview.textContent = summarizeDesignComment(first.body);
-        });
-      }
+      const preview = summary(el("p", "preview"), first.body);
       card.append(preview, header, meta);
       const item = el("div", "thread-item");
       item.dataset.thread = thread.id;
@@ -4140,11 +4157,14 @@ export function initComments(options: CommentsOptions): CommentsController {
       | null;
     const focusKey = active?.dataset.focusKey;
     const caret = focusKey ? active?.selectionStart : null;
+    const visibleFocus = !!active?.matches(":focus-visible");
     const scroll = dialogs.querySelector(".messages")?.scrollTop ?? 0;
     const accountScroll =
       dialogs.querySelector(".account-dialog")?.scrollTop ?? 0;
     const nextKey = account ? "account" : draft ? "draft" : selected;
     const previousDialog = dialogs.firstElementChild as HTMLElement | null;
+    const panel = threadPanel();
+    const wasDocked = dialogs.classList.contains("thread-pane");
     const changing = dialogKey !== nextKey;
     const previousRect = previousDialog?.getBoundingClientRect();
     const previousReactions = new Map(
@@ -4156,8 +4176,14 @@ export function initComments(options: CommentsOptions): CommentsController {
         item.querySelector<HTMLElement>(".message-reaction"),
       ]),
     );
-    if (previousDialog && changing && !reducedMotion()) {
-      // The outgoing card fades in place; the account sheet takes its backdrop along.
+    if (
+      previousDialog &&
+      changing &&
+      !reducedMotion() &&
+      !(wasDocked && (panel || !dialogs.isConnected))
+    ) {
+      // The outgoing card fades in place; the account sheet takes its backdrop
+      // along, and a thread in the sidebar slides back off its list.
       const current = getComputedStyle(previousDialog);
       const from = { opacity: current.opacity, transform: current.transform };
       previousDialog.getAnimations().forEach((animation) => animation.cancel());
@@ -4167,17 +4193,29 @@ export function initComments(options: CommentsOptions): CommentsController {
         fill: "forwards",
       } as const;
       const leaving =
-        dialogKey === "account" ? el("div", "account-layer") : previousDialog;
+        dialogKey === "account"
+          ? el("div", "account-layer")
+          : wasDocked
+            ? el("div", "thread-pane")
+            : previousDialog;
       if (leaving !== previousDialog) leaving.append(previousDialog);
       previousDialog.animate(
-        [{ transform: from.transform }, { transform: "translateY(4px) scale(.99)" }],
+        [
+          { transform: from.transform },
+          { transform: wasDocked ? "translateX(24px)" : "translateY(4px) scale(.99)" },
+        ],
         timing,
       );
       const exit = leaving.animate([{ opacity: from.opacity }, { opacity: 0 }], timing);
       leaving.inert = true;
       leaving.setAttribute("aria-hidden", "true");
       previousDialog.style.pointerEvents = "none";
-      (leaving !== previousDialog && edgeSidebar ? sidebar : shadow).append(leaving);
+      (wasDocked
+        ? dialogs.parentElement!
+        : leaving !== previousDialog && edgeSidebar
+          ? sidebar
+          : shadow
+      ).append(leaving);
       exitingDialogs.set(leaving, disposePreviousAccentPicker);
       disposePreviousAccentPicker = undefined;
       void exit.finished
@@ -4190,6 +4228,29 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     disposePreviousAccentPicker?.();
     dialogs.replaceChildren();
+    placeDialogs(panel);
+    // The list steps aside for a thread and returns from it.
+    const list = sidebar.querySelector<HTMLElement>(".panel");
+    if (list && wasDocked !== !!panel) {
+      if (!reducedMotion())
+        for (const node of list.querySelectorAll<HTMLElement>(":scope > :not(.thread-pane)")) {
+          const frames = [
+            { visibility: "visible", opacity: 1, transform: "none" },
+            { visibility: "visible", opacity: 0, transform: "translateX(-24px)" },
+          ];
+          node.animate(panel ? frames : frames.reverse(), {
+            duration: 250,
+            easing: "cubic-bezier(.22,1,.36,1)",
+          });
+        }
+      // Keep keyboard focus in the sidebar across the swap.
+      const card = `[data-thread="${CSS.escape(dialogKey ?? "")}"] .thread-card`;
+      if (panel ? focusBack : visibleFocus && (list.contains(active!) || !active!.isConnected))
+        queueMicrotask(() =>
+          (panel ? dialogs : list).querySelector<HTMLElement>(panel ? ".thread-back" : card)?.focus({ preventScroll: true }),
+        );
+      focusBack = false;
+    }
     dialogKey = nextKey;
     dialogs.classList.toggle("account-layer", account);
     if (!draft && !selected && !account) {
@@ -4274,15 +4335,26 @@ export function initComments(options: CommentsOptions): CommentsController {
       controls.append(resolve);
     }
     controls.append(
-      button(
-        account ? "Close account" : "Close comment",
-        dismiss,
-        "icon",
-        "close",
-      ),
+      panel
+        ? button(
+            "Close sidebar",
+            () => {
+              dismiss();
+              toggleExpanded(false);
+            },
+            "icon",
+            "close",
+          )
+        : button(account ? "Close account" : "Close comment", dismiss, "icon", "close"),
     );
+    if (panel) {
+      head.append(
+        button("Back to comments", dismiss, "icon thread-back", "chevron"),
+        summary(el("strong", "thread-title"), thread?.comments[0]?.body ?? ""),
+      );
+    }
     head.append(controls);
-    if (thread || account) dialog.append(head);
+    if (thread || account || panel) dialog.append(head);
     else
       dialog.append(
         button("Close comment", dismiss, "draft-close icon", "close"),
@@ -4596,7 +4668,11 @@ export function initComments(options: CommentsOptions): CommentsController {
           (tag) => saveTag(thread, { untag: tag }),
         );
         slot.classList.add("thread-tags");
-        dialog.append(slot);
+        // Tags belong to the whole thread: under the sidebar header, or
+        // under the first author in the floating card.
+        const author = messages.querySelector(".message > .row");
+        if (panel || !author) messages.before(slot);
+        else author.after(slot);
       }
       dialog.append(composer(thread));
     } else
@@ -4619,7 +4695,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         { duration: 250, easing: "cubic-bezier(.22,1,.36,1)" },
       );
     }
-    if (!account) {
+    if (!account && !panel) {
       const dragHandle = el("div", "comment-drag-handle");
       dragHandle.setAttribute("aria-hidden", "true");
       dialog.prepend(dragHandle);
@@ -4635,10 +4711,43 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
     }
     positionDialog();
+    if (panel) {
+      if (changing) {
+        outlineHover = false;
+        showOutline(true, 1200);
+      }
+      const hover = (on: boolean) => {
+        outlineHover = on;
+        showOutline(on);
+      };
+      for (const part of [head, dialog.querySelector(".messages")]) {
+        // Movement, not a card appearing under a resting pointer, brings it back.
+        part?.addEventListener("pointermove", () => outlineHover || hover(true));
+        part?.addEventListener("pointerleave", () => hover(false));
+        part?.addEventListener("focusin", (event) => {
+          if ((event.target as Element).matches(":focus-visible")) hover(true);
+        });
+        part?.addEventListener("focusout", () => hover(false));
+      }
+      dialog.addEventListener("click", () => showOutline(false, 600));
+      // The outline shows the target here; its selector tooltip would cover the card.
+      dialog.addEventListener("pointerover", (event) =>
+        (event.target as Element).closest(".design-card-target")?.removeAttribute("title"),
+      );
+    }
     if (!account && !reducedMotion()) {
       const target = dialog.getBoundingClientRect();
       const origin = openingPreview ?? (!changing ? previousRect : null);
-      if (
+      if (panel) {
+        if (changing)
+          dialog.animate(
+            [
+              { opacity: 0, transform: wasDocked ? "none" : "translateX(24px)" },
+              { opacity: 1, transform: "none" },
+            ],
+            { duration: 250, easing: "cubic-bezier(.22,1,.36,1)" },
+          );
+      } else if (
         origin &&
         (openingPreview ||
           Math.abs(origin.height - target.height) > 1 ||
@@ -4758,6 +4867,19 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
   }
   let dialogSize: ResizeObserver | undefined;
+  let outlineUntil = 0;
+  // The target outline flashes when a thread opens in the sidebar, and returns
+  // while its header or messages are pointed at or focused. Before/After
+  // switches hide it so only the change moves.
+  let outlineShown = false,
+    outlineHover = false,
+    outlineTimer = 0;
+  function showOutline(on: boolean, ms = 0) {
+    clearTimeout(outlineTimer);
+    outlineShown = on;
+    updateHover();
+    if (ms) outlineTimer = window.setTimeout(() => showOutline(outlineHover), ms);
+  }
   function positionDialog() {
     const availableHeight = Math.min(
       window.innerHeight,
@@ -4765,6 +4887,18 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
     const dialog = dialogs.firstElementChild as HTMLElement | null;
     if (!dialog || account) return;
+    // In the sidebar only the target outline moves; follow a Before/After morph.
+    if (dialogs.classList.contains("thread-pane")) {
+      const running = outlineUntil;
+      outlineUntil = performance.now() + 500;
+      const step = () => {
+        updateHover();
+        if (performance.now() < outlineUntil) requestAnimationFrame(step);
+        else outlineUntil = 0;
+      };
+      if (!running) step();
+      return;
+    }
     if (compactSidebar && dialog.querySelector("textarea:focus")) {
       const viewport = window.visualViewport;
       const top = viewport?.offsetTop ?? 0;
@@ -5123,6 +5257,21 @@ export function initComments(options: CommentsOptions): CommentsController {
     return pickable(control) ? control : target;
   }
   function updateHover() {
+    // A thread open in the sidebar outlines what it discusses; its pin steps back.
+    const thread = !mode && threadPanel() && threads.find((t) => t.id === selected);
+    const spot = thread && locateAnchor(thread.anchor);
+    const target = spot && spot.attached && (spot.width && spot.height
+      ? { left: spot.x, top: spot.y, right: spot.x + spot.width, bottom: spot.y + spot.height }
+      : spot.component);
+    hoverOutline.toggleAttribute("data-thread", !!target);
+    pins.toggleAttribute("data-quiet", !!target);
+    pins.toggleAttribute("data-outlined", !!target && outlineShown);
+    if (target) {
+      const element = anchorElement(thread.anchor);
+      outline(target, element, framed && !!element && surface.contains(element));
+      if (!outlineShown) hoverOutline.style.opacity = "0";
+      return;
+    }
     if (
       (!mode && !draft) ||
       drag ||
@@ -5142,8 +5291,14 @@ export function initComments(options: CommentsOptions): CommentsController {
       hoverOutline.style.opacity = "0";
       return;
     }
-    const rect = hoverTarget.getBoundingClientRect();
-    const bounds = framed && surface.contains(hoverTarget)
+    outline(hoverTarget.getBoundingClientRect(), hoverTarget, framed && surface.contains(hoverTarget));
+  }
+  function outline(
+    rect: { left: number; top: number; right: number; bottom: number },
+    element: Element | null,
+    inFrame: boolean,
+  ) {
+    const bounds = inFrame
       ? surface.getBoundingClientRect()
       : {
           left: 0,
@@ -5165,7 +5320,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       top: `${top}px`,
       width: `${right - left}px`,
       height: `${bottom - top}px`,
-      borderRadius: getComputedStyle(hoverTarget).borderRadius,
+      borderRadius: element ? getComputedStyle(element).borderRadius : "",
     });
   }
   function scheduleHover() {
@@ -5206,7 +5361,6 @@ export function initComments(options: CommentsOptions): CommentsController {
     renderPins();
     renderList();
     renderDialog();
-    placeEdgeAccount();
     const commentsPanel = sidebar.querySelector<HTMLElement>(".panel");
     if (commentsPanel) {
       commentsPanel.inert = designActive;
@@ -5357,7 +5511,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       signal: abort.signal,
     },
   );
-  for (const type of ["focusin", "focusout"])
+  for (const type of ["focusin", "focusout", "click"])
     dialogs.addEventListener(type, () => requestAnimationFrame(positionDialog), {
       signal: abort.signal,
     });

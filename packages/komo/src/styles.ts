@@ -2255,7 +2255,7 @@ textarea {
   transform: translateX(-50%) scale(1);
 }
 :host([data-sidebar="edge"]) .edge-sidebar .panel {
-  position: static;
+  position: relative;
   z-index: auto;
   width: 100%;
   height: 100%;
@@ -2494,4 +2494,26 @@ textarea {
   :host([data-sidebar="mobile"]) .panel { transition:none; }
 }
 
+/* A thread opened from the sidebar takes the list's place in it. */
+.panel[data-thread] > :not(.thread-pane) { visibility: hidden; }
+.thread-pane { position: absolute; inset: 0; padding: inherit; display: flex; flex-direction: column; pointer-events: none; }
+:host([data-sidebar="background"]) .thread-pane { padding-bottom: 96px; }
+:host([data-sidebar="edge"]) .thread-pane { padding-bottom: 44px; }
+.thread-pane .dialog { position: static; flex: 1; min-height: 0; width: auto; max-width: none; max-height: none; margin: 0 -16px; background: none; box-shadow: none; border-radius: 0; }
+.thread-pane .dialog-head { position: static; height: auto; padding: 0 16px 8px; background: none; gap: 4px; }
+.thread-pane .messages { max-height: none; }
+.thread-pane .composer { margin-top: auto; }
+.message > .thread-tags { margin: 6px 0 0; padding: 0 0 0 32px; }
+.thread-pane .dialog > .thread-tags { margin: 0; padding: 0 16px 8px; }
+.thread-pane .message:first-child > .row { padding-right: 0; }
+/* Design mode's selection outline marks the open thread's target. */
+.component-hover[data-thread] { border: 2px solid var(--accent, #bda6ef); border-radius: 8px; background: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #bda6ef) 22%, transparent), 0 2px 12px #0003; transition: opacity 150ms ease; }
+/* The open thread's pin stays as a quiet marker, and steps away while the outline shows. */
+.pins[data-quiet] .pin.active { scale: .7; opacity: .6; box-shadow: 0 0 0 2px #fff; transition: opacity 150ms ease; }
+.pins[data-outlined] .pin.active { opacity: 0; pointer-events: none; }
+.thread-pane .icon:focus-visible { outline: 2px solid var(--accent, #bda6ef); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .component-hover, .pins .pin.active { transition: none; } }
+.thread-back { margin-left: -6px; }
+.thread-back svg { rotate: 90deg; }
+.thread-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; }
 `;
