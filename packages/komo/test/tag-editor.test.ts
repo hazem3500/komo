@@ -25,7 +25,8 @@ function mount(tags: string[] = [], suggestions: string[] = []) {
     input()!.dispatchEvent(event);
     return event;
   };
-  const options = () => [...slot.querySelectorAll("[role=option]")].map((option) => option.textContent);
+  // The menu floats at the root, outside the slot.
+  const options = () => [...document.querySelectorAll("[role=option]")].map((option) => option.textContent);
   const chips = () => [...slot.querySelectorAll(".tag-chip span")].map((chip) => chip.textContent);
   return { slot, added, removed, add, input, type, press, options, chips };
 }
@@ -64,11 +65,12 @@ describe("tag editor", () => {
     editor.press(",");
     expect(editor.chips()).toEqual(["#button", "#launch", "#ui"]);
     // Clicking an option picks it.
-    editor.slot.querySelector<HTMLElement>("[role=option]")!.click();
+    document.querySelector<HTMLElement>("[role=option]")!.click();
     expect(editor.added).toEqual(["button", "launch", "copy"]);
     // Enter on an empty field closes it.
     editor.type("");
     expect(editor.input()).toBeNull();
+    expect(document.querySelectorAll(".tag-options")).toHaveLength(0);
     expect(submitted).toBe(false);
   });
 

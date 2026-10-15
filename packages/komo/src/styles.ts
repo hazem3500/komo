@@ -816,6 +816,12 @@ ${morphingMenuStyles}
   top: 12px;
   right: 8px;
 }
+/* The header floats over the list; back it so scrolled content doesn't show through. */
+.dialog > .dialog-head { background: #242424; border-radius: 8px; }
+/* Fade whichever edge of the list has more content past it. */
+.messages[data-fade] { mask-image: linear-gradient(to bottom, var(--fade-top, #000), #000 28px, #000 calc(100% - 28px), var(--fade-bottom, #000)); }
+.messages[data-fade~="top"] { --fade-top: transparent; }
+.messages[data-fade~="bottom"] { --fade-bottom: transparent; }
 .message .author {
   font-size: 11px;
 }
@@ -1662,6 +1668,8 @@ ${morphingMenuStyles}
   padding-left: 32px;
   line-height: 1.6;
 }
+/* A design card sits beside the open button: line it up under the author's name. */
+.pin-preview .pin-preview-card { margin: -8px 16px 16px 48px; padding: 0; cursor: pointer; }
 .message-content {
   margin-right: -6px;
 }
