@@ -1,6 +1,6 @@
 # Customer journey acceptance
 
-September 16, 2026 · `@tjcages/komo` 0.1.0 published release
+September 16, 2026 · `@hazem3500/komo` 0.1.0 published release
 
 ## Environment
 
@@ -14,8 +14,8 @@ September 16, 2026 · `@tjcages/komo` 0.1.0 published release
 
 | Step | Evidence |
 | --- | --- |
-| Install | Clean public-registry npm install with a fresh cache, scoped CLI help, generated `@tjcages/komo/setup` import, and Vite production build. Registry SHA-512 integrity exactly matches the artifact tested through onboarding. |
-| Initialize | `npx @tjcages/komo init` opens setup, the Google owner creates the project, and the waiting CLI writes the configuration. No manual endpoint, repository, or branch input. |
+| Install | Clean public-registry npm install with a fresh cache, scoped CLI help, generated `@hazem3500/komo/setup` import, and Vite production build. Registry SHA-512 integrity exactly matches the artifact tested through onboarding. |
+| Initialize | `npx @hazem3500/komo init` opens setup, the Google owner creates the project, and the waiting CLI writes the configuration. No manual endpoint, repository, or branch input. |
 | Approve site | Owner approves the returned deployment address in the sidebar. The approved address returns HTTP 200; a different, unapproved deployment returns HTTP 403. |
 | Authenticate | Google sign-in from the customer website returns to the widget with the verified profile. |
 | Comment | Owner anchors and posts a comment on the customer website's button. |
@@ -27,7 +27,7 @@ September 16, 2026 · `@tjcages/komo` 0.1.0 published release
 | Agent export | The page export button confirms “Copied prompt”; prompt content and resolved-thread exclusion are covered by local formatter tests. |
 | Usage | The owner sees 2 of 3 projects and 2 / 250 comments. Resolving does not reduce storage usage. |
 | Limits | Local real-workerd/SQLite integration tests enforce the three-project limit and the 250-comment boundary, including concurrent writes. Live customer quota was not exhausted for this test. |
-| Self-host artifact | Wrangler builds the installed package's `@tjcages/komo/server` export in a deployment dry run. |
+| Self-host artifact | Wrangler builds the installed package's `@hazem3500/komo/server` export in a deployment dry run. |
 
 ## Found during acceptance
 
@@ -54,7 +54,7 @@ The slow-save fixture uses an isolated local API to produce deterministic failur
 
 ## Release artifact
 
-Published package: [`@tjcages/komo@0.1.0`](https://www.npmjs.com/package/@tjcages/komo).
+Published package: [`@hazem3500/komo@0.1.0`](https://www.npmjs.com/package/@hazem3500/komo).
 
 Registry and tested tarball integrity:
 

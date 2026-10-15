@@ -313,10 +313,10 @@ async function init() {
       return;
     } else {
       if (
-        !(await exists(resolve(cwd, "node_modules/@tjcages/komo/package.json")))
+        !(await exists(resolve(cwd, "node_modules/@hazem3500/komo/package.json")))
       )
         throw Error(
-          "Install komo in this project before self-hosting: npm install @tjcages/komo (or install the preview tarball before publication)."
+          "Install komo in this project before self-hosting: npm install @hazem3500/komo (or install the preview tarball before publication)."
         );
       await protectLocalFiles();
       const name = `komo-${basename(cwd)
@@ -335,7 +335,7 @@ async function init() {
       );
       await writeFile(
         join(dir, "index.ts"),
-        'export { default } from "@tjcages/komo/server";\n'
+        'export { default } from "@hazem3500/komo/server";\n'
       );
       const wrangler = {
         name,
@@ -374,7 +374,7 @@ async function init() {
     await installAgentWorkflow(cwd);
     console.log("Added the komo comment workflow to AGENTS.md");
     console.log(
-      `\nMount after the page loads:\n\nimport { initKomo } from '@tjcages/komo';\ninitKomo(${JSON.stringify({ ...config, origin: undefined, ...(config.scope === "branch" ? { branch: branchName(process.env, cwd) } : {}) }, null, 2)});\n\nFor automatic branch detection, use the generated komo.config.js helper and run komo sync before your build.\n`
+      `\nMount after the page loads:\n\nimport { initKomo } from '@hazem3500/komo';\ninitKomo(${JSON.stringify({ ...config, origin: undefined, ...(config.scope === "branch" ? { branch: branchName(process.env, cwd) } : {}) }, null, 2)});\n\nFor automatic branch detection, use the generated komo.config.js helper and run komo sync before your build.\n`
     );
   } finally {
     rl.close();

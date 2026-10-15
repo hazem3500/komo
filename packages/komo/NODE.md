@@ -7,7 +7,7 @@ The browser widget and CLI use the same API protocol on Cloudflare and Node. Thi
 1. In your website repository, install komo and generate the Node project:
 
    ```sh
-   npm install @tjcages/komo
+   npm install @hazem3500/komo
    npx komo init --node \
      --endpoint https://comments.example.com \
      --origin https://pr-42.preview.example.com \

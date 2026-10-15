@@ -38,9 +38,9 @@ These results are not Core Web Vitals or a guarantee of negligible overhead on e
 ## Reproduce
 
 ```sh
-pnpm --filter @tjcages/komo build
-pnpm --filter @tjcages/komo size
-pnpm --filter @tjcages/komo bench
+pnpm --filter @hazem3500/komo build
+pnpm --filter @hazem3500/komo size
+pnpm --filter @hazem3500/komo bench
 ```
 
 Open the benchmark URL printed by the final command. Use `?mode=none` for the host-only control and `?mode=after&comments=0` for an empty project. To compare an older production ESM bundle, set `KOMO_BENCH_BASELINE` to its directory containing `index.js` and use `?mode=before`. Keep viewport, browser, hardware, and foreground state identical.

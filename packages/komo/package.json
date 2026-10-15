@@ -1,6 +1,6 @@
 {
-  "name": "@tjcages/komo",
-  "version": "0.7.0",
+  "name": "@hazem3500/komo",
+  "version": "0.8.0",
   "description": "Point, area, and threaded comments for website branches.",
   "type": "module",
   "license": "MIT",
@@ -71,7 +71,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tjcages/komo.git",
+    "url": "git+https://github.com/hazem3500/komo.git",
     "directory": "packages/komo"
   },
   "publishConfig": {
@@ -105,9 +105,9 @@
   "engines": {
     "node": ">=22.12"
   },
-  "homepage": "https://komo.offbr.co",
+  "homepage": "https://github.com/hazem3500/komo#readme",
   "bugs": {
-    "url": "https://github.com/tjcages/komo/issues"
+    "url": "https://github.com/hazem3500/komo/issues"
   },
   "peerDependencies": {
     "react": "^18.2.0 || ^19.0.0",

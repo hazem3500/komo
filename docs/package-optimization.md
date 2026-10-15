@@ -5,7 +5,7 @@ Follow-up to OFF-713, implemented under OFF-715 in PR #29. The changes extend th
 ## Implemented
 
 - [x] Fix self-host CLI package-root scope and include every current server import in the npm file list.
-- [x] Add `pnpm --filter @tjcages/komo test:package`: install an actual tarball in a fresh consumer; check imports, SSR, types, stubbed init/resume, migration copying and server bundling.
+- [x] Add `pnpm --filter @hazem3500/komo test:package`: install an actual tarball in a fresh consumer; check imports, SSR, types, stubbed init/resume, migration copying and server bundling.
 - [x] Reject invalid benchmark workloads before timing, count selector-all calls, and support both sidebar layouts.
 - [x] Poll closed/idle widgets at approximately 60 seconds with jitter; active unchanged reads back off to 15 seconds. Pause hidden/offline polling and refresh on reopening/focus/reconnect. Preserve configured slower intervals.
 - [x] Resolve targets and measure geometry once per render pass; share semantic candidate indexes within that pass. Invalidate by discarding the pass before later DOM changes.

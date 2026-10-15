@@ -1,4 +1,4 @@
-import { initKomo } from "@tjcages/komo";
+import { initKomo } from "@hazem3500/komo";
 
 // Same hosted project and preview-gateway rules as the landing page demo.
 initKomo({
