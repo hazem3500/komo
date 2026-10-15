@@ -15,6 +15,7 @@ export interface Shortcut {
 const defaults: Record<ShortcutAction, string> = {
   comment: "C",
   browse: "V",
+  design: "D",
   restore: "Shift+K",
 };
 const modifiers = ["Ctrl", "Alt", "Shift", "Meta"] as const;

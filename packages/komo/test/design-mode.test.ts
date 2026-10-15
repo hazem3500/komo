@@ -50,6 +50,26 @@ describe("design mode preview inspector", () => {
     document.body.replaceChildren();
   });
 
+  it("shows a compact empty state until an element is selected", () => {
+    const inspector = shadow.querySelector<HTMLElement>(".design-inspector")!;
+    const empty = shadow.querySelector<HTMLElement>(".design-inspector__empty")!;
+    const comment = shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!;
+    expect(inspector.hasAttribute("data-empty")).toBe(true);
+    expect(empty.querySelector("strong")?.textContent).toBe("Select an element");
+    expect([...empty.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
+      "Click to inspect",
+      "Double-click text to edit",
+      "Esc to exit",
+    ]);
+    expect([...empty.querySelectorAll("kbd")].map((key) => key.textContent)).toEqual(["Click", "Double-click", "Esc"]);
+    expect(empty.querySelector("svg")).not.toBeNull();
+    expect(comment.hidden).toBe(true);
+    pointer("pointerdown", button);
+    expect(inspector.hasAttribute("data-empty")).toBe(false);
+    expect(shadow.querySelector(".design-inspector__empty")).toBeNull();
+    expect(comment.hidden).toBe(false);
+  });
+
   it("selects a page element and applies live preview styles", () => {
     const event = pointer("pointerdown", button);
     expect(event.defaultPrevented).toBe(true);

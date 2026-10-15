@@ -11,6 +11,8 @@ export interface DesignModeOptions {
   targetAt(x: number, y: number): Element | null;
   onComment(element: Element, proposal?: string): void;
   onExit(): void;
+  /** Label of the shortcut that toggles Design mode, shown in the empty state. */
+  exitKey?: string;
 }
 
 type Edit = {
@@ -202,13 +204,32 @@ export function createDesignMode(options: DesignModeOptions) {
   }
   function renderControls() {
     controls.replaceChildren();
+    syncEmpty();
     if (!selected) {
-      const empty = document.createElement("p");
+      const empty = document.createElement("div");
       empty.className = "design-inspector__empty";
-      empty.textContent = "Select an element to preview styles. Double-click text to edit it.";
+      const heading = document.createElement("strong");
+      heading.textContent = "Select an element";
+      const hints = document.createElement("ul");
+      // Odd parts are keycaps: "", "Click", " to inspect".
+      const hint = (...parts: string[]) => {
+        const line = document.createElement("li");
+        parts.forEach((part, index) => {
+          if (index % 2 === 0) line.append(part);
+          else line.append(Object.assign(document.createElement("kbd"), { textContent: part }));
+        });
+        hints.append(line);
+      };
+      hint("", "Click", " to inspect");
+      hint("", "Double-click", " text to edit");
+      if (options.exitKey) hint("", "Esc", " or ", options.exitKey, " to exit");
+      else hint("", "Esc", " to exit");
+      empty.append(icon("design"), heading, hints);
       controls.append(empty);
-      title.textContent = "Nothing selected";
-      subtitle.textContent = "Click a page element";
+      // Compact screens fold the sheet to its heading, so the title stays there.
+      title.textContent = "Select an element";
+      subtitle.textContent = "";
+      parent.hidden = true;
       return;
     }
     const identity = `${selected.tagName.toLowerCase()}${selected.id ? `#${selected.id}` : ""}`;
@@ -262,6 +283,11 @@ export function createDesignMode(options: DesignModeOptions) {
         if (theme) controls.append(theme);
       }).catch(() => {});
     }
+  }
+  /** With nothing selected, the inspector drops its footer and the sidebar fits the empty state. */
+  function syncEmpty() {
+    panel.toggleAttribute("data-empty", (comment.hidden = !selected));
+    panel.parentElement?.toggleAttribute("data-design-empty", active && !selected);
   }
   function outlineFor(element: HTMLElement | null, kind: "hover" | "selected") {
     if (!active || !element?.isConnected) {
@@ -408,6 +434,7 @@ export function createDesignMode(options: DesignModeOptions) {
     window.clearTimeout(closeTimer);
     closeTimer = 0;
     active = value;
+    syncEmpty();
     if (value) {
       panel.hidden = false;
       panel.setAttribute("aria-hidden", "false");
@@ -523,7 +550,11 @@ export function createDesignMode(options: DesignModeOptions) {
   return {
     setActive,
     mountPanel(parent: HTMLElement) {
-      if (panel.parentElement !== parent) parent.append(panel);
+      if (panel.parentElement !== parent) {
+        panel.parentElement?.removeAttribute("data-design-empty");
+        parent.append(panel);
+        syncEmpty();
+      }
     },
     get active() { return active; },
     /** Resolves once the property controls have loaded. */

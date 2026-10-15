@@ -81,7 +81,7 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 - Safe HTTP(S) links and simple Markdown links in comment messages.
 - Searchable sidebar, draggable dock, and Google or guest profiles.
 - Dismiss the toolbar for the current tab with ×; restore it with Shift+K or `controller.open()`. Set `showToolbar: false` to start hidden.
-- Keyboard shortcuts: C to comment, V to browse, Shift+K to restore. Remap or disable them with `shortcuts`.
+- Keyboard shortcuts: C to comment, V to browse, D to toggle Design mode, Shift+K to restore. Remap or disable them with `shortcuts`.
 - Copy open feedback with selectors, source paths, page URLs, replies, and geometry into an agent.
 - Hosted Cloudflare storage, or your own Worker/D1 or Node/PostgreSQL service.
 
@@ -262,7 +262,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `drawerContainer` | `HTMLElement` | Viewport | Element used to center the drawer before it is dragged. |
 | `autoHideDrawer` | `boolean` | `true` | Set `false` to keep the drawer visible away from the pointer. |
 | `showToolbar` | `boolean` | `true` | Set `false` to keep the toolbar, drawer, and comment pins hidden until `controller.open()` or the restore shortcut. |
-| `shortcuts` | `{ comment?, browse?, restore? }` | `C`, `V`, `Shift+K` | A key with optional `Ctrl`, `Alt`, `Shift`, or `Meta`, such as `"M"` or `"Shift+J"`. Set `false` to disable one. Escape and Tab are reserved. |
+| `shortcuts` | `{ comment?, browse?, design?, restore? }` | `C`, `V`, `D`, `Shift+K` | A key with optional `Ctrl`, `Alt`, `Shift`, or `Meta`, such as `"M"` or `"Shift+J"`. Set `false` to disable one. Escape and Tab are reserved. |
 | `features` | `{ designMode?, tags? }` | All `true` | Set a feature to `false` to remove it from the review UI, e.g. `{ designMode: false, tags: false }`. Existing tags stay stored and remain available to the CLI. |
 | `sidebar` | `"background" \| "edge"` | `"edge"` | `"edge"` (Floating) is a draggable sidebar that parks off and peeks from the viewport edge while closed. `"background"` (Frame) frames the site and shows the sidebar in the scaled review sheet. Account → Sidebar switches the two; that choice is remembered per project. |
 | `emojiDataSource` | `string` | jsDelivr emoji data 1.8.0 | Full emoji JSON URL; fetched only after “Choose another emoji”. |

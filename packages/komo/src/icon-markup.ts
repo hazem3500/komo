@@ -20,7 +20,7 @@ import { Link01 } from "@untitledui/icons/Link01";
 import { Code02 } from "@untitledui/icons/Code02";
 import { SmileIcon } from "./SmileIcon.js";
 import { GitBranch01 } from "@untitledui/icons/GitBranch01";
-import { BrushIcon } from "./BrushIcon.js";
+import { DesignIcon } from "./DesignIcon.js";
 // Icon components are shared by the DOM and React surfaces.
 export type IconName =
   | "chevron"
@@ -43,7 +43,7 @@ export type IconName =
   | "code"
   | "smile"
   | "branch"
-  | "brush";
+  | "design";
 export const components: Record<
   IconName,
   ComponentType<SVGProps<SVGSVGElement>>
@@ -68,7 +68,7 @@ export const components: Record<
   code: Code02,
   smile: SmileIcon,
   branch: GitBranch01,
-  brush: BrushIcon,
+  design: DesignIcon,
 };
 
 // This module is evaluated by the package build, leaving only SVG strings in

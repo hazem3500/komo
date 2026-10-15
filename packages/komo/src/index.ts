@@ -1448,17 +1448,17 @@ export function initComments(options: CommentsOptions): CommentsController {
     requestAnimationFrame(() => {
       const list = sidebar.querySelector<HTMLElement>(".list");
       if (list) list.scrollTop = designReturnScrollTop;
-      sidebar.querySelector<HTMLButtonElement>(".design-mode-trigger")?.focus({ preventScroll: true });
+      sidebar.querySelector<HTMLButtonElement>('[data-menu-item="design"]')?.focus({ preventScroll: true });
     });
   }
-  function setDesignMode(value: boolean, returnToComments = false) {
+  function setDesignMode(value: boolean) {
     if (options.onboarding || !!draft || (value && !designEnabled)) return;
     if (value) {
       // Keep the shared sidebar open. Its existing drawer morph is the outer
       // surface transition for both Comments and Design; only the content view
       // changes while the comment list and selection context stay mounted.
       designReturnToComments = true;
-      if (returnToComments || expanded)
+      if (expanded)
         designReturnScrollTop = sidebar.querySelector<HTMLElement>(".list")?.scrollTop ?? 0;
       setMode(false);
       if (!expanded) toggleExpanded(true);
@@ -2300,8 +2300,8 @@ export function initComments(options: CommentsOptions): CommentsController {
         ? [
             {
               id: "design",
-              label: "Design mode · preview styles",
-              icon: glyph("brush"),
+              label: withShortcut("Design mode", shortcuts.design),
+              icon: glyph("design"),
               onSelect: () => setDesignMode(!designActive),
             },
           ]
@@ -2968,16 +2968,6 @@ export function initComments(options: CommentsOptions): CommentsController {
           "icon sidebar-search-trigger",
           "search",
         ),
-        ...(designEnabled
-          ? [
-              button(
-                "Design mode",
-                () => setDesignMode(true, true),
-                "icon design-mode-trigger",
-                "brush",
-              ),
-            ]
-          : []),
         button("Close sidebar", () => toggleExpanded(false), "icon", "close"),
       );
       const selector = el("div", "sidebar-selector");
@@ -4700,6 +4690,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             root: shadow,
             panelRoot: sidebar,
             host,
+            exitKey: shortcuts.design?.label,
             targetAt(x, y) {
               const target = siteElementAt(x, y);
               return target && target !== surface && surface.contains(target) ? target : null;
@@ -5196,6 +5187,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       } else if (matchesShortcut(event, shortcuts.browse)) {
         event.preventDefault();
         setMode(false);
+      } else if (designEnabled && matchesShortcut(event, shortcuts.design)) {
+        event.preventDefault();
+        setDesignMode(!designActive);
       }
     },
     { signal: abort.signal },
