@@ -29,8 +29,6 @@ export const designPanelStyles = `
 .design-field--color { --lead:26px; }
 .design-field > input:not([type="color"]),.design-field > select { flex:1; box-sizing:border-box; width:100%; min-width:0; height:100%; margin:0; padding:0 8px; border:0; border-radius:6px; outline:0; box-shadow:none; background:none; color:#f1efeb; font:inherit; font-size:11px; font-variant-numeric:tabular-nums; text-overflow:ellipsis; }
 .design-field > :is(input,select):focus-visible { outline:0; }
-.design-field > select { appearance:none; padding-right:20px; cursor:pointer; background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 7px center/8px no-repeat; }
-.design-field > select option { background:#191919; }
 .design-field input[type="number"] { appearance:textfield; -moz-appearance:textfield; }
 .design-field input::-webkit-inner-spin-button { appearance:none; }
 .design-field__glyph { flex:none; display:grid; place-items:center; width:22px; height:100%; margin-right:-6px; color:#77736f; font-size:10px; font-weight:600; cursor:ew-resize; user-select:none; touch-action:none; }

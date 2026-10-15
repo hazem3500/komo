@@ -49,6 +49,9 @@ export const fields: Field[] = [
   { property: "border-color", label: "Border color", kind: "color" },
 ];
 
+/** Fetched with the panel, so its first render already has styled selects. */
+const selectMenu = import("./select-menu.js").catch(() => null);
+
 const typography = ["font-family", "font-size", "line-height", "font-weight", "text-align", "color"];
 
 export function toHex(value: string): string {
@@ -251,6 +254,8 @@ function section(context: PanelContext, name: string, properties: string[] | nul
 /** Render only the sections that apply to the element; empty Fill and Border offer a quiet add. */
 export function renderPanel(container: HTMLElement, context: PanelContext) {
   const { element, changed } = context;
+  // Selects open komo's own listbox once that module (fetched with the panel) is in.
+  void selectMenu.then((menu) => menu?.attach(container));
   const style = getComputedStyle(element);
   const touched = (properties: string[]) => properties.some((property) => changed?.has(property));
   // Direct text, or text styles the element sets inline for its children.

@@ -24,6 +24,9 @@ const inlineTextEditing = (await readdir("dist"))
 const designPanel = (await readdir("dist"))
   .filter((file) => /^design-panel.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const selectMenu = (await readdir("dist"))
+  .filter((file) => /^select-menu.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const entry = Object.keys(outputs).find(
   (path) => outputs[path].entryPoint === "dist/index.js"
 );
@@ -60,6 +63,7 @@ const report = {
   optionalDesignMode: await sizes(new Set(["dist/design-mode.js"])),
   optionalInlineTextEditing: await sizes(new Set(inlineTextEditing)),
   optionalDesignPanel: await sizes(new Set(designPanel)),
+  optionalSelectMenu: await sizes(new Set(selectMenu)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
   adapterClassTheme: await sizes(new Set(["dist/adapters/class-theme.js"])),
   package: {
@@ -108,8 +112,13 @@ if (report.optionalInlineTextEditing.gzip > 3_100)
 // Design mode's property controls load as their own chunk when Design mode opens,
 // so the Figma-style panel does not grow the Design mode entry (7,007 -> 5,677 gzip).
 // New budget: 4,262 measured for scrubbing, inline token chips and section rules.
+// The select trigger's chevron moved to the select menu chunk below (4,271 -> ~4,140).
 if (report.optionalDesignPanel.gzip > 4_300)
   throw new Error("komo's design panel chunk exceeds its gzip budget.");
+// The Design panel's styled select popups (listbox, keyboard, flip and check marks)
+// load as their own chunk beside the panel, so neither the panel nor the entry grows.
+if (report.optionalSelectMenu.gzip > 3_100)
+  throw new Error("komo's select menu chunk exceeds its gzip budget.");
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.
