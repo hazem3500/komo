@@ -36,7 +36,8 @@ export interface InlineTextTools {
   readonly element: HTMLElement | null;
   readonly busy: boolean;
   isEditing(element: HTMLElement | null): boolean;
-  toggle(): Promise<void>;
+  /** Start or finish editing; a point inside the text places the caret there. */
+  toggle(point?: { clientX: number; clientY: number }): Promise<void>;
   finish(cancel?: boolean): void;
   handleKey(event: KeyboardEvent): boolean;
   hasChanges(element: HTMLElement): boolean;
@@ -115,7 +116,7 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
     options.onChange();
   }
 
-  async function toggle() {
+  async function toggle(point?: { clientX: number; clientY: number }) {
     const element = options.selected();
     if (editor && editor.element === element) {
       finish();
@@ -145,6 +146,7 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
       if (!next) options.status.textContent = "This text is not a safe editable leaf or registered string prop.";
       else if (options.active() && options.selected() === element) {
         editor = next;
+        if (point) caretAtPoint(element, point.clientX, point.clientY);
         options.status.textContent = element.hasAttribute("data-komo-text-prop")
           ? "React state preview · resets on refresh"
           : "Editing leaf text · preview only";
@@ -182,8 +184,19 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
 
 export function bindInlineTextTools(options: InlineTextToolsOptions): InlineTextTools {
   const tools = createInlineTextTools(options);
-  options.button.addEventListener("click", () => { void tools.toggle(); });
+  options.button.addEventListener("click", (event) => { void tools.toggle(event); });
   return tools;
+}
+
+function caretAtPoint(element: HTMLElement, x: number, y: number) {
+  const position = document.caretPositionFromPoint?.(x, y);
+  const range = position ? document.createRange() : document.caretRangeFromPoint?.(x, y);
+  if (position && range) range.setStart(position.offsetNode, position.offset);
+  if (!range || !element.contains(range.startContainer)) return;
+  range.collapse(true);
+  const selection = document.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
 }
 
 export function canEditLeafText(element: HTMLElement): boolean {

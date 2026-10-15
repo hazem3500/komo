@@ -71,7 +71,8 @@ if (report.initial.gzip > 100_000 || report.coreFeatures.gzip > 199_000)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
-if (report.optionalDesignMode.gzip > 7_000)
+// Raised from 7,000 for double-click inline editing (37 bytes); the caret logic stays in the editor chunk.
+if (report.optionalDesignMode.gzip > 7_100)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 if (report.optionalInlineTextEditing.gzip > 2_800)
   throw new Error("komo's on-demand inline text editor chunk exceeds its gzip budget.");

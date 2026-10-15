@@ -113,6 +113,24 @@ describe("design mode preview inspector", () => {
     expect(commentProposals.at(-1)).toContain('"Selected text" → "Comment proposal"');
   });
 
+  it("double-clicking leaf text selects it and starts inline editing", async () => {
+    const label = document.querySelector<HTMLElement>("#label")!;
+    const doubleClick = (target: Element) => {
+      pointer("pointerdown", target);
+      target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, composed: true, clientX: 30, clientY: 20, detail: 2 }));
+    };
+    doubleClick(label);
+    await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
+    expect(document.activeElement).toBe(label);
+    label.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
+    expect(label.hasAttribute("contenteditable")).toBe(false);
+
+    const nested = document.querySelector<HTMLElement>("#nested")!;
+    doubleClick(nested);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(nested.hasAttribute("contenteditable")).toBe(false);
+  });
+
   it("keeps nested markup, interactive controls, and private text out of inline editing", async () => {
     const edit = () => shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
     const status = () => shadow.querySelector(".design-inspector__status")?.textContent;
