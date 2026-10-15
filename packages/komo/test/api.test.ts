@@ -53,14 +53,19 @@ async function request(
 }
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "branch-comments-test-"));
-  port = await new Promise<number>((resolve) => {
-    const server = createServer();
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      const value = typeof address === "object" && address ? address.port : 0;
-      server.close(() => resolve(value));
+  const freePort = () =>
+    new Promise<number>((resolve) => {
+      const server = createServer();
+      server.listen(0, "127.0.0.1", () => {
+        const address = server.address();
+        const value = typeof address === "object" && address ? address.port : 0;
+        server.close(() => resolve(value));
+      });
     });
-  });
+  port = await freePort();
+  // api and iap tests start wrangler dev in parallel; left to its default, each
+  // probes 9229 for the inspector and both can bind it at once, so one fails.
+  const inspectorPort = await freePort();
   const config = JSON.parse(
     await readFile(new URL("../server/wrangler.jsonc", import.meta.url), "utf8")
   );
@@ -208,6 +213,8 @@ beforeAll(async () => {
       configPath,
       "--port",
       String(port),
+      "--inspector-port",
+      String(inspectorPort),
       "--persist-to",
       join(directory, "state"),
     ],
