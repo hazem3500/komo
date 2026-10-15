@@ -1,4 +1,4 @@
-import { isEmoji } from "./emoji.js";
+import { isEmoji } from "./emoji-sequence.js";
 import { button, el, onPage } from "./dom.js";
 
 import { emojiHistory, rankedEmoji } from "./emoji-history.js";

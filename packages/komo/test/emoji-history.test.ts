@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { isEmoji } from "../src/emoji";
+import { isEmoji as isEmojiSequence } from "../src/emoji-sequence";
 import {
   DEFAULT_EMOJI,
   emojiHistory,
@@ -9,11 +10,14 @@ import {
 
 afterEach(() => vi.unstubAllGlobals());
 describe("emoji preferences", () => {
-  it("accepts one complete emoji, including flags, skin tones and joined sequences", () => {
-    for (const emoji of ["❤️", "👩🏽‍💻", "🇺🇸", "1️⃣", "👨‍👩‍👧‍👦", "🫶🏽"])
-      expect(isEmoji(emoji)).toBe(true);
-    for (const value of ["", "hi", "👍👍", "👍 text", "<b>👍</b>", 1])
-      expect(isEmoji(value)).toBe(false);
+  it.each([
+    ["API", isEmoji],
+    ["browser", isEmojiSequence],
+  ])("%s check accepts one complete emoji, including flags, skin tones and joined sequences", (_, check) => {
+    for (const emoji of ["❤️", "👩🏽‍💻", "🇺🇸", "1️⃣", "👨‍👩‍👧‍👦", "🫶🏽", "🏳️‍🌈", "🏴󠁧󠁢󠁳󠁣󠁴󠁿", ...DEFAULT_EMOJI])
+      expect(check(emoji)).toBe(true);
+    for (const value of ["", "hi", "1", "#", "👍👍", "👍 text", "<b>👍</b>", 1])
+      expect(check(value)).toBe(false);
   });
   it("inserts a custom choice at the end, then promotes it with repeated use", () => {
     expect(rankedEmoji({ counts: {} })).toEqual(DEFAULT_EMOJI);

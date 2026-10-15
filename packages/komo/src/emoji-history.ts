@@ -1,4 +1,4 @@
-import { isEmoji } from "./emoji.js";
+import { isEmoji } from "./emoji-sequence.js";
 
 export const DEFAULT_EMOJI = ["👍", "❤️", "🎉", "👀", "✅", "🤔"];
 export type EmojiHistory = { counts: Record<string, number>; recent?: string };
