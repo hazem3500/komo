@@ -96,7 +96,8 @@ function inputValue(field: Field, control: Control): string | null {
   return value;
 }
 
-function fieldControl(field: Field, context: PanelContext) {
+/** Shared by every section, including the shared theme tokens. */
+export function fieldControl(field: Field, context: Pick<PanelContext, "element" | "begin" | "apply" | "commit">) {
   const { element } = context;
   const box = document.createElement("div");
   box.className = `design-field design-field--${field.kind}`;

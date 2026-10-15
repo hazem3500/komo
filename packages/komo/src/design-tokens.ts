@@ -141,10 +141,15 @@ function validTokenValue(source: RegisteredDesignTokenSource, token: KomoDesignT
   return !css?.supports || token.properties.some((property) => css.supports(property, value));
 }
 
+/**
+ * Preview a shared theme value. With `merge`, a live edit (typing, scrubbing, picking)
+ * extends the last undo step for the same token instead of adding one per keystroke.
+ */
 export function previewThemeToken(
   source: RegisteredDesignTokenSource,
   token: KomoDesignToken,
   value: string,
+  merge = false,
 ): boolean {
   if (!source.tokens.some((item) => item === token || item.path === token.path) || !validTokenValue(source, token, value)) return false;
   const before = tokenValue(source, token);
@@ -156,9 +161,26 @@ export function previewThemeToken(
   source.root.style.setProperty(token.cssVariable, value);
   if (value === (prior?.before ?? before)) source.themeEdits.delete(token.path);
   else source.themeEdits.set(token.path, { before: prior?.before ?? before, after: value, inlineBefore: baselineInline });
-  edits.push({ kind: "theme", source, token, before, after: value, inlineBefore });
+  const last = edits.at(-1);
+  if (merge && last?.kind === "theme" && last.token.path === token.path) {
+    if (value === last.before) edits.pop();
+    else last.after = value;
+  } else edits.push({ kind: "theme", source, token, before, after: value, inlineBefore });
   history.set(source, edits);
   return true;
+}
+
+/** Return one shared token to the page's value; like Reset, it leaves no undo step. */
+export function resetThemeToken(source: RegisteredDesignTokenSource, token: KomoDesignToken): void {
+  const edit = source.themeEdits.get(token.path);
+  const steps = history.get(source) ?? [];
+  const first = steps.find((item) => item.kind === "theme" && item.token.path === token.path);
+  const inline = edit?.inlineBefore ?? (first?.kind === "theme" ? first.inlineBefore : undefined);
+  if (inline === undefined) return;
+  if (inline) source.root.style.setProperty(token.cssVariable, inline);
+  else source.root.style.removeProperty(token.cssVariable);
+  source.themeEdits.delete(token.path);
+  history.set(source, steps.filter((item) => item.kind !== "theme" || item.token.path !== token.path));
 }
 
 export function applyTokenToElement(
@@ -403,6 +425,10 @@ export function undoDesignToken(element: HTMLElement): void {
     if (state && state.after === edit.after) {
       if (state.before === edit.before) source.themeEdits.delete(edit.token.path);
       else source.themeEdits.set(edit.token.path, { ...state, after: edit.before });
+    } else if (!state) {
+      // The undone step had returned the token to the page's value, so it is changed again.
+      const first = history.get(source)!.find((item) => item.kind === "theme" && item.token.path === edit.token.path);
+      source.themeEdits.set(edit.token.path, { before: edit.after, after: edit.before, inlineBefore: (first?.kind === "theme" ? first : edit).inlineBefore });
     }
     return;
   }
