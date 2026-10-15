@@ -531,3 +531,49 @@ it("uses Floating for boxless content roots even when explicitly configured", ()
   controller = initComments({ ...options, sidebar: "background", pageRoot: app });
   expect(([...document.body.children].find(node => node.shadowRoot)! as HTMLElement).dataset.sidebar).toBe("edge");
 });
+
+it("toggles Design mode with D, a configured key, and never while typing or disabled", async () => {
+  const press = (init: KeyboardEventInit, target: EventTarget = document) => {
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, composed: true, ...init });
+    target.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  const mount = (extra: Partial<CommentsOptions> = {}) => {
+    controller?.destroy();
+    controller = initComments({ ...options, onboarding: undefined, ...extra });
+    const host = [...document.body.children].find((node) => node.shadowRoot) as HTMLElement;
+    return { host, root: host.shadowRoot! };
+  };
+
+  let { host, root } = mount();
+  expect(root.querySelector('[data-menu-item="design"]')!.getAttribute("aria-label")).toBe("Design mode · D");
+  const input = document.createElement("input");
+  document.body.append(input);
+  expect(press({ key: "d" }, input)).toBe(false);
+  expect(host.classList.contains("design-active")).toBe(false);
+  expect(press({ key: "d" })).toBe(true);
+  expect(host.classList.contains("design-active")).toBe(true);
+  for (let i = 0; i < 20 && !root.querySelector(".design-inspector__empty"); i++)
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(root.querySelector(".design-inspector__empty")?.textContent).toContain("Esc or D to exit");
+  const sidebar = root.querySelector(".design-inspector")!.parentElement!;
+  expect(sidebar.hasAttribute("data-design-empty")).toBe(true);
+  expect(press({ key: "d" })).toBe(true);
+  expect(host.classList.contains("design-active")).toBe(false);
+  expect(sidebar.hasAttribute("data-design-empty")).toBe(false);
+
+  ({ host, root } = mount({ shortcuts: { design: "Shift+E" } }));
+  expect(root.querySelector('[data-menu-item="design"]')!.getAttribute("aria-label")).toBe("Design mode · Shift+E");
+  expect(press({ key: "d" })).toBe(false);
+  expect(press({ key: "E", shiftKey: true })).toBe(true);
+  expect(host.classList.contains("design-active")).toBe(true);
+
+  ({ host, root } = mount({ shortcuts: { design: false } }));
+  expect(root.querySelector('[data-menu-item="design"]')!.getAttribute("aria-label")).toBe("Design mode");
+  expect(press({ key: "d" })).toBe(false);
+  expect(host.classList.contains("design-active")).toBe(false);
+
+  ({ host } = mount({ features: { designMode: false } }));
+  expect(press({ key: "d" })).toBe(false);
+  expect(host.classList.contains("design-active")).toBe(false);
+});

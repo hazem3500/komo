@@ -37,7 +37,20 @@ export const designModeStyles = `
 .design-inspector[data-folded] > :not(.design-inspector__heading) { display:none; }
 .design-inspector[data-folded] .design-inspector__heading { border:0; }
 .design-inspector__controls { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; }
-.design-inspector__empty { margin:0; padding:16px 12px; color:#898680; }
+/* Empty state: the floating sidebar fits a compact, centered hint instead of an empty column. */
+:host([data-sidebar="edge"]) .edge-sidebar[data-design-empty]:not([data-morphing]) { height:auto !important; }
+:host([data-sidebar="edge"]) [data-design-empty] > .design-inspector { position:relative; inset:auto; }
+/* The hidden toolbar docked in the sidebar would otherwise add its height. */
+:host([data-sidebar="edge"]) [data-design-empty]:not([data-morphing]) > .toolbar { position:absolute; }
+.design-inspector[data-empty] .design-inspector__heading { border:0; }
+.design-inspector[data-empty] .design-inspector__identity { visibility:hidden; }
+.design-inspector[data-empty] .design-inspector__controls { display:grid; place-items:center; }
+.design-inspector[data-empty] .design-inspector__bar:not([data-changes],[data-message]) { display:none; }
+.design-inspector__empty { display:flex; flex-direction:column; align-items:center; gap:4px; padding:0 24px 28px; color:#898680; font-size:11px; text-align:center; }
+.design-inspector__empty > svg { box-sizing:content-box; width:20px; height:20px; margin-bottom:8px; padding:8px; border-radius:10px; background:#ffffff0a; color:#77736f; }
+.design-inspector__empty strong { color:#e9e6e1; font-size:12px; font-weight:600; }
+.design-inspector__empty ul { display:grid; gap:6px; margin:8px 0 0; padding:0; list-style:none; }
+.design-inspector__empty kbd { display:inline-block; min-width:8px; padding:0 5px; border-radius:4px; background:#ffffff0f; box-shadow:inset 0 0 0 1px #ffffff12,inset 0 -1px 0 #ffffff12; color:#c9c5bf; font:inherit; font-size:10px; font-weight:500; line-height:17px; }
 /* One slim bar: a quiet Comment action, plus a change count and tools once something changed. */
 .design-inspector__bar { flex:none; display:flex; align-items:center; gap:8px; min-height:44px; padding:0 8px 0 12px; border-top:1px solid #ffffff12; color:#898680; font-size:11px; }
 .design-inspector__count { white-space:nowrap; font-variant-numeric:tabular-nums; }
@@ -65,6 +78,7 @@ export const designModeStyles = `
   }
   .design-inspector__heading { height:52px; padding-left:18px; }
   .design-inspector__fold { display:grid; }
+  .design-inspector[data-empty] .design-inspector__identity { visibility:visible; }
   .design-field { height:34px; }
 }
 @media (prefers-reduced-motion:reduce) {

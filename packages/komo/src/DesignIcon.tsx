@@ -1,6 +1,7 @@
 import type { SVGProps } from "react";
 
-export function BrushIcon(props: SVGProps<SVGSVGElement>) {
+/** Design mode: a selected element inside inspector crop marks. */
+export function DesignIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
       width="100%"
@@ -11,9 +12,9 @@ export function BrushIcon(props: SVGProps<SVGSVGElement>) {
       {...props}
     >
       <path
-        d="m14.4 6.2 3.4 3.4M4.5 19.5c1.8 0 3.1-.6 4.3-1.8 1.3-1.3 1.4-3.2 2.7-4.5l6.8-6.8a2.4 2.4 0 0 0-3.4-3.4l-6.8 6.8c-1.3 1.3-3.2 1.4-4.5 2.7-1.2 1.2-1.8 2.5-1.8 4.3v2.7h2.7Z"
+        d="M3 7.5V6a3 3 0 0 1 3-3h1.5m9 0H18a3 3 0 0 1 3 3v1.5m0 9V18a3 3 0 0 1-3 3h-1.5m-9 0H6a3 3 0 0 1-3-3v-1.5M8 8h8v8H8Z"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

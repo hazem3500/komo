@@ -58,7 +58,7 @@ function Demo() {
       <span className="eyebrow">komo · isolated React inspector</span>
       <InlineHeadline text={headline} onChange={setHeadline} />
       <p className="intro">
-        Open the bottom brush, select this heading to try direct text editing, then
+        Press D for Design mode, select this heading to try direct text editing, then
         select the card. Each color, spacing, typography, and radius control shows
         the token the card already uses; type a custom value or pick another token,
         or explicitly preview a shared theme change and its affected scope.

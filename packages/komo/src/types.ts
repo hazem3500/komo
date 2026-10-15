@@ -76,6 +76,8 @@ export interface KomoShortcuts {
   comment?: string | false;
   /** Return to browsing. Defaults to "V". */
   browse?: string | false;
+  /** Toggle Design mode. Defaults to "D". Has no effect when features.designMode is false. */
+  design?: string | false;
   /** Restore a dismissed toolbar. Defaults to "Shift+K". */
   restore?: string | false;
 }
