@@ -12,6 +12,11 @@ export interface TagEditorOptions {
 }
 
 // Matches the dialog's own fields: muted fill, hairline inset, no accent ring.
+// The option menu is attached to komo's root so no container can clip it. In
+// the composer the tag row grows when the picker opens, instead of spilling over
+// the text above it. In threads the row lines up with message text (16px gutter,
+// 24px avatar, 8px gap) and sits under the last message's bottom padding.
+// Comments stay out of the string: they would ship in the bundle.
 const css = `
 .tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; min-height: 24px; font-size: 12px; }
 .tag-row .tag-chip {
@@ -37,9 +42,8 @@ const css = `
 .tag-row .tag-input::placeholder { color: #858585; }
 .tag-row .tag-input:focus { box-shadow: inset 0 0 0 1px #ffffff20; }
 .tag-row .tag-input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px #f28b8299; }
-/* A floating menu attached to komo's root, so no container can clip it. */
 .tag-options {
-  position: fixed; z-index: 40; display: grid; gap: 1px; width: 220px; max-height: 220px; overflow: auto;
+  position: fixed; z-index: 40; pointer-events: auto; display: grid; gap: 1px; width: 220px; max-height: 220px; overflow: auto;
   padding: 4px; border-radius: 10px; background: #2a2a2a; box-shadow: 0 0 0 1px #ffffff14, 0 12px 32px #0007;
   font-size: 12px;
 }
@@ -51,13 +55,11 @@ const css = `
 .tag-option[aria-selected="true"] { background: #ffffff14; color: #fff; }
 .tag-option-hint, .tag-option-empty { color: #858585; }
 .tag-option-empty { padding: 6px 8px; }
-/* The tag row grows when the picker opens, instead of spilling over the text above it. */
 .new-comment-composer .draft-body:has(.tag-slot) { grid-template-rows: minmax(28px, auto) minmax(28px, auto); }
 .new-comment-composer .draft-body .tag-slot { grid-row: 2; grid-column: 2; align-self: start; min-width: 0; padding-top: 2px; }
 .new-comment-composer .draft-body:has(.tag-slot) .send { align-self: start; }
 .new-comment-composer .draft-body:not(:has(.avatar)) .tag-slot { grid-column: 1; }
-/* Line up with message text: 16px gutter plus the 24px avatar and 8px gap. */
-.thread-tags { padding: 8px 16px 12px 48px; }
+.thread-tags { margin-top: -10px; padding: 0 16px 12px 48px; }
 `;
 
 /** Lowercase and validate a typed tag; returns null when it isn't a valid tag. */
@@ -166,8 +168,6 @@ export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
             option.setAttribute("role", "option");
             if (create) option.append(Object.assign(document.createElement("span"), { className: "tag-option-hint", textContent: "Create" }));
             option.append(Object.assign(document.createElement("span"), { textContent: `#${tag}` }));
-            // Keep focus in the input so blur doesn't close the list first.
-            option.addEventListener("pointerdown", (event) => event.preventDefault());
             option.addEventListener("click", () => choose(tag));
             option.addEventListener("pointermove", () => highlight(index));
             return option;
@@ -216,7 +216,19 @@ export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
         }
       });
       input.addEventListener("input", () => input.removeAttribute("aria-invalid"));
+      // Pressing the menu can still blur the input (it sits outside the dialog);
+      // keep the menu open so the click lands, and return focus to the field.
+      let pressing = false;
+      list.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        pressing = true;
+      });
       input.addEventListener("blur", () => {
+        if (pressing) {
+          pressing = false;
+          requestAnimationFrame(() => input.isConnected && input.focus({ preventScroll: true }));
+          return;
+        }
         if (swapping || !input.isConnected || !typing) return;
         typing = false;
         render();
