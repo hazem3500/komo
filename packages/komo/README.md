@@ -186,6 +186,22 @@ initKomo({ project: "your-project", design: { tokens: classTokens } });
 
 Keep `resolve()` cheap and honest: report only properties you can vouch for. Define the adapter once, outside render, so `useKomo` sees the same object. The React props demo shows this adapter with `?tokens=classes`.
 
+#### Discovering CSS variables
+
+`discoverCssTokens()` from `@hazem3500/komo/adapters/css-variables` is the no-table option for sites whose tokens are CSS custom properties, including the variables Tailwind v4 emits for `@theme`. It is opt-in, reads `--*` declarations on `:root`/`html` from same-origin stylesheets (cross-origin sheets are skipped), and is meant for development builds.
+
+```ts
+import { discoverCssTokens } from "@hazem3500/komo/adapters/css-variables";
+
+initKomo({ project, design: { tokens: discoverCssTokens() } });
+```
+
+- Tailwind namespaces set the type and the properties a token may style: `--color-*`, `--spacing`/`--spacing-*`, `--radius-*`, `--text-*`, `--font-*`, `--font-weight-*`, `--leading-*`. Other variables are kept only when their value is a color or a length. `--tw-*` is skipped. Paths follow the name, so `--color-brand-500` is `color.brand-500`.
+- A property shows a token only when the element's winning declaration (inline, then stylesheet by `!important`, specificity and order) is exactly one `var()` of a discovered variable. An equal value is not a match.
+- Choosing a token previews `property: var(--name)`, and proposals say `Replace var(--old) with var(--new) for property`, so agents write the reference, not the resolved value.
+- `include(name)` filters variables and `limit` caps the list (300). Values come from the computed style, so they follow the current theme. The scan reruns on every `list()`; `@layer` and `@media` blocks are read, but variables set only under a theme selector such as `[data-mode=dark]` are not listed on their own.
+- Selector-based impact counts and **Edit shared theme values** need `useKomoDesignTokens` and are not part of this adapter.
+
 #### Tailwind and class themes
 
 Two optional adapters ship as their own entry points, outside the core bundle. For utility-class design systems, a token is a class: komo previews by swapping classes, not by setting CSS variables.
