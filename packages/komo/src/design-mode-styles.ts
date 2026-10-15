@@ -87,7 +87,7 @@ export const designModeStyles = `
   .design-inspector__heading { height:52px; padding-left:18px; }
   .design-inspector__fold { display:grid; }
   .design-inspector[data-empty] .design-inspector__identity { visibility:visible; }
-  .design-field { height:34px; }
+  .design-inspector .design-field { height:34px; }
 }
 @media (prefers-reduced-motion:reduce) {
   .design-outline,.design-inspector,.design-inspector__fold svg,.design-inspector__status { transition:none; animation:none; }
