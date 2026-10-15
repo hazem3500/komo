@@ -115,6 +115,18 @@ Komo adapts those patterns to an embedded live page: direct hover/select, a comp
 
 Sources: [Figma layer properties and styles](https://help.figma.com/hc/en-us/articles/360039832014-Design-prototype-and-explore-layer-properties-in-the-right-sidebar), [Figma Dev Mode](https://help.figma.com/hc/en-us/articles/15023124644247-Guide-to-Dev-Mode), [pen.dev installation and IDE design mode](https://docs.pen.dev/getting-started/installation), [pen.dev interface and undo/redo](https://docs.pen.dev/core-concepts/pencil-interface), [OpenPencil features and properties panel](https://openpencil.dev/overview/features), [OpenPencil layers and selection sync](https://openpencil.dev/user-guide/layers-and-pages), [Puck component configuration](https://puckeditor.com/docs/integrating-puck/component-configuration), [Puck nested object and array fields](https://puckeditor.com/docs/api-reference/fields/object), [Puck permissions](https://puckeditor.com/docs/api-reference/permissions), [Puck source and MIT license](https://github.com/puckeditor/puck), and the [Design Tokens Format Module 2025.10](https://www.w3.org/community/reports/design-tokens/CG-FINAL-format-20251028/).
 
+### Design-system adapters
+
+`design: { tokens, themes, components }` tells Design mode about your design system. These are types in `DesignSystem`, and all three are optional. komo never guesses tokens from computed styles or reads framework internals; your adapters answer.
+
+- `tokens: TokenAdapter` lists tokens (aliases resolved, per theme). For a picked element, it says which token each CSS property uses, or that the value is off-token. It can also preview a token, for example by swapping a utility class, and describe how to apply the change in source.
+- `themes: ThemeAxis[]` are independent axes reviewers can flip, such as light/dark or a product palette. Proposals record the theme state they were made in.
+- `components: ComponentAdapter` identifies the component behind an element (name, props, source), so Design mode shows "Button (variant=secondary)". It works alongside `useKomoInspectable`.
+
+Design proposals also carry a versioned `DesignEdit` record (token swaps, prop changes, text, and a raw CSS fallback) that the CLI and agents can apply.
+
+The API is landing in stages, and this section is updated as each part ships. Without `design.tokens`, Design mode uses the CSS custom properties registered with `useKomoDesignTokens`.
+
 ## Agent CLI
 
 `komo init` adds the default comment workflow to `AGENTS.md`, preserving existing instructions. For an existing project, run `komo agents setup` from its root. Commit the instructions so every agent uses them.

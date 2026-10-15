@@ -80,6 +80,16 @@ describe("useKomo", () => {
     await render({ project: "test", features: { tags: true } });
     expect(init).toHaveBeenCalledTimes(2);
   });
+  it("compares inline design objects by their adapters", async () => {
+    const tokens = { id: "a", list: () => [], resolve: () => ({}) };
+    const otherTokens = { id: "b", list: () => [], resolve: () => ({}) };
+    const axis = { id: "mode", options: [{ id: "light" }], current: () => "light", apply() {} };
+    await render({ project: "test", design: { tokens, themes: [axis] } });
+    await render({ project: "test", design: { tokens, themes: [axis] } });
+    expect(init).toHaveBeenCalledTimes(1);
+    await render({ project: "test", design: { tokens: otherTokens, themes: [axis] } });
+    expect(init).toHaveBeenCalledTimes(2);
+  });
   it("cleans up before remounting changed configuration", async () => {
     await render({ project: "first" });
     await render({ project: "second" });

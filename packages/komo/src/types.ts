@@ -1,3 +1,6 @@
+import type { DesignSystem } from "./design-system.js";
+export type * from "./design-system.js";
+
 export interface Identity {
   id: string;
   name: string;
@@ -135,6 +138,11 @@ export interface CommentsOptions {
    * Defaults to true; set false if the host needs to observe them.
    */
   isolateEvents?: boolean;
+  /**
+   * Design-system adapters for Design mode: tokens, theme axes, and component
+   * identity. All optional; see DesignSystem.
+   */
+  design?: DesignSystem;
   /** Resolve an anchor to a repository-relative source path. */
   source?: (element: Element) => string | undefined;
   /** Defaults to GitHub's source viewer. */
