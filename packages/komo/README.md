@@ -259,6 +259,7 @@ Pass these to `initKomo(config)` from `@tjcages/komo` or `useKomo(config)` from 
 | `autoHideDrawer` | `boolean` | `true` | Set `false` to keep the drawer visible away from the pointer. |
 | `showToolbar` | `boolean` | `true` | Set `false` to keep the toolbar, drawer, and comment pins hidden until `controller.open()` or the restore shortcut. |
 | `shortcuts` | `{ comment?, browse?, restore? }` | `C`, `V`, `Shift+K` | A key with optional `Ctrl`, `Alt`, `Shift`, or `Meta`, such as `"M"` or `"Shift+J"`. Set `false` to disable one. Escape and Tab are reserved. |
+| `features` | `{ designMode?, tags? }` | All `true` | Set a feature to `false` to remove it from the review UI, e.g. `{ designMode: false, tags: false }`. Existing tags stay stored and remain available to the CLI. |
 | `sidebar` | `"background" \| "edge"` | `"edge"` | `"edge"` (Floating) is a draggable sidebar that parks off and peeks from the viewport edge while closed. `"background"` (Frame) frames the site and shows the sidebar in the scaled review sheet. Account → Sidebar switches the two; that choice is remembered per project. |
 | `emojiDataSource` | `string` | jsDelivr emoji data 1.8.0 | Full emoji JSON URL; fetched only after “Choose another emoji”. |
 | `pollInterval` | `number` | `4000` | Refresh interval in milliseconds, minimum 2000. |

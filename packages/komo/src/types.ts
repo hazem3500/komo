@@ -80,6 +80,14 @@ export interface KomoShortcuts {
   restore?: string | false;
 }
 
+/** Optional review features. Each defaults to true; false removes it from the UI. */
+export interface KomoFeatures {
+  /** Design mode inspector, style previews, and design proposals. */
+  designMode?: boolean;
+  /** Thread group tags in the sidebar and comment menu. */
+  tags?: boolean;
+}
+
 export interface CommentsOptions {
   /** Used by the hosted setup screen to reuse the sidebar account UI. */
   onboarding?: OnboardingOptions;
@@ -95,6 +103,8 @@ export interface CommentsOptions {
   showToolbar?: boolean;
   /** Override or disable the review keyboard shortcuts. */
   shortcuts?: KomoShortcuts;
+  /** Turn optional features off, e.g. { designMode: false, tags: false }. */
+  features?: KomoFeatures;
   /**
    * Sidebar presentation when the review opens. "edge" (default) is a floating,
    * draggable sidebar that parks off and peeks from the viewport edge while

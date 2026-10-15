@@ -126,6 +126,22 @@ it("lets reviewers dismiss and restore the toolbar, and supports hidden initiali
   expect(hiddenToolbar.style.display).not.toBe("none");
 });
 
+it("removes Design mode entry points when the feature is off", () => {
+  controller = initComments({
+    ...options,
+    onboarding: undefined,
+    features: { designMode: false, tags: false },
+  });
+  const host = [...document.body.children].find(
+    (node) => node.shadowRoot,
+  ) as HTMLElement;
+  const root = host.shadowRoot!;
+  expect(root.querySelector('[data-menu-item="design"]')).toBeNull();
+  expect(root.querySelector('[data-menu-item="comment"]')).not.toBeNull();
+  expect(root.querySelector(".design-mode-trigger")).toBeNull();
+  expect(root.querySelector(".design-inspector")).toBeNull();
+});
+
 it("uses configured shortcut keys and labels", () => {
   controller = initComments({
     ...options,
