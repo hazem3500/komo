@@ -89,7 +89,8 @@ await writeFile(
 // and drags, and comment dialogs stay in the visible area (~270 bytes; the rest is on demand).
 // 102,450 / 208,450: comments open beside the region they discuss, and Design mode
 // comments collapse the sidebar (~200 bytes in positionDialog, which runs at mount).
-if (report.initial.gzip > 102_450 || report.coreFeatures.gzip > 208_450)
+// +50 for the Floating/Frame switch in the toolbar menu.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 208_500)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
