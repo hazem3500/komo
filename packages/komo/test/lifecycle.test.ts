@@ -698,3 +698,158 @@ it("closes komo menus on pointerdown elsewhere in komo despite isolation", async
   down(elsewhere);
   expect(close).toHaveBeenCalledTimes(2);
 });
+
+/** jsdom has no layout: give the commented element a box so pins render. */
+function layoutBody() {
+  const target = document.createElement("main");
+  target.id = "target";
+  document.body.append(target);
+  const measure = HTMLElement.prototype.getBoundingClientRect;
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    return this === target ? new DOMRect(10, 10, 400, 300) : measure.call(this);
+  });
+}
+
+it("opens threads inside the open sidebar, switches in place, and steps back with Escape", async () => {
+  const { CommentsApi } = await import("../src/api");
+  const config = { ...options, onboarding: undefined };
+  const api = new CommentsApi(config);
+  api.save({
+    token: "panel-session",
+    user: { id: "reviewer", name: "Panel Reviewer", verified: true },
+  });
+  const thread = (id: string, body: string, updatedAt: number) => ({
+    id,
+    page: "/",
+    resolved: false,
+    resolvedBy: null,
+    createdAt: 1,
+    updatedAt,
+    anchor: {
+      selector: "#target",
+      text: "",
+      x: 0.5,
+      y: 0.5,
+      width: 0,
+      height: 0,
+      pageX: 0,
+      pageY: 0,
+      viewportWidth: 1200,
+    },
+    comments: [
+      {
+        id: `${id}-comment`,
+        body,
+        author: api.user,
+        createdAt: 1,
+        editedAt: null,
+        reactions: {},
+      },
+    ],
+  });
+  localStorage.setItem(
+    `${api.sessionKey}:${JSON.stringify([config.repo, "local"])}:threads`,
+    JSON.stringify({
+      token: api.token,
+      threads: [thread("first", "First thread", 2), thread("second", "Second thread", 1)],
+    }),
+  );
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+  layoutBody();
+  controller = initComments(config);
+  controller.open();
+  const shadow = [...document.body.children].find(
+    (node) => node.shadowRoot,
+  )!.shadowRoot!;
+  const panel = shadow.querySelector<HTMLElement>(".panel")!;
+  const pane = () =>
+    [...panel.children].find((node) => node.classList.contains("thread-pane"));
+  const card = (text: string) =>
+    [...panel.querySelectorAll<HTMLButtonElement>(".thread-card")].find((node) =>
+      node.textContent?.includes(text),
+    )!;
+
+  card("First thread").click();
+  expect(panel.hasAttribute("data-thread")).toBe(true);
+  expect(pane()?.querySelector(".thread-title")?.textContent).toBe("First thread");
+  expect(pane()?.querySelector(".messages")?.textContent).toContain("First thread");
+  expect(pane()?.querySelector('[aria-label="Back to comments"]')).not.toBeNull();
+  expect(pane()?.querySelector("textarea")).not.toBeNull();
+  // The floating dialog layer is empty: the thread lives in the sidebar.
+  expect(shadow.querySelector(":scope > div > .dialog")).toBeNull();
+  expect(
+    shadow.querySelector('.pin.active[aria-label^="Comment 1:"]'),
+  ).not.toBeNull();
+
+  shadow.querySelector<HTMLButtonElement>('.pin[aria-label^="Comment 2:"]')!.click();
+  expect(pane()?.querySelector(".thread-title")?.textContent).toBe("Second thread");
+  expect(
+    shadow.querySelector('.pin.active[aria-label^="Comment 2:"]'),
+  ).not.toBeNull();
+
+  const reply = pane()!.querySelector("textarea")!;
+  reply.value = "Panel reply";
+  reply.dispatchEvent(new Event("input"));
+  reply.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+  await vi.waitFor(() =>
+    expect(pane()?.querySelector(".messages")?.textContent).toContain("Panel reply"),
+  );
+  expect(panel.hasAttribute("data-thread")).toBe(true);
+
+  pane()!.querySelector<HTMLButtonElement>('[aria-label="Back to comments"]')!.click();
+  expect(panel.hasAttribute("data-thread")).toBe(false);
+  expect(pane()).toBeUndefined();
+
+  card("First thread").click();
+  pane()!
+    .querySelector("textarea")!
+    .dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+  expect(panel.hasAttribute("data-thread")).toBe(false);
+  expect(panel.isConnected).toBe(true);
+  panel.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+  // Then the sidebar closes: removed, or parked inert as the floating drawer.
+  expect(!panel.isConnected || panel.parentElement!.inert).toBe(true);
+  localStorage.clear();
+});
+
+it("keeps the floating dialog while the sidebar is closed", async () => {
+  const { CommentsApi } = await import("../src/api");
+  const config = { ...options, onboarding: undefined };
+  const api = new CommentsApi(config);
+  api.save({
+    token: "closed-session",
+    user: { id: "reviewer", name: "Closed Reviewer", verified: true },
+  });
+  localStorage.setItem(
+    `${api.sessionKey}:${JSON.stringify([config.repo, "local"])}:threads`,
+    JSON.stringify({
+      token: api.token,
+      threads: [
+        {
+          id: "only",
+          page: "/",
+          resolved: false,
+          resolvedBy: null,
+          createdAt: 1,
+          updatedAt: 1,
+          anchor: { selector: "#target", text: "", x: 0.5, y: 0.5, width: 0, height: 0, pageX: 0, pageY: 0, viewportWidth: 1200 },
+          comments: [
+            { id: "c", body: "Floating thread", author: api.user, createdAt: 1, editedAt: null, reactions: {} },
+          ],
+        },
+      ],
+    }),
+  );
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+  layoutBody();
+  controller = initComments(config);
+  const shadow = [...document.body.children].find(
+    (node) => node.shadowRoot,
+  )!.shadowRoot!;
+  shadow.querySelector<HTMLButtonElement>(".pin")!.click();
+  const dialog = shadow.querySelector<HTMLElement>(".dialog")!;
+  expect(dialog.textContent).toContain("Floating thread");
+  expect(dialog.closest(".panel")).toBeNull();
+  expect(dialog.querySelector(".thread-back")).toBeNull();
+  localStorage.clear();
+});
