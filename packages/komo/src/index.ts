@@ -2430,6 +2430,19 @@ export function initComments(options: CommentsOptions): CommentsController {
         showInBar: false,
         onSelect: () => run(() => copyPrompt("all")),
       },
+      // Switch between the floating sidebar and Frame (page beside comments).
+      // Design mode manages its own Frame while active, so the switch waits.
+      ...(canFrame && !compactSidebar && !designActive
+        ? [
+            {
+              id: "layout",
+              label: sidebarMode === "edge" ? "Frame view" : "Floating view",
+              icon: glyph("expand"),
+              showInBar: false,
+              onSelect: () => setSidebarMode(sidebarMode === "edge" ? "background" : "edge"),
+            },
+          ]
+        : []),
       {
         id: "dismiss",
         label: shortcuts.restore
