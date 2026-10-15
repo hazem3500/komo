@@ -57,7 +57,7 @@ function change(line: string, kind: string): DesignChange | null {
   if (!match) return null;
   const [, label, before, after, note] = match;
   if (kind === "inline text") return { label: "Text", before: unquote(before), after: unquote(after), apply: { kind: "text", property: "text" } };
-  if (kind === "React prop") return { label, before, after, ...(note && note !== "custom value" ? { token: note } : {}) };
+  if (kind === "React prop") return { label, before: unquote(before), after: unquote(after), ...(note && note !== "custom value" ? { token: note } : {}) };
   return { label, before, after, apply: { kind: "style", property: label } };
 }
 
@@ -220,6 +220,11 @@ function revert(key: string, smooth = false) {
   settling.set(key, { finish, timer: setTimeout(() => settle(key), 480) });
 }
 
+/** Whether a comment's After state is currently applied to the page. */
+export function isPreviewing(key: string): boolean {
+  return applied.has(key) || settling.has(key);
+}
+
 /** Undo every live preview except those whose cards are still on screen. */
 export function resetDesignPreviews(keep: ReadonlySet<string> = new Set()) {
   for (const key of [...settling.keys()]) if (!keep.has(key)) settle(key);
@@ -241,6 +246,11 @@ const css = `
 .design-row { display: grid; grid-template-columns: minmax(64px, 30%) minmax(0, 1fr); gap: 10px; align-items: center; padding: 6px 12px; }
 .design-row + .design-row { border-top: 1px solid #ffffff06; }
 .design-row[hidden] { display: none; }
+.design-row-prose { grid-template-columns: 1fr; gap: 3px; }
+.design-diff { margin: 0; line-height: 1.5; color: #ddd; overflow-wrap: anywhere; }
+.design-diff del, .design-diff ins { border-radius: 3px; padding: 0 2px; }
+.design-diff del { color: #f6a19a; background: #f28b8224; text-decoration-color: #f6a19a99; }
+.design-diff ins { color: #b9e6ad; background: #8fd69424; text-decoration: none; }
 .design-prop { color: #9a9a9a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .design-values { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; color: #eee; }
 .design-before { color: #858585; text-decoration: line-through; text-decoration-color: #85858599; }
@@ -255,6 +265,37 @@ const css = `
 [data-compact] .design-card-head, [data-compact] .design-row, [data-compact] > .design-source { min-height: 0; padding: 4px 10px; }
 [data-compact]:hover > .design-source { color: #eee; text-decoration: underline; }
 `;
+
+/** Sentences read better as one line with the edit marked than as two columns. */
+function isProse(item: DesignChange): boolean {
+  if (item.apply?.kind === "text") return true;
+  // CSS values like "22px 24px" stay in two columns; only prop strings read as prose.
+  if (item.apply || item.token || COLOR.test(item.before) || COLOR.test(item.after)) return false;
+  return /\s/.test(item.before + item.after) || item.before.length + item.after.length > 32;
+}
+
+/** The shared text once, with the removed part struck and the added part highlighted. */
+function diff(before: string, after: string): HTMLElement {
+  let start = 0;
+  while (start < before.length && start < after.length && before[start] === after[start]) start++;
+  let end = 0;
+  while (end < before.length - start && end < after.length - start && before[before.length - 1 - end] === after[after.length - 1 - end]) end++;
+  // Widen to whole words so "page" → "pages" reads as a word swap, not a stray "s".
+  while (start > 0 && !/\s/.test(before[start - 1])) start--;
+  while (end > 0 && !/\s/.test(before[before.length - end])) end--;
+  const prefix = before.slice(0, start);
+  const suffix = before.slice(before.length - end);
+  const line = document.createElement("p");
+  line.className = "design-diff";
+  // Keep long unchanged context short around the edit.
+  line.append(prefix.length > 48 ? `…${prefix.slice(-40)}` : prefix);
+  const removed = before.slice(start, before.length - end);
+  const added = after.slice(start, after.length - end);
+  if (removed) line.append(Object.assign(document.createElement("del"), { textContent: removed }));
+  if (added) line.append(Object.assign(document.createElement("ins"), { textContent: added }));
+  line.append(suffix.length > 48 ? `${suffix.slice(0, 40)}…` : suffix);
+  return line;
+}
 
 function value(text: string, token?: string): HTMLElement {
   const wrap = document.createElement("span");
@@ -297,7 +338,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   // Compact cards show the first three rows across all sections and count the rest.
   let room = compact ? 3 : Infinity;
   let extra = 0;
-  const previewable = !compact && sections.some((section) => section.changes.some((item) => item.apply));
+  const previewable = sections.some((section) => section.changes.some((item) => item.apply));
   const toggles: HTMLElement[] = [];
   const sync = () => {
     const on = applied.has(options.key);
@@ -338,7 +379,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
       toggle.setAttribute("role", "group");
       toggle.setAttribute("aria-label", "Preview on page");
       for (const [index, label] of ["Before", "After"].entries()) {
-        const button = Object.assign(document.createElement("button"), { type: "button", textContent: label, title: `${label} · B` });
+        const button = Object.assign(document.createElement("button"), { type: "button", textContent: label, title: `${label} · ${index ? "→" : "←"} or B` });
         button.addEventListener("click", () => {
           const showAfter = index === 1;
           if (showAfter === applied.has(options.key)) return;
@@ -369,6 +410,12 @@ export function renderDesignComment(container: HTMLElement, body: string, option
       row.hidden = !compact && index >= visible && block.changes.length > visible + 1;
       const label = Object.assign(document.createElement("span"), { className: "design-prop", textContent: item.label });
       label.title = item.label;
+      if (isProse(item)) {
+        row.classList.add("design-row-prose");
+        row.append(label, diff(item.before, item.after));
+        rows.append(row);
+        return;
+      }
       const values = document.createElement("span");
       values.className = "design-values";
       const before = value(item.before);
@@ -402,12 +449,15 @@ function listenForShortcut() {
   if (shortcutBound) return;
   shortcutBound = true;
   document.addEventListener("keydown", (event) => {
-    if (event.key.toLowerCase() !== "b" || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
+    // B toggles; ← shows Before and → shows After.
+    const key = event.key === "ArrowLeft" ? 0 : event.key === "ArrowRight" ? 1 : event.key.toLowerCase() === "b" ? -1 : null;
+    if (key === null || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) return;
     const origin = event.composedPath()[0];
     if (origin instanceof HTMLElement && (origin.isContentEditable || origin.matches("input, textarea, select"))) return;
     // The most recently drawn switch still on screen belongs to the open comment.
     const toggle = [...visibleToggles].reverse().find((item) => item.isConnected);
-    const next = toggle?.querySelector<HTMLButtonElement>('button[aria-pressed="false"]');
+    const buttons = toggle?.querySelectorAll<HTMLButtonElement>("button");
+    const next = key === -1 ? toggle?.querySelector<HTMLButtonElement>('button[aria-pressed="false"]') : buttons?.[key];
     if (!next) return;
     event.preventDefault();
     next.click();

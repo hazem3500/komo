@@ -459,6 +459,15 @@ export function initComments(options: CommentsOptions): CommentsController {
       }
       return module;
     }));
+  /** Element a design change targets: its recorded selector, else the comment's anchor. */
+  const designTarget = (thread: Thread) => (selector?: string) => {
+    try {
+      if (selector) return document.querySelector(selector) ?? resolveAnchor(thread.anchor);
+    } catch {
+      /* Not a valid selector; fall back to the anchor. */
+    }
+    return resolveAnchor(thread.anchor);
+  };
   /** Short text for pins and previews; design proposals read as a summary, not raw text. */
   const commentText = (body: string) =>
     designProposal.test(body)
@@ -516,9 +525,14 @@ export function initComments(options: CommentsOptions): CommentsController {
   let previewThread: string | null = null;
   let previewMotion: Animation | null = null;
   let openingPreview: DOMRect | null = null;
+  let hoverPreviewKey = "";
   const hidePreview = (immediate = false) => {
     window.clearTimeout(previewTimer);
     if (pinPreview.hidden || (previewClosing && !immediate)) return;
+    // Undo a Before/After preview started from the hover card, keeping the open comment's.
+    designModule?.resetDesignPreviews(
+      new Set(threads.find((item) => item.id === selected)?.comments.map((item) => item.id)),
+    );
     previewClosing = true;
     previewMotion?.cancel();
     if (immediate || matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -2502,7 +2516,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     ]);
     if (snapshot === pinSnapshot) return;
     pinSnapshot = snapshot;
-    hidePreview();
+    // A hover card previewing After changes the page itself; keep it open.
+    if (!designModule?.isPreviewing(hoverPreviewKey)) hidePreview();
     const scrollOffsets = new Map(
       Array.from(pins.querySelectorAll<HTMLElement>(".pin-stack"), (stack) => [
         stack.dataset.stack,
@@ -2588,13 +2603,21 @@ export function initComments(options: CommentsOptions): CommentsController {
         if (design)
           void loadDesignComments().then(({ renderDesignComment }) =>
             renderDesignComment(summary, message.body, {
-              key: "",
-              resolve: () => null,
+              key: (hoverPreviewKey = `hover:${message.id}`),
+              resolve: designTarget(thread),
               note: (node, text) => (node.textContent = text),
               compact: true,
             }),
           );
-        open.append(authorRow(message), summary);
+        // The design card has its own Before/After buttons, so it sits beside the
+        // open button (buttons can't nest) and opens the comment on other clicks.
+        open.append(authorRow(message));
+        if (design) {
+          summary.classList.add("pin-preview-card");
+          summary.addEventListener("click", (event) => {
+            if (!(event.target as Element).closest(".design-toggle")) selectThread(thread);
+          });
+        } else open.append(summary);
         // A sibling of the open button: buttons can't nest.
         const resolve = button(
           thread.resolved ? "Reopen comment" : "Resolve comment",
@@ -2606,7 +2629,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           "check",
         );
         resolve.disabled = !canResolve();
-        pinPreview.append(open, resolve);
+        pinPreview.append(open, ...(design ? [summary] : []), resolve);
         pinPreview.hidden = false;
         const point = indicatorPoint(pin, rect);
         const right =
@@ -3614,14 +3637,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       const show = ({ renderDesignComment }: typeof import("./design-comment.js")) =>
         renderDesignComment(message, comment.body, {
           key: comment.id,
-          resolve(selector) {
-            try {
-              if (selector) return document.querySelector(selector) ?? resolveAnchor(thread.anchor);
-            } catch {
-              /* Not a valid selector; fall back to the comment's anchor. */
-            }
-            return resolveAnchor(thread.anchor);
-          },
+          resolve: designTarget(thread),
           note: appendMessageLinks,
         });
       if (designModule) show(designModule);
@@ -4051,11 +4067,12 @@ export function initComments(options: CommentsOptions): CommentsController {
     // Undo Before/After previews from comments that are no longer on screen.
     void designComments?.then(({ resetDesignPreviews }) =>
       resetDesignPreviews(
-        new Set(
-          account
+        new Set([
+          ...(account
             ? []
-            : threads.find((item) => item.id === selected)?.comments.map((item) => item.id),
-        ),
+            : (threads.find((item) => item.id === selected)?.comments.map((item) => item.id) ?? [])),
+          ...(pinPreview.hidden ? [] : [hoverPreviewKey]),
+        ]),
       ),
     );
     let disposePreviousAccentPicker = disposeAccentPicker;
@@ -4541,6 +4558,10 @@ export function initComments(options: CommentsOptions): CommentsController {
       for (const comment of thread.comments)
         messages.append(renderMessage(comment, thread));
       dialog.append(messages);
+      const fade = () =>
+        (messages.dataset.fade = `${messages.scrollTop > 2 ? "top" : ""} ${messages.scrollTop + messages.clientHeight < messages.scrollHeight - 2 ? "bottom" : ""}`);
+      messages.addEventListener("scroll", fade, { passive: true });
+      requestAnimationFrame(fade);
       if (tagsEnabled) {
         const slot = tagSlot(
           thread.tags ?? [],

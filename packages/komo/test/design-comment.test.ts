@@ -135,6 +135,36 @@ describe("design comments", () => {
     expect(container.querySelector('.design-toggle button[aria-pressed="true"]')!.textContent).toBe("Before");
   });
 
+  it("shows text edits as one sentence with the change marked", () => {
+    const container = document.createElement("div");
+    renderDesignComment(container, 'Proposed inline text change (preview only)\n- Text: "Inspect safe props in the flow of a real page." → "Inspect safe props in the flow of a real pages."', { key: "c5", resolve: () => null, note: () => {} });
+    const line = container.querySelector(".design-diff")!;
+    expect(line.querySelector("del")!.textContent).toBe("page.");
+    expect(line.querySelector("ins")!.textContent).toBe("pages.");
+    expect(line.textContent).toBe("Inspect safe props in the flow of a real page.pages.");
+    expect(container.querySelector(".design-row-prose .design-prop")!.textContent).toBe("Text");
+    // Prop strings lose their JSON quotes; short values keep the two-column layout.
+    const props = 'Proposed React prop changes (preview only)\nComponent: Headline\n- text: "Old" → "New" [custom value]';
+    renderDesignComment(container, props, { key: "c6", resolve: () => null, note: () => {} });
+    expect(container.querySelector(".design-before")!.textContent).toBe("Old");
+  });
+
+  it("shows Before with ← and After with →", () => {
+    document.body.innerHTML = '<h2 id="title" style="width: 462px">Old title</h2>';
+    const title = document.getElementById("title")!;
+    title.scrollIntoView = () => {};
+    const container = document.createElement("div");
+    document.body.append(container);
+    renderDesignComment(container, style, { key: "c7", resolve: () => title, note: () => {} });
+    const press = (key: string) => document.body.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    press("ArrowRight");
+    expect(title.style.width).toBe("308px");
+    press("ArrowRight");
+    expect(title.style.width).toBe("308px");
+    press("ArrowLeft");
+    expect(container.querySelector('.design-toggle button[aria-pressed="true"]')!.textContent).toBe("Before");
+  });
+
   it("collapses long change lists", () => {
     const long = ["Proposed style changes (preview only)", "Target: p", ...Array.from({ length: 7 }, (_, index) => `- prop-${index}: 0 → ${index + 1}`)].join("\n");
     const container = document.createElement("div");
@@ -146,14 +176,15 @@ describe("design comments", () => {
     expect(container.querySelectorAll(".design-row[hidden]")).toHaveLength(0);
   });
 
-  it("renders a compact, read-only card for hover previews", () => {
+  it("renders a compact card for hover previews", () => {
     const container = document.createElement("div");
     renderDesignComment(container, `${style}\n\n${tokens}\n\n${props}`, { key: "c5", resolve: () => null, note: () => {}, compact: true });
     // Three rows across sections, then a count of the rest.
     expect(container.querySelectorAll(".design-row")).toHaveLength(3);
     expect(container.querySelectorAll(".design-card")).toHaveLength(2);
     expect(container.querySelector(".design-source")!.textContent).toBe("+2 more");
-    // Nothing interactive: no Before/After switch or expand button.
-    expect(container.querySelector("button, .design-toggle")).toBeNull();
+    // Hover cards keep the Before/After switch, but never the expand button.
+    expect(container.querySelectorAll(".design-toggle")).toHaveLength(1);
+    expect(container.querySelector(".design-more")).toBeNull();
   });
 });
