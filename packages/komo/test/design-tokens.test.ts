@@ -118,7 +118,7 @@ describe("explicit design-token preview bridge", () => {
     Object.defineProperties(event, { clientX: { value: 20 }, clientY: { value: 20 }, button: { value: 0 } });
     card.dispatchEvent(event);
     await vi.waitFor(() => expect(shadow.querySelector(".design-theme-group")).not.toBeNull());
-    expect(shadow.querySelector('[aria-label="Style token for color"]')).not.toBeNull();
+    expect(shadow.querySelector('[aria-label="Style token for padding"]')).not.toBeNull();
     controller.destroy();
     cleanup();
   });
@@ -151,7 +151,7 @@ describe("explicit design-token preview bridge", () => {
   });
 
   it("keeps stylesheet token provenance through custom overrides and rebinding", async () => {
-    document.body.innerHTML = '<style>.card { padding: var(--space-card); }</style><main><article class="card"></article></main><div id="komo"></div>';
+    document.body.innerHTML = '<style>.card { display: flex; padding: var(--space-card); }</style><main><article class="card"></article></main><div id="komo"></div>';
     const root = document.documentElement;
     root.style.setProperty("--space-card", "28px");
     const cleanup = registerDesignTokenSource(root, tokens);
@@ -196,6 +196,50 @@ describe("explicit design-token preview bridge", () => {
     expect(card.style.getPropertyValue("padding")).toBe("");
     await vi.waitFor(() => expect(row.dataset.mode).toBe("connected"));
     expect(proposedDesignTokenChanges(card)).toBeUndefined();
+    controller.destroy();
+    cleanup();
+  });
+
+  it("binds a token inline as a chip on the field and detaches it back to the raw value", async () => {
+    document.body.innerHTML = '<main><article class="card">Card copy</article></main><div id="komo"></div>';
+    const root = document.documentElement;
+    root.style.setProperty("--brand", "#224466");
+    const cleanup = registerDesignTokenSource(root, tokens);
+    const host = document.querySelector<HTMLElement>("#komo")!;
+    const card = document.querySelector<HTMLElement>(".card")!;
+    card.style.backgroundColor = "#ff0000";
+    const shadow = host.attachShadow({ mode: "open" });
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    const controller = createDesignMode({ root: shadow, host, targetAt: () => card, onComment: vi.fn(), onExit: vi.fn() });
+    controller.setActive(true);
+    const event = new Event("pointerdown", { bubbles: true, cancelable: true, composed: true });
+    Object.defineProperties(event, { clientX: { value: 20 }, clientY: { value: 20 }, button: { value: 0 } });
+    card.dispatchEvent(event);
+    const chooser = await vi.waitFor(() => {
+      const found = shadow.querySelector<HTMLSelectElement>('[data-field-property="background-color"] [aria-label="Style token for background-color"]');
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    const field = chooser.closest<HTMLElement>(".design-field")!;
+    // Unbound: no chip text and no "not connected" caption.
+    expect(field.dataset.tokenMode).toBe("custom");
+    expect(field.querySelector(".design-token-chip")?.textContent).toBe("");
+    expect(field.textContent).not.toContain("Not connected");
+    expect(field.querySelector('[data-property="background-color"]')).not.toBeNull();
+
+    chooser.value = "color.brand";
+    chooser.dispatchEvent(new Event("change"));
+    expect(card.style.backgroundColor).toBe("var(--brand)");
+    expect(field.dataset.tokenMode).toBe("token");
+    expect(field.querySelector(".design-token-chip")?.textContent).toBe("color.brand");
+    expect(shadow.querySelector(".design-inspector__count")?.textContent).toBe("1 change");
+
+    field.querySelector<HTMLButtonElement>('[aria-label="Detach token from background-color"]')!.click();
+    await vi.waitFor(() => expect(field.dataset.tokenMode).toBe("custom"));
+    expect(card.style.backgroundColor).toBe("rgb(34, 68, 102)");
+    expect(chooser.value).toBe("custom");
+    expect(field.querySelector(".design-token-chip")?.textContent).toBe("");
     controller.destroy();
     cleanup();
   });

@@ -21,6 +21,9 @@ const outputs = result.metafile.outputs;
 const inlineTextEditing = (await readdir("dist"))
   .filter((file) => /^inline-text-editor.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const designPanel = (await readdir("dist"))
+  .filter((file) => /^design-panel.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const entry = Object.keys(outputs).find(
   (path) => outputs[path].entryPoint === "dist/index.js"
 );
@@ -54,6 +57,7 @@ const report = {
   coreFeatures: await sizes(Object.keys(outputs)),
   optionalDesignMode: await sizes(new Set(["dist/design-mode.js"])),
   optionalInlineTextEditing: await sizes(new Set(inlineTextEditing)),
+  optionalDesignPanel: await sizes(new Set(designPanel)),
   package: {
     tarball: pack.size,
     unpacked: pack.unpackedSize,
@@ -77,3 +81,8 @@ if (report.optionalDesignMode.gzip > 7_100)
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 if (report.optionalInlineTextEditing.gzip > 3_000)
   throw new Error("komo's on-demand inline text editor chunk exceeds its gzip budget.");
+// Design mode's property controls load as their own chunk when Design mode opens,
+// so the Figma-style panel does not grow the Design mode entry (7,007 -> 5,677 gzip).
+// New budget: 4,262 measured for scrubbing, inline token chips and section rules.
+if (report.optionalDesignPanel.gzip > 4_300)
+  throw new Error("komo's design panel chunk exceeds its gzip budget.");
