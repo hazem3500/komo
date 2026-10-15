@@ -49,7 +49,10 @@ const css = `
 .tag-row .tag-option[aria-selected="true"] { background: #ffffff12; color: #fff; }
 .tag-row .tag-option-hint, .tag-row .tag-option-empty { color: #858585; }
 .tag-row .tag-option-empty { padding: 5px 8px; }
-.new-comment-composer .draft-body .tag-slot { grid-row: 2; grid-column: 2; align-self: center; min-width: 0; }
+/* The tag row grows when the picker opens, instead of spilling over the text above it. */
+.new-comment-composer .draft-body:has(.tag-slot) { grid-template-rows: minmax(28px, auto) minmax(28px, auto); }
+.new-comment-composer .draft-body .tag-slot { grid-row: 2; grid-column: 2; align-self: start; min-width: 0; padding-top: 2px; }
+.new-comment-composer .draft-body:has(.tag-slot) .send { align-self: start; }
 .new-comment-composer .draft-body:not(:has(.avatar)) .tag-slot { grid-column: 1; }
 /* Line up with message text: 16px gutter plus the 24px avatar and 8px gap. */
 .thread-tags { padding: 0 16px 12px 48px; margin-top: -6px; }
