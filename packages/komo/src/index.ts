@@ -3807,7 +3807,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     input.placeholder = thread ? "Reply…" : proposal ? "Add a note…" : "Add a comment…";
     input.rows = 1;
     input.maxLength = 4000;
-    input.required = true;
+    // With a Design mode proposal attached, the note is optional.
+    input.required = !!thread || !draftProposal;
     input.value = thread ? (replies.get(thread.id) ?? "") : draftText;
     input.setAttribute("aria-label", thread ? "Reply" : "Comment");
     input.dataset.focusKey = "body";
