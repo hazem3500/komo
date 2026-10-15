@@ -23,6 +23,22 @@ beforeEach(() => {
 });
 
 describe("precise anchors", () => {
+  it("resolves controls inside a body-level portal outside the app root", () => {
+    document.body.innerHTML =
+      '<div id="root"><button>Open</button></div><div data-komo></div><div role="dialog"><h2>Edit</h2><button>Save</button></div>';
+    const save = document.querySelector('[role="dialog"] button')!;
+    const anchor = capture(save);
+    expect(resolveAnchor(anchor)).toBe(save);
+    // Reopening the dialog renders a fresh portal at the end of body.
+    document.querySelector('[role="dialog"]')!.remove();
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<div role="dialog"><h2>Edit</h2><button>Save</button></div>',
+    );
+    expect(resolveAnchor(anchor)).toBe(
+      document.querySelector('[role="dialog"] button'),
+    );
+  });
   it("recovers a repeated control within its stable scope after reordering cards", () => {
     document.body.innerHTML =
       '<section id="cards"><article><h2>Alpha</h2><button>Edit</button></article><article><h2>Beta</h2><button>Edit</button></article></section>';
