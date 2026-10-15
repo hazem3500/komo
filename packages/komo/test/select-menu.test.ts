@@ -42,13 +42,39 @@ function mount({ grouped = false, disabled = false } = {}) {
     select.dispatchEvent(event);
     return event;
   };
+  const pointer = (type: string, target: Element, init: PointerEventInit = {}) => {
+    const event = new PointerEvent(type, { bubbles: true, composed: true, cancelable: true, button: 0, pointerId: 1, pointerType: "mouse", ...init });
+    target.dispatchEvent(event);
+    return event;
+  };
+  // A mouse press: pointerdown, then its compatibility mousedown.
   const down = (target: Element) => {
+    pointer("pointerdown", target);
     const event = new MouseEvent("mousedown", { bubbles: true, composed: true, cancelable: true, button: 0 });
     target.dispatchEvent(event);
     return event;
   };
+  // A finger or pen: pointerdown, an optional drag, pointerup, touchend, then the tap's click.
+  const tap = (target: Element, { pointerType = "touch", dx = 0, dy = 0 } = {}) => {
+    const init = { pointerType, pointerId: 7, clientX: 20, clientY: 20 };
+    const events = [pointer("pointerdown", target, init)];
+    if (dx || dy) events.push(pointer("pointermove", target, { ...init, clientX: 20 + dx, clientY: 20 + dy }));
+    events.push(pointer("pointerup", target, { ...init, clientX: 20 + dx, clientY: 20 + dy }));
+    if (pointerType === "touch") {
+      const end = new Event("touchend", { bubbles: true, composed: true, cancelable: true });
+      target.dispatchEvent(end);
+      events.push(end as PointerEvent);
+    }
+    // A cancelled touchend means the browser sends no click.
+    if (!events.some((event) => event.type === "touchend" && event.defaultPrevented)) {
+      const click = new MouseEvent("click", { bubbles: true, composed: true, cancelable: true });
+      target.dispatchEvent(click);
+      events.push(click as PointerEvent);
+    }
+    return events;
+  };
   const active = () => root.getElementById(select.getAttribute("aria-activedescendant") ?? "")?.textContent;
-  return { root, container, select, list, press, down, active, changes, inputs };
+  return { root, container, select, list, press, pointer, down, tap, active, changes, inputs };
 }
 
 afterEach(() => {
@@ -58,8 +84,12 @@ afterEach(() => {
 
 describe("select menu", () => {
   it("opens a komo listbox from the select instead of the system popup", () => {
-    const { root, select, list, down, active } = mount();
-    const event = down(select);
+    const { root, select, list, pointer, down, active } = mount();
+    // A mouse opens on press, and neither its pointerdown nor its mousedown reaches the system popup.
+    expect(pointer("pointerdown", select).defaultPrevented).toBe(true);
+    expect(list()).not.toBeNull();
+    const event = new MouseEvent("mousedown", { bubbles: true, composed: true, cancelable: true, button: 0 });
+    select.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
     expect(root.activeElement).toBe(select);
     expect(list()).not.toBeNull();
@@ -171,5 +201,86 @@ describe("select menu", () => {
     attach(container);
     expect(select.getAttribute("aria-expanded")).toBe("false");
     expect(root.querySelector("[role=listbox]")).toBeNull();
+  });
+
+  it("opens on a touch or pen tap without the system picker", () => {
+    for (const pointerType of ["touch", "pen"]) {
+      const { root, select, list, tap } = mount();
+      const events = tap(select, { pointerType });
+      // Every event that could reach the system picker is cancelled.
+      expect(events.filter((event) => event.type !== "pointerup").every((event) => event.defaultPrevented)).toBe(true);
+      expect(list()).not.toBeNull();
+      // Focusing the select from a tap can raise the iOS picker, so a tap leaves focus alone.
+      expect(root.activeElement).not.toBe(select);
+      expect(select.getAttribute("aria-expanded")).toBe("true");
+      // A second tap on the trigger closes the menu.
+      tap(select, { pointerType });
+      expect(list()).toBeNull();
+    }
+  });
+
+  it("does not open when a touch on the select drags or is cancelled", () => {
+    const { select, list, pointer, tap } = mount();
+    expect(tap(select, { dy: 30 })[0].defaultPrevented).toBe(true);
+    expect(list()).toBeNull();
+    pointer("pointerdown", select, { pointerType: "touch", pointerId: 8 });
+    pointer("pointercancel", select, { pointerType: "touch", pointerId: 8 });
+    pointer("pointerup", select, { pointerType: "touch", pointerId: 9 });
+    expect(list()).toBeNull();
+  });
+
+  it("picks an option on a tap but not after scrolling the list by touch", () => {
+    const { select, list, pointer, tap, changes } = mount();
+    tap(select);
+    const options = () => [...list()!.querySelectorAll<HTMLElement>("[role=option]")];
+    // Small jitter is still a tap.
+    tap(options()[0], { dx: 4 });
+    expect(select.value).toBe("calm");
+    tap(select);
+    // A drag past the slop scrolls instead, even if the browser still sends a click.
+    tap(options()[2], { dy: 40 });
+    expect(list()).not.toBeNull();
+    expect(select.value).toBe("calm");
+    // A cancelled pointer (the browser took over the scroll) picks nothing either.
+    pointer("pointerdown", options()[2], { pointerType: "touch", pointerId: 3 });
+    pointer("pointercancel", options()[2], { pointerType: "touch", pointerId: 3 });
+    options()[2].click();
+    expect(select.value).toBe("calm");
+    expect(changes).toEqual(["calm"]);
+    // A pen tap picks normally afterwards.
+    tap(options()[2], { pointerType: "pen" });
+    expect(select.value).toBe("quiet");
+  });
+
+  it("gives options finger-sized rows on coarse pointers", () => {
+    const { root, down, select } = mount();
+    down(select);
+    const css = [...root.querySelectorAll("style")].map((style) => style.textContent).join("");
+    const coarse = css.match(/@media \(pointer:coarse\)\{(.*?\})\}/)?.[1] ?? "";
+    const height = Number(coarse.match(/\[role=option\]\{min-height:(\d+)px/)?.[1]);
+    expect(height).toBeGreaterThanOrEqual(36);
+    expect(height).toBeLessThanOrEqual(44);
+  });
+
+  it("stops only the keys it handles while open, so komo's shortcuts see the rest", () => {
+    const { select, list, press } = mount();
+    select.focus();
+    press("Enter");
+    const reached: string[] = [];
+    const page = (event: KeyboardEvent) => reached.push(event.key);
+    window.addEventListener("keydown", page);
+    // Letters are type-ahead, as in a native select, and arrows move: both stay in the menu.
+    for (const key of ["d", "ArrowDown", "Home"]) expect(press(key).defaultPrevented).toBe(true);
+    // Modifier chords and keys the menu ignores pass through untouched.
+    for (const [key, init] of [["z", { metaKey: true }], ["k", { ctrlKey: true }], ["F2", {}], ["Shift", { shiftKey: true }]] as const)
+      expect(press(key, init).defaultPrevented).toBe(false);
+    expect(list()).not.toBeNull();
+    expect(press("Escape").defaultPrevented).toBe(true);
+    expect(list()).toBeNull();
+    // With the menu shut, Escape and letters belong to the page again.
+    press("Escape");
+    press("d");
+    window.removeEventListener("keydown", page);
+    expect(reached).toEqual(["z", "k", "F2", "Shift", "Escape", "d"]);
   });
 });
