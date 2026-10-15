@@ -612,3 +612,89 @@ it("picks body-level portals outside pageRoot unless pickRoots narrows the bound
   expect(pick({ pickRoots: () => [] })).toBe(false);
   expect(pick({ pickRoots: () => [portal] })).toBe(true);
 });
+
+it("keeps komo's typing, pointer and focus events away from page listeners", () => {
+  const mount = (extra: Partial<CommentsOptions> = {}) => {
+    controller?.destroy();
+    controller = initComments({ ...options, onboarding: undefined, ...extra });
+    const host = [...document.body.children].find((node) => node.shadowRoot)!;
+    const field = document.createElement("textarea");
+    const control = document.createElement("button");
+    host.shadowRoot!.append(field, control);
+    return { host, root: host.shadowRoot!, field, control };
+  };
+  const seen: string[] = [];
+  const page = (event: Event) =>
+    seen.push(`${event.type}:${(event.target as Element).tagName}`);
+  const types = ["keydown", "keyup", "pointerdown", "click", "wheel", "focusin", "focusout"];
+  const listen = () => {
+    for (const type of types) document.addEventListener(type, page);
+    return () => types.forEach((type) => document.removeEventListener(type, page));
+  };
+  const fire = (target: EventTarget, type: string, init: object = {}) =>
+    target.dispatchEvent(
+      new (type.startsWith("key") ? KeyboardEvent : type.startsWith("focus") ? FocusEvent : MouseEvent)(
+        type,
+        { bubbles: true, composed: true, ...init },
+      ),
+    );
+
+  let { host, root, field, control } = mount();
+  const stop = listen();
+  fire(field, "keydown", { key: "c" });
+  fire(field, "keyup", { key: "c" });
+  for (const type of ["pointerdown", "click", "wheel", "focusin", "focusout"])
+    fire(control, type);
+  expect(seen).toEqual([]);
+  // Keys on komo's buttons still reach page shortcuts.
+  fire(control, "keydown", { key: "k" });
+  expect(seen).toEqual(["keydown:DIV"]);
+  // Page events are untouched.
+  const outside = document.createElement("input");
+  document.body.append(outside);
+  fire(outside, "pointerdown");
+  fire(outside, "keydown", { key: "x" });
+  expect(seen.slice(1)).toEqual(["pointerdown:INPUT", "keydown:INPUT"]);
+  // Moving focus into komo doesn't reach later focus-trap listeners.
+  seen.length = 0;
+  fire(outside, "focusout", { relatedTarget: host });
+  fire(outside, "focusout", { relatedTarget: null });
+  expect(seen).toEqual(["focusout:INPUT"]);
+  stop();
+
+  // komo still handles its own shortcuts: Escape in a komo field leaves comment mode.
+  fire(document, "keydown", { key: "c" });
+  const catcher = root.querySelector<HTMLElement>(".catch")!;
+  expect(catcher.hidden).toBe(false);
+  fire(field, "keydown", { key: "Escape" });
+  expect(catcher.hidden).toBe(true);
+
+  ({ host, field, control } = mount({ isolateEvents: false }));
+  seen.length = 0;
+  const stopAgain = listen();
+  fire(field, "keydown", { key: "c" });
+  fire(control, "pointerdown");
+  stopAgain();
+  expect(seen).toEqual(["keydown:DIV", "pointerdown:DIV"]);
+});
+
+it("closes komo menus on pointerdown elsewhere in komo despite isolation", async () => {
+  const { onPage } = await import("../src/dom");
+  controller = initComments({ ...options, onboarding: undefined });
+  const root = [...document.body.children].find((node) => node.shadowRoot)!
+    .shadowRoot!;
+  const menu = document.createElement("div");
+  const elsewhere = document.createElement("button");
+  root.append(menu, elsewhere);
+  const close = vi.fn();
+  const listening = new AbortController();
+  onPage(menu, "pointerdown", close, { signal: listening.signal });
+  const down = (target: EventTarget) =>
+    target.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, composed: true }));
+  down(elsewhere);
+  down(document.body);
+  expect(close).toHaveBeenCalledTimes(2);
+  listening.abort();
+  down(elsewhere);
+  expect(close).toHaveBeenCalledTimes(2);
+});

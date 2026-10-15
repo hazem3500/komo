@@ -1,5 +1,5 @@
 import { isEmoji } from "./emoji.js";
-import { button, el } from "./dom.js";
+import { button, el, onPage } from "./dom.js";
 
 import { emojiHistory, rankedEmoji } from "./emoji-history.js";
 
@@ -160,7 +160,8 @@ export function reactionPicker(
     items.find((item) => item.getAttribute("aria-checked") === "true") ??
     items[0]
   )?.focus({ preventScroll: true });
-  document.addEventListener(
+  onPage(
+    menu,
     "pointerdown",
     (event) => {
       if (

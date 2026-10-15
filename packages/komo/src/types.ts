@@ -129,6 +129,12 @@ export interface CommentsOptions {
    * picking to pageRoot. Called on every pick; keep it cheap.
    */
   pickRoots?: () => Element[];
+  /**
+   * Stop komo's own pointer, focus, wheel and typing events at its host
+   * element, so page shortcuts and open modals don't react to komo's UI.
+   * Defaults to true; set false if the host needs to observe them.
+   */
+  isolateEvents?: boolean;
   /** Resolve an anchor to a repository-relative source path. */
   source?: (element: Element) => string | undefined;
   /** Defaults to GitHub's source viewer. */
