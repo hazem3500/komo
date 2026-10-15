@@ -619,6 +619,7 @@ export function createDesignMode(options: DesignModeOptions) {
       (property) => originals.get(element)?.get(property)?.computed,
       reactPanelModule?.tokenBoundProperties(element),
       [textTools?.proposal(element), reactPanelModule?.proposedDesignChanges(element)],
+      reactPanelModule?.designContext(element, options.design),
     )), () => { status.textContent = "Comment unavailable · try again"; });
   });
   // Editing anything, Undo, Reset or Comment first returns to After.

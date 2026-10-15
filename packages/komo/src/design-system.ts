@@ -129,7 +129,11 @@ export interface DesignSystem {
 
 /**
  * Machine-readable record of a Design mode proposal, versioned so the CLI and
- * agents can apply it. Comments carry it alongside the human-readable text.
+ * agents can apply it. Comments carry it as human-readable text: besides the
+ * changes, the first proposal section names its context in lines such as
+ * "Theme: mode=dark, density=compact", "Component: PromoCard (src/card.tsx:19)"
+ * and 'Props: tone="calm", compact=false', which fill `theme` and
+ * `target.component`. Comments without those lines still parse.
  */
 export interface DesignEdit {
   komo: "design-edit";
@@ -155,8 +159,13 @@ export type DesignEditChange =
   | { kind: "token"; property: string; from: TokenUsage; to: TokenRef; apply?: string }
   /** Change a shared token's value for everyone using it. */
   | { kind: "token-value"; path: string; from: string; to: string }
-  /** Change a component prop (from `useKomoInspectable` or the component adapter). */
-  | { kind: "prop"; name: string; from: ComponentPropValue | undefined; to: ComponentPropValue | undefined }
+  /**
+   * Change a component prop (from `useKomoInspectable` or the component adapter).
+   * `token` is the style token path the new value binds, e.g. "color.brand"
+   * for var(--color-brand); absent for custom values. Optional, so v1 edits
+   * without it stay valid.
+   */
+  | { kind: "prop"; name: string; from: ComponentPropValue | undefined; to: ComponentPropValue | undefined; token?: string }
   /** Change text content. */
   | { kind: "text"; from: string; to: string }
   /** Raw CSS fallback when no token or prop applies. */

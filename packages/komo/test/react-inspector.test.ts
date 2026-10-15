@@ -125,6 +125,8 @@ describe("React props inspector bridge", () => {
     expect(comments[0].element).toBe(card);
     expect(comments[0].proposal).toContain('title: "A preview title" → "A revised preview title"');
     expect(comments[0].proposal).toContain("Source: examples/react-props/src/card.tsx:15");
+    // The component's props as the page had them, for the CLI's target.component.
+    expect(comments[0].proposal).toContain('\nProps: title="A preview title", tone="calm", compact=false, visits=3\n');
   });
 
   it("supports undo and reset through the React state callback", async () => {
