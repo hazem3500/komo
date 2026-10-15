@@ -1490,6 +1490,9 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (compactSidebar) sidebarMode = "edge";
     else setSidebarMode(designActive ? "background" : "edge", true);
   }
+  // Frame view lives on the open sidebar. Commenting keeps it; the floating
+  // sidebar (or one Design mode framed for a moment) still steps aside.
+  const inFrame = () => expanded && !edgeSidebar && !compactSidebar && !designFrame;
   function setMode(value: boolean) {
     if (options.onboarding) return;
     if (designActive) {
@@ -1498,7 +1501,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       syncDesignFrame();
     }
     commentMode = value;
-    if (expanded) toggleExpanded(false);
+    if (expanded && !inFrame()) toggleExpanded(false);
     const restore = value ? (parkedDraft ?? recoveredDrafts.shift()) : null;
     if (restore) {
       draft = restore.anchor;
@@ -2139,6 +2142,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       clearTimeout(accountOpenTimer);
       accountOpenTimer = 0;
       account = false;
+      hoverCard = focusCard = "";
+      setHot();
     }
     if (compactSidebar) {
       cancelAnimationFrame(mobileEnterFrame);
@@ -2627,7 +2632,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       const pin = button(
         `Comment ${number}: ${commentText(thread.comments[0]?.body ?? "").slice(0, 100)}`,
         () => selectThread(thread),
-        `pin${thread.id === selected ? " active" : ""}${thread.resolved ? " resolved" : ""}${rect.attached ? "" : " detached"}`,
+        `pin${thread.id === selected ? " active" : ""}${thread.id === hotCard ? " hot" : ""}${thread.resolved ? " resolved" : ""}${rect.attached ? "" : " detached"}`,
       );
       pin.textContent = "";
       // The hover card replaces the native tooltip; aria-label stays.
@@ -4125,8 +4130,11 @@ export function initComments(options: CommentsOptions): CommentsController {
         !account &&
         selected === optimistic.id(item.id)
       ) {
-        selected = null;
-        if (expanded) toggleExpanded(false);
+        // In Frame the new thread stays open in the sidebar, ready for the next click.
+        if (!inFrame()) {
+          selected = null;
+          if (expanded) toggleExpanded(false);
+        }
         mode = true;
         render();
       }
@@ -4251,9 +4259,10 @@ export function initComments(options: CommentsOptions): CommentsController {
             easing: "cubic-bezier(.22,1,.36,1)",
           });
         }
-      // Keep keyboard focus in the sidebar across the swap.
+      // Keep keyboard focus in the sidebar across the swap, unless a new
+      // comment's composer is taking it.
       const card = `[data-thread="${CSS.escape(dialogKey ?? "")}"] .thread-card`;
-      if (panel ? focusBack : visibleFocus && (list.contains(active!) || !active!.isConnected))
+      if (panel ? focusBack : !draft && visibleFocus && (list.contains(active!) || !active!.isConnected))
         queueMicrotask(() =>
           (panel ? dialogs : list).querySelector<HTMLElement>(panel ? ".thread-back" : card)?.focus({ preventScroll: true }),
         );
@@ -4882,6 +4891,20 @@ export function initComments(options: CommentsOptions): CommentsController {
   let outlineShown = false,
     outlineHover = false,
     outlineTimer = 0;
+  // A list card that is pointed at or focused outlines its target too, and
+  // raises its pin. hotCard is the one shown.
+  let hotCard = "",
+    hoverCard = "",
+    focusCard = "",
+    hotTimer = 0;
+  function setHot(id = hoverCard || focusCard) {
+    clearTimeout(hotTimer);
+    if (id === hotCard) return;
+    hotCard = id;
+    for (const pin of pins.querySelectorAll<HTMLElement>(".pin"))
+      pin.classList.toggle("hot", pin.dataset.thread === id);
+    updateHover();
+  }
   function showOutline(on: boolean, ms = 0) {
     clearTimeout(outlineTimer);
     outlineShown = on;
@@ -5089,8 +5112,8 @@ export function initComments(options: CommentsOptions): CommentsController {
             onComment(element, proposal) {
               designReturnToComments = false;
               // The comment list beside the composer is a distraction, and the
-              // compact sheet would cover it, as in setMode().
-              if (expanded) toggleExpanded(false);
+              // compact sheet would cover it, as in setMode(). Frame view stays.
+              if (expanded && !inFrame()) toggleExpanded(false);
               setDesignMode(false);
               draftText = "";
               draftProposal = proposal ?? "";
@@ -5266,18 +5289,24 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   function updateHover() {
     // A thread open in the sidebar outlines what it discusses; its pin steps back.
-    const thread = !mode && threadPanel() && threads.find((t) => t.id === selected);
+    // A hovered list card outlines its target the same way.
+    const docked = !mode && !!threadPanel();
+    const id = docked
+      ? selected
+      : expanded && !draft && !threadPanel() &&
+          sidebar.querySelector(`.list [data-thread="${CSS.escape(hotCard)}"]`) && hotCard;
+    const thread = id && threads.find((t) => t.id === id && t.page === page());
     const spot = thread && locateAnchor(thread.anchor);
     const target = spot && spot.attached && (spot.width && spot.height
       ? { left: spot.x, top: spot.y, right: spot.x + spot.width, bottom: spot.y + spot.height }
       : spot.component);
     hoverOutline.toggleAttribute("data-thread", !!target);
-    pins.toggleAttribute("data-quiet", !!target);
-    pins.toggleAttribute("data-outlined", !!target && outlineShown);
+    pins.toggleAttribute("data-quiet", !!target && docked);
+    pins.toggleAttribute("data-outlined", !!target && docked && outlineShown);
     if (target) {
       const element = anchorElement(thread.anchor);
       outline(target, element, framed && !!element && surface.contains(element));
-      if (!outlineShown) hoverOutline.style.opacity = "0";
+      if (docked && !outlineShown) hoverOutline.style.opacity = "0";
       return;
     }
     if (
@@ -5432,6 +5461,13 @@ export function initComments(options: CommentsOptions): CommentsController {
     draftBeside = beside;
     hidePreview();
     draft = captureAnchor(element, start, end, options.source);
+    if (framed) {
+      // Store document coordinates, not the scaled frame's.
+      const frame = surface.getBoundingClientRect(),
+        scale = appliedScale * htmlZoom();
+      draft.pageX = (Math.min(start.x, end.x) - frame.left) / scale + surface.scrollLeft;
+      draft.pageY = (Math.min(start.y, end.y) - frame.top) / scale + surface.scrollTop;
+    }
     hoverTarget = element;
     mode = false;
     selected = null;
@@ -5439,7 +5475,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     editing = null;
     error = "";
     render();
-    shadow
+    // A thread pane sliding out of the sidebar still holds a reply box.
+    dialogs
       .querySelector<HTMLTextAreaElement>('[data-focus-key="body"]')
       ?.focus({ preventScroll: true });
     positionDialog();
@@ -5639,6 +5676,8 @@ export function initComments(options: CommentsOptions): CommentsController {
         !path.includes(dialogs) &&
         !path.includes(toolbar) &&
         !path.includes(pins) &&
+        // A Frame thread left open after posting yields to the next comment.
+        !(mode && path.includes(catcher)) &&
         !reviewControl
       ) {
         if (draft && draftText.trim())
@@ -5735,6 +5774,21 @@ export function initComments(options: CommentsOptions): CommentsController {
       signal: abort.signal,
     },
   );
+  const cardAt = (event: Event) =>
+    (event.target as Element).closest?.<HTMLElement>(".list .thread-item")?.dataset.thread ?? "";
+  // Moving between cards crosses gaps; settle briefly instead of flickering.
+  const settleHot = () => {
+    clearTimeout(hotTimer);
+    hotTimer = window.setTimeout(() => setHot(), 80);
+  };
+  for (const [type, handle] of [
+    ["pointerover", (event: Event) => (hoverCard = cardAt(event)) ? setHot() : settleHot()],
+    ["pointerleave", () => { hoverCard = ""; settleHot(); }],
+    ["focusin", (event: Event) => { focusCard = cardAt(event); setHot(); }],
+    ["focusout", () => { focusCard = ""; settleHot(); }],
+    ["scroll", () => { hoverCard = focusCard = ""; setHot(); }],
+  ] as const)
+    sidebar.addEventListener(type, handle, { capture: true, signal: abort.signal });
   // Frame mode: a click on the framed site closes the sidebar, like a scrim.
   // Armed on pointerdown so a press that only dismisses a draft or selection
   // keeps the sidebar open; click (not pointerdown) so scrolling never closes.
@@ -5893,7 +5947,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           y: rect.top + rect.height / 2,
         });
       };
-      if (expanded) {
+      if (expanded && !inFrame()) {
         toggleExpanded(false);
         if (pageMotion && pageTransitioning)
           void pageMotion.finished.then(compose);
