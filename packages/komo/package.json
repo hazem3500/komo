@@ -27,7 +27,8 @@
     "server/node-webhooks.ts",
     "server/import-project.ts",
     "server/digest.ts",
-    "server/project-sites.ts"
+    "server/project-sites.ts",
+    "server/iap.ts"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -44,6 +45,14 @@
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js"
+    },
+    "./adapters/tailwind": {
+      "types": "./dist/adapters/tailwind.d.ts",
+      "import": "./dist/adapters/tailwind.js"
+    },
+    "./adapters/class-theme": {
+      "types": "./dist/adapters/class-theme.d.ts",
+      "import": "./dist/adapters/class-theme.js"
     },
     "./node": {
       "import": "./dist/node.mjs"

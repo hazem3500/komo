@@ -60,6 +60,8 @@ const report = {
   optionalDesignMode: await sizes(new Set(["dist/design-mode.js"])),
   optionalInlineTextEditing: await sizes(new Set(inlineTextEditing)),
   optionalDesignPanel: await sizes(new Set(designPanel)),
+  adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
+  adapterClassTheme: await sizes(new Set(["dist/adapters/class-theme.js"])),
   package: {
     tarball: pack.size,
     unpacked: pack.unpackedSize,
@@ -108,3 +110,10 @@ if (report.optionalInlineTextEditing.gzip > 3_100)
 // New budget: 4,262 measured for scrubbing, inline token chips and section rules.
 if (report.optionalDesignPanel.gzip > 4_300)
   throw new Error("komo's design panel chunk exceeds its gzip budget.");
+// Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
+// imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
+// class swapping, spacing helper and theme switching, with a little headroom.
+if (report.adapterTailwind.gzip > 2_500)
+  throw new Error("komo's Tailwind token adapter exceeds its gzip budget.");
+if (report.adapterClassTheme.gzip > 1_000)
+  throw new Error("komo's class theme adapter exceeds its gzip budget.");
