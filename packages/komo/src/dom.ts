@@ -2,6 +2,9 @@ import { applyAccent } from "./accent.js";
 import type { Identity } from "./types.js";
 import { iconMarkup as icons } from "./icon-markup.js";
 export { icons };
+/** Read on each use: the preference can change while the page is open. */
+export const reducedMotion = () =>
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
 export const editable = (node?: EventTarget) =>
   node instanceof HTMLElement &&
   (node.matches("input,textarea,select") || node.isContentEditable);

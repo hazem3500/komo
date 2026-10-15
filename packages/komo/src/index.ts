@@ -71,6 +71,7 @@ import {
   isolated,
   isolatedEvents,
   onPage,
+  reducedMotion,
 } from "./dom.js";
 import { matchesShortcut, resolveShortcuts, withShortcut } from "./shortcuts.js";
 import { styles } from "./styles.js";
@@ -540,7 +541,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
     previewClosing = true;
     previewMotion?.cancel();
-    if (immediate || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (immediate || reducedMotion()) {
       pinPreview.hidden = true;
       previewThread = null;
       return;
@@ -856,7 +857,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     scalePage();
     render();
     switchingSidebar = false;
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (reducedMotion()) return;
     nodes().forEach((node, index) => {
       const from = before[index];
       if (!node?.isConnected || !from?.width) return;
@@ -1191,7 +1192,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       activeNotice = null;
       clearTimeout(toastTimer);
     }
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (reducedMotion()) {
       toast.remove();
       return;
     }
@@ -1245,7 +1246,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     shadow.append(toast);
     positionNotice();
     followNotices();
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches)
+    if (!reducedMotion())
       toast.animate(
         [
           {
@@ -1323,7 +1324,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (
         previous &&
         !toast.dataset.closing &&
-        !matchMedia("(prefers-reduced-motion: reduce)").matches
+        !reducedMotion()
       ) {
         const animation = toast.animate(
           [
@@ -1734,7 +1735,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       !keyboardAction &&
       !switchingSidebar &&
       !restoring &&
-      !matchMedia("(prefers-reduced-motion: reduce)").matches
+      !reducedMotion()
     ) {
       const after = useFrame
         ? pageFrameBounds()
@@ -1949,7 +1950,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (opening) sidebar.dataset.tipsReady = "";
     };
     const reduced =
-      restoring || matchMedia("(prefers-reduced-motion: reduce)").matches;
+      restoring || reducedMotion();
     if (opening) {
       const visual = interrupted ? sidebar.getBoundingClientRect() : null;
       const radius = sidebar.style.borderRadius || "16px";
@@ -2126,7 +2127,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (compactSidebar) {
       cancelAnimationFrame(mobileEnterFrame);
       setMobilePanelOrigin();
-      if (opening && !restoring && !matchMedia("(prefers-reduced-motion: reduce)").matches)
+      if (opening && !restoring && !reducedMotion())
         host.dataset.mobileEntering = "";
       else delete host.dataset.mobileEntering;
       hidden = false;
@@ -2168,7 +2169,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     dockMotion?.stop();
     toolbar.style.translate = "0px 0px";
     const after = toolbar.getBoundingClientRect();
-    if (!restoring && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (!restoring && !reducedMotion()) {
       dockMotion = animate(
         toolbar,
         {
@@ -2268,7 +2269,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             ? Math.min(window.innerHeight, window.visualViewport?.height ?? window.innerHeight)
             : window.innerHeight) * 0.35) /
           (framed ? appliedScale * htmlZoom() : 1),
-        behavior: fromMobileSidebar && !matchMedia("(prefers-reduced-motion: reduce)").matches
+        behavior: fromMobileSidebar && !reducedMotion()
           ? "smooth"
           : "instant",
       });
@@ -2349,7 +2350,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         toolbar.style.translate = "0px 0px";
         if (
           dockCenter !== undefined &&
-          !matchMedia("(prefers-reduced-motion: reduce)").matches
+          !reducedMotion()
         ) {
           dockMotion = animate(
             toolbar,
@@ -2700,7 +2701,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         });
         if (
           wasHidden &&
-          !matchMedia("(prefers-reduced-motion: reduce)").matches
+          !reducedMotion()
         )
           previewMotion = pinPreview.animate(
             [
@@ -3050,7 +3051,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         }
         renderList();
         const destination = (open ? field : trigger).getBoundingClientRect();
-        if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        if (!reducedMotion()) {
           field.animate(
             open
               ? [
@@ -3208,7 +3209,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       const next = icon(copyGlyph);
       const shouldAnimate =
         copyPage.dataset.glyph !== undefined &&
-        !matchMedia("(prefers-reduced-motion: reduce)").matches;
+        !reducedMotion();
       copyPage.dataset.glyph = copyGlyph;
       if (shouldAnimate && previous) {
         previous.setAttribute("data-leaving", "true");
@@ -3320,7 +3321,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     const animateRows =
       !compactSidebar &&
       !restoring &&
-      !matchMedia("(prefers-reduced-motion: reduce)").matches;
+      !reducedMotion();
     const previous = new Map<string | undefined, number>();
     if (animateRows && existingList) {
       const bounds = existingList.getBoundingClientRect();
@@ -4155,63 +4156,36 @@ export function initComments(options: CommentsOptions): CommentsController {
         item.querySelector<HTMLElement>(".message-reaction"),
       ]),
     );
-    if (
-      previousDialog &&
-      changing &&
-      dialogKey === "account" &&
-      !matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      const leaving = el("div", "account-layer");
+    if (previousDialog && changing && !reducedMotion()) {
+      // The outgoing card fades in place; the account sheet takes its backdrop along.
+      const current = getComputedStyle(previousDialog);
+      const from = { opacity: current.opacity, transform: current.transform };
+      previousDialog.getAnimations().forEach((animation) => animation.cancel());
+      const timing = {
+        duration: 150,
+        easing: "cubic-bezier(.22,1,.36,1)",
+        fill: "forwards",
+      } as const;
+      const leaving =
+        dialogKey === "account" ? el("div", "account-layer") : previousDialog;
+      if (leaving !== previousDialog) leaving.append(previousDialog);
+      previousDialog.animate(
+        [{ transform: from.transform }, { transform: "translateY(4px) scale(.99)" }],
+        timing,
+      );
+      const exit = leaving.animate([{ opacity: from.opacity }, { opacity: 0 }], timing);
       leaving.inert = true;
       leaving.setAttribute("aria-hidden", "true");
-      leaving.append(previousDialog);
-      if (edgeSidebar) sidebar.append(leaving);
-      else shadow.append(leaving);
+      previousDialog.style.pointerEvents = "none";
+      (leaving !== previousDialog && edgeSidebar ? sidebar : shadow).append(leaving);
       exitingDialogs.set(leaving, disposePreviousAccentPicker);
       disposePreviousAccentPicker = undefined;
-      const exit = leaving.animate([{ opacity: 1 }, { opacity: 0 }], {
-        duration: 150,
-        fill: "forwards",
-      });
-      previousDialog.animate(
-        [{ transform: "none" }, { transform: "translateY(4px) scale(.99)" }],
-        { duration: 150, fill: "forwards" },
-      );
       void exit.finished
         .catch(() => {})
         .finally(() => {
           leaving.remove();
           exitingDialogs.get(leaving)?.();
           exitingDialogs.delete(leaving);
-        });
-    }
-    if (
-      previousDialog &&
-      changing &&
-      dialogKey !== "account" &&
-      !matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      const current = getComputedStyle(previousDialog);
-      const from = { opacity: current.opacity, transform: current.transform };
-      previousDialog.getAnimations().forEach((animation) => animation.cancel());
-      previousDialog.inert = true;
-      previousDialog.setAttribute("aria-hidden", "true");
-      previousDialog.style.pointerEvents = "none";
-      shadow.append(previousDialog);
-      exitingDialogs.set(previousDialog, undefined);
-      const exit = previousDialog.animate(
-        [from, { opacity: 0, transform: "translateY(4px) scale(.99)" }],
-        {
-          duration: 150,
-          easing: "cubic-bezier(.22,1,.36,1)",
-          fill: "forwards",
-        },
-      );
-      void exit.finished
-        .catch(() => {})
-        .finally(() => {
-          previousDialog.remove();
-          exitingDialogs.delete(previousDialog);
         });
     }
     disposePreviousAccentPicker?.();
@@ -4222,7 +4196,6 @@ export function initComments(options: CommentsOptions): CommentsController {
       positionNotice();
       return;
     }
-    dialogs.classList.toggle("account-layer", account);
     const dialog = el("section", account ? "dialog account-dialog" : "dialog");
     if (account) dialog.setAttribute("aria-modal", "false");
     dialog.setAttribute("role", "dialog");
@@ -4632,7 +4605,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (
       account &&
       changing &&
-      !matchMedia("(prefers-reduced-motion: reduce)").matches
+      !reducedMotion()
     ) {
       dialogs.animate([{ opacity: 0 }, { opacity: 1 }], {
         duration: 250,
@@ -4662,7 +4635,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
     }
     positionDialog();
-    if (!account && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (!account && !reducedMotion()) {
       const target = dialog.getBoundingClientRect();
       const origin = openingPreview ?? (!changing ? previousRect : null);
       if (
@@ -4875,11 +4848,18 @@ export function initComments(options: CommentsOptions): CommentsController {
       h = dialog.offsetHeight;
     if (pin && x + w > window.innerWidth - right) x = pin.x - w - 20;
     // Right, then left, then below, then above the region, 14px clear of it.
+    // A region too wide for either side takes the roomier of below and above,
+    // shortening the card to fit rather than covering the region.
     if (around && !compactSidebar && !follow) {
+      const below = bottom - around.bottom - 14,
+        above = around.top - 26;
       if (around.right + 14 + w <= window.innerWidth - right) [x, y] = [around.right + 14, around.top];
       else if (around.left - 14 - w >= 12) [x, y] = [around.left - 14 - w, around.top];
-      else if (around.bottom + 14 + h <= bottom) [x, y] = [around.left, around.bottom + 14];
-      else if (around.top - 14 - h >= 12) [x, y] = [around.left, around.top - 14 - h];
+      else if (Math.max(below, above) >= Math.min(h, 200)) {
+        const room = below >= h || below >= above ? below : above;
+        dialog.style.maxHeight = `${room}px`;
+        [x, y] = [around.left, room === below ? around.bottom + 14 : around.top - 14 - Math.min(h, room)];
+      }
     }
     cardFollow.place(
       dialogKey,
@@ -5797,7 +5777,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     // Reopen where the reviewer left off: no frame, dock or card motion; one fade.
     toggleExpanded(true);
     restoring = false;
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches)
+    if (!reducedMotion())
       for (const node of [host, framed ? surface : null])
         node?.animate([{ opacity: 0 }, { opacity: 1 }], {
           duration: 200,
