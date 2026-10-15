@@ -120,12 +120,23 @@ Sources: [Figma layer properties and styles](https://help.figma.com/hc/en-us/art
 `design: { tokens, themes, components }` tells Design mode about your design system. These are types in `DesignSystem`, and all three are optional. komo never guesses tokens from computed styles or reads framework internals; your adapters answer.
 
 - `tokens: TokenAdapter` lists tokens (aliases resolved, per theme). For a picked element, it says which token each CSS property uses, or that the value is off-token. It can also preview a token, for example by swapping a utility class, and describe how to apply the change in source.
-- `themes: ThemeAxis[]` are independent axes reviewers can flip, such as light/dark or a product palette. Proposals record the theme state they were made in.
-- `components: ComponentAdapter` identifies the component behind an element (name, props, source), so Design mode shows "Button (variant=secondary)". It works alongside `useKomoInspectable`.
+- `themes: ThemeAxis[]` are independent axes reviewers can flip from the Design panel, such as light/dark or a product palette. Proposals record the theme state they were made in.
+- `components: ComponentAdapter` identifies the component behind an element (name, props, source). Proposals name it with its props. A component registered with `useKomoInspectable` on the element itself takes precedence and keeps its editable props.
 
-Design proposals also map to a versioned `DesignEdit` record (token swaps, shared token values, prop changes, text, and a raw CSS fallback) that agents can apply. The comment keeps the readable proposal text; the CLI reads the record back from it, so older Design mode comments work too. See [Agent CLI](#agent-cli).
+Each Design mode comment starts with its context, for example `Theme: mode=dark`, `Component: Button (src/ui/Button.tsx:12)` and `Props: variant="secondary"`. Its changes follow: token swaps, shared token values, prop changes, text, and raw CSS as a fallback. The CLI reads the comment back as a versioned `DesignEdit` record (`theme`, `target.component`, `changes`) that agents can apply; comments without context lines still parse. See [Agent CLI](#agent-cli).
 
-The API is landing in stages, and this section is updated as each part ships. Token adapters and the CLI's `DesignEdit` output work today; themes and components follow, and proposals don't record theme state or component props yet.
+#### Themes
+
+Each axis gets a row at the top of the Design panel: a segmented control for two or three options, a select for more. Switching calls `apply(id)`, then the panel re-reads `current()`, lists tokens for the new theme state, and refreshes the picked element's values, chips and outline.
+
+```ts
+import { classTheme } from "@hazem3500/komo/adapters/class-theme";
+
+const mode = classTheme({ id: "mode", options: [{ id: "light" }, { id: "dark", class: "dark" }], colorScheme: true });
+initKomo({ project: "your-project", design: { themes: [mode] } });
+```
+
+Theme is context, not an edit. Switching isn't counted as a change, and Undo, Reset and Before/After leave it alone. When Design mode closes, or the widget is destroyed, komo applies each axis's original option again. An axis whose `current()` throws is left out; an `apply()` that throws doesn't break the panel. Any object with `id`, `options`, `current()` and `apply()` works, so a theme kept in React state or a cookie fits too.
 
 #### Token adapters
 

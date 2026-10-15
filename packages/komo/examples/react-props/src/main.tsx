@@ -40,11 +40,16 @@ const utilityTokens: DesignToken[] = [
   { path: "space.sm", type: "dimension", value: "8px", properties: ["padding"], group: "Spacing", ref: "tk-p-sm" },
   { path: "space.md", type: "dimension", value: "16px", properties: ["padding"], group: "Spacing", ref: "tk-p-md" },
 ];
-const utilityCss = ".tk-text-primary{color:#1f1f1f}.tk-text-secondary{color:#6b6b6b}.tk-text-accent{color:#7c3aed}.tk-text-accent:hover{color:#5b21b6}.tk-p-sm{padding:8px}.tk-p-md{padding:16px}";
+// Dark values for ?theme: list() answers per theme, and the classes follow [data-mode=dark].
+const darkValues: Record<string, string> = { "color.text.primary": "#f1efeb", "color.text.secondary": "#a8a49d", "color.text.accent": "#c4b5fd" };
+const utilityCss = ".tk-text-primary{color:#1f1f1f}.tk-text-secondary{color:#6b6b6b}.tk-text-accent{color:#7c3aed}.tk-text-accent:hover{color:#5b21b6}.tk-p-sm{padding:8px}.tk-p-md{padding:16px}" +
+  "[data-mode=dark] .tk-text-primary{color:#f1efeb}[data-mode=dark] .tk-text-secondary{color:#a8a49d}[data-mode=dark] .tk-text-accent{color:#c4b5fd}";
 const prefixes: Record<string, string> = { color: "tk-text-", padding: "tk-p-" };
 const classTokens: TokenAdapter = {
   id: "example-classes",
-  list: () => utilityTokens,
+  list: (theme) => theme?.mode === "dark"
+    ? utilityTokens.map((token) => ({ ...token, value: darkValues[token.path] ?? token.value }))
+    : utilityTokens,
   resolve(element) {
     const usage: Record<string, TokenUsage> = {};
     for (const [property, prefix] of Object.entries(prefixes)) {
@@ -74,7 +79,8 @@ const query = new URLSearchParams(location.search);
 const appShell = query.has("shell");
 const sidebar = query.get("sidebar") === "frame" ? "background" : undefined;
 const classAdapter = query.get("tokens") === "classes";
-// ?theme adds a light/dark axis, so Design mode comments name the theme they were made in.
+// ?theme adds a light/dark axis: Design mode shows a switcher for it, and comments
+// name the theme they were made in.
 const themes: ThemeAxis[] | undefined = query.has("theme") ? [{
   id: "mode",
   options: [{ id: "light" }, { id: "dark" }],

@@ -304,6 +304,8 @@ export function createDesignMode(options: DesignModeOptions) {
       void reactPanelPromise.then((module) => {
         if (!active || selected !== element || controls.querySelector(".design-react-group, .design-theme-group")) return;
         const styleRoot = options.root;
+        // Switching a theme re-renders the selection, so tokens, values and the outline follow it.
+        module.attachThemeSwitcher(controls, options.design, () => select(element), styleRoot);
         const props = module.createReactPropsPanel(element, () => {
           status.textContent = "React state preview · resets on exit";
           updateActions();

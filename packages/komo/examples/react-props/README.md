@@ -27,6 +27,11 @@ widget destruction, or Reset. Matching selectors are an estimate of scope, not
 a discovery of all CSS consumers. Komo does not import arbitrary DTCG files,
 persist tokens, or write application source.
 
+Add `?tokens=classes` for a class-based token adapter and `?theme` for a
+light/dark theme axis. With `?theme`, the top of the Design panel switches the
+page between light and dark; the token chips follow, and leaving Design mode
+puts the original theme back.
+
 The demo uses React 19. The adapter uses public hooks, ref callbacks, and state
 updates compatible with the package's React 18.2+ / 19 peer range, but React 18
 has not been exercised in this prototype. In SSR frameworks, call the hook from
