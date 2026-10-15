@@ -84,7 +84,7 @@ export interface KomoShortcuts {
 export interface KomoFeatures {
   /** Design mode inspector, style previews, and design proposals. */
   designMode?: boolean;
-  /** Thread group tags in the sidebar and comment menu. */
+  /** Thread group tags: add them while writing a comment or on an open thread; shown in the sidebar. */
   tags?: boolean;
 }
 

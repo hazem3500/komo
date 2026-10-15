@@ -21,6 +21,7 @@ import { installAgentWorkflow } from "./workflow.mjs";
 const actions = {
   list: "List threads; defaults to open. --status open|resolved|all, --page /path, --limit 50, --offset 0",
   tag: "Add a group tag: tag THREAD_ID TAG",
+  untag: "Remove a group tag: untag THREAD_ID TAG",
   get: "Read one complete thread: get THREAD_ID",
   prompt: "Export open feedback as Markdown; --page /path, --json",
   create: "Create a thread: --page /path --anchor-file FILE --body TEXT",
@@ -446,7 +447,7 @@ export async function runAgent(
     command === "project"
       ? 2
       : command === "comments"
-        ? ["edit", "delete", "react", "tag"].includes(action)
+        ? ["edit", "delete", "react", "tag", "untag"].includes(action)
           ? 4
           : ["get", "reply", "resolve", "reopen", "move"].includes(action)
             ? 3
@@ -564,9 +565,9 @@ export async function runAgent(
       });
     } else {
       const thread = `threads/${id(threadId)}`;
-      if (action === "tag") {
+      if (action === "tag" || action === "untag") {
         if (!commentId) throw Error("Supply a tag name.");
-        data = await request(thread, "PATCH", { tag: commentId });
+        data = await request(thread, "PATCH", { [action]: commentId });
       } else if (["resolve", "reopen"].includes(action))
         data = await request(thread, "PATCH", {
           resolved: action === "resolve",

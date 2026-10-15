@@ -184,13 +184,13 @@ async function body(request: Request): Promise<Record<string, unknown>> {
                       : path === "/me"
                         ? ["name", "avatarUrl", "accentColor"]
                         : path === "/threads"
-                          ? ["body", "page", "anchor"]
+                          ? ["body", "page", "anchor", "tags"]
                           : path.endsWith("/comments")
                             ? ["body"]
                             : path.includes("/comments/")
                               ? ["body"]
                               : path.startsWith("/threads/")
-                                ? ["anchor", "resolved", "tag"]
+                                ? ["anchor", "resolved", "tag", "untag"]
                                 : [];
     check(
       Object.keys(result).every((key) => allowed.includes(key)),
@@ -1195,12 +1195,18 @@ async function route(
     const text = string(data.body, 4000, "comment");
     const page = pagePath(data.page);
     const anchor = anchorValue(data.anchor);
+    let tags: string[] = [];
+    if (data.tags !== undefined) {
+      check(Array.isArray(data.tags), 400, "Invalid tags.");
+      tags = [...new Set((data.tags as unknown[]).map(tagValue))].sort();
+      check(tags.length <= 12, 400, "A thread can have at most 12 tags.");
+    }
     const id = crypto.randomUUID();
     const firstCommentId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO threads(id,project,repo,branch,page,anchor,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)"
-      ).bind(id, project, repo, branch, page, JSON.stringify(anchor), now, now),
+        "INSERT INTO threads(id,project,repo,branch,page,anchor,tags,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)"
+      ).bind(id, project, repo, branch, page, JSON.stringify(anchor), JSON.stringify(tags), now, now),
       env.DB.prepare(
         "INSERT INTO comments(id,thread_id,user_id,body,created_at) VALUES(?,?,?,?,?)"
       ).bind(firstCommentId, id, user.id, text, now),
@@ -1244,13 +1250,22 @@ async function route(
   check(thread, 404, "Thread not found on this branch.");
   if (url.pathname === `/threads/${threadId}` && request.method === "PATCH") {
     const data = await body(request);
+    if (data.untag !== undefined) {
+      const tag = tagValue(data.untag);
+      const tags = parseTags(thread.tags);
+      if (tags.includes(tag)) {
+        const next = tags.filter((item) => item !== tag);
+        await env.DB.prepare(
+          "UPDATE threads SET tags=?,updated_at=? WHERE id=?",
+        )
+          .bind(JSON.stringify(next), now, threadId)
+          .run();
+        return json({ ok: true, tags: next });
+      }
+      return json({ ok: true, tags });
+    }
     if (data.tag !== undefined) {
-      const tag = string(data.tag, 32, "tag").toLocaleLowerCase("en-US");
-      check(
-        /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,31}$/u.test(tag),
-        400,
-        "Use a tag with up to 32 letters, numbers, spaces, dots, underscores, or hyphens.",
-      );
+      const tag = tagValue(data.tag);
       const tags = parseTags(thread.tags);
       if (!tags.includes(tag)) {
         check(tags.length < 12, 400, "A thread can have at most 12 tags.");
@@ -1443,6 +1458,17 @@ async function route(
     return json({ ok: true });
   }
   throw new HttpError(405, "Method not allowed.");
+}
+
+/** Normalized group tag: lowercase, up to 32 letters, numbers, spaces, dots, underscores, or hyphens. */
+function tagValue(value: unknown): string {
+  const tag = string(value, 32, "tag").trim().toLocaleLowerCase("en-US");
+  check(
+    /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,31}$/u.test(tag),
+    400,
+    "Use a tag with up to 32 letters, numbers, spaces, dots, underscores, or hyphens.",
+  );
+  return tag;
 }
 
 function parseTags(value: string | null | undefined): string[] {
