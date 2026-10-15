@@ -324,6 +324,8 @@ export interface DesignCommentOptions {
   note(element: HTMLElement, text: string): void;
   /** Read-only summary for hover cards: at most three rows, no Before/After switch. */
   compact?: boolean;
+  /** Called once a Before/After switch has settled, e.g. to move a dialog off a resized element. */
+  onSwitch?(): void;
 }
 
 /** Replace `container`'s content with a change card for each proposal. */
@@ -389,6 +391,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
           if (!reduced) morph(sections, options.resolve);
           if (showAfter) apply(options.key, sections, options.resolve, !reduced);
           else revert(options.key, !reduced);
+          if (options.onSwitch) setTimeout(options.onSwitch, reduced ? 0 : 480);
           sync();
         });
         toggle.append(button);
