@@ -122,6 +122,13 @@ export interface CommentsOptions {
   drawerContainer?: HTMLElement;
   /** Mounted content root for Frame. Defaults to a sole body content element; otherwise Floating only. */
   pageRoot?: HTMLElement;
+  /**
+   * Roots, besides pageRoot, whose elements can be picked for comments and
+   * Design mode, such as a portal container. Defaults to all of body except
+   * komo, so body-level dialogs and popovers are pickable. Return [] to limit
+   * picking to pageRoot. Called on every pick; keep it cheap.
+   */
+  pickRoots?: () => Element[];
   /** Resolve an anchor to a repository-relative source path. */
   source?: (element: Element) => string | undefined;
   /** Defaults to GitHub's source viewer. */

@@ -577,3 +577,38 @@ it("toggles Design mode with D, a configured key, and never while typing or disa
   expect(press({ key: "d" })).toBe(false);
   expect(host.classList.contains("design-active")).toBe(false);
 });
+
+it("picks body-level portals outside pageRoot unless pickRoots narrows the boundary", () => {
+  const app = document.createElement("main");
+  const portal = document.createElement("div");
+  const save = document.createElement("button");
+  save.textContent = "Save";
+  portal.append(save);
+  document.body.append(app, portal);
+  Object.defineProperty(document, "elementsFromPoint", {
+    configurable: true,
+    value: () => [save, portal, document.body, document.documentElement],
+  });
+  Object.defineProperty(Element.prototype, "setPointerCapture", {
+    configurable: true,
+    value() {},
+  });
+  const pick = (extra: Partial<CommentsOptions> = {}) => {
+    controller?.destroy();
+    controller = initComments({ ...options, onboarding: undefined, pageRoot: app, ...extra });
+    const root = [...document.body.children].find((node) => node.shadowRoot)!
+      .shadowRoot!;
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "c", bubbles: true }),
+    );
+    const catcher = root.querySelector<HTMLElement>(".catch")!;
+    for (const type of ["pointerdown", "pointerup"])
+      catcher.dispatchEvent(
+        new MouseEvent(type, { bubbles: true, clientX: 10, clientY: 10 }),
+      );
+    return !!root.querySelector('[data-focus-key="body"]');
+  };
+  expect(pick()).toBe(true);
+  expect(pick({ pickRoots: () => [] })).toBe(false);
+  expect(pick({ pickRoots: () => [portal] })).toBe(true);
+});
