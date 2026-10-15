@@ -441,7 +441,7 @@ export function createDesignMode(options: DesignModeOptions) {
     copy.disabled = !selected || !(changed.get(selected)?.size);
     comment.disabled = !selected;
     // Nested markup is never editable; the editor checks privacy and interactivity on use.
-    editText.disabled = !!textTools?.busy || !selected?.isConnected || selected.childElementCount > 0;
+    editText.disabled = !!textTools?.busy || !selected?.isConnected;
     editText.textContent = textTools?.isEditing(selected) ? "Done editing" : "Edit text";
     editText.setAttribute("aria-label", textTools?.isEditing(selected) ? "Finish inline text editing" : "Edit selected text inline");
   }
@@ -493,7 +493,7 @@ export function createDesignMode(options: DesignModeOptions) {
     // Unfold and scroll only once the tap has finished, so the sheet never lands under the finger.
     if (selected) reveal(selected);
     // The second pointerdown of a double-click already selected the target; edit it where it was clicked.
-    if (event.detail === 2 && !editText.disabled && !textTools?.element) editText.dispatchEvent(new MouseEvent("click", event));
+    if (event.detail === 2 && selected?.contains(event.target as Node) && !editText.disabled && !textTools?.element) editText.dispatchEvent(new MouseEvent("click", event));
   }
   function onKey(event: KeyboardEvent) {
     if (textTools?.handleKey(event)) {
