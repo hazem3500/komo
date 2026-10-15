@@ -19,6 +19,7 @@ import {
   resetDesignTokens,
   resetThemeToken,
   restoreElementProperty,
+  showThemeBefore,
   syncElementTokenBinding,
   tokenImpactCount,
   tokenSourceFor,
@@ -37,6 +38,21 @@ const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#7
 
 function scalarLabel(value: InspectableScalar): string {
   return value === undefined ? "unset" : JSON.stringify(value) ?? "unset";
+}
+
+const afterProps = new Map<HTMLElement, Record<string, InspectableScalar>>();
+/** Before/After for React prop previews and shared theme values. */
+export function showDesignBefore(on: boolean): void {
+  if (on)
+    for (const [element, baseline] of originals) {
+      const component = inspectableFor(element);
+      if (!component) continue;
+      afterProps.set(element, component.props);
+      component.setProps({ ...component.props, ...Object.fromEntries(baseline) });
+    }
+  else for (const [element, props] of afterProps) inspectableFor(element)?.setProps(props);
+  if (!on) afterProps.clear();
+  showThemeBefore(on);
 }
 
 export function hasReactPropChanges(element: HTMLElement): boolean {
