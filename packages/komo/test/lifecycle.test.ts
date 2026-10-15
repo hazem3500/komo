@@ -77,6 +77,100 @@ it("rejects unsafe endpoint schemes and embedded credentials before mounting", (
   expect(document.body.children).toHaveLength(0);
 });
 
+it.each([false, true])(
+  "renders Google login after an early anonymous 401 (private=%s)",
+  async (isPrivate) => {
+    let finishConfig!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: URL) => {
+        if (url.pathname.endsWith("/config"))
+          return new Promise<Response>((resolve) => {
+            finishConfig = resolve;
+          });
+        return Promise.resolve(
+          Response.json({ error: "Sign in required" }, { status: 401 }),
+        );
+      }),
+    );
+    controller = initComments({ ...options, onboarding: undefined });
+    const shadow = [...document.body.children].find(
+      (node) => node.shadowRoot,
+    )!.shadowRoot!;
+    shadow
+      .querySelector<HTMLButtonElement>('[aria-label="Enter your name"]')!
+      .click();
+    await vi.waitFor(() =>
+      expect(shadow.textContent).toContain("Sign in required"),
+    );
+    expect(shadow.textContent).not.toContain("Continue with Google");
+    finishConfig(
+      Response.json({
+        google: true,
+        github: false,
+        guests: false,
+        guestResolve: false,
+        private: isPrivate,
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(shadow.textContent).toContain("Continue with Google"),
+    );
+    expect(shadow.textContent).toContain(
+      isPrivate ? "Private project" : "Sign in required",
+    );
+    if (!isPrivate) expect(shadow.textContent).not.toContain("Private project");
+  },
+);
+
+it("offers Google login after an expired session, even with delayed config", async () => {
+  const { CommentsApi } = await import("../src/api");
+  const config = { ...options, onboarding: undefined };
+  new CommentsApi(config).save({
+    token: "expired-session",
+    user: { id: "old", name: "Old", verified: true },
+  });
+  let finishConfig!: (response: Response) => void;
+  const fetchMock = vi.fn((url: URL) => {
+    if (url.pathname.endsWith("/config"))
+      return new Promise<Response>((resolve) => {
+        finishConfig = resolve;
+      });
+    return Promise.resolve(
+      Response.json({ error: "Sign in required" }, { status: 401 }),
+    );
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  controller = initComments(config);
+  const shadow = [...document.body.children].find(
+    (node) => node.shadowRoot,
+  )!.shadowRoot!;
+  shadow
+    .querySelector<HTMLButtonElement>('[aria-label="Old · Account"]')!
+    .click();
+  await vi.waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(([url]) => url.pathname.endsWith("/config")),
+    ).toBe(true),
+  );
+  expect(fetchMock.mock.calls[0][0].pathname.endsWith("/me")).toBe(true);
+  expect(shadow.textContent).not.toContain("Continue with Google");
+  finishConfig(
+    Response.json({
+      google: true,
+      github: false,
+      guests: false,
+      guestResolve: false,
+      private: false,
+    }),
+  );
+  await vi.waitFor(() =>
+    expect(shadow.textContent).toContain("Continue with Google"),
+  );
+  expect(shadow.textContent).not.toContain("Private project");
+  localStorage.clear();
+});
+
 it("lets reviewers dismiss and restore the toolbar, and supports hidden initialization", () => {
   controller = initComments({ ...options, onboarding: undefined });
   const host = [...document.body.children].find(

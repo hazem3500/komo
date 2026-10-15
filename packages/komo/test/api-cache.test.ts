@@ -31,6 +31,77 @@ const thread = (id: string) => ({
   ],
 });
 afterEach(() => vi.unstubAllGlobals());
+it("keeps an in-flight public config read alive after an anonymous 401", async () => {
+  vi.stubGlobal("location", { hostname: "localhost", protocol: "http:" });
+  vi.stubGlobal("document", { cookie: "" });
+  vi.stubGlobal("localStorage", { getItem: () => null });
+  let finishConfig!: (response: Response) => void;
+  let configSignal!: AbortSignal;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: URL, init: RequestInit) => {
+      if (url.pathname.endsWith("/config")) {
+        configSignal = init.signal!;
+        return new Promise<Response>((resolve) => {
+          finishConfig = resolve;
+        });
+      }
+      return Promise.resolve(
+        Response.json({ error: "Sign in required" }, { status: 401 }),
+      );
+    }),
+  );
+  const api = new CommentsApi({
+    endpoint: "https://example.com/api/",
+    project: "test",
+    repo: "test",
+    branch: "main",
+  });
+  const config = api.request<{ google: boolean }>("config");
+  const list = api.list();
+  await expect(list).rejects.toMatchObject({ status: 401 });
+  expect(configSignal.aborted).toBe(false);
+  finishConfig(Response.json({ google: true }));
+  await expect(config).resolves.toEqual({ google: true });
+  expect(api.token).toBeNull();
+});
+
+it("clears an expired token but not a newer session on stale 401", async () => {
+  vi.stubGlobal("location", { hostname: "localhost", protocol: "http:" });
+  vi.stubGlobal("document", { cookie: "" });
+  vi.stubGlobal("localStorage", {
+    getItem: () => null,
+    setItem() {},
+    removeItem() {},
+  });
+  let finish!: (response: Response) => void;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    ),
+  );
+  const api = new CommentsApi({
+    endpoint: "https://example.com/",
+    project: "test",
+    repo: "test",
+    branch: "main",
+  });
+  const user = { id: "u1", name: "Ty", verified: true };
+  api.save({ token: "old", user });
+  const stale = api.request("me", "POST");
+  api.save({ token: "new", user });
+  finish(Response.json({ error: "Expired" }, { status: 401 }));
+  await expect(stale).rejects.toMatchObject({ status: 401 });
+  expect(api.token).toBe("new");
+  const expired = api.request("me", "POST");
+  finish(Response.json({ error: "Expired" }, { status: 401 }));
+  await expect(expired).rejects.toMatchObject({ status: 401 });
+  expect(api.token).toBeNull();
+});
 it("reuses the revision cache and replaces it when comments change", async () => {
   vi.stubGlobal("location", { hostname: "localhost" });
   vi.stubGlobal("document", { cookie: "" });

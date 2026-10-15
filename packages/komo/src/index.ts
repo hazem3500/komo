@@ -368,6 +368,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   let accessError = "";
   let issue: ConnectionIssue | null = null;
   let projectLoaded = false;
+  let privateProject = false;
   let connectingProject = false;
   let setupSiteDraft =
     options.onboarding?.sites
@@ -915,7 +916,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     accessError = "";
     issue = null;
     connection = "Connecting";
-    google = github = guests = guestResolve = false;
+    google = github = guests = guestResolve = privateProject = false;
     selected = null;
     draft = null;
     parkedDraft = null;
@@ -3281,7 +3282,9 @@ export function initComments(options: CommentsOptions): CommentsController {
           "strong",
           "",
           accessError
-            ? "Private project"
+            ? privateProject
+              ? "Private project"
+              : "Sign in required"
             : connection === "Offline" && issue
               ? issue.title
               : loading
@@ -5238,7 +5241,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     projectLoaded = false;
     issue = null;
     connection = "Connecting";
-    google = github = guests = guestResolve = false;
+    google = github = guests = guestResolve = privateProject = false;
     draft = parkedDraft = null;
     draftText = "";
     replies.clear();
@@ -5472,20 +5475,21 @@ export function initComments(options: CommentsOptions): CommentsController {
       google?: boolean;
       guests: boolean;
       guestResolve: boolean;
+      private?: boolean;
     };
-    // Threads need the settled session, not the config: load both in parallel.
-    const listed = client
-      .restore()
-      .catch(() => {
-        /* An expired guest session can be renewed by entering a name. */
-      })
-      .then(() => {
-        if (destroyed || client !== api) return;
-        if (token !== client.token) hydrateThreads();
-        renderToolbar();
-        if (account) renderDialog();
-        return refresh();
-      });
+    // Settle a stored session before starting reads: an expired token clears
+    // session-bound reads, including a config launched alongside restore.
+    try {
+      await client.restore();
+    } catch {
+      /* An expired guest session can be renewed by entering a name. */
+    }
+    if (destroyed || client !== api) return;
+    if (token !== client.token) hydrateThreads();
+    renderToolbar();
+    if (account) renderDialog();
+    // Once the session is settled, threads and config can load in parallel.
+    const listed = refresh();
     listed.catch(() => {});
     try {
       config = await client.request("config");
@@ -5509,6 +5513,10 @@ export function initComments(options: CommentsOptions): CommentsController {
     github = config.github;
     guests = config.guests;
     guestResolve = config.guestResolve;
+    privateProject = !!config.private;
+    // The list may already have failed with an expected anonymous 401.
+    // Publish auth options before awaiting it so an open account can sign in.
+    render();
     const changed = await listed;
     if (destroyed || client !== api) return;
     const deepLink = new URL(location.href).searchParams.get("comment");
