@@ -359,7 +359,8 @@ export function createDesignMode(options: DesignModeOptions) {
     panel.toggleAttribute("data-empty", (comment.hidden = !selected));
     panel.parentElement?.toggleAttribute("data-design-empty", active && !selected);
   }
-  function outlineFor(element: HTMLElement | null, kind: "hover" | "selected") {
+  /** Draw the outline; only a newly picked or hovered target (`retarget`) may move the panel. */
+  function outlineFor(element: HTMLElement | null, kind: "hover" | "selected", retarget = false) {
     if (!active || !element?.isConnected) {
       outline.hidden = true;
       return;
@@ -372,7 +373,8 @@ export function createDesignMode(options: DesignModeOptions) {
     outline.hidden = false;
     outline.dataset.kind = kind;
     // Flip once per target, only when it sits under the panel and would be clear on the other side.
-    if (element !== flipFor || kind !== flipKind) {
+    // Resizes, edits and Before/After redraw the outline but never move the panel.
+    if (retarget && (element !== flipFor || kind !== flipKind)) {
       flipFor = element;
       flipKind = kind;
       window.clearTimeout(flipTimer);
@@ -405,7 +407,7 @@ export function createDesignMode(options: DesignModeOptions) {
     selected = element;
     hovered = element;
     renderControls();
-    outlineFor(element, "selected");
+    outlineFor(element, "selected", true);
     updateActions();
   }
   function compact() {
@@ -471,7 +473,7 @@ export function createDesignMode(options: DesignModeOptions) {
     const element = options.targetAt(event.clientX, event.clientY);
     if (!(element instanceof HTMLElement) || options.host.contains(element)) return;
     hovered = element;
-    if (!selected) outlineFor(hovered, "hover");
+    if (!selected) outlineFor(hovered, "hover", true);
   }
   function onDown(event: PointerEvent) {
     if (!active || event.composedPath().includes(options.host)) return;
