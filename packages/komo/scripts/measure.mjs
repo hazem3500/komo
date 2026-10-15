@@ -87,7 +87,9 @@ await writeFile(
 // The initial bundle is due a trimming pass before more features land in it.
 // 102,250 / 208,250: Design mode frames the page while active, the floating panel avoids
 // and drags, and comment dialogs stay in the visible area (~270 bytes; the rest is on demand).
-if (report.initial.gzip > 102_250 || report.coreFeatures.gzip > 208_250)
+// 102,450 / 208,450: comments open beside the region they discuss, and Design mode
+// comments collapse the sidebar (~200 bytes in positionDialog, which runs at mount).
+if (report.initial.gzip > 102_450 || report.coreFeatures.gzip > 208_450)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
