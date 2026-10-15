@@ -396,3 +396,9 @@ function listenForShortcut() {
     next.click();
   });
 }
+
+/** A proposal being written: read-only, since the change is already live on the page. */
+export function renderDraftProposal(container: HTMLElement, body: string) {
+  renderDesignComment(container, body, { key: "draft", resolve: () => null, note: (element, text) => element.append(text) });
+  container.querySelector(".design-toggle")?.remove();
+}

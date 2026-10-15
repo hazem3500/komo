@@ -3860,14 +3860,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (proposal) {
       const card = el("div", "draft-proposal");
       card.textContent = proposal;
-      void loadDesignComments().then(({ renderDesignComment }) => {
-        renderDesignComment(card, proposal, {
-          key: "draft",
-          resolve: () => null,
-          note: appendMessageLinks,
-        });
-        // The change is already live while composing, so there is nothing to switch.
-        card.querySelector(".design-toggle")?.remove();
+      void loadDesignComments().then(({ renderDraftProposal }) => {
+        renderDraftProposal(card, proposal);
         positionDialog();
       });
       form.prepend(card);
