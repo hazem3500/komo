@@ -284,11 +284,10 @@ it("dismisses the active Design overlay without intercepting host clicks", async
   )!;
   design.click();
 
-  for (let i = 0; i < 20; i++) {
-    const inspector = root.querySelector<HTMLElement>(".design-inspector");
-    if (inspector?.getAttribute("aria-hidden") === "false") break;
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
+  // Design mode is a dynamic import; under load it takes more than a few ticks.
+  await vi.waitFor(() =>
+    expect(root.querySelector(".design-inspector")?.getAttribute("aria-hidden")).toBe("false"),
+  );
   const inspector = root.querySelector<HTMLElement>(".design-inspector")!;
   expect(inspector.getAttribute("aria-hidden")).toBe("false");
 
@@ -340,11 +339,10 @@ it("keeps the morphing sidebar as the shared surface when entering and leaving D
   const toolbar = root.querySelector<HTMLElement>(".toolbar")!;
   root.querySelector<HTMLButtonElement>('[data-menu-item="design"]')!.click();
 
-  for (let i = 0; i < 20; i++) {
-    const inspector = root.querySelector<HTMLElement>(".design-inspector");
-    if (inspector?.getAttribute("aria-hidden") === "false") break;
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
+  // Design mode is a dynamic import; under load it takes more than a few ticks.
+  await vi.waitFor(() =>
+    expect(root.querySelector(".design-inspector")?.getAttribute("aria-hidden")).toBe("false"),
+  );
   const sidebar = root.querySelector<HTMLElement>(".edge-sidebar, .sidebar") ??
     [...root.children].find((element) => element.querySelector(".design-inspector")) as HTMLElement;
   const inspector = root.querySelector<HTMLElement>(".design-inspector")!;
