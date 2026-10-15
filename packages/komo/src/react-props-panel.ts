@@ -538,7 +538,7 @@ export function createReactPropsPanel(
   group.className = "design-group design-react-group";
   group.open = true;
   const summary = document.createElement("summary");
-  summary.textContent = "React props";
+  summary.textContent = "Properties";
   group.append(summary);
   const source = document.createElement("small");
   source.className = "design-react-source";

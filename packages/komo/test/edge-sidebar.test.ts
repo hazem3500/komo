@@ -30,6 +30,16 @@ describe("edge sidebar placement", () => {
     expect(g.y).toBe(EDGE_MARGIN);
   });
 
+  it("brings an off-screen saved placement back inside the viewport", () => {
+    for (const saved of [{ x: 5000, y: -400 }, { x: -900, y: 4000 }]) {
+      const g = edgeSidebarPlacement(saved, width, height, 1280, 800);
+      expect(g.x).toBeGreaterThanOrEqual(EDGE_MARGIN);
+      expect(g.x + width).toBeLessThanOrEqual(1280 - EDGE_MARGIN);
+      expect(g.y).toBeGreaterThanOrEqual(EDGE_MARGIN);
+      expect(g.y + height).toBeLessThanOrEqual(800 - EDGE_MARGIN);
+    }
+  });
+
   it("parks off the right edge and peeks with a sliver", () => {
     const g = edgeSidebarPlacement({ x: 1044, y: 16 }, width, height, vw, vh);
     const offsets = edgeSidebarOffsets(g, vw);

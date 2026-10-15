@@ -330,9 +330,13 @@ export function createDesignMode(options: DesignModeOptions) {
       outlineFor(selected ?? hovered, selected ? "selected" : "hover");
     });
   }
+  // Style edits resize the selection; the outline follows it.
+  const resized = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleOutline) : null;
   function select(element: Element | null) {
     if (!(element instanceof HTMLElement) || options.host.contains(element)) return;
     if (textTools?.element && textTools.element !== element) finishTextEdit();
+    resized?.disconnect();
+    resized?.observe(element);
     selected = element;
     hovered = element;
     renderControls();
@@ -362,6 +366,8 @@ export function createDesignMode(options: DesignModeOptions) {
     });
   }
   function updateActions() {
+    // Every edit, undo and reset lands here; re-measure after it applies.
+    scheduleOutline();
     syncBar();
     undo.disabled = history.length === 0 && !(selected && reactPanelModule?.canUndoReactProp(selected)) && !(selected && reactPanelModule?.canUndoDesignTokenEdit(selected));
     reset.disabled = !selected || !(changed.get(selected)?.size) && !textTools?.hasChanges(selected) && !(reactPanelModule?.hasReactPropChanges(selected)) && !(reactPanelModule?.hasDesignTokenEdit(selected));
@@ -579,6 +585,7 @@ export function createDesignMode(options: DesignModeOptions) {
       window.clearTimeout(closeTimer);
       window.clearTimeout(statusTimer);
       window.clearTimeout(flipTimer);
+      resized?.disconnect();
       listeners.abort();
       cancelAnimationFrame(frame);
       for (const [element, properties] of originals)
