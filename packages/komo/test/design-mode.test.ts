@@ -80,9 +80,10 @@ describe("design mode preview inspector", () => {
     color.dispatchEvent(new Event("input", { bubbles: true }));
     expect(button.style.color).toBe("rgb(255, 0, 0)");
     expect(shadow.querySelector<HTMLElement>(".design-inspector__count")?.textContent).toBe("1 change");
-    expect(shadow.querySelector<HTMLElement>(".design-inspector__count")?.title).toContain("resets on refresh");
+    expect(shadow.querySelector<HTMLElement>(".design-inspector__count")?.title).toContain("resets on exit");
+    // Leaving Design mode restores the page; posted comments preview with Before/After.
     controller.setActive(false);
-    expect(button.style.color).toBe("rgb(255, 0, 0)");
+    expect(button.style.color).toBe("");
   });
 
   it("compares Before and After from the footer and with ←, → and B", () => {
@@ -110,9 +111,9 @@ describe("design mode preview inspector", () => {
     expect(button.style.color).toBe("rgb(255, 0, 0)");
     compare.querySelector<HTMLButtonElement>("button")!.click();
     expect(button.style.color).toBe("");
-    // Leaving Design mode always ends in After.
+    // Leaving Design mode restores the page, whichever side was showing.
     controller.setActive(false);
-    expect(button.style.color).toBe("rgb(255, 0, 0)");
+    expect(button.style.color).toBe("");
   });
 
   it("edits leaf text inline, keeps pasted markup as text, and supports undo/reset/comment", async () => {
@@ -163,6 +164,31 @@ describe("design mode preview inspector", () => {
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
     await vi.waitFor(() => expect(comments.at(-1)).toBe(label));
     expect(commentProposals.at(-1)).toContain('"Selected text" → "Comment proposal"');
+  });
+
+  it("restores edited text and styles when Design mode closes, and keeps no history", async () => {
+    const label = document.querySelector<HTMLElement>("#label")!;
+    pointer("pointerdown", label);
+    shadow.querySelector<HTMLButtonElement>("[aria-label='Edit selected text inline']")!.click();
+    await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
+    label.textContent = "Edited";
+    label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
+    label.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
+    const color = shadow.querySelector<HTMLInputElement>('[data-property="color"]')!;
+    color.dispatchEvent(new Event("focus"));
+    color.value = "#ff0000";
+    color.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(label.textContent).toBe("Edited");
+    expect(label.style.color).toBe("rgb(255, 0, 0)");
+    controller.setActive(false);
+    expect(label.textContent).toBe("Selected text");
+    expect(label.style.color).toBe("");
+    controller.setActive(true);
+    const undo = shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:first-child")!;
+    expect(undo.disabled).toBe(true);
+    // Before/After has nothing left to bring back.
+    pointer("pointerdown", label);
+    expect(shadow.querySelector<HTMLElement>(".design-inspector__compare")!.hidden).toBe(true);
   });
 
   it("double-clicking text selects it and starts inline editing", async () => {

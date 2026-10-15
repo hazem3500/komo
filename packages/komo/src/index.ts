@@ -465,14 +465,20 @@ export function initComments(options: CommentsOptions): CommentsController {
       }
       return module;
     }));
-  /** Element a design change targets: its recorded selector, else the comment's anchor. */
-  const designTarget = (thread: Thread) => (selector?: string) => {
+  /**
+   * Element a design change targets. The comment's anchor (scoped path, text,
+   * context) wins when the recorded selector agrees or is ambiguous, as older
+   * class-only selectors are; an exact selector wins if the pin has moved.
+   */
+  const designTarget = (anchor: Anchor) => (selector?: string) => {
+    const anchored = resolveAnchor(anchor);
+    let found: Element[] = [];
     try {
-      if (selector) return document.querySelector(selector) ?? resolveAnchor(thread.anchor);
+      if (selector) found = [...document.querySelectorAll(selector)];
     } catch {
-      /* Not a valid selector; fall back to the anchor. */
+      /* Not a valid selector; use the anchor. */
     }
-    return resolveAnchor(thread.anchor);
+    return found.length !== 1 || (anchored && found.includes(anchored)) ? (anchored ?? found[0] ?? null) : found[0];
   };
   /** Short text for pins and previews; design proposals read as a summary, not raw text. */
   const commentText = (body: string) =>
@@ -538,7 +544,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (pinPreview.hidden || (previewClosing && !immediate)) return;
     // Undo a Before/After preview started from the hover card, keeping the open comment's.
     designModule?.resetDesignPreviews(
-      new Set(threads.find((item) => item.id === selected)?.comments.map((item) => item.id)),
+      new Set([...(threads.find((item) => item.id === selected)?.comments.map((item) => item.id) ?? []), "draft"]),
     );
     previewClosing = true;
     previewMotion?.cancel();
@@ -2215,8 +2221,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   function dismissToolbar() {
     // Hide the complete review surface and stop Design mode from capturing
-    // page interaction. Keep its runtime preview edits, but not its selection
-    // overlay; Shift+K or controller.open() can restore Komo for this tab.
+    // page interaction; leaving it restores its preview edits. Shift+K or
+    // controller.open() can restore Komo for this tab.
     designReturnToComments = false;
     designActive = false;
     designController?.setActive(false);
@@ -2669,7 +2675,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           void loadDesignComments().then(({ renderDesignComment }) =>
             renderDesignComment(summary, message.body, {
               key: (hoverPreviewKey = `hover:${message.id}`),
-              resolve: designTarget(thread),
+              resolve: designTarget(thread.anchor),
               note: (node, text) => (node.textContent = text),
               compact: true,
             }),
@@ -3707,7 +3713,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       const show = ({ renderDesignComment }: typeof import("./design-comment.js")) =>
         renderDesignComment(message, comment.body, {
           key: comment.id,
-          resolve: designTarget(thread),
+          resolve: designTarget(thread.anchor),
           note: appendMessageLinks,
           // The element can grow under the dialog; place it again once the change settles.
           onSwitch: () => positionDialog(),
@@ -3986,8 +3992,9 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (proposal) {
       const card = el("div", "draft-proposal");
       card.textContent = proposal;
+      const target = draft ? designTarget(draft) : () => null;
       void loadDesignComments().then(({ renderDraftProposal }) => {
-        renderDraftProposal(card, proposal);
+        renderDraftProposal(card, proposal, target);
         positionDialog();
       });
       form.prepend(card);
@@ -4144,6 +4151,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             ? []
             : (threads.find((item) => item.id === selected)?.comments.map((item) => item.id) ?? [])),
           ...(pinPreview.hidden ? [] : [hoverPreviewKey]),
+          ...(draft ? ["draft"] : []),
         ]),
       ),
     );
@@ -5824,6 +5832,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       destroyed = true;
       polling?.stop();
       designController?.destroy();
+      designModule?.resetDesignPreviews();
       api.cancelReads();
       stopLayoutMotion();
       disposeHeaderTip?.();

@@ -120,6 +120,8 @@ export function createTextPreviewHistory(): TextPreviewHistory {
     },
     restoreAll() {
       for (const [element, value] of originals) setText(element, value, snapshots.get(element));
+      originals.clear();
+      edits.length = 0;
     },
     showBefore(on) {
       if (on)
@@ -178,8 +180,8 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
           if (!cancelled && !result.reactProp && result.before !== result.after) {
             history.record(result);
             options.onCommit(element);
-            options.status.textContent = "Text preview · resets on refresh";
-          } else if (result.reactProp) options.status.textContent = "React state preview · resets on refresh";
+            options.status.textContent = "Text preview · resets on exit";
+          } else if (result.reactProp) options.status.textContent = "React state preview · resets on exit";
         },
       });
       if (!next) options.status.textContent = "This text couldn't be connected to its component prop.";
@@ -187,7 +189,7 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
         editor = next;
         if (point) caretAtPoint(element, point.clientX, point.clientY);
         options.status.textContent = element.hasAttribute("data-komo-text-prop")
-          ? "React state preview · resets on refresh"
+          ? "React state preview · resets on exit"
           : "Editing text · preview only";
       }
       else next.finish(true);

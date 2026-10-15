@@ -476,6 +476,14 @@ export function resetDesignTokens(element: HTMLElement): void {
   ));
 }
 
+/** Restore every element and shared theme value, e.g. when Design mode closes. */
+export function resetAllDesignTokens(): void {
+  for (const source of sources) {
+    for (const element of [source.root, ...source.elementOriginals.keys(), ...source.elementBindings.keys()]) resetDesignTokens(element);
+    history.set(source, []);
+  }
+}
+
 export function proposedDesignTokenChanges(element: HTMLElement): string | undefined {
   const source = tokenSourceFor(element);
   if (!source) return undefined;

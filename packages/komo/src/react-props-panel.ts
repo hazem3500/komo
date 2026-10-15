@@ -16,6 +16,7 @@ import {
   noteElementTokenOverride,
   previewThemeToken,
   proposedDesignTokenChanges,
+  resetAllDesignTokens,
   resetDesignTokens,
   resetThemeToken,
   restoreElementProperty,
@@ -36,6 +37,7 @@ import {
   markOffToken,
   offTokenMarker,
   proposedTokenSwaps,
+  resetAllTokenSwaps,
   resetTokenSwaps,
   resolveTokens,
   showTokenSwapsBefore,
@@ -49,7 +51,7 @@ import {
 } from "./token-adapter.js";
 
 const originals = new Map<HTMLElement, Map<string, InspectableScalar>>();
-const edits = new WeakMap<HTMLElement, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();
+const edits = new Map<HTMLElement, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();
 const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
 // React props, inline token chips and shared theme values, in the inspector's compact field style.
@@ -618,6 +620,15 @@ export function undoReactProp(element: HTMLElement): void {
     if (Object.is(initial, edit.before)) baseline.delete(edit.propName);
     if (!baseline.size) originals.delete(element);
   }
+}
+
+/** Undo every prop, token and theme preview, e.g. when Design mode closes. */
+export function resetPreviews(): void {
+  for (const element of [...originals.keys()]) resetReactProps(element);
+  originals.clear();
+  edits.clear();
+  resetAllDesignTokens();
+  resetAllTokenSwaps();
 }
 
 export function resetReactProps(element: HTMLElement): void {

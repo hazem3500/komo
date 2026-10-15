@@ -84,7 +84,7 @@ export function createDesignMode(options: DesignModeOptions) {
   bar.className = "design-inspector__bar";
   const count = document.createElement("span");
   count.className = "design-inspector__count";
-  count.title = "Preview only · resets on refresh";
+  count.title = "Preview only · resets on exit";
   const status = document.createElement("p");
   status.className = "design-inspector__status";
   status.setAttribute("role", "status");
@@ -192,7 +192,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (!values.size) changed.delete(element);
     outlineFor(selected, "selected");
   }
-  /** The bar shows a change count and its tools only once the selection has changes. */
+  /** The bar shows a change count and its tools only once the selection has changes. Returns the count. */
   function syncBar() {
     const element = selected;
     const total = element
@@ -200,9 +200,9 @@ export function createDesignMode(options: DesignModeOptions) {
         Number(!!reactPanelModule?.hasDesignTokenEdit(element))
       : 0;
     count.textContent = total ? `${total} change${total > 1 ? "s" : ""}` : "";
-    bar.toggleAttribute("data-changes", total > 0 || history.length > 0 ||
-      !!(element && (reactPanelModule?.canUndoReactProp(element) || reactPanelModule?.canUndoDesignTokenEdit(element))));
+    bar.toggleAttribute("data-changes", total > 0 || !undo.disabled);
     compare.hidden = !total && !showingBefore;
+    return total;
   }
   // Status messages show briefly in the bar, then give way to the change count.
   let statusTimer = 0;
@@ -345,7 +345,7 @@ export function createDesignMode(options: DesignModeOptions) {
         if (!active || selected !== element || controls.querySelector(".design-react-group, .design-theme-group")) return;
         const styleRoot = options.root;
         const props = module.createReactPropsPanel(element, () => {
-          status.textContent = "React state preview · resets on refresh";
+          status.textContent = "React state preview · resets on exit";
           updateActions();
         }, styleRoot, select);
         if (props) controls.append(props);
@@ -444,9 +444,8 @@ export function createDesignMode(options: DesignModeOptions) {
   function updateActions() {
     // Every edit, undo and reset lands here; re-measure after it applies.
     scheduleOutline();
-    syncBar();
-    undo.disabled = history.length === 0 && !(selected && reactPanelModule?.canUndoReactProp(selected)) && !(selected && reactPanelModule?.canUndoDesignTokenEdit(selected));
-    reset.disabled = !selected || !(changed.get(selected)?.size) && !textTools?.hasChanges(selected) && !(reactPanelModule?.hasReactPropChanges(selected)) && !(reactPanelModule?.hasDesignTokenEdit(selected));
+    undo.disabled = !history.length && !reactPanelModule?.canUndoReactProp(selected) && !reactPanelModule?.canUndoDesignTokenEdit(selected);
+    reset.disabled = !syncBar();
     copy.disabled = !selected || !(changed.get(selected)?.size);
     comment.disabled = !selected;
     // Nested markup is never editable; the editor checks privacy and interactivity on use.
@@ -540,8 +539,19 @@ export function createDesignMode(options: DesignModeOptions) {
     }
   }
   function setActive(value: boolean) {
-    if (!value) showBefore(false);
-    if (!value && textTools?.element) finishTextEdit();
+    // Leaving Design mode, Comment included, restores the page; posted comments preview with Before/After.
+    if (!value) {
+      showBefore(false);
+      textTools?.finish();
+      for (const [element, properties] of originals)
+        for (const [property, original] of properties) restore(element, property, original);
+      originals.clear();
+      changed.clear();
+      history.length = 0;
+      textTools?.restoreAll();
+      reactPanelModule?.resetPreviews();
+      updateActions();
+    }
     window.clearTimeout(closeTimer);
     closeTimer = 0;
     active = value;
@@ -591,7 +601,7 @@ export function createDesignMode(options: DesignModeOptions) {
         reactPanelModule?.undoReactProp(selected);
         renderControls();
       }
-      status.textContent = "React state preview · resets on refresh";
+      status.textContent = "React state preview · resets on exit";
     } else if (!edit.kind) {
       edit.undo();
       renderControls();
@@ -678,17 +688,14 @@ export function createDesignMode(options: DesignModeOptions) {
     /** Resolves once the property controls have loaded. */
     ready,
     destroy() {
-      showBefore(false);
-      if (textTools?.element) finishTextEdit(true);
+      textTools?.finish(true);
+      setActive(false);
       window.clearTimeout(closeTimer);
       window.clearTimeout(statusTimer);
       window.clearTimeout(flipTimer);
       resized?.disconnect();
       listeners.abort();
       cancelAnimationFrame(frame);
-      for (const [element, properties] of originals)
-        for (const [property, original] of properties) restore(element, property, original);
-      textTools?.restoreAll();
       panel.remove();
       outline.remove();
       tip.remove();
