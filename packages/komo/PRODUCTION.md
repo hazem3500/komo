@@ -7,7 +7,7 @@ Status: working preview / controlled beta. Not ready for an unrestricted public 
 - Dedicated hosted Worker and D1 database, Google owner onboarding, persistent reviewer sessions, guest comments, and owner-approved sites.
 - Three hosted projects per Google owner and 250 stored comments per project; concurrent quota enforcement covered against real workerd/SQLite.
 - Payload validation, session scoping, rate limits, suspension controls, and scheduled cleanup.
-- Published `@tjcages/komo@0.1.1`, clean public-registry installation, and exact integrity match with the browser-tested release artifact.
+- Published `@hazem3500/komo@0.1.1`, clean public-registry installation, and exact integrity match with the browser-tested release artifact.
 - Separate self-hosted deployment path and successful Worker bundle dry run.
 - Setup uses management sessions only. Its UI does not expose comment creation; comment APIs continue rejecting management sessions.
 

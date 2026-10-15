@@ -115,7 +115,7 @@ navigation?.addEventListener("click", (event) => {
 compactNav.addEventListener("change", () => setNavigation(false));
 setNavigation(false);
 
-import { initKomo } from "@tjcages/komo";
+import { initKomo } from "@hazem3500/komo";
 import { mountScene } from "./scene";
 import { mountFeatureScenes } from "./feature-scenes";
 import { mountUsageScene } from "./usage-scene";

@@ -78,7 +78,7 @@ importers:
 
   packages/komo-site:
     dependencies:
-      '@tjcages/komo':
+      '@hazem3500/komo':
         specifier: workspace:*
         version: link:../komo
       react:

@@ -42,16 +42,16 @@ try {
     join(root, packed.filename),
   ]);
   assert.match(
-    await readFile(join(root, "node_modules/@tjcages/komo/dist/react.js"), "utf8"),
+    await readFile(join(root, "node_modules/@hazem3500/komo/dist/react.js"), "utf8"),
     /^['"]use client['"];?/,
     "React entry must preserve its client boundary after minification",
   );
   await writeFile(
     join(root, "smoke.mjs"),
     `
-    import { initKomo } from '@tjcages/komo';
-    import { defineKomo } from '@tjcages/komo/setup';
-    import { useKomo } from '@tjcages/komo/react';
+    import { initKomo } from '@hazem3500/komo';
+    import { defineKomo } from '@hazem3500/komo/setup';
+    import { useKomo } from '@hazem3500/komo/react';
     import { createElement } from 'react';
     import { renderToString } from 'react-dom/server';
     const config = {project:'packed-test'};
@@ -64,9 +64,9 @@ try {
   await writeFile(
     join(root, "consumer.ts"),
     `
-    import { initKomo, type KomoConfig } from '@tjcages/komo';
-    import { defineKomo } from '@tjcages/komo/setup';
-    import { useKomo } from '@tjcages/komo/react';
+    import { initKomo, type KomoConfig } from '@hazem3500/komo';
+    import { defineKomo } from '@hazem3500/komo/setup';
+    import { useKomo } from '@hazem3500/komo/react';
     const config: KomoConfig = {project:'packed-test'};
     initKomo(config).destroy(); defineKomo(config)().destroy(); useKomo(config);
   `,
@@ -102,7 +102,7 @@ try {
   `,
     { mode: 0o755 },
   );
-  const cli = join(root, "node_modules/@tjcages/komo/cli/index.mjs");
+  const cli = join(root, "node_modules/@hazem3500/komo/cli/index.mjs");
   const env = {
     ...process.env,
     PATH: `${join(root, "bin")}:${process.env.PATH}`,
@@ -138,7 +138,7 @@ try {
     2,
   );
   const migrations = await readdir(
-    join(root, "node_modules/@tjcages/komo/server/migrations"),
+    join(root, "node_modules/@hazem3500/komo/server/migrations"),
   );
   assert.deepEqual(await readdir(join(root, ".komo/migrations")), migrations);
   assert.match(

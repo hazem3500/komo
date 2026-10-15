@@ -3,13 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @tjcages/komo build && node scripts/build.mjs",
+    "build": "pnpm --filter @hazem3500/komo build && node scripts/build.mjs",
     "dev": "pnpm run build && python3 -m http.server 4340 -d dist",
     "deploy": "pnpm run build && wrangler deploy --config wrangler.jsonc",
     "typecheck": "wrangler types worker/worker-configuration.d.ts && tsc -p tsconfig.json && tsc -p worker/tsconfig.json"
   },
   "dependencies": {
-    "@tjcages/komo": "workspace:*",
+    "@hazem3500/komo": "workspace:*",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },

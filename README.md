@@ -1,7 +1,7 @@
 # komo
 
-[![npm version](https://img.shields.io/npm/v/@tjcages/komo)](https://www.npmjs.com/package/@tjcages/komo)
-[![downloads](https://img.shields.io/npm/dm/@tjcages/komo)](https://www.npmjs.com/package/@tjcages/komo)
+[![npm version](https://img.shields.io/npm/v/@hazem3500/komo)](https://www.npmjs.com/package/@hazem3500/komo)
+[![downloads](https://img.shields.io/npm/dm/@hazem3500/komo)](https://www.npmjs.com/package/@hazem3500/komo)
 
 Comments for your website. Point at an element, mark an area, and leave feedback your team can reply to, resolve, or copy into a coding agent.
 
@@ -14,11 +14,11 @@ Review actions update immediately while saving in the background. Failed writes 
 ## Install
 
 ```sh
-npm install @tjcages/komo
-npx @tjcages/komo init
+npm install @hazem3500/komo
+npx @hazem3500/komo init
 ```
 
-Requires Node.js 22 or newer. The unscoped `komo` package on npm is unrelated; use `@tjcages/komo`.
+Requires Node.js 22 or newer. The unscoped `komo` package on npm is unrelated; use `@hazem3500/komo`.
 
 The setup command detects your Git repository, creates a project, and asks you to sign in with Google. It prints a public project key and a ready-to-paste inline configuration. It also saves settings to `.komo/project.json` and generates an optional `komo.config.js` helper.
 
@@ -29,7 +29,7 @@ Hosted onboarding is available through the dedicated komo service. Self-hosting 
 Mount after the page has loaded:
 
 ```js
-import { initKomo } from '@tjcages/komo';
+import { initKomo } from '@hazem3500/komo';
 initKomo({ project: 'YOUR_PROJECT_KEY' });
 ```
 
@@ -49,7 +49,7 @@ With React 18.2 or 19, call the hook once near your app root:
 
 ```tsx
 'use client'; // Required for Next.js App Router client components.
-import { useKomo } from '@tjcages/komo/react';
+import { useKomo } from '@hazem3500/komo/react';
 
 export function Komo() {
   useKomo({ project: 'YOUR_PROJECT_KEY' });
@@ -80,12 +80,12 @@ Before editing, agents read open comments, export the relevant prompt, and read 
 Requires komo 0.2.0 or later. Connect your coding agent to the same comments your team sees in the browser:
 
 ```sh
-npm install @tjcages/komo@latest
-npx @tjcages/komo login
-npx @tjcages/komo comments list
-npx @tjcages/komo comments get THREAD_ID
-npx @tjcages/komo comments reply THREAD_ID --body "Fixed and verified on mobile."
-npx @tjcages/komo comments resolve THREAD_ID
+npm install @hazem3500/komo@latest
+npx @hazem3500/komo login
+npx @hazem3500/komo comments list
+npx @hazem3500/komo comments get THREAD_ID
+npx @hazem3500/komo comments reply THREAD_ID --body "Fixed and verified on mobile."
+npx @hazem3500/komo comments resolve THREAD_ID
 ```
 
 Run these from a project configured with `komo init`. The CLI searches parent directories for `.komo/project.json`. Google sign-in opens a local browser handoff; `--no-open` prints the local sign-in link instead. Credentials are stored outside your repository in `~/.config/komo`, with a private file per API/project. Sessions stay valid until you sign out. `komo logout` revokes the session and removes its file.
@@ -183,7 +183,7 @@ Self-hosted storage belongs to your Cloudflare account; its service limits and c
 
 ### Client options
 
-Pass these to `initKomo(config)` from `@tjcages/komo` or `useKomo(config)` from `@tjcages/komo/react`.
+Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` from `@hazem3500/komo/react`.
 
 `YOUR_PROJECT_KEY` is a placeholder for a string. Hosted komo generates the key during `komo init`; copy that value. For self-hosting, use the project identifier configured on your server. Reuse the same key across sites that should share feedback.
 
@@ -261,9 +261,9 @@ Choose **Copy all comments for agent** to copy open feedback across the configur
 Requires Node.js 22+, a modern browser, and Cloudflare access for deployment.
 
 ```sh
-pnpm --filter @tjcages/komo typecheck
-pnpm --filter @tjcages/komo test
-pnpm --filter @tjcages/komo build
+pnpm --filter @hazem3500/komo typecheck
+pnpm --filter @hazem3500/komo test
+pnpm --filter @hazem3500/komo build
 ```
 
 Tests use real workerd and isolated SQLite databases. To publish this repository’s package artifact and website review preview, run `pnpm run comments:preview` from a feature branch. It does not deploy the marketing Worker or replace the existing review database.
@@ -296,27 +296,27 @@ Extracted from the komo product at source commit `f57f3521` in the Cloudflare ma
 
 ## Project management
 
-Sign in as the Google owner with `npx @tjcages/komo login`. In the widget, open **Account → Project settings** to manage access, download feedback, clear resolved threads, or delete a hosted project.
+Sign in as the Google owner with `npx @hazem3500/komo login`. In the widget, open **Account → Project settings** to manage access, download feedback, clear resolved threads, or delete a hosted project.
 
 ```sh
-npx @tjcages/komo project info
-npx @tjcages/komo project access --access private
-npx @tjcages/komo project invite --email teammate@example.com
-npx @tjcages/komo project export --out comments.json
+npx @hazem3500/komo project info
+npx @hazem3500/komo project access --access private
+npx @hazem3500/komo project invite --email teammate@example.com
+npx @hazem3500/komo project export --out comments.json
 ```
 
 Projects default to link access. Private projects require Google sign-in and owner-approved membership for reads and writes, including the CLI. Invitations match a verified email address, expire after seven days, and are single-use. Members can review; only owners manage access, export, import, or delete. Google accounts used before this release should sign out and back in to verify their email. Repository access is separate.
 
 ### Quota recovery and migration
 
-Export first, then permanently clear resolved threads with `npx @tjcages/komo project clear-resolved --confirm PROJECT_KEY`. This reclaims stored-comment quota. In the sidebar’s Resolved view, owners can also use the trash button to permanently delete only the currently filtered threads and their replies after confirmation. `project delete --confirm PROJECT_KEY` permanently deletes a hosted project and frees its project slot. Both are owner-only. The account panel also offers these actions with typed confirmation.
+Export first, then permanently clear resolved threads with `npx @hazem3500/komo project clear-resolved --confirm PROJECT_KEY`. This reclaims stored-comment quota. In the sidebar’s Resolved view, owners can also use the trash button to permanently delete only the currently filtered threads and their replies after confirmation. `project delete --confirm PROJECT_KEY` permanently deletes a hosted project and frees its project slot. Both are owner-only. The account panel also offers these actions with typed confirmation.
 
-To migrate, export from your source, set up a destination using `npx @tjcages/komo init --self-host` in another directory, then sign in there and run:
+To migrate, export from your source, set up a destination using `npx @hazem3500/komo init --self-host` in another directory, then sign in there and run:
 
 ```sh
-npx @tjcages/komo project import --file /path/to/comments.json
+npx @hazem3500/komo project import --file /path/to/comments.json
 ```
 
 Exports include threads, replies, reactions, anchors, and historical profiles across all pages and branches, including resolved feedback. They exclude sessions, credentials, verified emails, and membership. Imports use the destination repository and keep imported authors unverified. Retrying the same export is safe; existing imported records are not overwritten. Destination quotas still apply. Export retries are required if feedback changes while downloading. Keep export files private.
 
-Upgrade self-hosted deployments with `npm install @tjcages/komo@latest` then `npx @tjcages/komo deploy`; the CLI applies bundled database migrations before redeploying. Self-hosted project removal is controlled by your Worker configuration. Account-wide data requests remain available at ty@offbr.co.
+Upgrade self-hosted deployments with `npm install @hazem3500/komo@latest` then `npx @hazem3500/komo deploy`; the CLI applies bundled database migrations before redeploying. Self-hosted project removal is controlled by your Worker configuration. Account-wide data requests remain available at ty@offbr.co.

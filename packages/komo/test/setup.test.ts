@@ -95,10 +95,10 @@ describe("simple komo setup", () => {
       await expect(
         readFile(join(dir, ".komo/setup.json"), "utf8")
       ).rejects.toThrow();
-      expect(initialized.stdout).toContain("from '@tjcages/komo'");
+      expect(initialized.stdout).toContain("from '@hazem3500/komo'");
       expect(initialized.stdout).not.toContain("fixture-poll-secret");
       const generated = await readFile(join(dir, "komo.config.js"), "utf8");
-      expect(generated).toContain("from '@tjcages/komo/setup'");
+      expect(generated).toContain("from '@hazem3500/komo/setup'");
       expect(generated).toContain("preview/one");
       expect(generated).not.toContain("onboarding");
       expect(generated).not.toContain("fixture-poll-secret");
