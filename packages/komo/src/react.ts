@@ -32,6 +32,20 @@ function sameConfig(a: KomoConfig, b: KomoConfig): boolean {
         Object.is(before[field], after[field]),
       );
     }
+    if (key === "design") {
+      // Inline design objects are new each render; compare the adapters inside.
+      const before = a.design;
+      const after = b.design;
+      if (!before || !after) return before === after;
+      const themes = before.themes ?? [];
+      const nextThemes = after.themes ?? [];
+      return (
+        before.tokens === after.tokens &&
+        before.components === after.components &&
+        themes.length === nextThemes.length &&
+        themes.every((axis, index) => axis === nextThemes[index])
+      );
+    }
     if (key !== "onboarding") return Object.is(a[key], b[key]);
     const before = a.onboarding;
     const after = b.onboarding;
