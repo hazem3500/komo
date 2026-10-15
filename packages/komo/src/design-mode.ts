@@ -279,7 +279,7 @@ export function createDesignMode(options: DesignModeOptions) {
           starts.set(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
           commit(input, field.property);
         }, styleRoot, panelControls.valueFor, panelControls.toHex);
-        const theme = module.createDesignThemePanel(element, updateActions, styleRoot);
+        const theme = module.createDesignThemePanel(element, panelControls, updateActions, styleRoot);
         if (theme) controls.append(theme);
       }).catch(() => {});
     }

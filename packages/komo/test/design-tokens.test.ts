@@ -12,7 +12,9 @@ import {
   tokenImpactCount,
   tokenSourceFor,
   undoDesignToken,
+  canUndoDesignToken,
 } from "../src/design-tokens.js";
+import * as panelFields from "../src/design-panel.js";
 import { createDesignThemePanel, createElementTokenControl, noteDesignTokenOverride } from "../src/react-props-panel.js";
 import type { KomoDesignToken } from "../src/design-tokens.js";
 
@@ -69,11 +71,10 @@ describe("explicit design-token preview bridge", () => {
     const cleanup = registerDesignTokenSource(root, tokens);
     const card = document.querySelector<HTMLElement>(".card")!;
     const source = tokenSourceFor(card)!;
-    const panel = createDesignThemePanel(card, () => {})!;
+    const panel = createDesignThemePanel(card, panelFields, () => {})!;
     const brandValue = panel.querySelector<HTMLInputElement>('[aria-label="Shared theme value for color.brand"]')!;
     brandValue.value = "#abcdef";
-    expect(root.style.getPropertyValue("--brand")).toBe("#224466");
-    panel.querySelector<HTMLButtonElement>("button")!.click();
+    brandValue.dispatchEvent(new Event("input"));
     expect(root.style.getPropertyValue("--brand")).toBe("#abcdef");
     const knob = document.createElement("label");
     knob.dataset.property = "background-color";
@@ -99,6 +100,102 @@ describe("explicit design-token preview bridge", () => {
     expect(proposedDesignTokenChanges(card)).toContain("#345678 [custom value]");
     resetDesignTokens(card);
     expect(card.style.getPropertyValue("background-color")).toBe("");
+    cleanup();
+  });
+
+  it("previews shared theme values live as one undo step, marks them changed and resets per row", () => {
+    document.body.innerHTML = '<main><article class="card" data-theme="brand"></article></main>';
+    const root = document.documentElement;
+    root.style.setProperty("--brand", "#224466");
+    root.style.setProperty("--space-card", "28px");
+    const cleanup = registerDesignTokenSource(root, tokens);
+    const card = document.querySelector<HTMLElement>(".card")!;
+    const onEdit = vi.fn();
+    const panel = createDesignThemePanel(card, panelFields, onEdit)!;
+    expect(panel.open).toBe(false);
+    expect(panel.textContent).toContain("Changes every element using these tokens");
+    expect(panel.querySelector("button:not(.design-theme-reset)")).toBeNull();
+    const row = (path: string) => panel.querySelector<HTMLInputElement>(`[aria-label="Shared theme value for ${path}"]`)!.closest<HTMLElement>(".design-theme-token")!;
+    const brand = row("color.brand").querySelector<HTMLInputElement>("[data-property]")!;
+    const swatch = row("color.brand").querySelector<HTMLInputElement>('input[type="color"]')!;
+    const spacing = row("spacing.card").querySelector<HTMLInputElement>("[data-property]")!;
+    expect(spacing.value).toBe("28px");
+    expect(row("color.brand").querySelector<HTMLButtonElement>(".design-theme-reset")!.disabled).toBe(true);
+
+    // Typing previews on every input but records one undo step per focus session.
+    brand.dispatchEvent(new Event("focus"));
+    for (const value of ["#abc", "#abcdef"]) {
+      brand.value = value;
+      brand.dispatchEvent(new Event("input"));
+    }
+    brand.dispatchEvent(new Event("blur"));
+    expect(root.style.getPropertyValue("--brand")).toBe("#abcdef");
+    expect(swatch.value).toBe("#abcdef");
+    expect(onEdit).toHaveBeenCalledTimes(2);
+    expect(row("color.brand").hasAttribute("data-changed")).toBe(true);
+    expect(row("spacing.card").hasAttribute("data-changed")).toBe(false);
+    expect(proposedDesignTokenChanges(card)).toContain("Shared theme color.brand (--brand): #224466 → #abcdef");
+
+    // Sizes keep their unit and step with the arrow keys.
+    spacing.dispatchEvent(new Event("focus"));
+    spacing.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp" }));
+    spacing.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", shiftKey: true }));
+    spacing.dispatchEvent(new Event("blur"));
+    expect(root.style.getPropertyValue("--space-card")).toBe("39px");
+
+    undoDesignToken(card);
+    expect(root.style.getPropertyValue("--space-card")).toBe("28px");
+    undoDesignToken(card);
+    expect(root.style.getPropertyValue("--brand")).toBe("#224466");
+    expect(canUndoDesignToken(card)).toBe(false);
+
+    // Invalid values are flagged, then the field shows the live value again on blur.
+    brand.dispatchEvent(new Event("focus"));
+    brand.value = "not a color";
+    brand.dispatchEvent(new Event("input"));
+    expect(brand.getAttribute("aria-invalid")).toBe("true");
+    brand.dispatchEvent(new Event("blur"));
+    expect(brand.value).toBe("#224466");
+
+    brand.value = "#123456";
+    brand.dispatchEvent(new Event("input"));
+    const reset = row("color.brand").querySelector<HTMLButtonElement>(".design-theme-reset")!;
+    expect(reset.disabled).toBe(false);
+    reset.click();
+    expect(root.style.getPropertyValue("--brand")).toBe("#224466");
+    expect(brand.value).toBe("#224466");
+    expect(row("color.brand").hasAttribute("data-changed")).toBe(false);
+    expect(hasDesignTokenChanges(card)).toBe(false);
+    expect(canUndoDesignToken(card)).toBe(false);
+    cleanup();
+  });
+
+  it("marks a token changed again when undo reverses a return to the page value", () => {
+    document.body.innerHTML = '<main><article class="card"></article></main>';
+    const root = document.documentElement;
+    root.style.setProperty("--brand", "#224466");
+    const cleanup = registerDesignTokenSource(root, tokens);
+    const card = document.querySelector<HTMLElement>(".card")!;
+    const source = tokenSourceFor(card)!;
+    previewThemeToken(source, tokens[0], "#abcdef");
+    previewThemeToken(source, tokens[0], "#224466");
+    expect(source.themeEdits.size).toBe(0);
+    undoDesignToken(card);
+    expect(root.style.getPropertyValue("--brand")).toBe("#abcdef");
+    expect(source.themeEdits.get("color.brand")).toMatchObject({ before: "#224466", after: "#abcdef" });
+    cleanup();
+  });
+
+  it("groups long token lists by their first path segment", () => {
+    document.body.innerHTML = '<main><article class="card"></article></main>';
+    const many: KomoDesignToken[] = ["a", "b", "c", "d"].flatMap((name) => [
+      { path: `color.${name}`, cssVariable: `--color-${name}`, type: "color", properties: ["color"], impactSelector: ".card" },
+      { path: `radius.${name}`, cssVariable: `--radius-${name}`, type: "dimension", properties: ["border-radius"], impactSelector: ".card" },
+    ]);
+    const cleanup = registerDesignTokenSource(document.documentElement, many);
+    const panel = createDesignThemePanel(document.querySelector<HTMLElement>(".card")!, panelFields, () => {})!;
+    expect([...panel.querySelectorAll(".design-theme-heading")].map((item) => item.textContent)).toEqual(["color", "radius"]);
+    expect(panel.querySelector(".design-theme-token > span")!.textContent).toBe("a");
     cleanup();
   });
 

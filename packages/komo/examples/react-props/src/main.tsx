@@ -61,7 +61,7 @@ function Demo() {
         Press D for Design mode, select this heading to try direct text editing, then
         select the card. Each color, spacing, typography, and radius control shows
         the token the card already uses; type a custom value or pick another token,
-        or explicitly preview a shared theme change and its affected scope.
+        or edit a shared theme value to preview it everywhere it applies.
       </p>
       <div className="demo-row">
         <PromoCard

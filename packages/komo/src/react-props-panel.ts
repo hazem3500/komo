@@ -16,12 +16,15 @@ import {
   previewThemeToken,
   proposedDesignTokenChanges,
   resetDesignTokens,
+  resetThemeToken,
   restoreElementProperty,
   syncElementTokenBinding,
   tokenImpactCount,
   tokenSourceFor,
   tokenValue,
   undoDesignToken,
+  type KomoDesignToken,
+  type RegisteredDesignTokenSource,
 } from "./design-tokens.js";
 
 const originals = new Map<HTMLElement, Map<string, InspectableScalar>>();
@@ -29,7 +32,7 @@ const edits = new WeakMap<HTMLElement, Array<{ propName: string; before: Inspect
 const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
 // React props, inline token chips and shared theme values, in the inspector's compact field style.
-const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-field.design-field{display:grid;grid-template-columns:76px minmax(0,1fr);gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 8px;border:0;border-radius:6px;background:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field input[type=checkbox]{justify-self:end;width:14px;height:14px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;background:#ffffff0a;color:#e9e6e1;padding:0 6px;font:inherit;font-size:10px}.design-react-field .design-token-binding[data-mode=token] select{background:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>input[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group summary{color:#898680}.design-theme-token{display:grid;grid-template-columns:minmax(0,1fr) 92px auto;align-items:center;gap:6px;padding:3px 0;font-size:11px;color:#aaa6a0}.design-theme-token>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-theme-token input,.design-theme-token button{box-sizing:border-box;min-width:0;height:26px;border:0;border-radius:6px;background:#ffffff0a;color:#f1efeb;padding:0 8px;font:inherit;font-size:11px}.design-theme-token button{cursor:pointer;color:#aaa6a0}.design-theme-token button:hover{background:#ffffff14;color:#f1efeb}.design-theme-token :focus-visible{outline:2px solid #bda6ef;outline-offset:1px}.design-theme-token [aria-invalid=true]{box-shadow:inset 0 0 0 1px #f17676}`;
+const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-field.design-field{display:grid;grid-template-columns:76px minmax(0,1fr);gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 8px;border:0;border-radius:6px;background:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field input[type=checkbox]{justify-self:end;width:14px;height:14px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;background:#ffffff0a;color:#e9e6e1;padding:0 6px;font:inherit;font-size:10px}.design-react-field .design-token-binding[data-mode=token] select{background:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>input[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}`;
 
 function scalarLabel(value: InspectableScalar): string {
   return value === undefined ? "unset" : JSON.stringify(value) ?? "unset";
@@ -318,45 +321,121 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
   }
 }
 
-/** Shared theme editing stays secondary; per-element token choice lives on each knob. */
-export function createDesignThemePanel(element: HTMLElement, onEdit: () => void, styleRoot?: ShadowRoot): HTMLElement | null {
+type ThemeFields = Pick<typeof import("./design-panel.js"), "fieldControl" | "fields" | "toHex">;
+type ThemeField = Parameters<ThemeFields["fieldControl"]>[0];
+
+/** Whether the Shared theme section stays open when the panel re-renders, e.g. after Undo. */
+let themeOpen = false;
+
+/**
+ * Shared theme editing stays secondary; per-element token choice lives on each knob.
+ * Token rows reuse the panel's own fields and preview live, like every other field.
+ */
+export function createDesignThemePanel(
+  element: HTMLElement,
+  panel: ThemeFields,
+  onEdit: () => void,
+  styleRoot?: ShadowRoot,
+): HTMLElement | null {
   const source = tokenSourceFor(element);
   if (!source || !source.tokens.length) return null;
   ensurePanelStyles(styleRoot);
   const group = document.createElement("details");
   group.className = "design-group design-theme-group";
-  group.open = false;
+  group.open = themeOpen;
+  group.addEventListener("toggle", () => { if (group.isConnected) themeOpen = group.open; });
   const summary = document.createElement("summary");
   summary.textContent = "Shared theme";
-  group.append(summary);
   const note = document.createElement("small");
   note.className = "design-react-source";
-  note.textContent = "Affects all matching elements · preview only";
-  group.append(note);
+  note.textContent = "Changes every element using these tokens";
+  group.append(summary, note);
+  // Long lists group by the first path segment, e.g. color, spacing, radius.
+  const sets = new Map<string, KomoDesignToken[]>();
   for (const token of source.tokens) {
-    const row = document.createElement("div");
-    row.className = "design-theme-token";
-    const label = document.createElement("span");
-    label.textContent = token.path;
-    const value = document.createElement("input");
-    value.type = "text";
-    value.autocomplete = "off";
-    value.value = tokenValue(source, token);
-    value.setAttribute("aria-label", `Shared theme value for ${token.path}`);
-    const preview = document.createElement("button");
-    preview.type = "button";
-    preview.textContent = "Preview";
-    preview.setAttribute("aria-label", `Preview shared theme change for ${token.path}`);
-    preview.addEventListener("click", () => {
-      const valid = previewThemeToken(source, token, value.value.trim());
-      value.setAttribute("aria-invalid", String(!valid));
-      if (valid) onEdit();
-    });
-    row.title = `${tokenImpactCount(source, token)} matches · ${token.impactSelector}`;
-    row.append(label, value, preview);
-    group.append(row);
+    const key = token.path.split(".")[0];
+    sets.set(key, [...sets.get(key) ?? [], token]);
+  }
+  const grouped = source.tokens.length > 6 && sets.size > 1;
+  for (const [key, tokens] of grouped ? sets : new Map([["", source.tokens]])) {
+    if (key) {
+      const heading = document.createElement("small");
+      heading.className = "design-theme-heading";
+      heading.textContent = key;
+      group.append(heading);
+    }
+    for (const token of tokens) group.append(themeRow(source, token, panel, onEdit, key));
   }
   return group;
+}
+
+function themeRow(
+  source: RegisteredDesignTokenSource,
+  token: KomoDesignToken,
+  panel: ThemeFields,
+  onEdit: () => void,
+  key: string,
+): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "design-theme-token";
+  const label = document.createElement("span");
+  label.textContent = key ? token.path.slice(key.length + 1) || token.path : token.path;
+  label.title = `${token.path} · ${tokenImpactCount(source, token)} matching · ${token.impactSelector}`;
+  // Borrow the matching style field's kind and glyph; sizes keep their unit and scrub.
+  const base = panel.fields.find((field) => token.properties.includes(field.property));
+  const field: ThemeField = {
+    property: token.cssVariable,
+    label: `Shared theme value for ${token.path}`,
+    kind: token.type === "dimension" ? "size" : base?.kind ?? "text",
+    glyph: token.type === "color" ? undefined : base?.glyph,
+    values: base?.values,
+  };
+  let live = false;
+  const box = panel.fieldControl(field, {
+    element: source.root,
+    begin: () => { live = false; },
+    apply: (control, _property, value) => {
+      const valid = value !== null && previewThemeToken(source, token, value.trim(), live);
+      control.setAttribute("aria-invalid", String(!valid));
+      if (valid) {
+        live = true;
+        sync();
+        onEdit();
+      }
+    },
+    commit: (control, _property, final) => {
+      if (final === false) return;
+      live = false;
+      if (control.getAttribute("aria-invalid") === "true") show();
+    },
+  });
+  const control = box.querySelector<HTMLInputElement | HTMLSelectElement>("[data-property]")!;
+  const swatch = box.querySelector<HTMLInputElement>('input[type="color"]');
+  const show = () => {
+    const value = tokenValue(source, token);
+    control.value = value;
+    if (swatch) swatch.value = panel.toHex(value);
+    control.removeAttribute("aria-invalid");
+    sync();
+  };
+  const sync = () => {
+    reset.disabled = !row.toggleAttribute("data-changed", source.themeEdits.has(token.path));
+    if (token.type === "fontFamily") control.title = control.value;
+  };
+  const reset = document.createElement("button");
+  reset.type = "button";
+  reset.className = "design-theme-reset";
+  reset.title = "Reset to page value";
+  reset.setAttribute("aria-label", `Reset ${token.path}`);
+  reset.innerHTML = '<svg viewBox="0 0 16 16"><path d="M2.5 2.5v3h3M3 5.5a5.5 5.5 0 1 1-.5 2.5"/></svg>';
+  reset.addEventListener("click", () => {
+    resetThemeToken(source, token);
+    show();
+    onEdit();
+  });
+  show();
+  row.append(label, box, reset);
+  return row;
 }
 
 export function noteDesignTokenOverride(element: HTMLElement, property: string, value: string): void {
