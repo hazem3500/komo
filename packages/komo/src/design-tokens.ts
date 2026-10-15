@@ -1,3 +1,5 @@
+import type { DesignToken, TokenAdapter, TokenUsage } from "./design-system.js";
+
 /** Explicit bridge from a site's named CSS custom properties into Design mode. */
 export type KomoDesignTokenType =
   | "color"
@@ -501,4 +503,54 @@ export function proposedDesignTokenChanges(element: HTMLElement): string | undef
   }
   if (!rows.length) return undefined;
   return ["Proposed design-token changes (preview only)", ...rows, "Token references are preserved for element assignments; refresh resets previews."].join("\n");
+}
+
+/** A registered CSS-variable token in the adapter shape, valued for its own root. */
+function designTokenFor(source: RegisteredDesignTokenSource, token: KomoDesignToken): DesignToken {
+  return {
+    path: token.path,
+    type: token.type,
+    value: tokenValue(source, token),
+    properties: [...token.properties],
+    group: token.path.split(".")[0],
+    ref: token.cssVariable,
+  };
+}
+
+/**
+ * The built-in token adapter: CSS custom properties registered with
+ * `useKomoDesignTokens`. Design mode uses it when `design.tokens` is not set.
+ * `resolve()` reports a token only when the winning declaration references its
+ * variable, and an off-token value for the other allowlisted properties.
+ */
+export function cssVariableTokens(): TokenAdapter {
+  return {
+    id: "css-variables",
+    list: () => [...sources].flatMap((source) => source.tokens.map((token) => designTokenFor(source, token))),
+    resolve(element) {
+      const source = tokenSourceFor(element);
+      const usage: Record<string, TokenUsage> = {};
+      if (!source || !(element instanceof HTMLElement)) return usage;
+      const computed = element.ownerDocument.defaultView?.getComputedStyle(element);
+      for (const property of new Set(source.tokens.flatMap((token) => token.properties))) {
+        const declared = declaredTokenFor(source, element, property);
+        usage[property] = declared ? { path: declared.token.path } : { offToken: computed?.getPropertyValue(property).trim() ?? "" };
+      }
+      return usage;
+    },
+    preview(element, property, token) {
+      const source = tokenSourceFor(element);
+      const match = source?.tokens.find((item) => item.path === token.path);
+      if (!source || !match || !(element instanceof HTMLElement)) return () => {};
+      const value = element.style.getPropertyValue(property);
+      const priority = element.style.getPropertyPriority(property);
+      applyTokenToElement(source, element, match, property, { recordHistory: false });
+      return () => {
+        if (value) element.style.setProperty(property, value, priority);
+        else element.style.removeProperty(property);
+        syncElementTokenBinding(source, element, property);
+      };
+    },
+    describe: (_element, property, _from, to) => `Set ${property} to var(${to.ref})`,
+  };
 }

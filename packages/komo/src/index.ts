@@ -4949,6 +4949,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             panelRoot: sidebar,
             host,
             exitKey: shortcuts.design?.label,
+            design: options.design,
             flip() {
               if (!edgeSidebar || !expanded || designDragged || edgeMorphing) return;
               const from = sidebar.getBoundingClientRect();

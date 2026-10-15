@@ -19,6 +19,8 @@ export type {
   InspectableScalar,
 } from "./react-inspector.js";
 export type { KomoDesignToken, KomoDesignTokenType } from "./design-tokens.js";
+/** The built-in token adapter over `useKomoDesignTokens`; compose it into your own adapter to keep both. */
+export { cssVariableTokens } from "./design-tokens.js";
 
 function sameConfig(a: KomoConfig, b: KomoConfig): boolean {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<
