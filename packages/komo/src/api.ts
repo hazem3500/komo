@@ -241,7 +241,7 @@ export class CommentsApi {
     )
       throw invalidResponse();
     if (!response.ok) {
-      if (response.status === 401 && this.token === token) this.clear();
+      if (response.status === 401 && token && this.token === token) this.clear();
       if (result?.code === "site_not_approved")
         throw new ApiError(
           response.status,
