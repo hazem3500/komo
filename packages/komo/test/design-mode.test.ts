@@ -21,7 +21,7 @@ describe("design mode preview inspector", () => {
     return event;
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     document.body.innerHTML = '<main><button id="hero">Hello</button><span id="label">Selected text</span><div id="nested"><strong>Rich</strong> text</div><iframe title="Preview"></iframe></main><div id="komo"></div>';
     page = document.querySelector("main")!;
     button = document.querySelector("#hero")!;
@@ -41,6 +41,7 @@ describe("design mode preview inspector", () => {
       onExit: () => { exited++; },
     });
     controller.setActive(true);
+    await controller.ready;
   });
 
   afterEach(() => {
@@ -58,7 +59,8 @@ describe("design mode preview inspector", () => {
     color.value = "#ff0000";
     color.dispatchEvent(new Event("input", { bubbles: true }));
     expect(button.style.color).toBe("rgb(255, 0, 0)");
-    expect(shadow.querySelector<HTMLElement>(".design-inspector__status")?.textContent).toContain("resets on refresh");
+    expect(shadow.querySelector<HTMLElement>(".design-inspector__count")?.textContent).toBe("1 change");
+    expect(shadow.querySelector<HTMLElement>(".design-inspector__count")?.title).toContain("resets on refresh");
     controller.setActive(false);
     expect(button.style.color).toBe("rgb(255, 0, 0)");
   });
@@ -66,7 +68,7 @@ describe("design mode preview inspector", () => {
   it("edits leaf text inline, keeps pasted markup as text, and supports undo/reset/comment", async () => {
     const label = document.querySelector<HTMLElement>("#label")!;
     pointer("pointerdown", label);
-    const edit = shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
+    const edit = shadow.querySelector<HTMLButtonElement>("[aria-label='Edit selected text inline']")!;
     expect(edit.disabled).toBe(false);
     edit.click();
     await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
@@ -137,7 +139,7 @@ describe("design mode preview inspector", () => {
   });
 
   it("edits text inside nested markup in place without changing its structure", async () => {
-    const edit = () => shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
+    const edit = () => shadow.querySelector<HTMLButtonElement>("[aria-label='Edit selected text inline']")!;
     const nested = document.querySelector<HTMLElement>("#nested")!;
     const strong = nested.querySelector("strong")!;
     const rich = strong.firstChild as Text;
@@ -177,7 +179,7 @@ describe("design mode preview inspector", () => {
   });
 
   it("edits button and component text but keeps private text read-only", async () => {
-    const edit = () => shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
+    const edit = () => shadow.querySelector<HTMLButtonElement>("[aria-label='Edit selected text inline']")!;
     const status = () => shadow.querySelector(".design-inspector__status")?.textContent;
     pointer("pointerdown", button);
     edit().click();
@@ -217,7 +219,7 @@ describe("design mode preview inspector", () => {
   it("Escape cancels an inline edit first, then exits Design mode", async () => {
     const label = document.querySelector<HTMLElement>("#label")!;
     pointer("pointerdown", label);
-    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!.click();
+    shadow.querySelector<HTMLButtonElement>("[aria-label='Edit selected text inline']")!.click();
     await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
     label.textContent = "Not saved";
     label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
@@ -232,7 +234,6 @@ describe("design mode preview inspector", () => {
     expect(shadow.activeElement).toBe(
       shadow.querySelector<HTMLButtonElement>(".design-inspector__close"),
     );
-    expect(shadow.querySelector(".design-inspector__mark svg")).not.toBeNull();
   });
 
   it("uses a short open/close transition and hides the closing inspector from assistive tech", () => {
@@ -282,7 +283,7 @@ describe("design mode preview inspector", () => {
     input.value = "30";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
-    const reset = [...shadow.querySelectorAll<HTMLButtonElement>(".design-inspector__actions button")].find((item) => item.textContent === "Reset")!;
+    const reset = shadow.querySelector<HTMLButtonElement>('.design-inspector__actions [aria-label="Reset"]')!;
     reset.click();
     expect(button.style.getPropertyValue("font-size")).toBe("18px");
     expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__close"));
@@ -317,29 +318,101 @@ describe("design mode preview inspector", () => {
     expect(exited).toBe(1);
   });
 
-  it("keeps a slider gesture and precision input synchronized with one Undo", () => {
+  it("scrubs a number by dragging its glyph and nudges with arrow keys, as one Undo each", () => {
     button.style.fontSize = "18px";
     pointer("pointerdown", button);
-    const slider = shadow.querySelector<HTMLInputElement>('[aria-label="Font size slider"]')!;
-    const value = shadow.querySelector<HTMLInputElement>('[data-property="font-size"]')!;
-    slider.dispatchEvent(new Event("focus"));
-    for (const size of [24, 30, 36]) {
-      slider.value = String(size);
-      slider.dispatchEvent(new Event("input"));
-    }
-    slider.dispatchEvent(new Event("change"));
-    expect(value.value).toBe("36");
-    expect(slider.getAttribute("aria-valuetext")).toBe("36 pixels");
-    expect(button.style.fontSize).toBe("36px");
+    const field = shadow.querySelector<HTMLElement>('[data-field-property="font-size"]')!;
+    const glyph = field.querySelector<HTMLElement>(".design-field__glyph")!;
+    const value = field.querySelector<HTMLInputElement>('[data-property="font-size"]')!;
+    const drag = (type: string, clientX: number, shiftKey = false) => {
+      const event = new Event(type, { bubbles: true, cancelable: true, composed: true });
+      Object.defineProperties(event, { clientX: { value: clientX }, pointerId: { value: 1 }, shiftKey: { value: shiftKey } });
+      glyph.dispatchEvent(event);
+      return event;
+    };
+    expect(drag("pointerdown", 100).defaultPrevented).toBe(true);
+    drag("pointermove", 112);
+    expect(value.value).toBe("24");
+    drag("pointermove", 114, true);
+    expect(value.value).toBe("34");
+    drag("pointerup", 114);
+    expect(button.style.fontSize).toBe("34px");
     const undo = shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button")!;
     undo.click();
     expect(button.style.fontSize).toBe("18px");
     expect(undo.disabled).toBe(true);
-    const precision = shadow.querySelector<HTMLInputElement>('[data-property="font-size"]')!;
-    precision.focus();
-    precision.value = "27";
-    precision.dispatchEvent(new Event("input"));
-    expect(shadow.querySelector<HTMLInputElement>('[aria-label="Font size slider"]')?.value).toBe("27");
+
+    const input = shadow.querySelector<HTMLInputElement>('[data-property="font-size"]')!;
+    input.focus();
+    const key = (key: string, shiftKey = false) => {
+      const event = new KeyboardEvent("keydown", { key, shiftKey, bubbles: true, cancelable: true });
+      input.dispatchEvent(event);
+      return event;
+    };
+    expect(key("ArrowUp").defaultPrevented).toBe(true);
+    key("ArrowUp", true);
+    key("ArrowDown");
+    expect(input.value).toBe("28");
+    expect(button.style.fontSize).toBe("28px");
+    input.blur();
+    undo.click();
+    expect(button.style.fontSize).toBe("18px");
+  });
+
+  it("shows only the sections that apply and adds a fill from its empty section", () => {
+    const sections = () => [...shadow.querySelectorAll(".design-section")].map((item) =>
+      `${item.querySelector("summary, .design-section__title")?.textContent}${item.querySelector(".design-group") ? "" : " (empty)"}`);
+    const box = document.createElement("div");
+    box.append(document.createElement("span"));
+    page.append(box);
+    pointer("pointerdown", box);
+    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border (empty)"]);
+    expect(shadow.querySelector('[data-property="gap"]')).toBeNull();
+    expect(shadow.querySelector("[aria-label='Edit selected text inline']")).toBeNull();
+
+    box.style.display = "flex";
+    box.style.border = "2px solid red";
+    pointer("pointerdown", box);
+    expect(shadow.querySelector('[data-property="gap"]')).not.toBeNull();
+    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border"]);
+
+    pointer("pointerdown", button);
+    expect(sections()).toEqual(["Layout", "Typography", "Fill (empty)", "Border (empty)"]);
+    expect(shadow.querySelector(".design-section:nth-child(2) [aria-label='Edit selected text inline']")).not.toBeNull();
+    shadow.querySelector<HTMLButtonElement>('[aria-label="Add fill"]')!.click();
+    expect(button.style.backgroundColor).toBe("rgb(255, 255, 255)");
+    expect(sections()).toEqual(["Layout", "Typography", "Fill", "Border (empty)"]);
+    expect(shadow.querySelector<HTMLInputElement>('[data-property="background-color"]')?.value).toBe("#ffffff");
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button")!.click();
+    expect(button.style.backgroundColor).toBe("");
+    expect(sections()).toContain("Fill (empty)");
+  });
+
+  it("keeps the footer quiet until there are changes, then counts them", async () => {
+    const bar = shadow.querySelector<HTMLElement>(".design-inspector__bar")!;
+    const count = shadow.querySelector<HTMLElement>(".design-inspector__count")!;
+    pointer("pointerdown", button);
+    expect(bar.hasAttribute("data-changes")).toBe(false);
+    expect(count.textContent).toBe("");
+    expect(shadow.querySelector(".design-inspector__actions button:last-child")?.textContent).toBe("Comment");
+    const edit = (property: string, value: string) => {
+      const input = shadow.querySelector<HTMLInputElement>(`[data-property="${property}"]`)!;
+      input.dispatchEvent(new Event("focus"));
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    edit("color", "#ff0000");
+    expect(bar.hasAttribute("data-changes")).toBe(true);
+    expect(count.textContent).toBe("1 change");
+    edit("font-size", "30");
+    expect(count.textContent).toBe("2 changes");
+    shadow.querySelector<HTMLButtonElement>('.design-inspector__actions [aria-label="Copy CSS"]')!.click();
+    await vi.waitFor(() => expect(bar.hasAttribute("data-message")).toBe(true));
+    expect(shadow.querySelector(".design-inspector__status")?.textContent).not.toBe("");
+    shadow.querySelector<HTMLButtonElement>('.design-inspector__actions [aria-label="Reset"]')!.click();
+    expect(count.textContent).toBe("");
+    expect(bar.hasAttribute("data-changes")).toBe(false);
   });
 
   it("preserves color alpha until edited and rejects invalid CSS colors", () => {
