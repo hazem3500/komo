@@ -94,10 +94,13 @@ if (report.initial.gzip > 102_450 || report.coreFeatures.gzip > 208_450)
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
 // Raised from 7,000 for double-click inline editing (37 bytes); the caret logic stays in the editor chunk.
-if (report.optionalDesignMode.gzip > 7_100)
+// 7,250: the footer Before/After switch (styles, text, React props, theme), its keys and morph,
+// toolbar-style tooltips and header/footer polish (~870 bytes). The panel chunk has no room either.
+if (report.optionalDesignMode.gzip > 7_250)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
-if (report.optionalInlineTextEditing.gzip > 3_000)
+// 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).
+if (report.optionalInlineTextEditing.gzip > 3_100)
   throw new Error("komo's on-demand inline text editor chunk exceeds its gzip budget.");
 // Design mode's property controls load as their own chunk when Design mode opens,
 // so the Figma-style panel does not grow the Design mode entry (7,007 -> 5,677 gzip).
