@@ -2507,7 +2507,7 @@ textarea {
 .thread-pane .messages { max-height: none; }
 .thread-pane .composer { margin-top: auto; }
 .message > .thread-tags { margin: 6px 0 0; padding: 0 0 0 32px; }
-.thread-pane .dialog > .thread-tags { margin: 0; padding: 0 16px 8px; }
+.thread-pane .dialog > .thread-tags { margin: -6px 0 4px; padding: 0 16px 8px 36px; }
 .thread-pane .message:first-child > .row { padding-right: 0; }
 /* Design mode's selection outline marks the open thread's target. */
 .component-hover[data-thread] { border: 2px solid var(--accent, #bda6ef); border-radius: 8px; background: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #bda6ef) 22%, transparent), 0 2px 12px #0003; transition: opacity 150ms ease; }
