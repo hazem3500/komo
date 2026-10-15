@@ -108,11 +108,32 @@ export function shortTarget(selector: string): string {
 const COLOR = /^(#[0-9a-f]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|oklch\([^)]*\))$/i;
 
 // Live previews, keyed by comment id, so a redrawn card shows the right state.
-interface Applied { restore: Array<() => void> }
+interface Applied {
+  restore: Array<() => void>;
+  /** Inline styles to hand back once a smooth revert has finished animating. */
+  restoreStyles: Array<() => void>;
+  /** Pin each changed style to its measured Before value, so reverting can animate. */
+  pinBefore: Array<() => void>;
+}
 const applied = new Map<string, Applied>();
+// Before/After switches that may still be on screen, newest last.
+const visibleToggles = new Set<HTMLElement>();
+// Reverts that are still animating back, finished once their transition ends.
+const settling = new Map<string, { timer: ReturnType<typeof setTimeout>; finish(): void }>();
 
-function apply(key: string, sections: DesignSection[], resolve: (selector?: string) => Element | null) {
+function settle(key: string) {
+  const pending = settling.get(key);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  settling.delete(key);
+  pending.finish();
+}
+
+function apply(key: string, sections: DesignSection[], resolve: (selector?: string) => Element | null, smooth = false) {
+  settle(key);
   const restore: Array<() => void> = [];
+  const restoreStyles: Array<() => void> = [];
+  const pinBefore: Array<() => void> = [];
   for (const section of sections) {
     const element = resolve(section.target);
     for (const item of section.changes) {
@@ -125,8 +146,13 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
       } else if (element instanceof HTMLElement && item.apply.kind === "style") {
         const previous = element.style.getPropertyValue(item.apply.property);
         const priority = element.style.getPropertyPriority(item.apply.property);
-        element.style.setProperty(item.apply.property, item.after, "important");
-        restore.push(() => previous ? element.style.setProperty(item.apply!.property, previous, priority) : element.style.removeProperty(item.apply!.property));
+        const property = item.apply.property;
+        const pin = () => item.before !== "(unset)" && element.style.setProperty(property, item.before, "important");
+        // Browsers can't animate from keywords like auto, so start from the measured value.
+        if (smooth && pin()) void getComputedStyle(element).getPropertyValue(property);
+        element.style.setProperty(property, item.after, "important");
+        pinBefore.push(pin);
+        restoreStyles.push(() => previous ? element.style.setProperty(item.apply!.property, previous, priority) : element.style.removeProperty(item.apply!.property));
       } else if (element instanceof HTMLElement && item.apply.kind === "text" && !element.childElementCount) {
         // Text nodes are edited in place so frameworks keep their references.
         const node = element.firstChild;
@@ -138,19 +164,61 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
       }
     }
   }
-  applied.set(key, { restore });
-  return restore.length > 0;
+  applied.set(key, { restore, restoreStyles, pinBefore });
+  return restore.length + restoreStyles.length > 0;
 }
 
-function revert(key: string) {
+// Properties that animate when a theme token changes, since its users are unknown.
+const TOKEN_PROPERTIES = ["color", "background-color", "border-color", "outline-color", "fill", "stroke", "box-shadow", "text-decoration-color"];
+const EASE = "cubic-bezier(.22, 1, .36, 1)";
+let morphing: { style: HTMLStyleElement; timer: ReturnType<typeof setTimeout> } | undefined;
+
+/**
+ * Morph the page between Before and After: for a moment, transition exactly
+ * the properties this comment changes, so widths, spacing and colours ease to
+ * their new values in place. Text can't interpolate, so it fades instead.
+ */
+function morph(sections: DesignSection[], resolve: (selector?: string) => Element | null) {
+  const properties = new Set<string>();
+  for (const section of sections)
+    for (const item of section.changes) {
+      if (item.apply?.kind === "style") properties.add(item.apply.property);
+      else if (item.apply?.kind === "variable") TOKEN_PROPERTIES.forEach((property) => properties.add(property));
+      else if (item.apply?.kind === "text") {
+        const element = resolve(section.target);
+        if (element instanceof HTMLElement)
+          element.animate?.([{ opacity: 1 }, { opacity: 0.25, offset: 0.4 }, { opacity: 1 }], { duration: 360, easing: EASE });
+      }
+    }
+  if (!properties.size) return;
+  if (morphing) {
+    clearTimeout(morphing.timer);
+    morphing.style.remove();
+  }
+  const style = document.createElement("style");
+  // Komo's own UI lives in a shadow root, so this only reaches the page.
+  style.textContent = `*, *::before, *::after { transition-property: ${[...properties].join(", ")} !important; transition-duration: 420ms !important; transition-timing-function: ${EASE} !important; transition-delay: 0s !important; }`;
+  document.head.append(style);
+  // Leave the rule in place for the whole transition, then restore the page's own.
+  morphing = { style, timer: setTimeout(() => { style.remove(); morphing = undefined; }, 480) };
+}
+
+function revert(key: string, smooth = false) {
+  settle(key);
   const state = applied.get(key);
   if (!state) return;
-  for (const undo of state.restore.reverse()) undo();
   applied.delete(key);
+  for (const undo of state.restore.reverse()) undo();
+  const finish = () => { for (const undo of state.restoreStyles.reverse()) undo(); };
+  if (!smooth || !state.pinBefore.length) return finish();
+  // Animate back to the measured Before values, then hand the styles back to the page.
+  for (const pin of state.pinBefore) pin();
+  settling.set(key, { finish, timer: setTimeout(() => settle(key), 480) });
 }
 
 /** Undo every live preview except those whose cards are still on screen. */
 export function resetDesignPreviews(keep: ReadonlySet<string> = new Set()) {
+  for (const key of [...settling.keys()]) if (!keep.has(key)) settle(key);
   for (const key of [...applied.keys()]) if (!keep.has(key)) revert(key);
 }
 
@@ -252,25 +320,23 @@ export function renderDesignComment(container: HTMLElement, body: string, option
       toggle.setAttribute("role", "group");
       toggle.setAttribute("aria-label", "Preview on page");
       for (const [index, label] of ["Before", "After"].entries()) {
-        const button = Object.assign(document.createElement("button"), { type: "button", textContent: label });
+        const button = Object.assign(document.createElement("button"), { type: "button", textContent: label, title: `${label} · B` });
         button.addEventListener("click", () => {
           const showAfter = index === 1;
           if (showAfter === applied.has(options.key)) return;
           const element = options.resolve(sections.find((section) => section.target)?.target);
           if (showAfter) element?.scrollIntoView({ block: "center", behavior: "smooth" });
-          const swap = () => {
-            if (showAfter) apply(options.key, sections, options.resolve);
-            else revert(options.key);
-            sync();
-          };
-          // Crossfade the page between Before and After where the browser supports it.
-          const transition = (document as Document & { startViewTransition?(update: () => void): unknown }).startViewTransition;
-          if (transition && !matchMedia("(prefers-reduced-motion: reduce)").matches) transition.call(document, swap);
-          else swap();
+          const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+          if (!reduced) morph(sections, options.resolve);
+          if (showAfter) apply(options.key, sections, options.resolve, !reduced);
+          else revert(options.key, !reduced);
+          sync();
         });
         toggle.append(button);
       }
       toggles.push(toggle);
+      for (const item of visibleToggles) if (!item.isConnected) visibleToggles.delete(item);
+      visibleToggles.add(toggle);
       head.append(toggle);
     }
     card.append(head);
@@ -306,4 +372,23 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   }
   sync();
   container.replaceChildren(root);
+  if (toggles.length) listenForShortcut();
+}
+
+// B flips the open design comment between Before and After, unless typing.
+let shortcutBound = false;
+function listenForShortcut() {
+  if (shortcutBound) return;
+  shortcutBound = true;
+  document.addEventListener("keydown", (event) => {
+    if (event.key.toLowerCase() !== "b" || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
+    const origin = event.composedPath()[0];
+    if (origin instanceof HTMLElement && (origin.isContentEditable || origin.matches("input, textarea, select"))) return;
+    // The most recently drawn switch still on screen belongs to the open comment.
+    const toggle = [...visibleToggles].reverse().find((item) => item.isConnected);
+    const next = toggle?.querySelector<HTMLButtonElement>('button[aria-pressed="false"]');
+    if (!next) return;
+    event.preventDefault();
+    next.click();
+  });
 }

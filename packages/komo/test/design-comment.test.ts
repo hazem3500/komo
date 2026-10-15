@@ -118,6 +118,23 @@ describe("design comments", () => {
     expect(title.textContent).toBe("Old title");
   });
 
+  it("flips Before/After with B, except while typing", () => {
+    document.body.innerHTML = '<h2 id="title" style="width: 462px">Old title</h2><input id="field">';
+    const title = document.getElementById("title")!;
+    title.scrollIntoView = () => {};
+    const container = document.createElement("div");
+    document.body.append(container);
+    renderDesignComment(container, style, { key: "c4", resolve: () => title, note: () => {} });
+    const press = (target: EventTarget, key = "b") =>
+      target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, composed: true }));
+    press(document.body);
+    expect(title.style.width).toBe("308px");
+    press(document.getElementById("field")!);
+    expect(title.style.width).toBe("308px");
+    press(document.body, "B");
+    expect(container.querySelector('.design-toggle button[aria-pressed="true"]')!.textContent).toBe("Before");
+  });
+
   it("collapses long change lists", () => {
     const long = ["Proposed style changes (preview only)", "Target: p", ...Array.from({ length: 7 }, (_, index) => `- prop-${index}: 0 → ${index + 1}`)].join("\n");
     const container = document.createElement("div");
