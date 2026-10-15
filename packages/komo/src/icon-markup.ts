@@ -19,7 +19,6 @@ import { ArrowUp } from "@untitledui/icons/ArrowUp";
 import { Link01 } from "@untitledui/icons/Link01";
 import { Code02 } from "@untitledui/icons/Code02";
 import { SmileIcon } from "./SmileIcon.js";
-import { GitBranch01 } from "@untitledui/icons/GitBranch01";
 import { Tag01 } from "@untitledui/icons/Tag01";
 import { Palette } from "@untitledui/icons/Palette";
 // Icon components are shared by the DOM and React surfaces.
@@ -43,7 +42,6 @@ export type IconName =
   | "link"
   | "code"
   | "smile"
-  | "branch"
   | "tag"
   | "design";
 export const components: Record<
@@ -69,7 +67,6 @@ export const components: Record<
   link: Link01,
   code: Code02,
   smile: SmileIcon,
-  branch: GitBranch01,
   tag: Tag01,
   design: Palette,
 };

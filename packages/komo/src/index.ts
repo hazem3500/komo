@@ -2373,7 +2373,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       items.push({
         id: "retry",
         label: `${issue?.title ?? "Offline"} · Retry`,
-        icon: glyph("branch"),
+        icon: glyph("info"),
         showInBar: false,
         onSelect: retryConnection,
       });
