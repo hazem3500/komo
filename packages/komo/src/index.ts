@@ -462,6 +462,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       ? (summarizeDesign?.(body) ?? (void loadDesignComments(), "Design change"))
       : body;
   let draftText = "",
+    // A Design mode proposal attached to the new comment, shown as a change card.
+    draftProposal = "",
     draftTags: string[] = [],
     guestName = "",
     editing: string | null = null,
@@ -3801,7 +3803,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       `composer ${thread ? "reply-composer" : "new-comment-composer"}`,
     );
     const input = el("textarea");
-    input.placeholder = thread ? "Reply…" : "Add a comment…";
+    const proposal = thread ? "" : draftProposal;
+    input.placeholder = thread ? "Reply…" : proposal ? "Add a note…" : "Add a comment…";
     input.rows = 1;
     input.maxLength = 4000;
     input.required = true;
@@ -3849,13 +3852,29 @@ export function initComments(options: CommentsOptions): CommentsController {
         );
       form.append(body);
     }
+    // A proposal can be posted on its own; the note is optional.
     input.addEventListener("input", () => {
-      send.disabled = pending || !input.value.trim();
+      send.disabled = pending || (!input.value.trim() && !proposal);
     });
-    send.disabled ||= !input.value.trim();
+    send.disabled ||= !input.value.trim() && !proposal;
+    if (proposal) {
+      const card = el("div", "draft-proposal");
+      card.textContent = proposal;
+      void loadDesignComments().then(({ renderDesignComment }) => {
+        renderDesignComment(card, proposal, {
+          key: "draft",
+          resolve: () => null,
+          note: appendMessageLinks,
+        });
+        // The change is already live while composing, so there is nothing to switch.
+        card.querySelector(".design-toggle")?.remove();
+        positionDialog();
+      });
+      form.prepend(card);
+    }
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      if (!input.value.trim() || pending) return;
+      if ((!input.value.trim() && !proposal) || pending) return;
       if (!api.user) {
         submitAfterIdentity = () => postMessage(thread);
         openAccount();
@@ -3875,7 +3894,9 @@ export function initComments(options: CommentsOptions): CommentsController {
     const now = Date.now();
     const comment: Comment = {
       id: `pending-${crypto.randomUUID()}`,
-      body: thread ? (replies.get(thread.id) ?? "") : draftText,
+      body: thread
+        ? (replies.get(thread.id) ?? "")
+        : [draftText.trim(), draftProposal].filter(Boolean).join("\n\n"),
       author: { ...api.user },
       createdAt: now,
       editedAt: null,
@@ -3924,6 +3945,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     } else if (draft) {
       const anchor = draft;
       const tags = draftTags;
+      const note = draftText;
+      const proposal = draftProposal;
       const item: Thread = {
         id: `pending-${crypto.randomUUID()}`,
         page: page(),
@@ -3937,7 +3960,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       };
       selected = item.id;
       draft = null;
-      draftText = "";
+      draftText = draftProposal = "";
       draftTags = [];
       await saveOptimistic(
         (items) => [...items, item],
@@ -3961,7 +3984,8 @@ export function initComments(options: CommentsOptions): CommentsController {
           if (!draft) {
             selected = null;
             draft = anchor;
-            draftText = comment.body;
+            draftText = note;
+            draftProposal = proposal;
             draftTags = tags;
           } else recoveredDrafts.push({ anchor, text: comment.body });
         },
@@ -4805,7 +4829,8 @@ export function initComments(options: CommentsOptions): CommentsController {
               setDesignMode(false);
               // The compact sheet would cover the composer, as in setMode().
               if (compactSidebar && expanded) toggleExpanded(false);
-              draftText = proposal ?? "";
+              draftText = "";
+              draftProposal = proposal ?? "";
               draftTags = [];
               const rect = element.getBoundingClientRect();
               composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
@@ -5382,7 +5407,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     connection = "Connecting";
     google = github = guests = guestResolve = privateProject = false;
     draft = parkedDraft = null;
-    draftText = "";
+    draftText = draftProposal = "";
     draftTags = [];
     replies.clear();
     recoveredDrafts.length = 0;
