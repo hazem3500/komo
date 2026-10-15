@@ -147,7 +147,11 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
         const previous = element.style.getPropertyValue(item.apply.property);
         const priority = element.style.getPropertyPriority(item.apply.property);
         const property = item.apply.property;
-        const pin = () => item.before !== "(unset)" && element.style.setProperty(property, item.before, "important");
+        const pin = () => {
+          if (item.before === "(unset)") return false;
+          element.style.setProperty(property, item.before, "important");
+          return true;
+        };
         // Browsers can't animate from keywords like auto, so start from the measured value.
         if (smooth && pin()) void getComputedStyle(element).getPropertyValue(property);
         element.style.setProperty(property, item.after, "important");
@@ -391,4 +395,10 @@ function listenForShortcut() {
     event.preventDefault();
     next.click();
   });
+}
+
+/** A proposal being written: read-only, since the change is already live on the page. */
+export function renderDraftProposal(container: HTMLElement, body: string) {
+  renderDesignComment(container, body, { key: "draft", resolve: () => null, note: (element, text) => element.append(text) });
+  container.querySelector(".design-toggle")?.remove();
 }

@@ -1588,6 +1588,7 @@ ${morphingMenuStyles}
   padding: 16px 16px 16px;
   box-shadow: none;
 }
+.new-comment-composer .draft-proposal { margin-right: 32px; }
 .new-comment-composer .draft-body {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) 28px;

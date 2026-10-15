@@ -77,7 +77,8 @@ await writeFile(
 // All-features raised to 206,500 for the on-demand design comment cards, their Before/After morph and B shortcut.
 // Initial raised to 101,400 for host event isolation (~340 bytes): it has to run
 // at mount, before any host modal opens, so it cannot load on demand.
-if (report.initial.gzip > 101_400 || report.coreFeatures.gzip > 206_500)
+// 101,600: the new-comment box shows Design mode proposals as a change card (~130 bytes).
+if (report.initial.gzip > 101_600 || report.coreFeatures.gzip > 206_500)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
