@@ -2542,7 +2542,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
       pin.textContent = "";
       // The hover card replaces the native tooltip; aria-label stays.
-      pin.removeAttribute("title");
+      pin.title = "";
       if (thread.comments[0]) {
         const author = thread.comments[0].author;
         applyAccent(pin, author.accentColor);
@@ -2585,7 +2585,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         if (design)
           void loadDesignComments().then(({ renderDesignComment }) =>
             renderDesignComment(summary, message.body, {
-              key: `pin:${thread.id}`,
+              key: "",
               resolve: () => null,
               note: (node, text) => (node.textContent = text),
               compact: true,
@@ -2597,7 +2597,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           thread.resolved ? "Reopen comment" : "Resolve comment",
           () => {
             hidePreview();
-            toggleResolved(thread, captureNoticePosition(thread.anchor));
+            toggleResolved(thread);
           },
           "icon pin-preview-resolve",
           "check",

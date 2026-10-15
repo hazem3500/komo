@@ -251,11 +251,9 @@ const css = `
 .design-more { border: 0; width: 100%; padding: 7px 12px; text-align: left; font: inherit; font-size: 11px; color: #9a9a9a; background: none; border-top: 1px solid #ffffff06; cursor: pointer; }
 .design-more:hover, .design-toggle button:hover { color: #fff; }
 .design-source { padding: 0 12px 8px; color: #777; font-size: 11px; }
-.design-comment[data-compact] { gap: 6px; margin: 0; }
-.design-comment[data-compact] .design-note { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.design-comment[data-compact] .design-card-head { min-height: 0; padding: 6px 10px; }
-.design-comment[data-compact] .design-row { padding: 4px 10px; }
-.design-count { color: #9a9a9a; font-size: 11px; }
+[data-compact] { gap: 6px; margin: 11px 0 0; }
+[data-compact] .design-card-head, [data-compact] .design-row, [data-compact] > .design-source { min-height: 0; padding: 4px 10px; }
+[data-compact]:hover > .design-source { color: #eee; text-decoration: underline; }
 `;
 
 function value(text: string, token?: string): HTMLElement {
@@ -392,7 +390,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
     if (block.source && !compact) card.append(Object.assign(document.createElement("div"), { className: "design-source", textContent: block.source }));
     root.append(card);
   }
-  if (extra) root.append(Object.assign(document.createElement("span"), { className: "design-count", textContent: `+${extra} more` }));
+  if (extra) root.append(Object.assign(document.createElement("span"), { className: "design-source", textContent: `+${extra} more` }));
   sync();
   container.replaceChildren(root);
   if (toggles.length) listenForShortcut();

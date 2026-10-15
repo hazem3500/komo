@@ -871,12 +871,12 @@ ${morphingMenuStyles}
 }
 .pin-preview small {
   color: #999;
-  margin: 0 30px 0 auto;
+  margin: 0 36px 0 auto;
 }
 .pin-preview-resolve {
   position: absolute;
   top: 17px;
-  right: 10px;
+  right: 16px;
 }
 
 /* Review workspace: shared gutters and a dock aligned to the comment column. */

@@ -152,8 +152,8 @@ describe("design comments", () => {
     // Three rows across sections, then a count of the rest.
     expect(container.querySelectorAll(".design-row")).toHaveLength(3);
     expect(container.querySelectorAll(".design-card")).toHaveLength(2);
-    expect(container.querySelector(".design-count")!.textContent).toBe("+2 more");
+    expect(container.querySelector(".design-source")!.textContent).toBe("+2 more");
     // Nothing interactive: no Before/After switch or expand button.
-    expect(container.querySelector("button, .design-toggle, .design-source")).toBeNull();
+    expect(container.querySelector("button, .design-toggle")).toBeNull();
   });
 });
