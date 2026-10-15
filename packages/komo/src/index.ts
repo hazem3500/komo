@@ -168,6 +168,11 @@ export function initComments(options: CommentsOptions): CommentsController {
   })();
   let compactSidebar = isCompactReview(window.innerWidth, window.innerHeight);
   let edgeSidebar = !compactSidebar && sidebarMode === "edge";
+  // Set while Design mode has temporarily framed a floating sidebar, moved it
+  // off its target, or the user has dragged it this session.
+  let designFrame = false,
+    designMoved = false,
+    designDragged = false;
   // Development comments use a separate server-backed channel.
   const localSite = ["localhost", "127.0.0.1", "[::1]"].includes(
     location.hostname,
@@ -808,7 +813,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     pageTransitioning = false;
     pins.style.opacity = "";
   }
-  function setSidebarMode(mode: "background" | "edge") {
+  function setSidebarMode(mode: "background" | "edge", temporary?: boolean) {
     if (
       compactSidebar ||
       mode === sidebarMode ||
@@ -837,11 +842,14 @@ export function initComments(options: CommentsOptions): CommentsController {
     switchingSidebar = true;
     sidebarMode = mode;
     edgeSidebar = mode === "edge";
-    options = { ...options, sidebar: mode };
-    try {
-      localStorage.setItem(sidebarModeKey, mode);
-    } catch {
-      /* Keep the preference in memory when storage is blocked. */
+    if (!temporary) {
+      designFrame = false;
+      options = { ...options, sidebar: mode };
+      try {
+        localStorage.setItem(sidebarModeKey, mode);
+      } catch {
+        /* Keep the preference in memory when storage is blocked. */
+      }
     }
     syncEdgeMode();
     scalePage();
@@ -980,20 +988,26 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   const grip = el("div", "edge-sidebar-grip");
   grip.setAttribute("aria-hidden", "true");
-  floatingDrag(
-    sidebar,
-    grip,
-    placeSidebar,
-    abort.signal,
-    () => {
-      presence.show();
-    },
-    () => {
-      persistSidebarPlacement();
-      presence.update();
-    },
-    () => expanded && edgeSidebar && !edgeMorphing,
-  );
+  // The grip and Design mode's inspector heading both move the floating sidebar.
+  const dragSidebar = (handle: HTMLElement) =>
+    floatingDrag(
+      sidebar,
+      handle,
+      placeSidebar,
+      abort.signal,
+      () => {
+        // A manual move wins: Design mode stops avoiding until it reopens.
+        designMoved = false;
+        designDragged = true;
+        presence.show();
+      },
+      () => {
+        persistSidebarPlacement();
+        presence.update();
+      },
+      () => expanded && edgeSidebar && !edgeMorphing,
+    );
+  dragSidebar(grip);
   sidebar.prepend(grip);
   const resizeDirs: EdgeResizeDir[] = [
     "n",
@@ -1454,11 +1468,25 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (client === api && session === sessionRevision) refreshing = false;
     }
   }
+  // Design mode frames the page beside the inspector so the panel never covers
+  // what you pick. The floating layout returns on exit and isn't saved.
+  function syncDesignFrame() {
+    if (!designActive && designMoved) {
+      designMoved = false;
+      sidebarPlacement = savedSidebarPlacement;
+      positionSidebar();
+    }
+    if (designFrame === designActive || (designActive && (!canFrame || compactSidebar || sidebarMode !== "edge"))) return;
+    designFrame = designActive;
+    if (compactSidebar) sidebarMode = "edge";
+    else setSidebarMode(designActive ? "background" : "edge", true);
+  }
   function setMode(value: boolean) {
     if (options.onboarding) return;
     if (designActive) {
       designActive = false;
       designController?.setActive(false);
+      syncDesignFrame();
     }
     commentMode = value;
     if (expanded) toggleExpanded(false);
@@ -1504,6 +1532,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (expanded)
         designReturnScrollTop = sidebar.querySelector<HTMLElement>(".list")?.scrollTop ?? 0;
       setMode(false);
+      designActive = true;
+      designDragged = false;
+      syncDesignFrame();
       if (!expanded) toggleExpanded(true);
       account = false;
       // Move focus out of the Comments view before render marks it hidden.
@@ -1518,6 +1549,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       void ensureDesignController().then((controller) => controller?.setActive(designActive));
     } else {
       designController?.setActive(false);
+      syncDesignFrame();
       restoreCommentsAfterDesign();
     }
     render();
@@ -1568,7 +1600,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           window.visualViewport?.height ?? window.innerHeight,
         )
       : window.innerHeight;
-    const viewportKey = `${window.innerWidth}:${window.innerHeight}:${viewportHeight}:${zoom}:${expanded}:${account}:${sidebarMode}:${window.visualViewport?.offsetTop ?? 0}`;
+    const viewportKey = `${window.innerWidth}:${window.innerHeight}:${viewportHeight}:${zoom}:${expanded}:${account}:${sidebarMode}:${designActive}:${window.visualViewport?.offsetTop ?? 0}`;
     if (appliedViewport === viewportKey) return;
     if (!compactSidebar) stopLayoutMotion();
     appliedViewport = viewportKey;
@@ -1628,6 +1660,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       expanded,
       window.innerHeight,
       account,
+      designActive,
     );
     const useFrame = layout.framed;
     host.style.setProperty("--review-viewport-height", `${viewportHeight}px`);
@@ -2171,6 +2204,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     designReturnToComments = false;
     designActive = false;
     designController?.setActive(false);
+    syncDesignFrame();
     dismiss();
     if (expanded) toggleExpanded(false);
     mode = false;
@@ -4730,6 +4764,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       }
     }
   }
+  let dialogSize: ResizeObserver | undefined;
   function positionDialog() {
     const availableHeight = Math.min(
       window.innerHeight,
@@ -4754,7 +4789,11 @@ export function initComments(options: CommentsOptions): CommentsController {
       positionNotice();
       return;
     }
-    dialog.style.maxHeight = "";
+    // Stay inside what's visible: the frame when framed, above the toolbar otherwise.
+    // Content that loads later (design change cards) re-runs this through the observer.
+    const bottom = framed ? surface.getBoundingClientRect().bottom - 12 : availableHeight - 92;
+    dialog.style.maxHeight = `${bottom - 12}px`;
+    (dialogSize ??= new ResizeObserver(() => positionDialog())).observe(dialog);
     const anchor = draft ?? threads.find((t) => t.id === selected)?.anchor;
     const pin =
       draggedPin?.id === selected
@@ -4809,7 +4848,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       dialogKey,
       dialog,
       Math.max(12, Math.min(x, window.innerWidth - dialog.offsetWidth - right)),
-      Math.max(12, Math.min(y, availableHeight - dialog.offsetHeight - 92)),
+      Math.max(12, Math.min(y, bottom - dialog.offsetHeight)),
       follow,
     );
     updateOrigin();
@@ -4873,6 +4912,16 @@ export function initComments(options: CommentsOptions): CommentsController {
             panelRoot: sidebar,
             host,
             exitKey: shortcuts.design?.label,
+            flip() {
+              if (!edgeSidebar || !expanded || designDragged || edgeMorphing) return;
+              const from = sidebar.getBoundingClientRect();
+              placeSidebar({ x: document.documentElement.clientWidth - from.right, y: from.top });
+              designMoved = true;
+              sidebar.animate(
+                [{ transform: `translateX(${from.left - sidebar.getBoundingClientRect().left}px)` }, {}],
+                { duration: 320, easing: "cubic-bezier(.22,1,.36,1)" },
+              );
+            },
             targetAt(x, y) {
               const target = siteElementAt(x, y);
               return pickable(target) ? target : null;
@@ -4890,6 +4939,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             },
             onExit() {
               designActive = false;
+              syncDesignFrame();
               renderToolbar();
               restoreCommentsAfterDesign();
             },
@@ -4904,6 +4954,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         })
         .catch(() => {
           designActive = false;
+          syncDesignFrame();
           renderToolbar();
           return null;
         })
@@ -5143,6 +5194,11 @@ export function initComments(options: CommentsOptions): CommentsController {
       commentsPanel.hidden = designActive;
     }
     if (designActive) designController?.mountPanel(sidebar);
+    const head = sidebar.querySelector<HTMLElement>(".design-inspector__heading");
+    if (head && !head.dataset.drag) {
+      head.dataset.drag = "";
+      dragSidebar(head);
+    }
   }
   let drag: {
     x: number;

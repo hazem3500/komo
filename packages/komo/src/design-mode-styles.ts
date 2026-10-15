@@ -18,6 +18,10 @@ export const designModeStyles = `
   transition:opacity .15s var(--ease-smooth-out),translate .25s var(--ease-smooth-out);
 }
 .design-inspector[hidden] { display:none; }
+/* Frame docks the inspector in the sidebar column beside the scaled page. */
+:host([data-sidebar="background"]) .design-inspector { position:fixed; inset:0 0 0 auto; width:380px; border-radius:0; }
+/* The floating inspector drags by its heading, like the comment sidebar's grip. */
+:host([data-sidebar="edge"]) .design-inspector__heading { cursor:grab; touch-action:none; }
 .design-inspector[data-state="active"] { opacity:1; translate:0 0; pointer-events:auto; }
 .design-inspector[data-state="closing"] { opacity:0; translate:0 4px; }
 .design-inspector button { cursor:pointer; }
