@@ -30,7 +30,7 @@ type Edit = {
 
 type TextEdit = { kind: "text"; element: HTMLElement };
 /** A token previewed through the app's adapter; its undo comes from `preview()`. */
-type TokenSwap = { kind: "token"; element: HTMLElement; undo(): void };
+type TokenSwap = { kind?: undefined; element: HTMLElement; undo(): void };
 
 type Original = { value: string; priority: string; computed?: string };
 
@@ -354,7 +354,7 @@ export function createDesignMode(options: DesignModeOptions) {
           starts.set(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
           commit(input, field.property);
         }, styleRoot, panelControls.valueFor, panelControls.toHex, options.design, (undo) => {
-          history.push({ kind: "token", element, undo });
+          history.push({ element, undo });
           updateActions();
         });
         const theme = module.createDesignThemePanel(element, panelControls, updateActions, styleRoot);
@@ -591,9 +591,9 @@ export function createDesignMode(options: DesignModeOptions) {
         renderControls();
       }
       status.textContent = "React state preview · resets on refresh";
-    } else if (edit.kind === "token") {
+    } else if (!edit.kind) {
       edit.undo();
-      if (selected === edit.element) renderControls();
+      renderControls();
     } else if (edit.kind === "text") {
       if (selected === (textTools?.undo() ?? edit.element)) renderControls();
     } else {
