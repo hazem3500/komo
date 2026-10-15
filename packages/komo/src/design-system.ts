@@ -135,7 +135,11 @@ export interface DesignEdit {
   komo: "design-edit";
   version: 1;
   target: {
-    /** CSS selector for the edited element at proposal time. */
+    /**
+     * Selector that matched exactly the edited element at proposal time: a
+     * :nth-of-type path from body or a unique id. The comment's anchor
+     * (scoped path, text and context) re-finds the element if the page changes.
+     */
     selector: string;
     component?: Omit<ComponentIdentity, "element">;
   };

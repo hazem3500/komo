@@ -167,6 +167,11 @@ export function resetTokenSwaps(element: Element): void {
   while (swaps.has(element)) undoTokenSwap(element);
 }
 
+/** Take back every swap, e.g. when Design mode closes. */
+export function resetAllTokenSwaps(): void {
+  for (const element of [...swaps.keys()]) resetTokenSwaps(element);
+}
+
 /** Properties whose change the token section describes. */
 export function swappedProperties(element: Element): string[] {
   return [...new Set(swaps.get(element)?.map((swap) => swap.property))];

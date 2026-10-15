@@ -227,6 +227,7 @@ export function isPreviewing(key: string): boolean {
 
 /** Undo every live preview except those whose cards are still on screen. */
 export function resetDesignPreviews(keep: ReadonlySet<string> = new Set()) {
+  if (!keep.has("draft")) draftBody = undefined;
   for (const key of [...settling.keys()]) if (!keep.has(key)) settle(key);
   for (const key of [...applied.keys()]) if (!keep.has(key)) revert(key);
 }
@@ -467,8 +468,18 @@ function listenForShortcut() {
   });
 }
 
-/** A proposal being written: read-only, since the change is already live on the page. */
-export function renderDraftProposal(container: HTMLElement, body: string) {
-  renderDesignComment(container, body, { key: "draft", resolve: () => null, note: (element, text) => element.append(text) });
-  container.querySelector(".design-toggle")?.remove();
+// The proposal last shown in the composer, so redraws keep its Before/After choice.
+let draftBody: string | undefined;
+
+/**
+ * A proposal being written. Design mode has already restored the page, so the
+ * card starts on After; posting or closing the composer resets it.
+ */
+export function renderDraftProposal(container: HTMLElement, body: string, resolve: DesignCommentOptions["resolve"]) {
+  if (draftBody !== body) {
+    revert("draft");
+    draftBody = body;
+    apply("draft", parseDesignComment(body).filter((block): block is DesignSection => "changes" in block), resolve);
+  }
+  renderDesignComment(container, body, { key: "draft", resolve, note: (element, text) => element.append(text) });
 }

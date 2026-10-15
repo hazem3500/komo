@@ -143,6 +143,18 @@ describe("React props inspector bridge", () => {
     expect(changes.at(-1)?.title).toBe("A preview title");
   });
 
+  it("puts props back through the React state callback when Design mode closes", async () => {
+    await vi.waitFor(() => expect(shadow.querySelector(".design-react-group")).not.toBeNull());
+    const titleInput = shadow.querySelector<HTMLInputElement>('[aria-label="PromoCard title"]')!;
+    titleInput.value = "Left behind";
+    titleInput.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(changes.at(-1)?.title).toBe("Left behind");
+    controller.setActive(false);
+    expect(changes.at(-1)?.title).toBe("A preview title");
+    controller.setActive(true);
+    expect(shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:first-child")!.disabled).toBe(true);
+  });
+
   it("routes an explicitly mapped leaf text edit through React state and includes it in the comment proposal", async () => {
     controller.destroy();
     cleanup();

@@ -1,19 +1,19 @@
 /** On-demand formatting for Design mode's Copy CSS and comment proposal actions. */
+/**
+ * A selector that matches exactly `element`: a path of :nth-of-type steps from
+ * body or the nearest unique, non-generated id. Utility classes alone match
+ * dozens of elements in Tailwind apps, so they only label the last step.
+ */
 export function cssSelector(element: Element): string {
-  if (element.id) return `#${CSS.escape(element.id)}`;
   const parts: string[] = [];
-  let current: Element | null = element;
-  while (current && current !== document.body && parts.length < 6) {
-    const classes = [...current.classList].slice(0, 2).map((name) => `.${CSS.escape(name)}`).join("");
-    const siblings = current.parentElement
-      ? [...current.parentElement.children].filter((child) => child.tagName === current!.tagName)
-      : [];
-    parts.unshift(`${current.tagName.toLowerCase()}${classes}:nth-of-type(${siblings.indexOf(current) + 1})`);
-    if (current.parentElement?.id) {
-      parts.unshift(`#${CSS.escape(current.parentElement.id)}`);
-      break;
-    }
-    current = current.parentElement;
+  for (let node: Element | null = element; node; node = node.parentElement) {
+    // React useId and Radix ids change between renders, as in anchors.ts.
+    const id = node.id && !/^radix-|^:r|_r_|«r/.test(node.id) ? `#${CSS.escape(node.id)}` : "";
+    if (id && document.querySelectorAll(id).length === 1) return [id, ...parts].join(" > ");
+    if (node === document.body || !node.parentElement) return [node.tagName.toLowerCase(), ...parts].join(" > ");
+    const classes = node === element ? [...node.classList].slice(0, 2).map((name) => `.${CSS.escape(name)}`).join("") : "";
+    const index = [...node.parentElement.children].filter((child) => child.tagName === node!.tagName).indexOf(node) + 1;
+    parts.unshift(`${node.tagName.toLowerCase()}${classes}:nth-of-type(${index})`);
   }
   return parts.join(" > ");
 }

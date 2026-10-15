@@ -8,6 +8,7 @@ import {
   previewThemeToken,
   proposedDesignTokenChanges,
   registerDesignTokenSource,
+  resetAllDesignTokens,
   resetDesignTokens,
   tokenImpactCount,
   tokenSourceFor,
@@ -15,7 +16,7 @@ import {
   canUndoDesignToken,
 } from "../src/design-tokens.js";
 import * as panelFields from "../src/design-panel.js";
-import { createDesignThemePanel, createElementTokenControl, noteDesignTokenOverride } from "../src/react-props-panel.js";
+import { createDesignThemePanel, createElementTokenControl, noteDesignTokenOverride, resetPreviews } from "../src/react-props-panel.js";
 import type { KomoDesignToken } from "../src/design-tokens.js";
 
 const tokens: KomoDesignToken[] = [
@@ -25,6 +26,29 @@ const tokens: KomoDesignToken[] = [
 
 describe("explicit design-token preview bridge", () => {
   afterEach(() => { document.body.replaceChildren(); vi.unstubAllGlobals(); });
+
+  it("resets every element and shared theme preview when Design mode closes", () => {
+    document.body.innerHTML = '<main><article class="card"></article><article class="card"></article></main>';
+    const root = document.documentElement;
+    root.style.setProperty("--brand", "#224466");
+    const cleanup = registerDesignTokenSource(root, tokens);
+    const [first, second] = document.querySelectorAll<HTMLElement>(".card");
+    const source = tokenSourceFor(first)!;
+    applyTokenToElement(source, first, source.tokens[0], "background-color");
+    applyTokenToElement(source, second, source.tokens[0], "color");
+    expect(previewThemeToken(source, source.tokens[0], "#ff0000")).toBe(true);
+    resetPreviews();
+    expect(first.style.getPropertyValue("background-color")).toBe("");
+    expect(second.style.getPropertyValue("color")).toBe("");
+    expect(root.style.getPropertyValue("--brand")).toBe("#224466");
+    expect(hasDesignTokenChanges(first) || hasDesignTokenChanges(second)).toBe(false);
+    expect(canUndoDesignToken(first)).toBe(false);
+    // Nothing left to reset twice.
+    resetAllDesignTokens();
+    expect(root.style.getPropertyValue("--brand")).toBe("#224466");
+    cleanup();
+    root.style.removeProperty("--brand");
+  });
 
   it("only registers unique allowlisted CSS vars and restores preview state on cleanup", () => {
     document.body.innerHTML = '<main><article class="card"></article></main>';
