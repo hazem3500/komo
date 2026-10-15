@@ -145,6 +145,7 @@ small {
   z-index: 2;
 }
 .pin:hover,
+.pin.hot,
 .pin.active {
   background: #252522;
   color: #fff;
@@ -915,7 +916,8 @@ ${morphingMenuStyles}
     inset 0 0 0 1px #ffffff0c,
     0 4px 16px #0002;
 }
-.pin:hover {
+.pin:hover,
+.pin.hot {
   background: #bda6ef;
   color: #352a50;
   box-shadow:
@@ -1985,6 +1987,7 @@ textarea {
   border-radius: 50% 50% 5px 50%;
   transform-origin: bottom right;
 }
+.pin.hot { z-index: 3; transform: translate(var(--pin-x), -28px) scale(1.12); }
 .pins { transition:opacity 120ms ease; }
 .pins[data-scrolling="true"] { opacity:0; }
 .pins[data-scrolling="true"] .pin { pointer-events:none; }

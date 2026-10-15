@@ -2142,6 +2142,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       clearTimeout(accountOpenTimer);
       accountOpenTimer = 0;
       account = false;
+      hoverCard = focusCard = "";
+      setHot();
     }
     if (compactSidebar) {
       cancelAnimationFrame(mobileEnterFrame);
@@ -2630,7 +2632,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       const pin = button(
         `Comment ${number}: ${commentText(thread.comments[0]?.body ?? "").slice(0, 100)}`,
         () => selectThread(thread),
-        `pin${thread.id === selected ? " active" : ""}${thread.resolved ? " resolved" : ""}${rect.attached ? "" : " detached"}`,
+        `pin${thread.id === selected ? " active" : ""}${thread.id === hotCard ? " hot" : ""}${thread.resolved ? " resolved" : ""}${rect.attached ? "" : " detached"}`,
       );
       pin.textContent = "";
       // The hover card replaces the native tooltip; aria-label stays.
@@ -4889,6 +4891,20 @@ export function initComments(options: CommentsOptions): CommentsController {
   let outlineShown = false,
     outlineHover = false,
     outlineTimer = 0;
+  // A list card that is pointed at or focused outlines its target too, and
+  // raises its pin. hotCard is the one shown.
+  let hotCard = "",
+    hoverCard = "",
+    focusCard = "",
+    hotTimer = 0;
+  function setHot(id = hoverCard || focusCard) {
+    clearTimeout(hotTimer);
+    if (id === hotCard) return;
+    hotCard = id;
+    for (const pin of pins.querySelectorAll<HTMLElement>(".pin"))
+      pin.classList.toggle("hot", pin.dataset.thread === id);
+    updateHover();
+  }
   function showOutline(on: boolean, ms = 0) {
     clearTimeout(outlineTimer);
     outlineShown = on;
@@ -5273,18 +5289,24 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   function updateHover() {
     // A thread open in the sidebar outlines what it discusses; its pin steps back.
-    const thread = !mode && threadPanel() && threads.find((t) => t.id === selected);
+    // A hovered list card outlines its target the same way.
+    const docked = !mode && !!threadPanel();
+    const id = docked
+      ? selected
+      : expanded && !draft && !threadPanel() &&
+          sidebar.querySelector(`.list [data-thread="${CSS.escape(hotCard)}"]`) && hotCard;
+    const thread = id && threads.find((t) => t.id === id && t.page === page());
     const spot = thread && locateAnchor(thread.anchor);
     const target = spot && spot.attached && (spot.width && spot.height
       ? { left: spot.x, top: spot.y, right: spot.x + spot.width, bottom: spot.y + spot.height }
       : spot.component);
     hoverOutline.toggleAttribute("data-thread", !!target);
-    pins.toggleAttribute("data-quiet", !!target);
-    pins.toggleAttribute("data-outlined", !!target && outlineShown);
+    pins.toggleAttribute("data-quiet", !!target && docked);
+    pins.toggleAttribute("data-outlined", !!target && docked && outlineShown);
     if (target) {
       const element = anchorElement(thread.anchor);
       outline(target, element, framed && !!element && surface.contains(element));
-      if (!outlineShown) hoverOutline.style.opacity = "0";
+      if (docked && !outlineShown) hoverOutline.style.opacity = "0";
       return;
     }
     if (
@@ -5752,6 +5774,21 @@ export function initComments(options: CommentsOptions): CommentsController {
       signal: abort.signal,
     },
   );
+  const cardAt = (event: Event) =>
+    (event.target as Element).closest?.<HTMLElement>(".list .thread-item")?.dataset.thread ?? "";
+  // Moving between cards crosses gaps; settle briefly instead of flickering.
+  const settleHot = () => {
+    clearTimeout(hotTimer);
+    hotTimer = window.setTimeout(() => setHot(), 80);
+  };
+  for (const [type, handle] of [
+    ["pointerover", (event: Event) => (hoverCard = cardAt(event)) ? setHot() : settleHot()],
+    ["pointerleave", () => { hoverCard = ""; settleHot(); }],
+    ["focusin", (event: Event) => { focusCard = cardAt(event); setHot(); }],
+    ["focusout", () => { focusCard = ""; settleHot(); }],
+    ["scroll", () => { hoverCard = focusCard = ""; setHot(); }],
+  ] as const)
+    sidebar.addEventListener(type, handle, { capture: true, signal: abort.signal });
   // Frame mode: a click on the framed site closes the sidebar, like a scrim.
   // Armed on pointerdown so a press that only dismisses a draft or selection
   // keeps the sidebar open; click (not pointerdown) so scrolling never closes.

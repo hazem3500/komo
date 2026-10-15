@@ -946,3 +946,60 @@ it("still closes the Floating sidebar when commenting", async () => {
   expect(pane()).toBeNull();
   localStorage.clear();
 });
+
+it("outlines a hovered or focused list card's target and raises its pin", async () => {
+  const { CommentsApi } = await import("../src/api");
+  const config = { ...options, onboarding: undefined };
+  const api = new CommentsApi(config);
+  api.save({ token: "hover-session", user: { id: "hover", name: "Hover Reviewer", verified: true } });
+  const anchor = { selector: "#target", text: "", x: 0.5, y: 0.5, width: 0, height: 0, pageX: 0, pageY: 0, viewportWidth: 1200 };
+  const thread = (id: string, body: string) => ({
+    id, page: "/", resolved: false, resolvedBy: null, createdAt: 1, updatedAt: 1, anchor,
+    comments: [{ id: `${id}-c`, body, author: api.user, createdAt: 1, editedAt: null, reactions: {} }],
+  });
+  localStorage.setItem(
+    `${api.sessionKey}:${JSON.stringify([config.repo, "local"])}:threads`,
+    JSON.stringify({ token: api.token, threads: [thread("one", "Hover one"), thread("two", "Hover two")] }),
+  );
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+  layoutBody();
+  controller = initComments(config);
+  controller.open();
+  const shadow = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
+  const outline = shadow.querySelector<HTMLElement>(".component-hover")!;
+  const item = (id: string) => shadow.querySelector<HTMLElement>(`.list .thread-item[data-thread="${id}"]`)!;
+  const pin = (id: string) => shadow.querySelector<HTMLElement>(`.pin[data-thread="${id}"]`)!;
+  const fire = (target: Element, type: string) => target.dispatchEvent(new Event(type, { bubbles: true, composed: true }));
+  const lit = () => outline.hasAttribute("data-thread") && outline.style.opacity === "1";
+
+  fire(item("one").querySelector(".thread-card")!, "pointerover");
+  expect(lit()).toBe(true);
+  expect(outline.style.width).toBe("400px");
+  expect(pin("one").classList.contains("hot")).toBe(true);
+  expect(pin("two").classList.contains("hot")).toBe(false);
+
+  // Card to card: no gap clears in between.
+  fire(item("one").parentElement!, "pointerover");
+  fire(item("two"), "pointerover");
+  expect(lit()).toBe(true);
+  expect(pin("two").classList.contains("hot")).toBe(true);
+  expect(pin("one").classList.contains("hot")).toBe(false);
+
+  fire(shadow.querySelector(".panel")!, "pointerleave");
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  expect(outline.hasAttribute("data-thread")).toBe(false);
+  expect(shadow.querySelector(".pin.hot")).toBeNull();
+
+  // Keyboard focus does the same, and a list scroll clears it.
+  fire(item("one").querySelector(".thread-card")!, "focusin");
+  expect(lit()).toBe(true);
+  shadow.querySelector(".list")!.dispatchEvent(new Event("scroll"));
+  expect(outline.hasAttribute("data-thread")).toBe(false);
+
+  fire(item("two").querySelector(".thread-card")!, "pointerover");
+  expect(lit()).toBe(true);
+  controller.close();
+  expect(outline.hasAttribute("data-thread")).toBe(false);
+  expect(shadow.querySelector(".pin.hot")).toBeNull();
+  localStorage.clear();
+});
