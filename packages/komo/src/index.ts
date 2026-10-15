@@ -276,6 +276,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (!optimistic.busy) run(refresh);
   }
   let filter: "open" | "resolved" | "all" = "open",
+    tagFilter = "",
     allPages = true,
     search = "",
     connection = "Connecting",
@@ -2198,6 +2199,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         (t) =>
           (allPages || t.page === page()) &&
           (filter === "all" || t.resolved === (filter === "resolved")) &&
+          (!tagFilter || !!t.tags?.includes(tagFilter)) &&
           (!search ||
             t.comments.some((c) =>
               `${c.body} ${c.author.name}`
@@ -2371,7 +2373,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       items.push({
         id: "retry",
         label: `${issue?.title ?? "Offline"} · Retry`,
-        icon: glyph("branch"),
+        icon: glyph("info"),
         showInBar: false,
         onSelect: retryConnection,
       });
@@ -2428,7 +2430,10 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     const currentPage = page();
     const visible = threads.filter(
-      (t) => t.page === currentPage && !t.resolved,
+      (t) =>
+        t.page === currentPage &&
+        !t.resolved &&
+        (!tagFilter || !!t.tags?.includes(tagFilter)),
     );
     const anchors = anchorPass();
     const stacks = pinStacks(visible, (thread) =>
@@ -2962,6 +2967,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           "icon copy-page-prompt",
           "copy",
         ),
+        el("div", "tag-filter-slot"),
         button(
           "Search comments",
           () => setSearch(true),
@@ -3116,6 +3122,11 @@ export function initComments(options: CommentsOptions): CommentsController {
     const searchPanel = panel.querySelector<HTMLElement>(".sidebar-search")!;
     searchPanel.inert = !searchOpen;
     const filterSlot = panel.querySelector<HTMLElement>(".filter-slot")!;
+    const knownTags = tagsEnabled
+      ? [...new Set(threads.flatMap((t) => t.tags ?? []))].sort()
+      : [];
+    // A tag that no longer exists on any thread stops filtering.
+    if (tagFilter && !knownTags.includes(tagFilter)) tagFilter = "";
     if (filterSlot.dataset.value !== filter) {
       filterSlot.dataset.value = filter;
       filterSlot.replaceChildren(
@@ -3134,6 +3145,32 @@ export function initComments(options: CommentsOptions): CommentsController {
           },
         ),
       );
+    }
+    const tagSlot = panel.querySelector<HTMLElement>(".tag-filter-slot");
+    const tagKey = `${tagFilter} ${knownTags}`;
+    if (tagSlot && tagSlot.dataset.value !== tagKey) {
+      tagSlot.dataset.value = tagKey;
+      tagSlot.replaceChildren();
+      if (knownTags.length) {
+        // An icon button beside Search; the menu lists the project's tags.
+        const label = tagFilter ? `Filtered by #${tagFilter}` : "Filter by tag";
+        const menu = selectionMenu(
+          label,
+          [["", "All tags"], ...knownTags.map((tag) => [tag, `#${tag}`] as const)],
+          tagFilter,
+          (value) => {
+            tagFilter = value;
+            renderList();
+            renderPins();
+          },
+        );
+        const trigger = menu.querySelector("summary")!;
+        trigger.className = `icon tag-filter-trigger${tagFilter ? " active" : ""}`;
+        trigger.setAttribute("aria-label", label);
+        trigger.title = label;
+        trigger.replaceChildren(icon("tag"));
+        tagSlot.append(menu);
+      }
     }
     const scopeSlot = panel.querySelector<HTMLElement>(".scope-slot")!;
     if (scopeSlot.dataset.value !== String(allPages)) {
