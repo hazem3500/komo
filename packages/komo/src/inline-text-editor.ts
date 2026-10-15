@@ -17,7 +17,7 @@ export interface InlineTextEditResult {
 export type TextSnapshot = Array<[Text, string]>;
 
 // Text inside these stays read-only, even within an editable element.
-const lockedText = 'script,style,svg,input,textarea,select,[data-private],[data-sensitive],[aria-hidden="true"]';
+const lockedText = "script,style,svg,input,textarea,select,[data-private],[data-sensitive]";
 
 function textNodes(element: HTMLElement): Text[] {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -147,8 +147,9 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
       return;
     }
     if (!element || !options.active() || starting || editor) return;
-    if (!canEditText(element)) {
-      options.status.textContent = "This text is private or not editable; it stays read-only.";
+    const blocker = textEditBlocker(element);
+    if (blocker) {
+      options.status.textContent = blocker;
       return;
     }
     starting = true;
@@ -167,7 +168,7 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
           } else if (result.reactProp) options.status.textContent = "React state preview · resets on refresh";
         },
       });
-      if (!next) options.status.textContent = "This text is not editable or a registered string prop.";
+      if (!next) options.status.textContent = "This text couldn't be connected to its component prop.";
       else if (options.active() && options.selected() === element) {
         editor = next;
         if (point) caretAtPoint(element, point.clientX, point.clientY);
@@ -223,16 +224,19 @@ function caretAtPoint(element: HTMLElement, x: number, y: number) {
   selection?.addRange(range);
 }
 
-/** Any element with visible text, including nested markup, links, and buttons; private and form text stays read-only. */
+/** Why an element's text can't be edited inline, or null when it can. */
+export function textEditBlocker(element: HTMLElement): string | null {
+  if (element.matches("input,textarea,select")) return "Form fields can't be edited as text.";
+  if (element.matches("script,style,svg,canvas,video,audio,iframe")) return "Graphics, media, and frames can't be edited.";
+  if (element.closest("[data-private],[data-sensitive]")) return "This text is marked private, so it stays read-only.";
+  if (element.closest("[contenteditable]")) return "This text is already editable on the page.";
+  if (!textNodes(element).some((node) => node.data.trim() && !node.parentElement?.closest(lockedText)))
+    return "No text here. Double-click the text itself.";
+  return null;
+}
+
 export function canEditText(element: HTMLElement): boolean {
-  if (
-    element.matches("input,textarea,select,script,style,svg,canvas,video,audio,iframe,[contenteditable]") ||
-    element.closest('[data-private],[data-sensitive],[aria-hidden="true"],[contenteditable]') ||
-    !textNodes(element).some((node) => node.data.trim() && !node.parentElement?.closest(lockedText))
-  ) return false;
-  const owner = element.closest<HTMLElement>("[data-komo-inspectable]");
-  if (owner && (owner !== element || !element.dataset.komoTextProp)) return false;
-  return true;
+  return !textEditBlocker(element);
 }
 
 function caretOffset(element: HTMLElement): number {
