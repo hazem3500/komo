@@ -446,8 +446,11 @@ export function initComments(options: CommentsOptions): CommentsController {
   const designProposal = /^Proposed .+ \(preview only\)$/m;
   let designComments: Promise<typeof import("./design-comment.js")> | undefined;
   let summarizeDesign: ((body: string) => string) | undefined;
+  // Once loaded, redraws render synchronously so dialogs don't change height.
+  let designModule: typeof import("./design-comment.js") | undefined;
   const loadDesignComments = () =>
     (designComments ??= import("./design-comment.js").then((module) => {
+      designModule = module;
       summarizeDesign = module.summarizeDesignComment;
       // Pin labels were drawn with the placeholder; refresh them with summaries.
       if (!destroyed) {
@@ -3607,8 +3610,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     const design = designProposal.test(comment.body);
     const message = el(design ? "div" : "p", "message-text");
     appendMessageLinks(message, comment.body);
-    if (design)
-      void loadDesignComments().then(({ renderDesignComment }) =>
+    if (design) {
+      const show = ({ renderDesignComment }: typeof import("./design-comment.js")) =>
         renderDesignComment(message, comment.body, {
           key: comment.id,
           resolve(selector) {
@@ -3620,8 +3623,10 @@ export function initComments(options: CommentsOptions): CommentsController {
             return resolveAnchor(thread.anchor);
           },
           note: appendMessageLinks,
-        }),
-      );
+        });
+      if (designModule) show(designModule);
+      else void loadDesignComments().then(show);
+    }
     content.append(message);
     if (comment.body !== "[Comment deleted]") {
       const reaction = button(
@@ -3785,6 +3790,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       throw reason;
     }
   }
+  let tagModule: typeof import("./tag-editor.js") | undefined;
   /** Tag chips load on demand, so the editor stays out of the initial bundle. */
   function tagSlot(
     tags: readonly string[],
@@ -3792,14 +3798,21 @@ export function initComments(options: CommentsOptions): CommentsController {
     onRemove: (tag: string) => void,
   ) {
     const slot = el("div", "tag-slot");
-    void import("./tag-editor.js").then(({ tagEditor }) =>
+    const show = ({ tagEditor }: typeof import("./tag-editor.js")) =>
       tagEditor(slot, {
         tags,
         suggestions: [...new Set(threads.flatMap((item) => item.tags ?? []))].sort(),
         onAdd,
         onRemove,
-      }),
-    );
+      });
+    // Render synchronously once loaded, so redraws keep the dialog's height.
+    if (tagModule) show(tagModule);
+    else
+      void import("./tag-editor.js").then((module) => {
+        tagModule = module;
+        show(module);
+        positionDialog();
+      });
     return slot;
   }
   /** Save a tag change without re-rendering the open dialog, so typing continues. */
