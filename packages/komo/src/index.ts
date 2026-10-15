@@ -4794,7 +4794,10 @@ export function initComments(options: CommentsOptions): CommentsController {
     const bottom = framed ? surface.getBoundingClientRect().bottom - 12 : availableHeight - 92;
     dialog.style.maxHeight = `${bottom - 12}px`;
     (dialogSize ??= new ResizeObserver(() => positionDialog())).observe(dialog);
-    const anchor = draft ?? threads.find((t) => t.id === selected)?.anchor;
+    const thread = threads.find((t) => t.id === selected);
+    const anchor = draft ?? thread?.anchor;
+    // Areas and design changes are about a region: open beside it, not over it.
+    let around: { left: number; top: number; right: number; bottom: number } | undefined;
     const pin =
       draggedPin?.id === selected
         ? draggedPin
@@ -4803,6 +4806,12 @@ export function initComments(options: CommentsOptions): CommentsController {
               const rect = locateAnchor(anchor);
               // A detached comment opens centred rather than at stale coordinates.
               if (!rect.attached) return null;
+              around =
+                rect.width > 16 && rect.height > 16
+                  ? { left: rect.x, top: rect.y, right: rect.x + rect.width, bottom: rect.y + rect.height }
+                  : (draft ? draftBeside : designProposal.test(thread?.comments[0]?.body ?? ""))
+                    ? rect.component
+                    : undefined;
               const indicator =
                 selected &&
                 pins.querySelector<HTMLElement>(
@@ -4842,8 +4851,16 @@ export function initComments(options: CommentsOptions): CommentsController {
       expanded && !compactSidebar
         ? 396
         : 12;
-    if (pin && x + dialog.offsetWidth > window.innerWidth - right)
-      x = pin.x - dialog.offsetWidth - 20;
+    const w = dialog.offsetWidth,
+      h = dialog.offsetHeight;
+    if (pin && x + w > window.innerWidth - right) x = pin.x - w - 20;
+    // Right, then left, then below, then above the region, 14px clear of it.
+    if (around && !compactSidebar && !follow) {
+      if (around.right + 14 + w <= window.innerWidth - right) [x, y] = [around.right + 14, around.top];
+      else if (around.left - 14 - w >= 12) [x, y] = [around.left - 14 - w, around.top];
+      else if (around.bottom + 14 + h <= bottom) [x, y] = [around.left, around.bottom + 14];
+      else if (around.top - 14 - h >= 12) [x, y] = [around.left, around.top - 14 - h];
+    }
     cardFollow.place(
       dialogKey,
       dialog,
@@ -4928,14 +4945,16 @@ export function initComments(options: CommentsOptions): CommentsController {
             },
             onComment(element, proposal) {
               designReturnToComments = false;
+              // The comment list beside the composer is a distraction, and the
+              // compact sheet would cover it, as in setMode().
+              if (expanded) toggleExpanded(false);
               setDesignMode(false);
-              // The compact sheet would cover the composer, as in setMode().
-              if (compactSidebar && expanded) toggleExpanded(false);
               draftText = "";
               draftProposal = proposal ?? "";
               draftTags = [];
               const rect = element.getBoundingClientRect();
-              composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+              const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+              composeAt(element, center, center, true);
             },
             onExit() {
               designActive = false;
@@ -5239,11 +5258,15 @@ export function initComments(options: CommentsOptions): CommentsController {
       height: `${Math.abs(drag.y - event.clientY)}px`,
     });
   });
+  // Design mode comments are about the whole element, so their composer opens beside it.
+  let draftBeside = false;
   function composeAt(
     element: Element,
     start: { x: number; y: number },
     end = start,
+    beside = false,
   ) {
+    draftBeside = beside;
     hidePreview();
     draft = captureAnchor(element, start, end, options.source);
     hoverTarget = element;
