@@ -1877,9 +1877,9 @@ textarea {
 .toolbar .morphing-menu__row[aria-current] svg { color: inherit; }
 .sidebar-selector { display: grid; min-width: 0; }
 .sidebar-selector > * { grid-area: 1 / 1; transition: opacity 200ms ease, transform 250ms cubic-bezier(.22,1,.36,1); }
-.sidebar-selector .filter-slot { display: flex; align-items: center; gap: 2px; min-width: 0; }
-.sidebar-selector .tag-filter .selection-trigger { color: #858585; }
-.sidebar-selector .tag-filter.active .selection-trigger { color: var(--accent, #bda6ef); }
+.tag-filter-slot:empty { display: none; }
+.panel .sidebar-title .tag-filter-trigger.active { color: var(--accent, #bda6ef); }
+.panel[data-search="true"] .tag-filter-slot { opacity: 0; pointer-events: none; }
 .sidebar-selector .scope-slot { opacity: 0; transform: translateY(6px); pointer-events: none; }
 .panel[data-search="true"] .sidebar-selector .filter-slot { opacity: 0; transform: translateY(-6px); pointer-events: none; }
 .panel[data-search="true"] .sidebar-selector .scope-slot { opacity: 1; transform: none; pointer-events: auto; }
