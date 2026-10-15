@@ -1,13 +1,24 @@
 name: publish
+# Every merge to main that touches the package ships it to npm.
+# - If packages/komo/package.json has a version that isn't on npm yet (a manual
+#   minor/major bump in the PR), that version is published.
+# - Otherwise the patch version is bumped, committed back to main, and published.
+# Publishing uses npm trusted publishing (OIDC): no npm token is stored here.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths: ["packages/komo/**", "pnpm-lock.yaml", ".github/workflows/publish.yml"]
   workflow_dispatch:
+concurrency:
+  group: publish
+  cancel-in-progress: false
 permissions:
-  contents: read
+  contents: write
   id-token: write
 jobs:
   publish:
+    # The release commit below touches package.json; don't publish again for it.
+    if: ${{ !startsWith(github.event.head_commit.message, 'Release @hazem3500/komo') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,8 +28,48 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           cache: pnpm
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@latest
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm size
+      - name: Choose the version
+        id: version
+        working-directory: packages/komo
+        run: |
+          name=$(node -p "require('./package.json').name")
+          current=$(node -p "require('./package.json').version")
+          if npm view "$name@$current" version >/dev/null 2>&1; then
+            # Next patch after whichever is newer, this file or npm's latest, so a
+            # release whose bump commit failed to push is never republished.
+            latest=$(npm view "$name" version 2>/dev/null || echo 0.0.0)
+            next=$(node -e '
+              const parse = (v) => v.split(".").map(Number);
+              const [a, b] = process.argv.slice(1).map(parse);
+              const i = a.findIndex((n, k) => n !== b[k]);
+              const [major, minor, patch] = i >= 0 && b[i] > a[i] ? b : a;
+              console.log(`${major}.${minor}.${patch + 1}`);
+            ' "$current" "$latest")
+            npm version "$next" --no-git-tag-version >/dev/null
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
       - run: npm publish --access public --provenance
         working-directory: packages/komo
+      - name: Commit the version bump
+        if: steps.version.outputs.bumped == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Only the version file: build output must never be committed.
+          git add packages/komo/package.json
+          git commit -m "Release @hazem3500/komo ${{ steps.version.outputs.version }}"
+          git push origin HEAD:main
+      - name: Tag the release
+        run: |
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
