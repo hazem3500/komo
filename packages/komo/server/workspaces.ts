@@ -1,5 +1,6 @@
 import { check, string, originAllowed } from "./validation";
 import type { Identity } from "../src/types";
+import { pruneAudit } from "./tokens";
 import { editedOrigins, siteEdits } from "./project-sites";
 export type Project = {
   repo: string;
@@ -158,6 +159,7 @@ export async function maintain(db: D1Database, scheduled = false) {
       ...["rate_limits", "sessions", "project_invites", "oauth_states", "setup_requests"].map(
         table => db.prepare(`DELETE FROM ${table} WHERE expires_at<?`).bind(now)
       ),
+      pruneAudit(db, now),
       db.prepare("DELETE FROM users WHERE id LIKE 'guest:%' AND id NOT IN (SELECT user_id FROM sessions) AND id NOT IN (SELECT user_id FROM comments) AND id NOT IN (SELECT user_id FROM project_members)"),
     ]);
   } catch (error) {

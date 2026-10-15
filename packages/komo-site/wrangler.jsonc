@@ -30,6 +30,8 @@
       "/owner/*",
       "/workspace",
       "/workspace/*",
+      "/account",
+      "/account/*",
     ],
   },
   "routes": [

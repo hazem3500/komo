@@ -63,7 +63,7 @@ initKomo({
 });
 ```
 
-Point the existing CLI at the same endpoint, project, repository, and branch. `komo login` uses Google when configured; `KOMO_TOKEN` accepts a previously issued session token for a non-interactive bot. Store that token as a secret. It has the same permissions as its user. For example:
+Point the existing CLI at the same endpoint, project, repository, and branch. `komo login` uses Google when configured; `KOMO_TOKEN` accepts a personal access token (create one at `/account?project=KEY` on your server; see Bots and CI in the README) or a previously issued session token for a non-interactive bot. Store that token as a secret. Access tokens are limited by their scopes and projects; session tokens have the same permissions as their user. Optionally set `KOMO_TOKEN_PEPPER` to a long random secret to mix into stored token hashes; changing it revokes every access token. For example:
 
 ```sh
 komo comments list --endpoint https://comments.example.com --project YOUR_GENERATED_PROJECT_KEY --repo your-org/your-repo --branch pr-42 --origin https://pr-42.preview.example.com

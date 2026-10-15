@@ -47,6 +47,7 @@ const env = {
   GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID ?? "",
   GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET ?? "",
   KOMO_WEBHOOK_KEYS: process.env.KOMO_WEBHOOK_KEYS,
+  KOMO_TOKEN_PEPPER: process.env.KOMO_TOKEN_PEPPER || undefined,
   KOMO_WEBHOOK_SEND: sendWebhookPinned,
   KOMO_IAP_AUDIENCE: process.env.KOMO_IAP_AUDIENCE || undefined,
   KOMO_AUTH_PREFIX: process.env.KOMO_AUTH_PREFIX || undefined,

@@ -5,6 +5,17 @@ import {
   requireMember,
 } from "./project-management";
 import { setupPage } from "./setup-page";
+import { accountPage } from "./account-page";
+import {
+  accountProjects,
+  authenticateToken,
+  createToken,
+  isPersonalToken,
+  listTokens,
+  PAT_SCOPES,
+  revokeToken,
+  type PatAccess,
+} from "./tokens";
 import { authPrefix, iapIdentity, type IapIdentity } from "./iap";
 import setupClient from "./setup-client.txt";
 import {
@@ -166,6 +177,8 @@ async function body(request: Request): Promise<Record<string, unknown>> {
                 : path === "/project/webhook"
                   ? ["url", "secret", "events", "enabled"]
                 : ["access", "confirm", "threadIds"]
+      : path === "/account/tokens"
+        ? ["name", "expiresInDays", "scopes", "projects"]
       : ["/auth/google/start", "/auth/github/start"].includes(path)
         ? ["returnOrigin"]
         : path === "/setup/start"
@@ -230,15 +243,21 @@ async function session(env: Env, project: string, userId: string) {
   ]);
   return accessToken;
 }
+// Personal access tokens only pass where a route names the access it needs.
 async function authenticate(
   request: Request,
   env: Env,
-  project: string
+  project: string,
+  access?: PatAccess
 ): Promise<Identity> {
   const bearer = request.headers
     .get("Authorization")
     ?.match(/^Bearer (.{1,200})$/)?.[1];
   check(bearer, 401, "Enter your name to comment.");
+  if (isPersonalToken(bearer))
+    return identity(
+      await authenticateToken(env, bearer, project, access, request)
+    );
   const row = await env.DB.prepare(
     "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.project=? AND s.expires_at>?"
   )
@@ -662,6 +681,8 @@ async function route(
     return oauthAuthorize(new Request(authorize), env, "google");
   }
   if (url.pathname === "/setup") return setupPage();
+  if (url.pathname === "/account" && request.method === "GET")
+    return accountPage(env, url);
   if (
     url.pathname === "/setup/start" &&
     request.method === "POST" &&
@@ -762,9 +783,13 @@ async function route(
   const origin =
     request.headers.get("Origin") ??
     (request.headers.get("Sec-Fetch-Site") === "same-origin" ? url.origin : "");
+  const accountRoute = /^\/account\/tokens(?:\/[a-z0-9]{12})?$/.test(
+    url.pathname
+  );
   if (
     !(
       originAllowed(origin, config.origins) ||
+      (origin === url.origin && accountRoute) ||
       (project !== "_komo" && localOrigin(origin)) ||
       (origin === url.origin &&
         [
@@ -793,6 +818,7 @@ async function route(
   check(
     project !== "_komo" ||
       url.pathname.startsWith("/project") ||
+      accountRoute ||
       [
         "/setup/complete",
         "/workspace/verify",
@@ -888,6 +914,31 @@ async function route(
           )
         : [],
     });
+  }
+  if (accountRoute) {
+    // Sessions only: an access token can never mint or revoke access tokens.
+    const user = await authenticate(request, env, project);
+    check(
+      user.verified && user.id.startsWith("google:"),
+      403,
+      "Sign in with Google to manage access tokens."
+    );
+    const tokenId = url.pathname.match(/^\/account\/tokens\/([a-z0-9]{12})$/)?.[1];
+    if (url.pathname === "/account/tokens" && request.method === "GET")
+      return json({
+        tokens: await listTokens(env, user.id),
+        projects: await accountProjects(env, user.id),
+        scopes: PAT_SCOPES,
+      });
+    if (url.pathname === "/account/tokens" && request.method === "POST") {
+      await limit(env, `pat:create:${user.id}`, 10, 3600);
+      return json(await createToken(env, user.id, await body(request)), 201);
+    }
+    if (tokenId && request.method === "DELETE") {
+      await revokeToken(env, user.id, tokenId);
+      return json({ ok: true });
+    }
+    throw new HttpError(405, "Method not allowed.");
   }
   if (url.pathname === "/project" || url.pathname.startsWith("/project/")) {
     const user = await authenticate(request, env, project);
@@ -1069,7 +1120,12 @@ async function route(
     });
   }
   if (url.pathname === "/me") {
-    const user = await authenticate(request, env, project);
+    const user = await authenticate(
+      request,
+      env,
+      project,
+      request.method === "GET" ? "any" : undefined
+    );
     if (request.method === "DELETE") {
       const bearer = request.headers.get("Authorization")!.slice(7);
       await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?")
@@ -1128,10 +1184,11 @@ async function route(
     check(request.method === "GET", 405, "Method not allowed.");
     return json({ user });
   }
+  const access: PatAccess = request.method === "GET" ? "read" : "write";
   // Behind IAP, comments are never readable or writable without a session
   // minted from an IAP-verified Google account.
   if (env.KOMO_IAP_AUDIENCE) {
-    const reader = await authenticate(request, env, project);
+    const reader = await authenticate(request, env, project, access);
     check(
       reader.verified && reader.id.startsWith("google:"),
       403,
@@ -1142,7 +1199,7 @@ async function route(
     await requireMember(
       env,
       project,
-      await authenticate(request, env, project)
+      await authenticate(request, env, project, access)
     );
   }
   const requestedRepo = url.searchParams.get("repo");
@@ -1278,7 +1335,7 @@ async function route(
       revision,
     });
   }
-  const user = await authenticate(request, env, project);
+  const user = await authenticate(request, env, project, access);
   await limit(env, `${project}:session:${user.id}`, 60);
   const now = Date.now();
   if (url.pathname === "/threads" && request.method === "POST") {

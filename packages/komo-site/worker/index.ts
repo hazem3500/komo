@@ -10,6 +10,7 @@ const apiRoots = new Set([
   "project",
   "owner",
   "workspace",
+  "account",
 ]);
 
 export default {

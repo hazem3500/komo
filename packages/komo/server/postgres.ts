@@ -75,6 +75,7 @@ export function postgresDatabase(connectionString: string) {
           "001_initial.sql",
           "002_thread_tags.sql",
           "003_project_webhooks.sql",
+          "004_personal_access_tokens.sql",
         ];
         if (
           versions.rows.length > 1 ||
