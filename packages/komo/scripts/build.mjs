@@ -104,10 +104,22 @@ const result = await build({
   ],
   external: ["react", "react-dom", "emoji-regex", "./design-mode.js"],
 });
+// Optional design-system adapters (@hazem3500/komo/adapters/*): self-contained entry
+// points built separately, so core's chunks and their names stay exactly as they were.
+const adapters = await build({
+  entryPoints: ["src/adapters/tailwind.ts", "src/adapters/class-theme.ts"],
+  outdir: "dist/adapters",
+  bundle: true,
+  format: "esm",
+  platform: "browser",
+  target: "es2022",
+  minify: true,
+  metafile: true,
+});
 // Compress the emitted modules without changing their split boundaries or exports.
 // Preserve framework directives ("use client") and linked license notices.
 await Promise.all(
-  Object.keys(result.metafile.outputs)
+  [...Object.keys(result.metafile.outputs), ...Object.keys(adapters.metafile.outputs)]
     .filter((path) => path.endsWith(".js"))
     .map(async (path) => {
       const { code } = await minify(await readFile(path, "utf8"), {

@@ -40,6 +40,8 @@ try {
     "--no-audit",
     "--no-fund",
     join(root, packed.filename),
+    // react.d.ts imports React's types; a TypeScript consumer has them installed.
+    "@types/react@19",
   ]);
   assert.match(
     await readFile(join(root, "node_modules/@hazem3500/komo/dist/react.js"), "utf8"),
@@ -58,6 +60,10 @@ try {
     initKomo(config).destroy(); defineKomo(config)().destroy();
     function App(){useKomo(config);return createElement('p',null,'ok')}
     if(renderToString(createElement(App)) !== '<p>ok</p>') throw Error('SSR failed');
+    const { tailwindTokens, tailwindSpacing } = await import('@hazem3500/komo/adapters/tailwind');
+    const { classTheme } = await import('@hazem3500/komo/adapters/class-theme');
+    if (tailwindTokens({tokens: tailwindSpacing({prefix:['p'], steps:[4]})}).list({})[0].value !== '16px') throw Error('Tailwind adapter failed');
+    if (classTheme({id:'mode', options:[{id:'light'}]}).id !== 'mode') throw Error('Class theme adapter failed');
   `,
   );
   run(process.execPath, ["smoke.mjs"]);
@@ -67,7 +73,11 @@ try {
     import { initKomo, type KomoConfig } from '@hazem3500/komo';
     import { defineKomo } from '@hazem3500/komo/setup';
     import { useKomo } from '@hazem3500/komo/react';
-    const config: KomoConfig = {project:'packed-test'};
+    import { tailwindTokens, tailwindSpacing, type TailwindTable } from '@hazem3500/komo/adapters/tailwind';
+    import { classTheme } from '@hazem3500/komo/adapters/class-theme';
+    const mode = classTheme({ id: 'mode', options: [{ id: 'light', class: 'light' }, { id: 'dark', class: 'dark' }], colorScheme: true });
+    const table: TailwindTable = { tokens: [{ path: 'color.text.primary', type: 'color', class: 'text-primary', properties: ['color'], values: { light: '#000', dark: '#fff' } }, ...tailwindSpacing()] };
+    const config: KomoConfig = {project:'packed-test', design: { tokens: tailwindTokens(table, { themes: [mode] }), themes: [mode] }};
     initKomo(config).destroy(); defineKomo(config)().destroy(); useKomo(config);
   `,
   );

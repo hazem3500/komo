@@ -127,6 +127,46 @@ Design proposals also carry a versioned `DesignEdit` record (token swaps, prop c
 
 The API is landing in stages, and this section is updated as each part ships. Without `design.tokens`, Design mode uses the CSS custom properties registered with `useKomoDesignTokens`.
 
+#### Tailwind and class themes
+
+Two optional adapters ship as their own entry points, outside the core bundle. For utility-class design systems, a token is a class: komo previews by swapping classes, not by setting CSS variables.
+
+```ts
+import { tailwindTokens, tailwindSpacing, type TailwindToken } from "@hazem3500/komo/adapters/tailwind";
+import { classTheme } from "@hazem3500/komo/adapters/class-theme";
+
+const mode = classTheme({
+  id: "mode",
+  options: [{ id: "light", class: "light" }, { id: "dark", class: "dark" }],
+  colorScheme: true, // also sets color-scheme: light | dark on <html>
+});
+const product = classTheme({
+  id: "product",
+  options: [{ id: "focus", attribute: { "data-product": "focus" } }, { id: "track", attribute: { "data-product": "track" } }],
+});
+
+// Generate this from your design-system foundations.
+const tokens: TailwindToken[] = [
+  { path: "color.text.primary", type: "color", class: "text-primary", properties: ["color"], group: "Text",
+    values: { light: "#1f1f1f", dark: "#f5f5f5", "track+dark": "#fce5d8" } },
+  { path: "color.bg.primary-interactive", type: "color", class: "bg-primary-interactive",
+    properties: ["background-color"], value: "#e57cd8", states: ["hover", "active", "disabled"] },
+  { path: "radius.md", type: "dimension", class: "rounded-md", properties: ["border-radius"], value: "6px" },
+  { path: "typography.h1", type: "typography", class: "text-h1",
+    properties: ["font-size", "line-height", "font-weight"], value: "32px/40px 600" },
+  ...tailwindSpacing(), // p-*, px-*, …, m-*, gap-* on the 4px scale
+];
+
+initKomo({ project, design: { tokens: tailwindTokens({ tokens }, { themes: [mode, product] }), themes: [mode, product] } });
+```
+
+- `class` is the utility class; an array lists aliases, and the first is the one previews add. `properties` are the CSS properties the class sets, as the Design panel names them. A shorthand such as `padding` or `border-radius` also covers its longhands.
+- `values` keys are option ids (`dark`), `axis=option` pairs (`mode=dark`), or combinations joined with `+` (`track+dark`). The most specific match wins, then `value`.
+- `resolve()` reads base-state classes only; variants such as `hover:` or `md:` are ignored. When classes overlap, the narrower class wins, as in Tailwind (`p-4 px-2` reads `padding-left` from `px-2`). Properties with no table class are reported off-token with their computed value; pass `offToken: [...]` to narrow the list or `false` to turn it off.
+- Previews replace table classes the new class fully covers, keep everything else in place, and stack; undoing restores the original `class` exactly. Classes outside the table, such as `text-[14px]`, are left alone.
+- `tailwindSpacing({ prefix, scale, steps })` narrows the families (`p`, `px`, `py`, `pt`, `pr`, `pb`, `pl`, `m`, `mx`, …, `gap`, `gap-x`, `gap-y`), the pixels per step (default 4), and the steps (default Tailwind's 0 to 96). Paths are `spacing.<class>`, for example `spacing.p-4`.
+- `classTheme` options take `class`, `attribute`, or both, on `target()` (default `<html>`). An option with neither is the default. With `colorScheme`, applying an option sets `color-scheme` to its `colorScheme` or id, and returning to the starting option restores the page's own value.
+
 ## Agent CLI
 
 `komo init` adds the default comment workflow to `AGENTS.md`, preserving existing instructions. For an existing project, run `komo agents setup` from its root. Commit the instructions so every agent uses them.
