@@ -741,7 +741,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   function positionSidebar() {
     if (compactSidebar || !edgeSidebar) return;
-    applySidebarSize();
+    // A size saved on a larger screen must not push the sidebar off this one.
+    clampSidebarSize();
     const height =
       sidebar.offsetHeight ||
       Math.min(window.innerHeight - 2 * EDGE_MARGIN, EDGE_SIDEBAR_MAX_HEIGHT);
