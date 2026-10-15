@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDesignMode } from "../src/design-mode.js";
 import {
+  inspectableAncestor,
   inspectableFor,
   registerInspectableRoot,
   type InspectableComponent,
@@ -28,6 +29,7 @@ describe("React props inspector bridge", () => {
   let host: HTMLElement;
   let card: HTMLElement;
   let title: HTMLElement;
+  let target: HTMLElement;
   let shadow: ShadowRoot;
   let controller: ReturnType<typeof createDesignMode>;
   let cleanup: () => void;
@@ -52,6 +54,7 @@ describe("React props inspector bridge", () => {
     host = document.querySelector<HTMLElement>("#komo")!;
     card = document.querySelector<HTMLElement>("#promo")!;
     title = card.querySelector("h2")!;
+    target = card;
     shadow = host.attachShadow({ mode: "open" });
     changes = [];
     comments = [];
@@ -61,12 +64,12 @@ describe("React props inspector bridge", () => {
     controller = createDesignMode({
       root: shadow,
       host,
-      targetAt: () => title,
+      targetAt: () => target,
       onComment: (element, proposal) => comments.push({ element, proposal }),
       onExit: () => {},
     });
     controller.setActive(true);
-    pointerDown(title);
+    pointerDown(card);
   });
 
   afterEach(() => {
@@ -85,7 +88,23 @@ describe("React props inspector bridge", () => {
     expect([...shadow.querySelectorAll("style")].some((style) => style.textContent?.includes(".design-token-binding select"))).toBe(true);
     expect(group.querySelector<HTMLInputElement>('[aria-label^="PromoCard onActivate"]')?.disabled).toBe(true);
     expect(group.querySelector<HTMLInputElement>('[aria-label^="PromoCard details"]')?.disabled).toBe(true);
-    expect(inspectableFor(title)?.props).not.toHaveProperty("onActivate");
+    expect(inspectableFor(card)?.props).not.toHaveProperty("onActivate");
+  });
+
+  it("shows props only on the registered root and points descendants back to it", async () => {
+    expect(inspectableFor(title)).toBeNull();
+    expect(inspectableAncestor(title)?.root).toBe(card);
+    expect(inspectableAncestor(card)).toBeNull();
+    await vi.waitFor(() => expect(shadow.querySelector("details.design-react-group")).not.toBeNull());
+    target = title;
+    pointerDown(title);
+    await vi.waitFor(() => expect(shadow.querySelector(".design-react-inside")).not.toBeNull());
+    expect(shadow.querySelector("details.design-react-group")).toBeNull();
+    const inside = shadow.querySelector<HTMLElement>(".design-react-inside")!;
+    expect(inside.textContent).toBe("Inside PromoCard · Select component");
+    inside.querySelector("button")!.click();
+    await vi.waitFor(() => expect(shadow.querySelector("details.design-react-group")).not.toBeNull());
+    expect(shadow.querySelector(".design-react-inside")).toBeNull();
   });
 
   it("previews valid typed values, rejects invalid enum values, and proposes an explicit comment", async () => {
@@ -103,7 +122,7 @@ describe("React props inspector bridge", () => {
 
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
     await vi.waitFor(() => expect(comments).toHaveLength(1));
-    expect(comments[0].element).toBe(title);
+    expect(comments[0].element).toBe(card);
     expect(comments[0].proposal).toContain('title: "A preview title" → "A revised preview title"');
     expect(comments[0].proposal).toContain("Source: examples/react-props/src/card.tsx:15");
   });

@@ -134,20 +134,27 @@ export function updateInspectableRoot(
   else delete element.dataset.komoTextProp;
 }
 
-/** Find the nearest explicitly registered React component root for a DOM target. */
+/**
+ * The registered React component whose root is exactly this element. Descendants
+ * don't inherit the root's props, like layers inside a Figma instance.
+ */
 export function inspectableFor(
   target: Element | null,
 ): RegisteredInspectableComponent | null {
-  let current = target;
-  while (current) {
-    const registeredComponent = registered.get(current);
-    if (
-      registeredComponent &&
-      current.getAttribute("data-komo-inspectable") ===
-        registeredComponent.definition.id
-    )
-      return registeredComponent;
-    current = current.parentElement;
+  const registeredComponent = target && registered.get(target);
+  return registeredComponent &&
+    target.getAttribute("data-komo-inspectable") === registeredComponent.definition.id
+    ? registeredComponent
+    : null;
+}
+
+/** The nearest registered component root strictly above `target`, if any. */
+export function inspectableAncestor(
+  target: Element | null,
+): { root: HTMLElement; component: RegisteredInspectableComponent } | null {
+  for (let current = target?.parentElement; current; current = current.parentElement) {
+    const component = inspectableFor(current);
+    if (component) return { root: current, component };
   }
   return null;
 }

@@ -271,7 +271,7 @@ export function createDesignMode(options: DesignModeOptions) {
         const props = module.createReactPropsPanel(element, () => {
           status.textContent = "React state preview · resets on refresh";
           updateActions();
-        }, styleRoot);
+        }, styleRoot, select);
         if (props) controls.append(props);
         module.attachStyleTokenControls(element, panelControls.fields, controls, (field, input, before) => {
           remember(element, field.property, before);
