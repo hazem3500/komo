@@ -30,6 +30,12 @@ function InlineHeadline({ text, onChange }: { text: string; onChange(next: strin
   return <h2 {...inspectable}>{text}</h2>;
 }
 
+// ?shell renders an app-shell layout whose root is sized with viewport units, as
+// many apps do (Tailwind "flex h-screen w-screen"). ?sidebar=frame starts in Frame.
+const query = new URLSearchParams(location.search);
+const appShell = query.has("shell");
+const sidebar = query.get("sidebar") === "frame" ? "background" : undefined;
+
 function Demo() {
   const [headline, setHeadline] = useState("Inspect safe props in the flow of a real page.");
   const [props, setProps] = useState<PromoCardProps>({
@@ -49,11 +55,12 @@ function Demo() {
     project: "komo-landing-demo",
     repo: "tjcages/komo",
     branch: "main",
+    ...(sidebar ? { sidebar } : {}),
   });
   useKomoDesignTokens({ tokens: themeTokens, enabled: true });
   const updateProps = (next: Record<string, string | number | boolean | undefined>) =>
     setProps((current) => ({ ...current, ...next }));
-  return (
+  const page = (
     <main>
       <span className="eyebrow">komo · isolated React inspector</span>
       <InlineHeadline text={headline} onChange={setHeadline} />
@@ -81,6 +88,16 @@ function Demo() {
       </div>
       <div className="preview-banner">Fixture only · local test database · no production comments or notifications</div>
     </main>
+  );
+  if (!appShell) return page;
+  return (
+    <div className="app-shell" style={{ display: "flex", width: "100vw", height: "100vh" }}>
+      <nav className="app-nav" style={{ width: 220, flex: "none", padding: 20, borderRight: "1px solid #0001", background: "#ecebe6" }}>
+        <strong>App shell</strong>
+        <p style={{ fontSize: 13, color: "#666" }}>Root sized with 100vw × 100vh; the page scrolls inside.</p>
+      </nav>
+      <div className="app-content" style={{ flex: 1, overflow: "auto" }}>{page}</div>
+    </div>
   );
 }
 

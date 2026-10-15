@@ -44,6 +44,15 @@ describe("review viewport layout", () => {
     expect(layout.height).toBe(844);
     expect(layout.left).toBe(0);
   });
+  it("fits the whole viewport, scaled, beside the comment column", () => {
+    const layout = reviewLayout(1440, 900, true, 900, false, true);
+    expect(layout.left).toBe(24);
+    // The frame is the viewport scaled down: same aspect, so 100vw × 100vh fills it.
+    expect(layout.scale * 1440).toBeCloseTo(1440 - 404 - 24);
+    expect(layout.height).toBeCloseTo(900 * layout.scale);
+    expect(layout.top).toBeCloseTo((900 - layout.height) / 2);
+    expect(layout.left + layout.scale * 1440).toBeLessThanOrEqual(1440 - layout.right);
+  });
   it("keeps the desktop comment column", () => {
     const layout = reviewLayout(1280, 800, true);
     expect(layout.desktop).toBe(true);
