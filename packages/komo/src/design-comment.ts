@@ -251,6 +251,9 @@ const css = `
 .design-more { border: 0; width: 100%; padding: 7px 12px; text-align: left; font: inherit; font-size: 11px; color: #9a9a9a; background: none; border-top: 1px solid #ffffff06; cursor: pointer; }
 .design-more:hover, .design-toggle button:hover { color: #fff; }
 .design-source { padding: 0 12px 8px; color: #777; font-size: 11px; }
+[data-compact] { gap: 6px; margin: 11px 0 0; }
+[data-compact] .design-card-head, [data-compact] .design-row, [data-compact] > .design-source { min-height: 0; padding: 4px 10px; }
+[data-compact]:hover > .design-source { color: #eee; text-decoration: underline; }
 `;
 
 function value(text: string, token?: string): HTMLElement {
@@ -278,6 +281,8 @@ export interface DesignCommentOptions {
   resolve(selector?: string): Element | null;
   /** Render plain notes with the widget's normal link handling. */
   note(element: HTMLElement, text: string): void;
+  /** Read-only summary for hover cards: at most three rows, no Before/After switch. */
+  compact?: boolean;
 }
 
 /** Replace `container`'s content with a change card for each proposal. */
@@ -287,7 +292,12 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   const root = document.createElement("div");
   root.className = "design-comment";
   root.append(Object.assign(document.createElement("style"), { textContent: css }));
-  const previewable = sections.some((section) => section.changes.some((item) => item.apply));
+  const compact = !!options.compact;
+  if (compact) root.dataset.compact = "";
+  // Compact cards show the first three rows across all sections and count the rest.
+  let room = compact ? 3 : Infinity;
+  let extra = 0;
+  const previewable = !compact && sections.some((section) => section.changes.some((item) => item.apply));
   const toggles: HTMLElement[] = [];
   const sync = () => {
     const on = applied.has(options.key);
@@ -301,6 +311,10 @@ export function renderDesignComment(container: HTMLElement, body: string, option
       note.className = "design-note";
       options.note(note, block.text);
       root.append(note);
+      continue;
+    }
+    if (room <= 0) {
+      extra += block.changes.length;
       continue;
     }
     const card = document.createElement("section");
@@ -348,9 +362,11 @@ export function renderDesignComment(container: HTMLElement, body: string, option
     rows.className = "design-rows";
     const visible = 4;
     block.changes.forEach((item, index) => {
+      if (room <= 0) return void extra++;
+      if (compact) room--;
       const row = document.createElement("div");
       row.className = "design-row";
-      row.hidden = index >= visible && block.changes.length > visible + 1;
+      row.hidden = !compact && index >= visible && block.changes.length > visible + 1;
       const label = Object.assign(document.createElement("span"), { className: "design-prop", textContent: item.label });
       label.title = item.label;
       const values = document.createElement("span");
@@ -371,9 +387,10 @@ export function renderDesignComment(container: HTMLElement, body: string, option
       });
       card.append(more);
     }
-    if (block.source) card.append(Object.assign(document.createElement("div"), { className: "design-source", textContent: block.source }));
+    if (block.source && !compact) card.append(Object.assign(document.createElement("div"), { className: "design-source", textContent: block.source }));
     root.append(card);
   }
+  if (extra) root.append(Object.assign(document.createElement("span"), { className: "design-source", textContent: `+${extra} more` }));
   sync();
   container.replaceChildren(root);
   if (toggles.length) listenForShortcut();

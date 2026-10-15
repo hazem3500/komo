@@ -78,7 +78,9 @@ await writeFile(
 // Initial raised to 101,400 for host event isolation (~340 bytes): it has to run
 // at mount, before any host modal opens, so it cannot load on demand.
 // 101,600: the new-comment box shows Design mode proposals as a change card (~130 bytes).
-if (report.initial.gzip > 101_600 || report.coreFeatures.gzip > 206_500)
+// All-features 206,800: pin hover cards resolve in place and show a compact change card (~290 bytes,
+// mostly in the on-demand design comment chunk; initial stays within 101,600). Main was already at 206,503.
+if (report.initial.gzip > 101_600 || report.coreFeatures.gzip > 206_800)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

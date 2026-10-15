@@ -2541,6 +2541,8 @@ export function initComments(options: CommentsOptions): CommentsController {
         `pin${thread.id === selected ? " active" : ""}${thread.resolved ? " resolved" : ""}${rect.attached ? "" : " detached"}`,
       );
       pin.textContent = "";
+      // The hover card replaces the native tooltip; aria-label stays.
+      pin.title = "";
       if (thread.comments[0]) {
         const author = thread.comments[0].author;
         applyAccent(pin, author.accentColor);
@@ -2578,8 +2580,30 @@ export function initComments(options: CommentsOptions): CommentsController {
           "pin-preview-open",
         );
         open.textContent = "";
-        open.append(authorRow(message), el("p", "hover-message", commentText(message.body)));
-        pinPreview.append(open);
+        const design = designProposal.test(message.body);
+        const summary = el(design ? "div" : "p", "hover-message", commentText(message.body));
+        if (design)
+          void loadDesignComments().then(({ renderDesignComment }) =>
+            renderDesignComment(summary, message.body, {
+              key: "",
+              resolve: () => null,
+              note: (node, text) => (node.textContent = text),
+              compact: true,
+            }),
+          );
+        open.append(authorRow(message), summary);
+        // A sibling of the open button: buttons can't nest.
+        const resolve = button(
+          thread.resolved ? "Reopen comment" : "Resolve comment",
+          () => {
+            hidePreview();
+            toggleResolved(thread);
+          },
+          "icon pin-preview-resolve",
+          "check",
+        );
+        resolve.disabled = !canResolve();
+        pinPreview.append(open, resolve);
         pinPreview.hidden = false;
         const point = indicatorPoint(pin, rect);
         const right =

@@ -145,4 +145,15 @@ describe("design comments", () => {
     more.click();
     expect(container.querySelectorAll(".design-row[hidden]")).toHaveLength(0);
   });
+
+  it("renders a compact, read-only card for hover previews", () => {
+    const container = document.createElement("div");
+    renderDesignComment(container, `${style}\n\n${tokens}\n\n${props}`, { key: "c5", resolve: () => null, note: () => {}, compact: true });
+    // Three rows across sections, then a count of the rest.
+    expect(container.querySelectorAll(".design-row")).toHaveLength(3);
+    expect(container.querySelectorAll(".design-card")).toHaveLength(2);
+    expect(container.querySelector(".design-source")!.textContent).toBe("+2 more");
+    // Nothing interactive: no Before/After switch or expand button.
+    expect(container.querySelector("button, .design-toggle")).toBeNull();
+  });
 });
