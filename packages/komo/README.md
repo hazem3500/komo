@@ -256,6 +256,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `branch` | `string` | Inferred by `komo sync` | Required only for branch scope. |
 | `enabled` | `boolean` | `true` | Set from your build environment to restrict review UI. |
 | `pageRoot` | `HTMLElement` | Sole existing content root, when present | Mounted element inside body to scale in Frame mode. Body and html are not supported. |
+| `pickRoots()` | `() => Element[]` | All of body except komo | Extra roots, besides `pageRoot`, that can be picked for comments and Design mode. By default body-level portals such as dialogs and popovers are pickable; return `[]` to limit picking to `pageRoot`, or return your portal container to allow only it. In Frame, portals keep their own size and position. |
 | `source(element)` | `(element: Element) => string \| undefined` | Anchor metadata | Return a repository-relative source path. |
 | `sourceUrl(source, branch)` | `(source: string, branch: string) => string` | GitHub viewer | Custom source or editor link. |
 | `page()` | `() => string` | `location.pathname` | Canonical page identifier. |

@@ -124,5 +124,11 @@ describe("useKomo", () => {
     expect(init).toHaveBeenCalledTimes(1);
     await render({ project: "test", page: () => "/new", pageRoot: container });
     expect(init).toHaveBeenCalledTimes(2);
+    const pickRoots = () => [container];
+    await render({ project: "test", pickRoots });
+    await render({ project: "test", pickRoots });
+    expect(init).toHaveBeenCalledTimes(3);
+    await render({ project: "test", pickRoots: () => [container] });
+    expect(init).toHaveBeenCalledTimes(4);
   });
 });

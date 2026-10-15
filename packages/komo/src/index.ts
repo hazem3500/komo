@@ -4770,6 +4770,18 @@ export function initComments(options: CommentsOptions): CommentsController {
         .find((element) => element !== host && !host.contains(element)) ?? null
     );
   }
+  // Portals (dialogs, popovers) render into body outside pageRoot, so the
+  // whole body is pickable unless the host narrows it with pickRoots.
+  function pickable(element: Element | null): element is Element {
+    return (
+      !!element &&
+      element !== surface &&
+      element !== document.body &&
+      (options.pickRoots ? [surface, ...options.pickRoots()] : [document.body]).some(
+        (root) => root.contains(element),
+      )
+    );
+  }
   function ensureDesignController() {
     if (designController) return Promise.resolve(designController);
     if (!designControllerPromise) {
@@ -4782,7 +4794,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             exitKey: shortcuts.design?.label,
             targetAt(x, y) {
               const target = siteElementAt(x, y);
-              return target && target !== surface && surface.contains(target) ? target : null;
+              return pickable(target) ? target : null;
             },
             onComment(element, proposal) {
               designReturnToComments = false;
@@ -4948,14 +4960,14 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   function componentAt(x: number, y: number): Element | null {
     const hit = siteElementAt(x, y);
-    if (!hit || !surface.contains(hit) || hit === surface) return null;
+    if (!pickable(hit)) return null;
     const target =
       hit.closest(
         "button,a,input,textarea,select,[role=button],[role=link],[data-comment-anchor],h1,h2,h3,h4,h5,h6,p,li,figure,svg,canvas,img,video",
       ) ?? hit;
     // SVG paths and text spans belong to the control or text block they render.
     const control = target.closest("button,a,[role=button],[role=link]");
-    return control && surface.contains(control) ? control : target;
+    return pickable(control) ? control : target;
   }
   function updateHover() {
     if (
@@ -4978,7 +4990,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       return;
     }
     const rect = hoverTarget.getBoundingClientRect();
-    const bounds = framed
+    const bounds = framed && surface.contains(hoverTarget)
       ? surface.getBoundingClientRect()
       : {
           left: 0,
@@ -5329,7 +5341,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         geometry();
       }, 80);
   });
-  mutations.observe(surface, {
+  mutations.observe(document.body, {
     childList: true,
     subtree: true,
     characterData: true,
@@ -5460,7 +5472,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         clearTimeout(mutationTimer);
         mutationTimer = 0;
       } else {
-        mutations.observe(surface, {
+        mutations.observe(document.body, {
           childList: true,
           subtree: true,
           characterData: true,
