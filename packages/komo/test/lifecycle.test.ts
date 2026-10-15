@@ -506,6 +506,27 @@ it("frames an existing sole app root without reparenting it", () => {
   ).toBe("background");
 });
 
+it("repaints the frame when a theme changes the page background", async () => {
+  const style = document.createElement("style");
+  style.textContent = "body{background:rgb(245, 244, 240)}[data-mode=dark] body{background:rgb(27, 28, 25)}";
+  document.head.append(style);
+  const app = document.createElement("main");
+  document.body.append(app);
+  controller = initComments({ ...options, sidebar: "background" });
+  const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+  expect(app.style.background).toBe("rgb(245, 244, 240)");
+  document.documentElement.dataset.mode = "dark";
+  await nextFrame();
+  expect(app.style.background).toBe("rgb(27, 28, 25)");
+  expect(document.body.style.background).toBe("rgb(8, 8, 8)");
+  delete document.documentElement.dataset.mode;
+  await nextFrame();
+  expect(app.style.background).toBe("rgb(245, 244, 240)");
+  controller.destroy();
+  expect(document.body.style.background).toBe("");
+  style.remove();
+});
+
 it("rejects unsafe page roots before mounting", () => {
   for (const pageRoot of [
     document.body,

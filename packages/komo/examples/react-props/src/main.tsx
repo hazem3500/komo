@@ -129,7 +129,7 @@ function Demo() {
           <p className="tk-text-secondary tk-p-sm" style={{ fontSize: 13 }}>
             Class tokens: this note uses tk-text-secondary and tk-p-sm. Select it to swap them.
           </p>
-          <p className="tk-p-md" style={{ fontSize: 13, color: "#1f1f1f" }}>
+          <p className="tk-p-md" style={{ fontSize: 13, color: "light-dark(#1f1f1f, #ecebe6)" }}>
             Off-token: this note's color is set inline, not from a token.
           </p>
         </>

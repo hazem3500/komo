@@ -633,15 +633,39 @@ export function initComments(options: CommentsOptions): CommentsController {
     { position: string; marginBottom: string }
   >();
   const savedHtmlBackground = document.documentElement.style.background;
-  const bodyBackground = getComputedStyle(document.body).backgroundColor;
-  const htmlBackground = getComputedStyle(
-    document.documentElement,
-  ).backgroundColor;
-  const pageBackground =
-    [bodyBackground, htmlBackground].find(
-      (color) => color !== "rgba(0, 0, 0, 0)",
-    ) ?? "#fff";
+  const html = document.documentElement;
+  // The frame paints the page's own background; re-read it when a theme changes.
+  // Frame's dark backdrop sits inline on body and html, so lift it while reading.
+  function readPageBackground() {
+    const backdrop = framed || pageTransitioning;
+    const inline = [document.body.style.background, html.style.background];
+    if (backdrop) {
+      document.body.style.background = savedBody.background;
+      html.style.background = savedHtmlBackground;
+    }
+    const color =
+      [document.body, html]
+        .map((node) => getComputedStyle(node).backgroundColor)
+        .find((color) => color !== "rgba(0, 0, 0, 0)") ?? "#fff";
+    if (backdrop) {
+      [document.body.style.background, html.style.background] = inline;
+      themeWatch.takeRecords();
+    }
+    return color;
+  }
+  let themeFrame = 0;
+  const themeWatch = new MutationObserver(() => {
+    themeFrame ||= requestAnimationFrame(() => {
+      themeFrame = 0;
+      pageBackground = readPageBackground();
+      if (framed || pageTransitioning) surface.style.background = pageBackground;
+    });
+  });
   let framed = false;
+  let pageTransitioning = false;
+  let pageBackground = readPageBackground();
+  for (const node of [html, document.body])
+    themeWatch.observe(node, { attributes: true });
   let accountOpenTimer = 0;
   let pageMotion: ReturnType<typeof animate> | undefined;
   let keyboardAction = false;
@@ -670,7 +694,6 @@ export function initComments(options: CommentsOptions): CommentsController {
   } | null = null;
   let dockCenter: number | undefined;
   let drawerContainerCenter: number | undefined;
-  let pageTransitioning = false;
 
   function placeToolbar(p: Placement) {
     // React mounts the drawer after its host; retain the saved coordinates until it has a size.
@@ -5919,6 +5942,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       hidePreview();
       observer.disconnect();
       mutations.disconnect();
+      themeWatch.disconnect();
+      cancelAnimationFrame(themeFrame);
       const scroll = framed
         ? surface.scrollTop * htmlZoom()
         : window.scrollY / appliedScale;
