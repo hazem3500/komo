@@ -32,24 +32,22 @@ export const designModeStyles = `
 .design-inspector__identity { min-width:0; flex:1; display:flex; align-items:baseline; gap:6px; white-space:nowrap; }
 .design-inspector__parent { flex:none; max-width:35%; overflow:hidden; text-overflow:ellipsis; margin-left:-6px; padding:2px 6px; border-radius:7px; color:#909090; font-size:15px; font-weight:500; }
 .design-inspector__parent::after { content:'/'; margin-left:6px; color:#555; }
-.design-inspector__parent:hover { color:#eee; background:#161616; }
 .design-inspector__target { flex:none; max-width:60%; overflow:hidden; text-overflow:ellipsis; color:#fff; font-weight:600; font-size:15px; }
 .design-inspector__heading small { min-width:0; overflow:hidden; text-overflow:ellipsis; color:#909090; font-size:13px; }
-.design-inspector__close,.design-inspector__fold { display:grid; place-items:center; width:28px; height:28px; flex:none; border-radius:7px; color:#909090; }
-.design-inspector__close svg,.design-inspector__fold svg { width:16px; height:16px; }
-.design-inspector__close:hover,.design-inspector__fold:hover { background:#161616; color:#eee; }
+.design-inspector__close,.design-inspector__fold,.design-inspector__actions button { display:grid; place-items:center; min-width:28px; height:28px; border-radius:7px; color:#909090; }
+.design-inspector__close,.design-inspector__fold { flex:none; }
+.design-inspector__close svg,.design-inspector__fold svg,.design-inspector__actions svg { width:16px; height:16px; }
+.design-inspector__parent:hover,.design-inspector__close:hover,.design-inspector__fold:hover,.design-inspector__actions button:hover:not(:disabled) { background:#161616; color:#eee; }
 .design-inspector__fold { display:none; }
 .design-inspector__fold svg { transition:rotate .25s var(--ease-smooth-out); }
 .design-inspector[data-folded] .design-inspector__fold svg { rotate:180deg; }
 .design-inspector[data-folded] > :not(.design-inspector__heading) { display:none; }
-.design-inspector[data-folded] .design-inspector__heading { border:0; }
 .design-inspector__controls { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; }
 /* Empty state: the floating sidebar fits a compact, centered hint instead of an empty column. */
 :host([data-sidebar="edge"]) .edge-sidebar[data-design-empty]:not([data-morphing]) { height:auto !important; }
 :host([data-sidebar="edge"]) [data-design-empty] > .design-inspector { position:relative; inset:auto; }
 /* The hidden toolbar docked in the sidebar would otherwise add its height. */
 :host([data-sidebar="edge"]) [data-design-empty]:not([data-morphing]) > .toolbar { position:absolute; }
-.design-inspector[data-empty] .design-inspector__heading { border:0; }
 .design-inspector[data-empty] .design-inspector__identity { visibility:hidden; }
 .design-inspector[data-empty] .design-inspector__controls { display:grid; place-items:center; }
 .design-inspector[data-empty] .design-inspector__bar:not([data-changes],[data-message]) { display:none; }
@@ -71,10 +69,7 @@ export const designModeStyles = `
 .design-inspector__bar[data-message] .design-inspector__status { display:block; }
 .design-inspector__bar[data-message] .design-inspector__count,.design-inspector__bar:not([data-changes]) .design-inspector__tool { display:none; }
 .design-inspector__actions { display:flex; align-items:center; gap:2px; margin-left:auto; }
-.design-inspector__actions button { display:grid; place-items:center; min-width:28px; height:28px; border-radius:7px; color:#909090; }
-.design-inspector__actions button:hover:not(:disabled) { background:#161616; color:#eee; }
 .design-inspector__actions button:disabled { cursor:default; opacity:.35; }
-.design-inspector__actions svg { width:16px; height:16px; }
 /* Comment is komo's primary action, as on the Comments panel. */
 .design-inspector__actions button:last-child { min-height:34px; margin-left:6px; padding:0 14px; border-radius:8px; background:var(--accent,#bda6ef); color:#211b2d; font-size:12px; font-weight:500; }
 .design-inspector__actions button:last-child:hover:not(:disabled) { background:var(--accent,#bda6ef); color:#211b2d; filter:brightness(1.08); }

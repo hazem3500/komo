@@ -1,5 +1,5 @@
 import { designModeStyles } from "./design-mode-styles.js";
-import { icon } from "./dom.js";
+import { el, icon } from "./dom.js";
 import type { Control, PanelContext } from "./design-panel.js";
 import type { InlineTextTools } from "./inline-text-editor.js";
 import type { DesignSystem } from "./design-system.js";
@@ -34,10 +34,15 @@ type TokenSwap = { kind?: undefined; element: HTMLElement; undo(): void };
 
 type Original = { value: string; priority: string; computed?: string };
 
+/** A plain `type="button"` button; `el` keeps the class and text optional. */
+const action = (className?: string, text?: string) => Object.assign(el("button", className, text), { type: "button" });
+const media = (query: string) => typeof matchMedia === "function" && matchMedia(query).matches;
+const calm = () => media("(prefers-reduced-motion: reduce)");
+
 const glyph = (path: string) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
 
 export function createDesignMode(options: DesignModeOptions) {
-  const style = document.createElement("style");
+  const style = el("style");
   style.textContent = designModeStyles;
   // Property controls are a separate chunk, fetched as soon as Design mode loads.
   let panelModule: typeof import("./design-panel.js") | null = null;
@@ -45,55 +50,37 @@ export function createDesignMode(options: DesignModeOptions) {
     style.textContent += module.designPanelStyles;
     panelModule = module;
   }, () => { status.textContent = "Design controls unavailable · try again"; });
-  const panel = document.createElement("aside");
-  panel.className = "design-inspector";
+  const panel = el("aside", "design-inspector");
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-label", "Design mode inspector");
   panel.setAttribute("aria-hidden", "true");
   panel.hidden = true;
-  const outline = document.createElement("div");
-  outline.className = "design-outline";
+  const outline = el("div", "design-outline");
   outline.setAttribute("aria-hidden", "true");
-  const heading = document.createElement("div");
-  heading.className = "design-inspector__heading";
-  const parent = document.createElement("button");
-  parent.type = "button";
-  parent.className = "design-inspector__parent";
+  const heading = el("div", "design-inspector__heading");
+  const parent = action("design-inspector__parent");
   parent.hidden = true;
-  const title = document.createElement("span");
-  title.className = "design-inspector__target";
-  const subtitle = document.createElement("small");
-  const close = document.createElement("button");
-  close.type = "button";
-  close.className = "design-inspector__close";
+  const title = el("span", "design-inspector__target");
+  const subtitle = el("small");
+  const close = action("design-inspector__close");
   close.setAttribute("aria-label", "Exit design mode");
   close.append(icon("close"));
   // Compact screens only: fold the sheet so page elements under it stay reachable.
-  const fold = document.createElement("button");
-  fold.type = "button";
-  fold.className = "design-inspector__fold";
+  const fold = action("design-inspector__fold");
   fold.append(icon("chevron"));
-  const identity = document.createElement("div");
-  identity.className = "design-inspector__identity";
+  const identity = el("div", "design-inspector__identity");
   identity.append(parent, title, subtitle);
   heading.append(identity, fold, close);
 
-  const controls = document.createElement("div");
-  controls.className = "design-inspector__controls";
-  const bar = document.createElement("div");
-  bar.className = "design-inspector__bar";
-  const count = document.createElement("span");
-  count.className = "design-inspector__count";
+  const controls = el("div", "design-inspector__controls");
+  const bar = el("div", "design-inspector__bar");
+  const count = el("span", "design-inspector__count");
   count.title = "Preview only · resets on exit";
-  const status = document.createElement("p");
-  status.className = "design-inspector__status";
+  const status = el("p", "design-inspector__status");
   status.setAttribute("role", "status");
-  const actions = document.createElement("div");
-  actions.className = "design-inspector__actions";
+  const actions = el("div", "design-inspector__actions");
   const tool = (label: string, markup: string) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "design-inspector__tool";
+    const button = action("design-inspector__tool");
     button.dataset.tip = label;
     button.setAttribute("aria-label", label);
     button.innerHTML = markup;
@@ -103,25 +90,17 @@ export function createDesignMode(options: DesignModeOptions) {
   const reset = tool("Reset", glyph("M2.5 2.5v3h3M3 5.5a5.5 5.5 0 1 1-.5 2.5"));
   const copy = tool("Copy CSS", "");
   copy.append(icon("copy"));
-  const comment = document.createElement("button");
-  comment.type = "button";
-  comment.textContent = "Comment";
-  const editText = document.createElement("button");
-  editText.type = "button";
-  editText.className = "design-text-edit";
+  const comment = action("", "Comment");
+  const editText = action("design-text-edit", "Edit text");
   editText.title = "Edit text";
-  editText.textContent = "Edit text";
   editText.setAttribute("aria-label", "Edit selected text inline");
   actions.append(undo, reset, copy, comment);
   // Before shows the page without this session's edits; After puts them back.
-  const compare = document.createElement("div");
-  compare.className = "design-inspector__compare";
+  const compare = el("div", "design-inspector__compare");
   compare.setAttribute("role", "group");
   compare.setAttribute("aria-label", "Compare with the page");
   const sides = ["Before", "After"].map((label, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = label;
+    const button = action("", label);
     button.dataset.tip = `${label} · ${index ? "→" : "←"} or B`;
     button.setAttribute("aria-pressed", String(!!index));
     button.addEventListener("click", () => showBefore(!index));
@@ -129,34 +108,8 @@ export function createDesignMode(options: DesignModeOptions) {
     return button;
   });
   bar.append(count, compare, status, actions);
-  // Footer controls use the toolbar's tooltip surface, like the Comments header.
-  const tip = document.createElement("div");
-  tip.className = "morphing-menu__tooltip sidebar-tooltip";
-  tip.setAttribute("aria-hidden", "true");
-  let tipTimer = 0;
-  const hideTip = () => {
-    window.clearTimeout(tipTimer);
-    delete tip.dataset.open;
-  };
-  const showTip = (event: Event) => {
-    const button = (event.target as Element).closest?.<HTMLElement>("[data-tip]");
-    if (!button || (event.type === "focusin" && !button.matches(":focus-visible"))) return hideTip();
-    window.clearTimeout(tipTimer);
-    tipTimer = window.setTimeout(() => {
-      if (!button.isConnected) return;
-      const box = button.getBoundingClientRect();
-      tip.textContent = button.dataset.tip ?? "";
-      const half = tip.offsetWidth / 2;
-      tip.style.left = `${Math.max(8 + half, Math.min(document.documentElement.clientWidth - 8 - half, box.left + box.width / 2))}px`;
-      tip.style.top = `${box.top - 8 - tip.offsetHeight}px`;
-      tip.dataset.open = "true";
-    }, tip.dataset.open ? 0 : 400);
-  };
-  bar.addEventListener("pointerover", showTip);
-  bar.addEventListener("focusin", showTip);
-  for (const type of ["pointerleave", "pointerdown", "focusout"]) bar.addEventListener(type, hideTip);
   panel.append(heading, controls, bar);
-  options.root.append(style, outline, tip);
+  options.root.append(style, outline);
   (options.panelRoot ?? options.root).append(panel);
 
   let active = false;
@@ -175,6 +128,15 @@ export function createDesignMode(options: DesignModeOptions) {
   const starts = new WeakMap<Control, Original>();
   const pending = new WeakMap<Control, Edit>();
   const listeners = new AbortController();
+  const exporter = () => import("./design-export.js");
+  // Footer tooltips load with the export helpers on the bar's first hover or focus;
+  // a tip waits 400ms before it shows, so the chunk is in by then.
+  let tips: Promise<void> | undefined;
+  const loadTips = (event: Event) => {
+    tips ??= exporter().then(({ footerTips }) => footerTips(bar, options.root, listeners.signal, event), () => { tips = undefined; });
+  };
+  bar.addEventListener("pointerover", loadTips);
+  bar.addEventListener("focusin", loadTips);
   const collapsed = new Set<string>();
   const history: Array<Edit | TextEdit | TokenSwap> = [];
 
@@ -210,7 +172,7 @@ export function createDesignMode(options: DesignModeOptions) {
     const text = status.textContent ?? "";
     status.title = text;
     bar.toggleAttribute("data-message", !!text);
-    window.clearTimeout(statusTimer);
+    clearTimeout(statusTimer);
     if (text) statusTimer = window.setTimeout(function clear() {
       if (textTools?.element) statusTimer = window.setTimeout(clear, 2600);
       else status.textContent = "";
@@ -222,7 +184,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (on && textTools?.element) finishTextEdit();
     showingBefore = on;
     // Morph like design comments: animate exactly the changed properties, then hand them back.
-    const smooth = !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const smooth = !calm();
     for (const [element, values] of changed) {
       const transition = element.style.transition;
       if (smooth) element.style.transition = [...values.keys()].map((property) => `${property} .3s cubic-bezier(.22,1,.36,1)`).join();
@@ -281,17 +243,15 @@ export function createDesignMode(options: DesignModeOptions) {
     controls.replaceChildren();
     syncEmpty();
     if (!selected) {
-      const empty = document.createElement("div");
-      empty.className = "design-inspector__empty";
-      const heading = document.createElement("strong");
-      heading.textContent = "Select an element";
-      const hints = document.createElement("ul");
+      const empty = el("div", "design-inspector__empty");
+      const heading = el("strong", "", "Select an element");
+      const hints = el("ul");
       // Odd parts are keycaps: "", "Click", " to inspect".
       const hint = (...parts: string[]) => {
-        const line = document.createElement("li");
+        const line = el("li");
         parts.forEach((part, index) => {
           if (index % 2 === 0) line.append(part);
-          else line.append(Object.assign(document.createElement("kbd"), { textContent: part }));
+          else line.append(el("kbd", "", part));
         });
         hints.append(line);
       };
@@ -386,7 +346,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (retarget && (element !== flipFor || kind !== flipKind)) {
       flipFor = element;
       flipKind = kind;
-      window.clearTimeout(flipTimer);
+      clearTimeout(flipTimer);
       const box = panel.getBoundingClientRect();
       const covers = (left: number) => rect.left < left + box.width && rect.right > left && rect.top < box.bottom && rect.bottom > box.top;
       if (options.flip && box.width && covers(box.left) && !covers(document.documentElement.clientWidth - box.right))
@@ -419,9 +379,7 @@ export function createDesignMode(options: DesignModeOptions) {
     outlineFor(element, "selected", true);
     updateActions();
   }
-  function compact() {
-    return typeof matchMedia === "function" && matchMedia("(max-width:520px)").matches;
-  }
+  const compact = () => media("(max-width:520px)");
   function setFolded(value: boolean) {
     panel.toggleAttribute("data-folded", value && compact());
     fold.setAttribute("aria-expanded", String(!panel.hasAttribute("data-folded")));
@@ -437,7 +395,7 @@ export function createDesignMode(options: DesignModeOptions) {
       if (rect.top >= 12 && rect.bottom <= limit) return;
       window.scrollBy({
         top: rect.top - Math.max(12, (limit - rect.height) / 2),
-        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        behavior: calm() ? "auto" : "smooth",
       });
     });
   }
@@ -552,7 +510,7 @@ export function createDesignMode(options: DesignModeOptions) {
       reactPanelModule?.resetPreviews();
       updateActions();
     }
-    window.clearTimeout(closeTimer);
+    clearTimeout(closeTimer);
     closeTimer = 0;
     active = value;
     syncEmpty();
@@ -571,7 +529,7 @@ export function createDesignMode(options: DesignModeOptions) {
       outline.hidden = true;
       panel.setAttribute("aria-hidden", "true");
       panel.dataset.state = "closing";
-      if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (calm()) {
         panel.hidden = true;
         delete panel.dataset.state;
       } else {
@@ -637,7 +595,6 @@ export function createDesignMode(options: DesignModeOptions) {
     updateActions();
     close.focus({ preventScroll: true });
   });
-  const exporter = () => import("./design-export.js");
   copy.addEventListener("click", () => {
     const element = selected;
     const values = element ? changed.get(element) : undefined;
@@ -690,15 +647,14 @@ export function createDesignMode(options: DesignModeOptions) {
     destroy() {
       textTools?.finish(true);
       setActive(false);
-      window.clearTimeout(closeTimer);
-      window.clearTimeout(statusTimer);
-      window.clearTimeout(flipTimer);
+      clearTimeout(closeTimer);
+      clearTimeout(statusTimer);
+      clearTimeout(flipTimer);
       resized?.disconnect();
       listeners.abort();
       cancelAnimationFrame(frame);
       panel.remove();
       outline.remove();
-      tip.remove();
       style.remove();
     },
   };
