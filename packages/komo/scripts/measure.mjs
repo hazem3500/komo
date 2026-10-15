@@ -83,7 +83,9 @@ await writeFile(
 // All-features 206,800: pin hover cards resolve in place and show a compact change card (~290 bytes,
 // mostly in the on-demand design comment chunk; initial stays within 101,600). Main was already at 206,503.
 // 101,800 / 207,000: #33 and #34 each fit alone; together they add ~30 bytes past the old limits.
-if (report.initial.gzip > 101_800 || report.coreFeatures.gzip > 207_000)
+// 102,100 / 208,200: Before/After in pin hover cards and the floating tag menu.
+// The initial bundle is due a trimming pass before more features land in it.
+if (report.initial.gzip > 102_100 || report.coreFeatures.gzip > 208_200)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
