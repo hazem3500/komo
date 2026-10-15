@@ -5466,7 +5466,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           node instanceof Element &&
           node.getRootNode() === shadow &&
           node.matches(
-            "button,input,textarea,summary,[role=menu],.emoji-menu,.emoji-keyboard,.floating-notice",
+            "button,input,textarea,summary,[role=menu],[role=listbox],.emoji-menu,.emoji-keyboard,.floating-notice",
           ),
       );
       if (
