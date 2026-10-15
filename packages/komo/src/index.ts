@@ -438,6 +438,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   const exitingDialogs = new Map<HTMLElement, (() => void) | undefined>();
   let draftText = "",
+    draftTags: string[] = [],
     guestName = "",
     editing: string | null = null,
     editText = "";
@@ -3239,7 +3240,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         ),
       );
       if (tagsEnabled && thread.tags?.length)
-        meta.append(el("span", "tag-list", thread.tags.join(" · ")));
+        meta.append(el("span", "tag-list", thread.tags.map((tag) => `#${tag}`).join(" ")));
       card.append(el("p", "preview", first.body), header, meta);
       const item = el("div", "thread-item");
       item.dataset.thread = thread.id;
@@ -3685,6 +3686,42 @@ export function initComments(options: CommentsOptions): CommentsController {
       throw reason;
     }
   }
+  /** Tag chips load on demand, so the editor stays out of the initial bundle. */
+  function tagSlot(
+    tags: readonly string[],
+    onAdd: (tag: string) => void,
+    onRemove: (tag: string) => void,
+  ) {
+    const slot = el("div", "tag-slot");
+    void import("./tag-editor.js").then(({ tagEditor }) =>
+      tagEditor(slot, {
+        tags,
+        suggestions: [...new Set(threads.flatMap((item) => item.tags ?? []))].sort(),
+        onAdd,
+        onRemove,
+      }),
+    );
+    return slot;
+  }
+  /** Save a tag change without re-rendering the open dialog, so typing continues. */
+  function saveTag(thread: Thread, change: { tag: string } | { untag: string }) {
+    if (!api.user) {
+      // Tag changes need a reviewer identity, like posting; the chips reset when the dialog redraws.
+      openAccount();
+      return;
+    }
+    run(async () => {
+      const { tags } = await api.request<{ tags: string[] }>(
+        `threads/${optimistic.id(thread.id)}`,
+        "PATCH",
+        change,
+      );
+      threads = threads.map((item) =>
+        item.id === thread.id ? { ...item, tags } : item,
+      );
+      renderList();
+    });
+  }
   function composer(thread: Thread | null) {
     const form = el(
       "form",
@@ -3729,6 +3766,14 @@ export function initComments(options: CommentsOptions): CommentsController {
       const body = el("div", "draft-body");
       if (api.user) body.append(avatar(api.user));
       body.append(input, send);
+      if (tagsEnabled)
+        body.append(
+          tagSlot(
+            draftTags,
+            (tag) => (draftTags = [...draftTags, tag]),
+            (tag) => (draftTags = draftTags.filter((item) => item !== tag)),
+          ),
+        );
       form.append(body);
     }
     input.addEventListener("input", () => {
@@ -3805,10 +3850,12 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
     } else if (draft) {
       const anchor = draft;
+      const tags = draftTags;
       const item: Thread = {
         id: `pending-${crypto.randomUUID()}`,
         page: page(),
         anchor,
+        tags,
         resolved: false,
         resolvedBy: null,
         createdAt: now,
@@ -3818,13 +3865,14 @@ export function initComments(options: CommentsOptions): CommentsController {
       selected = item.id;
       draft = null;
       draftText = "";
+      draftTags = [];
       await saveOptimistic(
         (items) => [...items, item],
         async () => {
           const result = await api.request<{ id: string; commentId?: string }>(
             "threads",
             "POST",
-            { page: item.page, anchor, body: comment.body },
+            { page: item.page, anchor, body: comment.body, ...(tags.length ? { tags } : {}) },
           );
           // The initial message ID is returned so queued edits target the persisted comment.
           const saved =
@@ -3841,6 +3889,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             selected = null;
             draft = anchor;
             draftText = comment.body;
+            draftTags = tags;
           } else recoveredDrafts.push({ anchor, text: comment.body });
         },
       );
@@ -4030,25 +4079,6 @@ export function initComments(options: CommentsOptions): CommentsController {
           ].join("\n"),
         ),
         copy("Copy selector", () => thread.anchor.selector),
-        ...(tagsEnabled
-          ? [
-              {
-                label: "Add group tag",
-                icon: "branch" as const,
-                onSelect: () => {
-                  const tag = window.prompt("Group tag");
-                  if (!tag?.trim()) return;
-                  run(() =>
-                    mutate(async () => {
-                      await api.request(`threads/${thread.id}`, "PATCH", {
-                        tag,
-                      });
-                    }),
-                  );
-                },
-              },
-            ]
-          : []),
       ]);
       controls.append(more);
       const resolve = button(
@@ -4372,6 +4402,15 @@ export function initComments(options: CommentsOptions): CommentsController {
       for (const comment of thread.comments)
         messages.append(renderMessage(comment, thread));
       dialog.append(messages);
+      if (tagsEnabled) {
+        const slot = tagSlot(
+          thread.tags ?? [],
+          (tag) => saveTag(thread, { tag }),
+          (tag) => saveTag(thread, { untag: tag }),
+        );
+        slot.classList.add("thread-tags");
+        dialog.append(slot);
+      }
       dialog.append(composer(thread));
     } else
       dialog.append(el("div", "empty", "This comment is no longer available."));
@@ -4671,6 +4710,7 @@ export function initComments(options: CommentsOptions): CommentsController {
               // The compact sheet would cover the composer, as in setMode().
               if (compactSidebar && expanded) toggleExpanded(false);
               draftText = proposal ?? "";
+              draftTags = [];
               const rect = element.getBoundingClientRect();
               composeAt(element, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
             },
@@ -5244,6 +5284,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     google = github = guests = guestResolve = privateProject = false;
     draft = parkedDraft = null;
     draftText = "";
+    draftTags = [];
     replies.clear();
     recoveredDrafts.length = 0;
     queuedProfile = profileDraft = confirmedProfile = null;

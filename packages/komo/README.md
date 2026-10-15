@@ -77,6 +77,7 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 - Point and area comments anchored to page elements.
 - On-demand design mode for temporary typography, color, spacing, border, and layout previews; copy the resulting CSS or attach a comment to the selected element.
 - Replies, reactions, author-only editing, resolution, and undo.
+- Group tags: add them while writing a comment or on an open thread, with suggestions from tags already in the project.
 - Safe HTTP(S) links and simple Markdown links in comment messages.
 - Searchable sidebar, draggable dock, and Google or guest profiles.
 - Dismiss the toolbar for the current tab with ×; restore it with Shift+K or `controller.open()`. Set `showToolbar: false` to start hidden.
@@ -143,6 +144,7 @@ For an existing inline installation, pass `--project YOUR_PROJECT_KEY --origin h
 | `komo whoami` | Show the current reviewer and project scope. |
 | `komo comments list` | Open threads as JSON; `--status open\|resolved\|all`, `--page`, `--tag`, `--limit 1–250`, `--offset`. Default page size: 50. |
 | `komo comments tag THREAD_ID TAG` | Add a normalized group tag to a thread. |
+| `komo comments untag THREAD_ID TAG` | Remove a group tag from a thread. |
 | `komo comments get THREAD_ID` | Full thread, replies, selector, source reference, and anchor. |
 | `komo comments prompt` | The UI’s open-feedback prompt as Markdown; optional `--page` and `--json`. |
 | `komo comments reply THREAD_ID --body TEXT` | Add a reply as the signed-in reviewer. |

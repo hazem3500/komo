@@ -370,6 +370,38 @@ describe("shared comments against real workerd and SQLite", () => {
         )
       ).status
     ).toBe(400);
+    const removed = await call(
+      `/threads/${created.id}`,
+      "PATCH",
+      { untag: "Navigation" },
+      guest.token
+    );
+    expect(await removed.json()).toEqual({ ok: true, tags: [] });
+  });
+  it("accepts normalized tags when a thread is created", async () => {
+    const call = (
+      path: string,
+      method = "GET",
+      data?: unknown,
+      token?: string
+    ) => request(path, method, data, token, "tags-create", "owner/site", "test");
+    const guest = await (
+      await call("/auth/guest", "POST", { name: "Tag author" })
+    ).json();
+    const created = await call(
+      "/threads",
+      "POST",
+      { page: "/", anchor, body: "Tagged at creation", tags: ["Bug", "copy", "bug"] },
+      guest.token,
+    );
+    expect(created.status, await created.clone().text()).toBe(201);
+    const { id } = await created.json();
+    const listed = await (await call("/threads", "GET")).json();
+    expect(listed.threads.find((thread: Thread) => thread.id === id).tags).toEqual(["bug", "copy"]);
+    for (const tags of ["bug", ["bad/tag"], Array.from({ length: 13 }, (_, index) => `t${index}`)])
+      expect(
+        (await call("/threads", "POST", { page: "/", anchor, body: "Bad tags", tags }, guest.token)).status
+      ).toBe(400);
   });
   it("resolves project-only configuration to the existing repository", async () => {
     const canonical = await request(
@@ -1526,6 +1558,8 @@ it("runs the agent CLI against the real Worker and persisted threads", async () 
   const threadId = created.data.id;
   expect(created.scope.branch).toBe("shared");
   await cli("comments", "tag", threadId, "nav");
+  await cli("comments", "tag", threadId, "temporary");
+  expect((await cli("comments", "untag", threadId, "temporary")).data.tags).toEqual(["nav"]);
   const listing = await cli("comments", "list", "--page", "/cli");
   expect(listing.data.threads.map((thread: Thread) => thread.id)).toContain(
     threadId
