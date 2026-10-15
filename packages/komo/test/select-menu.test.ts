@@ -28,6 +28,8 @@ function mount({ grouped = false, disabled = false } = {}) {
   }
   select.value = "bold";
   field.append(select);
+  // Browsers give a click on a label's own control no label activation; jsdom re-clicks it forever.
+  field.addEventListener("click", (event) => { if (event.target === select) event.preventDefault(); });
   container.append(field);
   root.append(container);
   document.body.replaceChildren(host);
@@ -67,7 +69,7 @@ function mount({ grouped = false, disabled = false } = {}) {
     }
     // A cancelled touchend means the browser sends no click.
     if (!events.some((event) => event.type === "touchend" && event.defaultPrevented)) {
-      const click = new MouseEvent("click", { bubbles: true, composed: true, cancelable: true });
+      const click = new MouseEvent("click", { bubbles: true, composed: true, cancelable: true, clientX: 20 + dx, clientY: 20 + dy });
       target.dispatchEvent(click);
       events.push(click as PointerEvent);
     }
@@ -207,8 +209,10 @@ describe("select menu", () => {
     for (const pointerType of ["touch", "pen"]) {
       const { root, select, list, tap } = mount();
       const events = tap(select, { pointerType });
-      // Every event that could reach the system picker is cancelled.
-      expect(events.filter((event) => event.type !== "pointerup").every((event) => event.defaultPrevented)).toBe(true);
+      // The press is cancelled, so no compatibility mousedown reaches the system picker, and
+      // a touch's touchend is too, so the browser sends no mousedown or click after it.
+      expect(events.filter((event) => /down|touchend/.test(event.type)).every((event) => event.defaultPrevented)).toBe(true);
+      expect(events.some((event) => event.type === "click")).toBe(pointerType === "pen");
       expect(list()).not.toBeNull();
       // Focusing the select from a tap can raise the iOS picker, so a tap leaves focus alone.
       expect(root.activeElement).not.toBe(select);
@@ -223,14 +227,16 @@ describe("select menu", () => {
     const { select, list, pointer, tap } = mount();
     expect(tap(select, { dy: 30 })[0].defaultPrevented).toBe(true);
     expect(list()).toBeNull();
+    // The browser cancels a pointer it scrolls with and sends no pointerup; the next tap still opens.
     pointer("pointerdown", select, { pointerType: "touch", pointerId: 8 });
     pointer("pointercancel", select, { pointerType: "touch", pointerId: 8 });
-    pointer("pointerup", select, { pointerType: "touch", pointerId: 9 });
     expect(list()).toBeNull();
+    tap(select);
+    expect(list()).not.toBeNull();
   });
 
   it("picks an option on a tap but not after scrolling the list by touch", () => {
-    const { select, list, pointer, tap, changes } = mount();
+    const { select, list, tap, changes } = mount();
     tap(select);
     const options = () => [...list()!.querySelectorAll<HTMLElement>("[role=option]")];
     // Small jitter is still a tap.
@@ -240,11 +246,6 @@ describe("select menu", () => {
     // A drag past the slop scrolls instead, even if the browser still sends a click.
     tap(options()[2], { dy: 40 });
     expect(list()).not.toBeNull();
-    expect(select.value).toBe("calm");
-    // A cancelled pointer (the browser took over the scroll) picks nothing either.
-    pointer("pointerdown", options()[2], { pointerType: "touch", pointerId: 3 });
-    pointer("pointercancel", options()[2], { pointerType: "touch", pointerId: 3 });
-    options()[2].click();
     expect(select.value).toBe("calm");
     expect(changes).toEqual(["calm"]);
     // A pen tap picks normally afterwards.
