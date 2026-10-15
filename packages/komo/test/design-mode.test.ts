@@ -63,7 +63,7 @@ describe("design mode preview inspector", () => {
     expect(button.style.color).toBe("rgb(255, 0, 0)");
   });
 
-  it("edits only leaf text inline, keeps pasted markup as text, and supports undo/reset/comment", async () => {
+  it("edits leaf text inline, keeps pasted markup as text, and supports undo/reset/comment", async () => {
     const label = document.querySelector<HTMLElement>("#label")!;
     pointer("pointerdown", label);
     const edit = shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
@@ -71,7 +71,7 @@ describe("design mode preview inspector", () => {
     edit.click();
     await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
     expect(label.getAttribute("contenteditable")).toBe("true");
-    expect(shadow.querySelector<HTMLElement>(".design-inspector__status")?.textContent).toContain("Editing leaf text");
+    expect(shadow.querySelector<HTMLElement>(".design-inspector__status")?.textContent).toContain("Editing text");
     expect(document.activeElement).toBe(label);
 
     const selection = document.getSelection()!;
@@ -113,7 +113,7 @@ describe("design mode preview inspector", () => {
     expect(commentProposals.at(-1)).toContain('"Selected text" → "Comment proposal"');
   });
 
-  it("double-clicking leaf text selects it and starts inline editing", async () => {
+  it("double-clicking text selects it and starts inline editing", async () => {
     const label = document.querySelector<HTMLElement>("#label")!;
     const doubleClick = (target: Element) => {
       pointer("pointerdown", target);
@@ -125,34 +125,72 @@ describe("design mode preview inspector", () => {
     label.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
     expect(label.hasAttribute("contenteditable")).toBe(false);
 
+    // A double-click that lands outside the selection must not edit the previous selection.
+    pointer("pointerdown", label);
+    document.body.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, composed: true, detail: 2 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(label.hasAttribute("contenteditable")).toBe(false);
+
     const nested = document.querySelector<HTMLElement>("#nested")!;
     doubleClick(nested);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(nested.hasAttribute("contenteditable")).toBe(false);
+    await vi.waitFor(() => expect(nested.getAttribute("contenteditable")).toBe("true"));
   });
 
-  it("keeps nested markup, interactive controls, and private text out of inline editing", async () => {
+  it("edits text inside nested markup in place without changing its structure", async () => {
+    const edit = () => shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
+    const nested = document.querySelector<HTMLElement>("#nested")!;
+    const strong = nested.querySelector("strong")!;
+    const rich = strong.firstChild as Text;
+    pointer("pointerdown", nested);
+    expect(edit().disabled).toBe(false);
+    edit().click();
+    await vi.waitFor(() => expect(nested.getAttribute("contenteditable")).toBe("true"));
+    const input = (inputType: string, range: Range, data: string | null = null) => {
+      const event = new InputEvent("beforeinput", { inputType, data, bubbles: true, cancelable: true, composed: true });
+      Object.defineProperty(event, "getTargetRanges", { value: () => [range] });
+      nested.dispatchEvent(event);
+      return event;
+    };
+    const at = (node: Node, start: number, end = start) => {
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, end);
+      return range;
+    };
+    expect(input("insertText", at(rich, 4), "er").defaultPrevented).toBe(true);
+    expect(input("deleteContentBackward", at(rich, 0, 1)).defaultPrevented).toBe(true);
+    expect(nested.innerHTML).toBe("<strong>icher</strong> text");
+    // Deleting across the <strong> boundary, or starting a new paragraph, is refused.
+    const across = document.createRange();
+    across.setStart(rich, 4);
+    across.setEnd(nested.lastChild!, 1);
+    input("deleteContentForward", across);
+    input("insertParagraph", at(rich, 2));
+    expect(nested.querySelector("strong")).toBe(strong);
+    expect(nested.innerHTML).toBe("<strong>icher</strong> text");
+
+    nested.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
+    expect(nested.hasAttribute("contenteditable")).toBe(false);
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:first-child")!.click();
+    expect(nested.innerHTML).toBe("<strong>Rich</strong> text");
+    expect(nested.querySelector("strong")!.firstChild).toBe(rich);
+  });
+
+  it("edits button text but keeps private text and form controls read-only", async () => {
     const edit = () => shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
     const status = () => shadow.querySelector(".design-inspector__status")?.textContent;
-    const nested = document.querySelector<HTMLElement>("#nested")!;
-    pointer("pointerdown", nested);
-    expect(edit().disabled).toBe(true);
-    edit().click();
-    expect(nested.hasAttribute("contenteditable")).toBe(false);
     pointer("pointerdown", button);
     edit().click();
-    await vi.waitFor(() => expect(status()).toContain("stays read-only"));
-    expect(button.hasAttribute("contenteditable")).toBe(false);
+    await vi.waitFor(() => expect(button.getAttribute("contenteditable")).toBe("true"));
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
     const secret = document.createElement("span");
     secret.dataset.private = "true";
-    secret.textContent = "do not edit";
+    secret.innerHTML = "do <b>not</b> edit";
     page.append(secret);
     pointer("pointerdown", secret);
     edit().click();
     await vi.waitFor(() => expect(status()).toContain("stays read-only"));
     expect(secret.hasAttribute("contenteditable")).toBe(false);
-    pointer("pointerdown", document.querySelector<HTMLElement>("#label")!);
-    expect(edit().disabled).toBe(false);
   });
 
   it("lets Space reach the text being edited instead of reselecting it", async () => {

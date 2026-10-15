@@ -74,5 +74,6 @@ if (report.initial.gzip > 100_000 || report.coreFeatures.gzip > 199_000)
 // Raised from 7,000 for double-click inline editing (37 bytes); the caret logic stays in the editor chunk.
 if (report.optionalDesignMode.gzip > 7_100)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
-if (report.optionalInlineTextEditing.gzip > 2_800)
+// Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
+if (report.optionalInlineTextEditing.gzip > 3_000)
   throw new Error("komo's on-demand inline text editor chunk exceeds its gzip budget.");
