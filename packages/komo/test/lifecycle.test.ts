@@ -853,3 +853,96 @@ it("keeps the floating dialog while the sidebar is closed", async () => {
   expect(dialog.querySelector(".thread-back")).toBeNull();
   localStorage.clear();
 });
+
+async function mountForComments(sidebar: "background" | "edge", name: string) {
+  const { CommentsApi } = await import("../src/api");
+  const config = { ...options, onboarding: undefined, sidebar };
+  const api = new CommentsApi(config);
+  api.save({ token: `${name}-session`, user: { id: name, name, verified: true } });
+  localStorage.setItem(
+    `${api.sessionKey}:${JSON.stringify([config.repo, "local"])}:threads`,
+    JSON.stringify({ token: api.token, threads: [] }),
+  );
+  // Reads stay pending; writes succeed.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((_url: URL, init?: RequestInit) =>
+      init?.method && init.method !== "GET"
+        ? Promise.resolve(Response.json({ id: `${name}-thread`, commentId: `${name}-comment` }))
+        : new Promise<Response>(() => {}),
+    ),
+  );
+  layoutBody();
+  controller = initComments(config);
+  const host = [...document.body.children].find((node) => node.shadowRoot) as HTMLElement;
+  const shadow = host.shadowRoot!;
+  const press = (key: string) =>
+    document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true }));
+  const open = () => host.classList.contains("review-open");
+  const capturing = () => !shadow.querySelector<HTMLElement>(".catch")!.hidden;
+  const pane = () => shadow.querySelector<HTMLElement>(".panel .thread-pane");
+  const post = async (text: string) => {
+    controller!.comment(document.getElementById("target")!);
+    const input = shadow.querySelector<HTMLTextAreaElement>('[data-focus-key="body"]')!;
+    expect(input.closest(".panel")).toBeNull();
+    input.value = text;
+    input.dispatchEvent(new Event("input"));
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    await vi.waitFor(() => expect(capturing()).toBe(true));
+  };
+  return { host, shadow, press, open, capturing, pane, post };
+}
+
+it("keeps Frame view open while commenting, posting, resolving and in Design mode", async () => {
+  const { host, shadow, press, open, capturing, pane, post } = await mountForComments("background", "framer");
+  expect(host.dataset.sidebar).toBe("background");
+  controller!.open();
+  expect(open()).toBe(true);
+  const frame = document.getElementById("target")!;
+  expect(frame.style.transform).toMatch(/scale/);
+
+  press("c");
+  expect(open()).toBe(true);
+  expect(capturing()).toBe(true);
+
+  await post("Framed note");
+  // The new thread opens in the sidebar and comment mode stays armed.
+  expect(open()).toBe(true);
+  expect(frame.style.transform).toMatch(/scale/);
+  expect(pane()?.querySelector(".thread-title")?.textContent).toBe("Framed note");
+
+  pane()!.querySelector<HTMLButtonElement>('[aria-label="Resolve comment"]')!.click();
+  expect(open()).toBe(true);
+  press("Escape");
+  expect(open()).toBe(true);
+  expect(capturing()).toBe(false);
+
+  press("d");
+  expect(host.classList.contains("design-active")).toBe(true);
+  expect(open()).toBe(true);
+  press("c");
+  expect(host.classList.contains("design-active")).toBe(false);
+  expect(open()).toBe(true);
+  expect(capturing()).toBe(true);
+  press("Escape");
+  // Leaving Frame stays explicit: a second Escape closes the sidebar.
+  press("Escape");
+  expect(open()).toBe(false);
+  expect(shadow.querySelector(".thread-pane")).toBeNull();
+  localStorage.clear();
+});
+
+it("still closes the Floating sidebar when commenting", async () => {
+  const { host, press, open, capturing, pane, post } = await mountForComments("edge", "floater");
+  expect(host.dataset.sidebar).toBe("edge");
+  controller!.open();
+  expect(open()).toBe(true);
+  press("c");
+  expect(open()).toBe(false);
+  expect(capturing()).toBe(true);
+  controller!.open();
+  await post("Floating note");
+  expect(open()).toBe(false);
+  expect(pane()).toBeNull();
+  localStorage.clear();
+});
