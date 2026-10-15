@@ -5,6 +5,7 @@ import {
   requireMember,
 } from "./project-management";
 import { setupPage } from "./setup-page";
+import { authPrefix, iapIdentity, type IapIdentity } from "./iap";
 import setupClient from "./setup-client.txt";
 import {
   dispatchWebhook,
@@ -338,7 +339,7 @@ async function oauthAuthorize(
   authorize.search = new URLSearchParams({
     client_id:
       provider === "google" ? env.GOOGLE_CLIENT_ID : env.GITHUB_CLIENT_ID,
-    redirect_uri: `${url.origin}/auth/${provider}/callback`,
+    redirect_uri: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/auth/${provider}/callback`,
     ...(provider === "google"
       ? { response_type: "code", scope: "openid profile email" }
       : {}),
@@ -413,7 +414,7 @@ async function oauthCallback(
             : env.GITHUB_CLIENT_SECRET,
         grant_type: "authorization_code",
         code,
-        redirect_uri: `${url.origin}/auth/${provider}/callback`,
+        redirect_uri: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/auth/${provider}/callback`,
         code_verifier: saved.verifier,
       }),
     }
@@ -495,16 +496,23 @@ async function oauthCallback(
       )
     : undefined;
   const accessToken = await session(env, created?.project ?? saved.project, id);
+  return signedInPage(
+    {
+      type: created ? "komo:setup" : "branch-comments:auth",
+      ...(created ? { ...created, code: setupCode } : {}),
+      token: accessToken,
+      user,
+    },
+    saved.origin
+  );
+}
+// The popup posts the session back to the site that opened it, then closes.
+function signedInPage(message: Record<string, unknown>, origin: string) {
   const nonce = crypto.randomUUID();
-  const message = JSON.stringify({
-    type: created ? "komo:setup" : "branch-comments:auth",
-    ...(created ? { ...created, code: setupCode } : {}),
-    token: accessToken,
-    user,
-  }).replace(/</g, "\\u003c");
-  const target = JSON.stringify(saved.origin).replace(/</g, "\\u003c");
+  const body = JSON.stringify(message).replace(/</g, "\\u003c");
+  const target = JSON.stringify(origin).replace(/</g, "\\u003c");
   return new Response(
-    `<!doctype html><meta charset="utf-8"><title>Signed in</title><p>You’re signed in. You can close this window and return to your comments.</p><script nonce="${nonce}">if(window.opener){window.opener.postMessage(${message},${target});window.close();}</script>`,
+    `<!doctype html><meta charset="utf-8"><title>Signed in</title><p>You’re signed in. You can close this window and return to your comments.</p><script nonce="${nonce}">if(window.opener){window.opener.postMessage(${body},${target});window.close();}</script>`,
     {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
@@ -514,6 +522,44 @@ async function oauthCallback(
           "__Host-comments-oauth=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
       },
     }
+  );
+}
+// Records the IAP-verified Google account as a verified reviewer.
+async function iapUser(env: Env, signedIn: IapIdentity) {
+  await env.DB.prepare(
+    "INSERT INTO users(id,name,verified) VALUES(?,?,1) ON CONFLICT(id) DO NOTHING"
+  )
+    .bind(signedIn.id, signedIn.email.split("@")[0].slice(0, 60))
+    .run();
+  await env.DB.prepare("UPDATE users SET email=?,verified=1 WHERE id=?")
+    .bind(signedIn.email, signedIn.id)
+    .run();
+  return identity(
+    (await env.DB.prepare("SELECT * FROM users WHERE id=?")
+      .bind(signedIn.id)
+      .first<UserRow>())!
+  );
+}
+// Behind IAP the authorize step is the whole sign-in: IAP has already
+// authenticated the browser, so there is no Google redirect or callback.
+async function iapSignIn(request: Request, env: Env) {
+  const url = new URL(request.url);
+  const state = string(url.searchParams.get("state"), 200, "state");
+  const signedIn = await iapIdentity(request, env.KOMO_IAP_AUDIENCE!);
+  const saved = await env.DB.prepare(
+    "DELETE FROM oauth_states WHERE state_hash=? AND expires_at>? AND provider=? RETURNING project,origin"
+  )
+    .bind(await hash(state), Date.now(), "google")
+    .first<{ project: string; origin: string }>();
+  check(saved, 400, "Sign-in expired. Return to the site and try again.");
+  const user = await iapUser(env, signedIn);
+  return signedInPage(
+    {
+      type: "branch-comments:auth",
+      token: await session(env, saved.project, user.id),
+      user,
+    },
+    saved.origin
   );
 }
 async function route(
@@ -640,7 +686,7 @@ async function route(
     )
       .bind(id, await hash(secret), JSON.stringify(config), Date.now() + 600000)
       .run();
-    return json({ id, secret, url: `${url.origin}/setup?code=${id}` });
+    return json({ id, secret, url: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/setup?code=${id}` });
   }
   if (
     url.pathname === "/setup/poll" &&
@@ -668,7 +714,7 @@ async function route(
         ? {
             project: row.project,
             repo: JSON.parse(row.config).repo,
-            endpoint: url.origin,
+            endpoint: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}`,
           }
         : { pending: true }
     );
@@ -676,6 +722,33 @@ async function route(
   const oauthPath = url.pathname.match(
     /^\/auth\/(github|google)\/(authorize|callback)$/
   );
+  if (env.KOMO_IAP_AUDIENCE) {
+    // IAP sign-in replaces OAuth. Its handlers live only under KOMO_AUTH_PREFIX,
+    // the path the load balancer puts behind IAP.
+    const prefix = authPrefix(env.KOMO_AUTH_PREFIX);
+    const signInPath =
+      !prefix || url.pathname.startsWith(`${prefix}/auth/`)
+        ? url.pathname.slice(prefix.length)
+        : "";
+    if (signInPath === "/auth/google/authorize") return iapSignIn(request, env);
+    // For agents: an IAP-authenticated caller exchanges its identity for a
+    // project session, the non-interactive counterpart of the popup.
+    if (signInPath === "/auth/iap/session" && request.method === "POST") {
+      const signedIn = await iapIdentity(request, env.KOMO_IAP_AUDIENCE);
+      const target = string(url.searchParams.get("project"), 100, "project");
+      check(await projectConfig(env, target), 404, "Unknown comments project.");
+      const user = await iapUser(env, signedIn);
+      return json({ token: await session(env, target, user.id), user }, 201);
+    }
+    check(!oauthPath || oauthPath[1] === "google", 403, "Sign in with your Google account.");
+    check(
+      !oauthPath &&
+        url.pathname !== "/auth/iap/session" &&
+        !(prefix && url.pathname.startsWith(`${prefix}/`)),
+      404,
+      "Not found."
+    );
+  }
   if (oauthPath)
     return oauthPath[2] === "authorize"
       ? oauthAuthorize(request, env, oauthPath[1] as "github" | "google")
@@ -861,8 +934,12 @@ async function route(
     return json({
       repo: config.repo,
       github: !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
-      google: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
+      google: !!(
+        env.KOMO_IAP_AUDIENCE ||
+        (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
+      ),
       guests:
+        !env.KOMO_IAP_AUDIENCE &&
         config.allowGuests !== false &&
         (!config.requireOwner || !!owner) &&
         !(await privateAccess(env, project)),
@@ -931,6 +1008,7 @@ async function route(
     });
   }
   if (url.pathname === "/auth/guest" && request.method === "POST") {
+    check(!env.KOMO_IAP_AUDIENCE, 403, "Guest comments are disabled.");
     check(
       !(await privateAccess(env, project)),
       403,
@@ -958,9 +1036,11 @@ async function route(
   ) {
     const provider = url.pathname.includes("/google/") ? "google" : "github";
     check(
-      provider === "google"
-        ? env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
-        : env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET,
+      env.KOMO_IAP_AUDIENCE
+        ? provider === "google"
+        : provider === "google"
+          ? env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+          : env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET,
       503,
       "Sign-in is not configured."
     );
@@ -984,7 +1064,8 @@ async function route(
       )
       .run();
     return json({
-      url: `${url.origin}/auth/${provider}/authorize?state=${encodeURIComponent(state)}`,
+      // KOMO_PUBLIC_PATH covers apps served under a path behind a proxy that strips it.
+      url: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}${env.KOMO_IAP_AUDIENCE ? authPrefix(env.KOMO_AUTH_PREFIX) : ""}/auth/${provider}/authorize?state=${encodeURIComponent(state)}`,
     });
   }
   if (url.pathname === "/me") {
@@ -1046,6 +1127,16 @@ async function route(
     }
     check(request.method === "GET", 405, "Method not allowed.");
     return json({ user });
+  }
+  // Behind IAP, comments are never readable or writable without a session
+  // minted from an IAP-verified Google account.
+  if (env.KOMO_IAP_AUDIENCE) {
+    const reader = await authenticate(request, env, project);
+    check(
+      reader.verified && reader.id.startsWith("google:"),
+      403,
+      "Sign in with your Google account to see comments."
+    );
   }
   if (await privateAccess(env, project)) {
     await requireMember(

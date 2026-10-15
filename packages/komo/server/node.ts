@@ -5,21 +5,18 @@ import { postgresDatabase } from "./postgres";
 import worker from "./index";
 import { sitePattern } from "./validation";
 import { sendWebhookPinned } from "./node-webhooks";
+import { authPrefix, publicLocation } from "./iap";
 
 const databaseUrl = process.env.DATABASE_URL;
 const projects = process.env.PROJECTS;
 const publicUrl = process.env.PUBLIC_URL;
 if (!databaseUrl || !projects || !publicUrl)
   throw Error("DATABASE_URL, PUBLIC_URL, and PROJECTS are required");
-const origin = new URL(publicUrl);
-if (
-  origin.origin !== publicUrl ||
-  (origin.protocol !== "https:" &&
-    !["localhost", "127.0.0.1"].includes(origin.hostname))
-)
-  throw Error(
-    "PUBLIC_URL must be an HTTPS origin (or localhost for development)",
-  );
+// PUBLIC_URL may include a path (https://example.com/komo) when a proxy serves
+// the app under it; requests are accepted with or without that path.
+const { origin: publicOrigin, path: publicPath } = publicLocation(publicUrl);
+// Fail at startup, not on the first sign-in, when the prefix is malformed.
+authPrefix(process.env.KOMO_AUTH_PREFIX);
 const configured = JSON.parse(projects) as Record<
   string,
   { repo?: unknown; origins?: unknown }
@@ -51,14 +48,22 @@ const env = {
   GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET ?? "",
   KOMO_WEBHOOK_KEYS: process.env.KOMO_WEBHOOK_KEYS,
   KOMO_WEBHOOK_SEND: sendWebhookPinned,
+  KOMO_IAP_AUDIENCE: process.env.KOMO_IAP_AUDIENCE || undefined,
+  KOMO_AUTH_PREFIX: process.env.KOMO_AUTH_PREFIX || undefined,
+  KOMO_PUBLIC_PATH: publicPath || undefined,
 } as unknown as Env;
 const port = Number(process.env.PORT ?? 8080);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw Error("Invalid PORT");
 const server = createServer(async (incoming, outgoing) => {
   try {
-    const url = new URL(incoming.url ?? "/", publicUrl);
-    if (url.origin !== publicUrl) {
+    const url = new URL(incoming.url ?? "/", publicOrigin);
+    if (
+      publicPath &&
+      (url.pathname === publicPath || url.pathname.startsWith(`${publicPath}/`))
+    )
+      url.pathname = url.pathname.slice(publicPath.length) || "/";
+    if (url.origin !== publicOrigin) {
       outgoing.writeHead(400);
       outgoing.end();
       return;
