@@ -320,7 +320,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
       toggle.setAttribute("role", "group");
       toggle.setAttribute("aria-label", "Preview on page");
       for (const [index, label] of ["Before", "After"].entries()) {
-        const button = Object.assign(document.createElement("button"), { type: "button", textContent: label });
+        const button = Object.assign(document.createElement("button"), { type: "button", textContent: label, title: `${label} · B` });
         button.addEventListener("click", () => {
           const showAfter = index === 1;
           if (showAfter === applied.has(options.key)) return;
@@ -335,6 +335,8 @@ export function renderDesignComment(container: HTMLElement, body: string, option
         toggle.append(button);
       }
       toggles.push(toggle);
+      for (const item of visibleToggles) if (!item.isConnected) visibleToggles.delete(item);
+      visibleToggles.add(toggle);
       head.append(toggle);
     }
     card.append(head);
@@ -370,4 +372,23 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   }
   sync();
   container.replaceChildren(root);
+  if (toggles.length) listenForShortcut();
+}
+
+// B flips the open design comment between Before and After, unless typing.
+let shortcutBound = false;
+function listenForShortcut() {
+  if (shortcutBound) return;
+  shortcutBound = true;
+  document.addEventListener("keydown", (event) => {
+    if (event.key.toLowerCase() !== "b" || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
+    const origin = event.composedPath()[0];
+    if (origin instanceof HTMLElement && (origin.isContentEditable || origin.matches("input, textarea, select"))) return;
+    // The most recently drawn switch still on screen belongs to the open comment.
+    const toggle = [...visibleToggles].reverse().find((item) => item.isConnected);
+    const next = toggle?.querySelector<HTMLButtonElement>('button[aria-pressed="false"]');
+    if (!next) return;
+    event.preventDefault();
+    next.click();
+  });
 }
