@@ -335,7 +335,8 @@ export function createDesignMode(options: DesignModeOptions) {
       commit,
       rerender: renderControls,
     } satisfies PanelContext);
-    if (options.design?.tokens || element.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
+    // Any design-system adapter needs the token and props controls, not only registered elements.
+    if (options.design || element.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
       reactPanelPromise ??= import("./react-props-panel.js").then((module) => reactPanelModule = module).catch((error: unknown) => {
         reactPanelPromise = null;
         throw error;
