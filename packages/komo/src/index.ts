@@ -2967,6 +2967,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           "icon copy-page-prompt",
           "copy",
         ),
+        el("div", "tag-filter-slot"),
         button(
           "Search comments",
           () => setSearch(true),
@@ -3126,9 +3127,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       : [];
     // A tag that no longer exists on any thread stops filtering.
     if (tagFilter && !knownTags.includes(tagFilter)) tagFilter = "";
-    const filterKey = `${filter} ${tagFilter} ${knownTags}`;
-    if (filterSlot.dataset.value !== filterKey) {
-      filterSlot.dataset.value = filterKey;
+    if (filterSlot.dataset.value !== filter) {
+      filterSlot.dataset.value = filter;
       filterSlot.replaceChildren(
         selectionMenu(
           "Filter comments",
@@ -3145,9 +3145,17 @@ export function initComments(options: CommentsOptions): CommentsController {
           },
         ),
       );
+    }
+    const tagSlot = panel.querySelector<HTMLElement>(".tag-filter-slot");
+    const tagKey = `${tagFilter} ${knownTags}`;
+    if (tagSlot && tagSlot.dataset.value !== tagKey) {
+      tagSlot.dataset.value = tagKey;
+      tagSlot.replaceChildren();
       if (knownTags.length) {
-        const tagMenu = selectionMenu(
-          "Filter by tag",
+        // An icon button beside Search; the menu lists the project's tags.
+        const label = tagFilter ? `Filtered by #${tagFilter}` : "Filter by tag";
+        const menu = selectionMenu(
+          label,
           [["", "All tags"], ...knownTags.map((tag) => [tag, `#${tag}`] as const)],
           tagFilter,
           (value) => {
@@ -3156,9 +3164,12 @@ export function initComments(options: CommentsOptions): CommentsController {
             renderPins();
           },
         );
-        tagMenu.classList.add("tag-filter");
-        tagMenu.classList.toggle("active", !!tagFilter);
-        filterSlot.append(tagMenu);
+        const trigger = menu.querySelector("summary")!;
+        trigger.className = `icon tag-filter-trigger${tagFilter ? " active" : ""}`;
+        trigger.setAttribute("aria-label", label);
+        trigger.title = label;
+        trigger.replaceChildren(icon("tag"));
+        tagSlot.append(menu);
       }
     }
     const scopeSlot = panel.querySelector<HTMLElement>(".scope-slot")!;
