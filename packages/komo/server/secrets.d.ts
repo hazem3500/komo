@@ -8,6 +8,12 @@ interface Env {
   ) => Promise<void>;
   KOMO_HOSTED?: string;
   KOMO_PAUSED?: string;
+  /** Enables Google Cloud IAP sign-in: the IAP backend service audience. */
+  KOMO_IAP_AUDIENCE?: string;
+  /** Path prefix for IAP sign-in handlers, e.g. "/backoffice". */
+  KOMO_AUTH_PREFIX?: string;
+  /** Path the app is served under behind a proxy that strips it, e.g. "/komo". */
+  KOMO_PUBLIC_PATH?: string;
   EDGE_LIMIT?: RateLimit;
   KOMO_VERSION?: { id: string };
 }

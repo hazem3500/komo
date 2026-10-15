@@ -29,6 +29,26 @@ The browser widget and CLI use the same API protocol on Cloudflare and Node. Thi
 
 For a guest-only project, you can skip the generator and set `DATABASE_URL`, `PUBLIC_URL`, and `PROJECTS` directly. For example, `PROJECTS={"review":{"repo":"your-org/your-repo","origins":["https://pr-*.preview.example.com"],"allowGuests":true}}`. Anyone on an approved site can then comment; do not use guest-only mode for confidential reviews. `PROJECTS` must remain on one line in an env file. Google sign-in requires both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
+### Serve under a path
+
+If a reverse proxy serves komo under a path, include it in `PUBLIC_URL`, for example `PUBLIC_URL=https://labs.example.com/komo`. Sign-in links and redirect URLs then include `/komo`. Requests are accepted whether or not the proxy strips the path. Register OAuth redirect URIs with the path, for example `https://labs.example.com/komo/auth/google/callback`.
+
+### Google Cloud Identity-Aware Proxy (IAP) sign-in
+
+Behind a Google Cloud load balancer with IAP, komo can trust IAP's signed identity instead of running its own Google OAuth client. This is off by default. To turn it on:
+
+- **`KOMO_IAP_AUDIENCE`:** set it to the IAP backend audience, `/projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID`. komo then verifies the `x-goog-iap-jwt-assertion` header against Google's IAP signing keys, checking the issuer, audience and expiry. It mints a session for that Google account, so `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` aren't needed.
+- **`KOMO_AUTH_PREFIX`** (optional, for example `/backoffice`): serves the sign-in handlers only under this prefix, so the load balancer can protect just that path with IAP. The handlers are `PREFIX/auth/google/authorize` (the browser popup) and `POST PREFIX/auth/iap/session?project=KEY` (agents exchange their IAP identity for a project session). The same handlers without the prefix return 404.
+
+While IAP is on:
+
+- Google is the only sign-in method. Guest and GitHub sign-in are refused.
+- Reading or writing comments requires a session from an IAP-verified account.
+- Missing, forged, expired or wrong-audience assertions are rejected.
+- The rest of the API stays outside IAP: the widget calls it cross-origin with the bearer session from the popup.
+
+Make sure clients can't reach the prefixed handlers without going through IAP. The signed assertion check rejects forged headers either way.
+
 ## Connect a preview and bot
 
 Use the existing widget options; only its API endpoint changes:
