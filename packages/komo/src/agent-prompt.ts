@@ -1,4 +1,4 @@
-import type { CommentsOptions, Thread } from "./types.js";
+import type { Comment, CommentsOptions, Thread } from "./types.js";
 
 const quote = (value: string) =>
   value
@@ -18,6 +18,8 @@ export function agentPrompt(
   context: Pick<CommentsOptions, "project" | "repo" | "branch"> & {
     origin: string;
     page?: string;
+    /** Extra Markdown after a message, e.g. the CLI's parsed design edit. */
+    annotate?: (comment: Comment) => string | null | undefined;
   },
 ): string | null {
   const included = threads
@@ -85,6 +87,8 @@ export function agentPrompt(
       lines.push(
         `**${index ? "Reply" : "Requested change"} — ${value(comment.author.name)} · ${new Date(comment.createdAt).toISOString()}${comment.editedAt ? ` (edited ${new Date(comment.editedAt).toISOString()})` : ""}**\n${quote(comment.body)}`,
       );
+      const note = context.annotate?.(comment);
+      if (note) lines.push(note);
       const reactions = Object.entries(comment.reactions)
         .filter(([, users]) => users.length)
         .map(([emoji, users]) => `${emoji} × ${users.length}`);
