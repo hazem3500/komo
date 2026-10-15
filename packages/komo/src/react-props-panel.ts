@@ -28,13 +28,32 @@ import {
   type KomoDesignToken,
   type RegisteredDesignTokenSource,
 } from "./design-tokens.js";
+import type { DesignSystem, DesignToken, TokenAdapter, TokenUsage } from "./design-system.js";
+import {
+  closestToken,
+  hasTokenSwaps,
+  listTokens,
+  markOffToken,
+  offTokenMarker,
+  proposedTokenSwaps,
+  resetTokenSwaps,
+  resolveTokens,
+  showTokenSwapsBefore,
+  swappedProperties,
+  swappedToken,
+  swapToken,
+  themeState,
+  tokenName,
+  tokensFor,
+  tokenTitle,
+} from "./token-adapter.js";
 
 const originals = new Map<HTMLElement, Map<string, InspectableScalar>>();
 const edits = new WeakMap<HTMLElement, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();
 const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
 // React props, inline token chips and shared theme values, in the inspector's compact field style.
-const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-inside{padding:10px 12px}.design-react-inside button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-react-inside button:hover{text-decoration:underline}.design-react-field.design-field{display:grid;grid-template-columns:76px minmax(0,1fr);gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 8px;border:0;border-radius:6px;background:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field input[type=checkbox]{justify-self:end;width:14px;height:14px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;background:#ffffff0a;color:#e9e6e1;padding:0 6px;font:inherit;font-size:10px}.design-react-field .design-token-binding[data-mode=token] select{background:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>input[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}`;
+const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-inside{padding:10px 12px}.design-react-inside button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-react-inside button:hover{text-decoration:underline}.design-react-field.design-field{display:grid;grid-template-columns:76px minmax(0,1fr);gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 8px;border:0;border-radius:6px;background:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field input[type=checkbox]{justify-self:end;width:14px;height:14px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;background:#ffffff0a;color:#e9e6e1;padding:0 6px;font:inherit;font-size:10px}.design-react-field .design-token-binding[data-mode=token] select{background:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>input[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-token-off{position:absolute;top:8px;right:24px;display:grid;place-items:center;width:12px;height:12px}.design-token-off::before{content:'';width:4px;height:4px;border-radius:50%;background:#e7c27d;opacity:.7}.design-token-off[hidden]{display:none}.design-field:has(>.design-token-binding>.design-token-off:not([hidden]))>input[data-property]{padding-right:38px}`;
 
 function scalarLabel(value: InspectableScalar): string {
   return value === undefined ? "unset" : JSON.stringify(value) ?? "unset";
@@ -53,6 +72,7 @@ export function showDesignBefore(on: boolean): void {
   else for (const [element, props] of afterProps) inspectableFor(element)?.setProps(props);
   if (!on) afterProps.clear();
   showThemeBefore(on);
+  showTokenSwapsBefore(on);
 }
 
 export function hasReactPropChanges(element: HTMLElement): boolean {
@@ -150,7 +170,7 @@ export function proposedReactChanges(element: HTMLElement): string | undefined {
 }
 
 export function proposedDesignChanges(element: HTMLElement): string | undefined {
-  return [proposedReactChanges(element), proposedDesignTokenChanges(element)]
+  return [proposedReactChanges(element), proposedDesignTokenChanges(element), proposedTokenSwaps(element)]
     .filter((value): value is string => !!value)
     .join("\n\n") || undefined;
 }
@@ -166,7 +186,7 @@ export function installCommentCapture(
   button.addEventListener("click", (event) => {
     const element = selected();
     if (!element) return;
-    const tokenProposal = proposedDesignTokenChanges(element);
+    const tokenProposal = proposedDesignTokenChanges(element) || hasTokenSwaps(element);
     if (!inspectableFor(element) && !tokenProposal) return;
     event.stopImmediatePropagation();
     onComment(element, proposedDesignChanges(element));
@@ -178,7 +198,7 @@ export function canUndoDesignTokenEdit(element: HTMLElement | null): boolean {
 }
 
 export function hasDesignTokenEdit(element: HTMLElement): boolean {
-  return hasDesignTokenChanges(element);
+  return hasDesignTokenChanges(element) || hasTokenSwaps(element);
 }
 
 export function undoDesignTokenEdit(element: HTMLElement): void {
@@ -187,6 +207,7 @@ export function undoDesignTokenEdit(element: HTMLElement): void {
 
 export function resetDesignTokenEdits(element: HTMLElement): void {
   resetDesignTokens(element);
+  resetTokenSwaps(element);
 }
 
 function ensurePanelStyles(styleRoot?: ShadowRoot): void {
@@ -244,6 +265,7 @@ export function createElementTokenControl(
     option.textContent = resolved ? `${token.path} · ${resolved}` : token.path;
     select.append(option);
   }
+  const off = offTokenMarker();
   const update = () => {
     const binding = elementTokenBindingFor(source, element, property);
     const declared = binding ? null : declaredTokenFor(source, element, property);
@@ -261,6 +283,12 @@ export function createElementTokenControl(
         ? `Connected ${declared?.origin === "inline" ? "inline" : "from stylesheet"}`
         : mode === "override" ? `Custom override · was ${was}` : "";
     select.title = state.textContent || "Choose a token";
+    // Like the default adapter's resolve(): no token reference means off-token.
+    off.hidden = mode !== "custom";
+    if (mode === "custom") {
+      const value = getComputedStyle(element).getPropertyValue(property).trim();
+      markOffToken(off, value, closestToken(available.map((token) => ({ path: token.path, type: token.type, value: tokenValue(source, token) })), value));
+    }
   };
   const observer = new MutationObserver(update);
   observer.observe(element, { attributes: true, attributeFilter: ["style"] });
@@ -300,7 +328,7 @@ export function createElementTokenControl(
     select.dispatchEvent(new Event("change"));
     row.parentElement?.querySelector<HTMLElement>("[data-property]")?.focus();
   });
-  row.append(chip, select, icon, detach, state);
+  row.append(chip, select, icon, detach, off, state);
   queueMicrotask(update);
   update();
   return row;
@@ -309,7 +337,7 @@ export function createElementTokenControl(
 /** Properties whose before/after is described by token provenance instead of raw CSS. */
 export function tokenBoundProperties(element: HTMLElement): Set<string> {
   const source = tokenSourceFor(element);
-  return new Set(source?.elementBindings.get(element)?.keys() ?? []);
+  return new Set([...source?.elementBindings.get(element)?.keys() ?? [], ...swappedProperties(element)]);
 }
 
 export function attachStyleTokenControls<T extends { property: string; kind?: string }>(
@@ -320,22 +348,136 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
   styleRoot?: ShadowRoot,
   valueFor?: (field: T, element: HTMLElement) => string,
   toHex?: (value: string) => string,
-): void {
-  for (const field of fields) {
+  design?: DesignSystem,
+  onSwap?: (undo: () => void) => void,
+): void | Promise<void> {
+  // Fields are found now, so an adapter that answers late never reaches a newer selection's fields.
+  const found = fields.flatMap((field) => {
     const label = [...container.querySelectorAll<HTMLElement>("[data-field-property]")]
       .find((candidate) => candidate.dataset.fieldProperty === field.property);
-    if (!label || label.querySelector(".design-token-binding")) continue;
-    const input = label.querySelector<HTMLInputElement | HTMLSelectElement>("[data-property]");
-    if (!input) continue;
-    const control = createElementTokenControl(element, field.property,
-      (before) => {
-        onEdit(field, input, before);
+    const input = label?.querySelector<HTMLInputElement | HTMLSelectElement>("[data-property]");
+    return label && input ? [{ field, label, input }] : [];
+  });
+  const each = (attach: (field: T, label: HTMLElement, input: HTMLInputElement | HTMLSelectElement, refresh: () => void) => HTMLElement | null) => {
+    for (const { field, label, input } of found) {
+      if (label.querySelector(".design-token-binding") || !container.contains(label)) continue;
+      const refresh = () => {
         if (valueFor) input.value = valueFor(field, element);
         const dial = label.querySelector<HTMLInputElement>('input[type="range"],input[type="color"]');
         if (dial) dial.value = field.kind === "color" && toHex ? toHex(input.value) : input.value;
-      }, styleRoot);
-    if (control) label.append(control);
+      };
+      const control = attach(field, label, input, refresh);
+      if (control) label.append(control);
+    }
+  };
+  const adapter = design?.tokens;
+  if (!adapter) {
+    each((field, _label, input, refresh) => createElementTokenControl(element, field.property, (before) => {
+      onEdit(field, input, before);
+      refresh();
+    }, styleRoot));
+    return;
   }
+  // The app's adapter replaces CSS-variable chips on fields; it may answer
+  // asynchronously, so controls join the already-rendered fields when it does.
+  ensurePanelStyles(styleRoot);
+  return Promise.all([listTokens(adapter, themeState(design)), resolveTokens(adapter, element)]).then(([tokens, usage]) => {
+    each((field, label, input, refresh) => createAdapterTokenControl(adapter, element, field.property, tokens, usage[field.property], (undo) => {
+      onSwap?.(undo);
+      refresh();
+    }, label, input));
+  }, () => {});
+}
+
+/** A field's token chip, suggestions and off-token marker, driven by the app's adapter. */
+export function createAdapterTokenControl(
+  adapter: TokenAdapter,
+  element: HTMLElement,
+  property: string,
+  tokens: readonly DesignToken[],
+  usage: TokenUsage | undefined,
+  onSwap: (undo: () => void) => void,
+  label?: HTMLElement,
+  input?: HTMLElement,
+): HTMLElement | null {
+  const available = tokensFor(tokens, property);
+  if (!available.length && !usage) return null;
+  const off = usage && "offToken" in usage ? usage.offToken : undefined;
+  const match = off === undefined ? undefined : closestToken(available, off);
+  const row = document.createElement("span");
+  row.className = "design-token-binding";
+  const chip = document.createElement("span");
+  chip.className = "design-token-chip";
+  chip.setAttribute("aria-hidden", "true");
+  const icon = document.createElement("span");
+  icon.className = "design-token-icon";
+  icon.setAttribute("aria-hidden", "true");
+  const detach = document.createElement("button");
+  detach.type = "button";
+  detach.className = "design-token-detach";
+  detach.title = "Edit the value";
+  detach.setAttribute("aria-label", `Edit ${property} value`);
+  detach.innerHTML = '<svg viewBox="0 0 12 12"><path d="M5 3.5 6.5 2a2.1 2.1 0 0 1 3 3L8 6.5M7 8.5 5.5 10a2.1 2.1 0 0 1-3-3L4 5.5M2 2l8 8"/></svg>';
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", `Style token for ${property}`);
+  select.disabled = !available.length;
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "Choose a token";
+  select.append(none);
+  // Grouped by the adapter's group, in list order; ungrouped tokens come first.
+  const groups = new Map<string, HTMLElement>([["", select]]);
+  for (const token of available) {
+    const key = token.group ?? "";
+    let group = groups.get(key);
+    if (!group) {
+      group = document.createElement("optgroup");
+      (group as HTMLOptGroupElement).label = key;
+      groups.set(key, group);
+    }
+    const option = document.createElement("option");
+    option.value = token.path;
+    option.textContent = `${tokenName(token)}${token.ref ? ` · ${token.ref}` : ""}${token === match ? " · same value" : ""}`;
+    option.title = tokenTitle(token);
+    group.append(option);
+  }
+  for (const [key, group] of groups) if (key) select.append(group);
+  const dot = offTokenMarker();
+  if (off !== undefined) markOffToken(dot, off, match);
+  const state = document.createElement("small");
+  state.className = "design-token-binding__state";
+  state.setAttribute("aria-live", "polite");
+  let detached = false;
+  const update = () => {
+    const swapped = swappedToken(element, property);
+    const path = detached ? undefined : swapped?.path ?? (usage && "path" in usage ? usage.path : undefined);
+    const token = path ? tokens.find((item) => item.path === path) : undefined;
+    select.value = path && available.some((item) => item.path === path) ? path : "";
+    chip.textContent = token ? tokenName(token) : path ?? "";
+    const mode = !path ? "custom" : swapped ? "token" : "connected";
+    row.dataset.mode = mode;
+    (label ?? row.parentElement)?.setAttribute("data-token-mode", mode);
+    dot.hidden = off === undefined || !!swapped;
+    state.textContent = token ? `${swapped ? "Preview" : "Uses"} ${tokenTitle(token)}` : path ? `Uses ${path}` : dot.hidden ? "" : dot.title;
+    select.title = state.textContent || "Choose a token";
+  };
+  select.addEventListener("change", () => {
+    const token = available.find((item) => item.path === select.value);
+    if (!token) return update();
+    detached = false;
+    const from: TokenUsage = usage ?? { offToken: getComputedStyle(element).getPropertyValue(property).trim() };
+    const fromToken = "path" in from ? tokens.find((item) => item.path === from.path) : undefined;
+    onSwap(swapToken(adapter, element, property, token, from, fromToken));
+    update();
+  });
+  detach.addEventListener("click", () => {
+    detached = true;
+    update();
+    input?.focus();
+  });
+  row.append(chip, select, icon, detach, dot, state);
+  update();
+  return row;
 }
 
 type ThemeFields = Pick<typeof import("./design-panel.js"), "fieldControl" | "fields" | "toHex">;

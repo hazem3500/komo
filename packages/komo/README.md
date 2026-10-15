@@ -125,7 +125,55 @@ Sources: [Figma layer properties and styles](https://help.figma.com/hc/en-us/art
 
 Design proposals also carry a versioned `DesignEdit` record (token swaps, prop changes, text, and a raw CSS fallback) that the CLI and agents can apply.
 
-The API is landing in stages, and this section is updated as each part ships. Without `design.tokens`, Design mode uses the CSS custom properties registered with `useKomoDesignTokens`.
+The API is landing in stages, and this section is updated as each part ships. Token adapters work today; themes, components and the `DesignEdit` record follow.
+
+#### Token adapters
+
+Without `design.tokens`, Design mode uses the built-in `cssVariableTokens()` adapter (id `"css-variables"`, from `@hazem3500/komo/react`) over the CSS custom properties registered with `useKomoDesignTokens`. Passing `design.tokens` replaces it on every style field: the chips, the suggestions and the off-token markers all come from your adapter, so an element never shows two answers. The **Shared theme** section for registered CSS variables stays available, since it edits variable values rather than an element. To keep CSS-variable chips too, fall back to `cssVariableTokens()` inside your own `resolve()`.
+
+In Design mode, each style field of the picked element:
+
+- shows the token `resolve(element)` reports for that property as a chip;
+- suggests the `list()` tokens whose `properties` include it, grouped by `group`, labelled with `label` (or `path`) and `ref`;
+- marks an `{ offToken }` value with a small dot, "Not from a token · 13px", naming a color or dimension token with exactly that value;
+- previews a chosen token with `preview()`, or by setting its value inline when there is no `preview()`. Undo, Reset and Before/After use the undo it returns. States such as hover appear in the tooltip only; they are not previewed.
+
+`list()` and `resolve()` may return promises; the panel renders first and the token controls join when they resolve. `list()` is called once per theme state. A comment on a token swap records `Element color: #6b6b6b [color.text.secondary] → #1f1f1f [color.text.primary]`, followed by your `describe()` text on an `Apply:` line.
+
+Writing an adapter for utility classes:
+
+```ts
+import type { DesignToken, TokenAdapter, TokenUsage } from "@hazem3500/komo";
+
+const tokens: DesignToken[] = [
+  { path: "color.text.primary", type: "color", value: "#1f1f1f", properties: ["color"], group: "Text", ref: "text-primary" },
+  { path: "color.text.secondary", type: "color", value: "#6b6b6b", properties: ["color"], group: "Text", ref: "text-secondary" },
+];
+const textClass = (element: Element) => tokens.find((token) => element.classList.contains(token.ref!));
+
+const classTokens: TokenAdapter = {
+  id: "classes",
+  list: () => tokens,
+  resolve(element): Record<string, TokenUsage> {
+    const token = textClass(element);
+    return { color: token ? { path: token.path } : { offToken: getComputedStyle(element).color } };
+  },
+  preview(element, _property, token) {
+    const previous = textClass(element)?.ref;
+    if (previous) element.classList.remove(previous);
+    element.classList.add(token.ref!);
+    return () => {
+      element.classList.remove(token.ref!);
+      if (previous) element.classList.add(previous);
+    };
+  },
+  describe: (element, _property, _from, to) => `Replace class "${textClass(element)?.ref}" with "${to.ref}"`,
+};
+
+initKomo({ project: "your-project", design: { tokens: classTokens } });
+```
+
+Keep `resolve()` cheap and honest: report only properties you can vouch for. Define the adapter once, outside render, so `useKomo` sees the same object. The React props demo shows this adapter with `?tokens=classes`.
 
 #### Tailwind and class themes
 

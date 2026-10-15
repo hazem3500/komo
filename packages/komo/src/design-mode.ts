@@ -2,6 +2,7 @@ import { designModeStyles } from "./design-mode-styles.js";
 import { icon } from "./dom.js";
 import type { Control, PanelContext } from "./design-panel.js";
 import type { InlineTextTools } from "./inline-text-editor.js";
+import type { DesignSystem } from "./design-system.js";
 
 export interface DesignModeOptions {
   root: ShadowRoot;
@@ -15,6 +16,8 @@ export interface DesignModeOptions {
   exitKey?: string;
   /** Move the floating panel to the other side when it covers the target. */
   flip?(): void;
+  /** The app's design-system adapters; `tokens` replaces CSS-variable token chips. */
+  design?: DesignSystem;
 }
 
 type Edit = {
@@ -26,6 +29,8 @@ type Edit = {
 };
 
 type TextEdit = { kind: "text"; element: HTMLElement };
+/** A token previewed through the app's adapter; its undo comes from `preview()`. */
+type TokenSwap = { kind?: undefined; element: HTMLElement; undo(): void };
 
 type Original = { value: string; priority: string; computed?: string };
 
@@ -171,7 +176,7 @@ export function createDesignMode(options: DesignModeOptions) {
   const pending = new WeakMap<Control, Edit>();
   const listeners = new AbortController();
   const collapsed = new Set<string>();
-  const history: Array<Edit | TextEdit> = [];
+  const history: Array<Edit | TextEdit | TokenSwap> = [];
 
   function remember(element: HTMLElement, property: string, value = element.style.getPropertyValue(property), priority = element.style.getPropertyPriority(property)) {
     let values = originals.get(element);
@@ -330,7 +335,8 @@ export function createDesignMode(options: DesignModeOptions) {
       commit,
       rerender: renderControls,
     } satisfies PanelContext);
-    if (element.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
+    // Any design-system adapter needs the token and props controls, not only registered elements.
+    if (options.design || element.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
       reactPanelPromise ??= import("./react-props-panel.js").then((module) => reactPanelModule = module).catch((error: unknown) => {
         reactPanelPromise = null;
         throw error;
@@ -348,7 +354,10 @@ export function createDesignMode(options: DesignModeOptions) {
           track(element, field.property);
           starts.set(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
           commit(input, field.property);
-        }, styleRoot, panelControls.valueFor, panelControls.toHex);
+        }, styleRoot, panelControls.valueFor, panelControls.toHex, options.design, (undo) => {
+          history.push({ element, undo });
+          updateActions();
+        });
         const theme = module.createDesignThemePanel(element, panelControls, updateActions, styleRoot);
         if (theme) controls.append(theme);
       }).catch(() => {});
@@ -583,6 +592,9 @@ export function createDesignMode(options: DesignModeOptions) {
         renderControls();
       }
       status.textContent = "React state preview · resets on refresh";
+    } else if (!edit.kind) {
+      edit.undo();
+      renderControls();
     } else if (edit.kind === "text") {
       if (selected === (textTools?.undo() ?? edit.element)) renderControls();
     } else {
