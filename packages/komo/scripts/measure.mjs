@@ -85,7 +85,9 @@ await writeFile(
 // 101,800 / 207,000: #33 and #34 each fit alone; together they add ~30 bytes past the old limits.
 // 102,100 / 208,200: Before/After in pin hover cards and the floating tag menu.
 // The initial bundle is due a trimming pass before more features land in it.
-if (report.initial.gzip > 102_100 || report.coreFeatures.gzip > 208_200)
+// 102,250 / 208,250: Design mode frames the page while active, the floating panel avoids
+// and drags, and comment dialogs stay in the visible area (~270 bytes; the rest is on demand).
+if (report.initial.gzip > 102_250 || report.coreFeatures.gzip > 208_250)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

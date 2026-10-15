@@ -13,6 +13,8 @@ export interface DesignModeOptions {
   onExit(): void;
   /** Label of the shortcut that toggles Design mode, shown in the empty state. */
   exitKey?: string;
+  /** Move the floating panel to the other side when it covers the target. */
+  flip?(): void;
 }
 
 type Edit = {
@@ -117,6 +119,9 @@ export function createDesignMode(options: DesignModeOptions) {
   let hovered: HTMLElement | null = null;
   let textTools: InlineTextTools | null = null;
   let frame = 0;
+  let flipTimer = 0;
+  let flipFor: HTMLElement | null = null;
+  let flipKind = "";
   let reactPanelModule: typeof import("./react-props-panel.js") | null = null;
   let reactPanelPromise: Promise<typeof import("./react-props-panel.js")> | null = null;
   const originals = new Map<HTMLElement, Map<string, Original>>();
@@ -301,6 +306,16 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     outline.hidden = false;
     outline.dataset.kind = kind;
+    // Flip once per target, only when it sits under the panel and would be clear on the other side.
+    if (element !== flipFor || kind !== flipKind) {
+      flipFor = element;
+      flipKind = kind;
+      window.clearTimeout(flipTimer);
+      const box = panel.getBoundingClientRect();
+      const covers = (left: number) => rect.left < left + box.width && rect.right > left && rect.top < box.bottom && rect.bottom > box.top;
+      if (options.flip && box.width && covers(box.left) && !covers(document.documentElement.clientWidth - box.right))
+        flipTimer = window.setTimeout(options.flip, kind === "hover" ? 350 : 0);
+    }
     Object.assign(outline.style, {
       left: `${rect.left}px`,
       top: `${rect.top}px`,
@@ -563,6 +578,7 @@ export function createDesignMode(options: DesignModeOptions) {
       if (textTools?.element) finishTextEdit(true);
       window.clearTimeout(closeTimer);
       window.clearTimeout(statusTimer);
+      window.clearTimeout(flipTimer);
       listeners.abort();
       cancelAnimationFrame(frame);
       for (const [element, properties] of originals)

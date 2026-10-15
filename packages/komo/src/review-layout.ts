@@ -12,15 +12,17 @@ export function reviewLayout(
   expanded: boolean,
   pageHeight = height,
   account = false,
+  /** Fit the page's full width beside the sidebar instead of letting it run under the left edge. */
+  fit = false,
 ) {
   const desktop = expanded && !isCompactReview(width, height);
   const mobile = expanded && !desktop;
-  const scale = desktop ? PAGE_SCALE : 1;
-  const sheetTop = mobile ? (account ? 0 : height * 0.18) : height;
-  const frameHeight = (mobile ? pageHeight : height) * scale;
   const right = desktop ? SIDEBAR_WIDTH + PAGE_GAP : 0;
-  const left = desktop ? width - right - width * scale : 0;
-  const top = desktop ? (height * (1 - scale)) / 2 : 0;
+  const scale = desktop ? (fit ? Math.min(PAGE_SCALE, (width - right - PAGE_GAP) / width) : PAGE_SCALE) : 1;
+  const sheetTop = mobile ? (account ? 0 : height * 0.18) : height;
+  const frameHeight = mobile ? pageHeight : height * (desktop ? PAGE_SCALE : 1);
+  const left = desktop ? (fit ? PAGE_GAP : width - right - width * scale) : 0;
+  const top = desktop ? (height * (1 - PAGE_SCALE)) / 2 : 0;
   return {
     desktop,
     mobile,
