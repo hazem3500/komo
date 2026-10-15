@@ -170,6 +170,18 @@ export function previewThemeToken(
   return true;
 }
 
+/** Show shared theme values as the page had them, or put the edits back. */
+export function showThemeBefore(on: boolean): void {
+  for (const source of sources)
+    for (const [path, edit] of source.themeEdits) {
+      const variable = source.tokens.find((token) => token.path === path)?.cssVariable;
+      if (!variable) continue;
+      const value = on ? edit.inlineBefore : edit.after;
+      if (value) source.root.style.setProperty(variable, value);
+      else source.root.style.removeProperty(variable);
+    }
+}
+
 /** Return one shared token to the page's value; like Reset, it leaves no undo step. */
 export function resetThemeToken(source: RegisteredDesignTokenSource, token: KomoDesignToken): void {
   const edit = source.themeEdits.get(token.path);

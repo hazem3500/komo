@@ -66,6 +66,8 @@ export interface InlineTextTools {
   reconcile(element: HTMLElement, text: string): void;
   proposal(element: HTMLElement): string | undefined;
   restoreAll(): void;
+  /** Show the page's original text, or put the edits back. */
+  showBefore(on: boolean): void;
 }
 
 export interface TextPreviewHistory {
@@ -76,6 +78,7 @@ export interface TextPreviewHistory {
   reset(element: HTMLElement): void;
   proposal(element: HTMLElement): string | undefined;
   restoreAll(): void;
+  showBefore(on: boolean): void;
   undo(): HTMLElement | null;
 }
 
@@ -83,6 +86,7 @@ export function createTextPreviewHistory(): TextPreviewHistory {
   const originals = new Map<HTMLElement, string>();
   const snapshots = new Map<HTMLElement, TextSnapshot | undefined>();
   const edits: InlineTextEditResult[] = [];
+  const afters = new Map<HTMLElement, [string, TextSnapshot | undefined]>();
   return {
     record(result) {
       if (!result.reactProp && result.before !== result.after) {
@@ -116,6 +120,16 @@ export function createTextPreviewHistory(): TextPreviewHistory {
     },
     restoreAll() {
       for (const [element, value] of originals) setText(element, value, snapshots.get(element));
+    },
+    showBefore(on) {
+      if (on)
+        for (const [element, value] of originals) {
+          const nodes = snapshots.get(element);
+          afters.set(element, [element.textContent ?? "", nodes?.map(([node]) => [node, node.data])]);
+          setText(element, value, nodes);
+        }
+      else for (const [element, [text, nodes]] of afters) setText(element, text, nodes);
+      if (!on) afters.clear();
     },
     undo() {
       const edit = edits.pop();
@@ -204,6 +218,7 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
     reconcile(element, text) { history.reconcile(element, text); options.onChange(); },
     proposal(element) { return history.proposal(element); },
     restoreAll() { history.restoreAll(); },
+    showBefore: history.showBefore,
   };
 }
 

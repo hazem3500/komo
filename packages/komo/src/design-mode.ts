@@ -89,7 +89,7 @@ export function createDesignMode(options: DesignModeOptions) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "design-inspector__tool";
-    button.title = label;
+    button.dataset.tip = label;
     button.setAttribute("aria-label", label);
     button.innerHTML = markup;
     return button;
@@ -108,9 +108,50 @@ export function createDesignMode(options: DesignModeOptions) {
   editText.textContent = "Edit text";
   editText.setAttribute("aria-label", "Edit selected text inline");
   actions.append(undo, reset, copy, comment);
-  bar.append(count, status, actions);
+  // Before shows the page without this session's edits; After puts them back.
+  const compare = document.createElement("div");
+  compare.className = "design-inspector__compare";
+  compare.setAttribute("role", "group");
+  compare.setAttribute("aria-label", "Compare with the page");
+  const sides = ["Before", "After"].map((label, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.dataset.tip = `${label} · ${index ? "→" : "←"} or B`;
+    button.setAttribute("aria-pressed", String(!!index));
+    button.addEventListener("click", () => showBefore(!index));
+    compare.append(button);
+    return button;
+  });
+  bar.append(count, compare, status, actions);
+  // Footer controls use the toolbar's tooltip surface, like the Comments header.
+  const tip = document.createElement("div");
+  tip.className = "morphing-menu__tooltip sidebar-tooltip";
+  tip.setAttribute("aria-hidden", "true");
+  let tipTimer = 0;
+  const hideTip = () => {
+    window.clearTimeout(tipTimer);
+    delete tip.dataset.open;
+  };
+  const showTip = (event: Event) => {
+    const button = (event.target as Element).closest?.<HTMLElement>("[data-tip]");
+    if (!button || (event.type === "focusin" && !button.matches(":focus-visible"))) return hideTip();
+    window.clearTimeout(tipTimer);
+    tipTimer = window.setTimeout(() => {
+      if (!button.isConnected) return;
+      const box = button.getBoundingClientRect();
+      tip.textContent = button.dataset.tip ?? "";
+      const half = tip.offsetWidth / 2;
+      tip.style.left = `${Math.max(8 + half, Math.min(document.documentElement.clientWidth - 8 - half, box.left + box.width / 2))}px`;
+      tip.style.top = `${box.top - 8 - tip.offsetHeight}px`;
+      tip.dataset.open = "true";
+    }, tip.dataset.open ? 0 : 400);
+  };
+  bar.addEventListener("pointerover", showTip);
+  bar.addEventListener("focusin", showTip);
+  for (const type of ["pointerleave", "pointerdown", "focusout"]) bar.addEventListener(type, hideTip);
   panel.append(heading, controls, bar);
-  options.root.append(style, outline);
+  options.root.append(style, outline, tip);
   (options.panelRoot ?? options.root).append(panel);
 
   let active = false;
@@ -156,6 +197,7 @@ export function createDesignMode(options: DesignModeOptions) {
     count.textContent = total ? `${total} change${total > 1 ? "s" : ""}` : "";
     bar.toggleAttribute("data-changes", total > 0 || history.length > 0 ||
       !!(element && (reactPanelModule?.canUndoReactProp(element) || reactPanelModule?.canUndoDesignTokenEdit(element))));
+    compare.hidden = !total && !showingBefore;
   }
   // Status messages show briefly in the bar, then give way to the change count.
   let statusTimer = 0;
@@ -169,6 +211,29 @@ export function createDesignMode(options: DesignModeOptions) {
       else status.textContent = "";
     }, 2600);
   }).observe(status, { childList: true, characterData: true, subtree: true });
+  let showingBefore = false;
+  function showBefore(on: boolean) {
+    if (on === showingBefore) return;
+    if (on && textTools?.element) finishTextEdit();
+    showingBefore = on;
+    // Morph like design comments: animate exactly the changed properties, then hand them back.
+    const smooth = !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    for (const [element, values] of changed) {
+      const transition = element.style.transition;
+      if (smooth) element.style.transition = [...values.keys()].map((property) => `${property} .3s cubic-bezier(.22,1,.36,1)`).join();
+      for (const [property, value] of values) {
+        const original = originals.get(element)?.get(property);
+        if (on) restore(element, property, original);
+        else element.style.setProperty(property, value, original?.priority);
+      }
+      if (smooth) window.setTimeout(() => (element.style.transition = transition), 320);
+    }
+    textTools?.showBefore(on);
+    reactPanelModule?.showDesignBefore(on);
+    sides.forEach((button, index) => button.setAttribute("aria-pressed", String(!index === on)));
+    panel.toggleAttribute("data-before", on);
+    updateActions();
+  }
   function restore(element: HTMLElement, property: string, original?: Original) {
     if (original?.value) element.style.setProperty(property, original.value, original.priority);
     else element.style.removeProperty(property);
@@ -433,6 +498,19 @@ export function createDesignMode(options: DesignModeOptions) {
       editText.focus({ preventScroll: true });
       return;
     }
+    // ← Before, → After, B flips, as on design comments; never while typing in a field.
+    const key = event.key.toLowerCase();
+    const origin = event.composedPath()[0];
+    if (
+      active && !compare.hidden && !event.metaKey && !event.ctrlKey && !event.altKey &&
+      (key === "b" || key === "arrowleft" || key === "arrowright") &&
+      !(origin instanceof HTMLElement && (origin.isContentEditable || origin.matches("input, textarea, select")))
+    ) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      showBefore(key === "b" ? !showingBefore : key === "arrowleft");
+      return;
+    }
     if (active && !textTools?.element && (event.key === "Enter" || event.key === " ") && !event.composedPath().includes(options.host)) {
       const focused = document.activeElement;
       if (focused instanceof HTMLElement && focused !== document.body && focused !== document.documentElement) {
@@ -451,6 +529,7 @@ export function createDesignMode(options: DesignModeOptions) {
     }
   }
   function setActive(value: boolean) {
+    if (!value) showBefore(false);
     if (!value && textTools?.element) finishTextEdit();
     window.clearTimeout(closeTimer);
     closeTimer = 0;
@@ -561,6 +640,10 @@ export function createDesignMode(options: DesignModeOptions) {
       [textTools?.proposal(element), reactPanelModule?.proposedDesignChanges(element)],
     )), () => { status.textContent = "Comment unavailable · try again"; });
   });
+  // Editing anything, Undo, Reset or Comment first returns to After.
+  const toAfter = () => showBefore(false);
+  for (const node of [controls, actions, editText])
+    for (const type of ["pointerdown", "focusin", "click"]) node.addEventListener(type, toAfter, true);
   document.addEventListener("pointermove", onMove, { capture: true, signal: listeners.signal });
   document.addEventListener("pointerdown", onDown, { capture: true, signal: listeners.signal });
   document.addEventListener("click", onClick, { capture: true, signal: listeners.signal });
@@ -581,6 +664,7 @@ export function createDesignMode(options: DesignModeOptions) {
     /** Resolves once the property controls have loaded. */
     ready,
     destroy() {
+      showBefore(false);
       if (textTools?.element) finishTextEdit(true);
       window.clearTimeout(closeTimer);
       window.clearTimeout(statusTimer);
@@ -593,6 +677,7 @@ export function createDesignMode(options: DesignModeOptions) {
       textTools?.restoreAll();
       panel.remove();
       outline.remove();
+      tip.remove();
       style.remove();
     },
   };

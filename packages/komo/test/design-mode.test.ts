@@ -85,6 +85,36 @@ describe("design mode preview inspector", () => {
     expect(button.style.color).toBe("rgb(255, 0, 0)");
   });
 
+  it("compares Before and After from the footer and with ←, → and B", () => {
+    pointer("pointerdown", button);
+    const compare = shadow.querySelector<HTMLElement>(".design-inspector__compare")!;
+    expect(compare.hidden).toBe(true);
+    const color = shadow.querySelector<HTMLInputElement>('[data-property="color"]')!;
+    color.dispatchEvent(new Event("focus"));
+    color.value = "#ff0000";
+    color.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(compare.hidden).toBe(false);
+    const press = (key: string, target: EventTarget = document.body) =>
+      target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, composed: true }));
+    press("ArrowLeft");
+    expect(button.style.color).toBe("");
+    expect(compare.querySelector('[aria-pressed="true"]')?.textContent).toBe("Before");
+    press("ArrowRight");
+    expect(button.style.color).toBe("rgb(255, 0, 0)");
+    press("b");
+    expect(button.style.color).toBe("");
+    // Typing in a field never toggles, and editing a field returns to After first.
+    press("b", color);
+    expect(button.style.color).toBe("");
+    color.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(button.style.color).toBe("rgb(255, 0, 0)");
+    compare.querySelector<HTMLButtonElement>("button")!.click();
+    expect(button.style.color).toBe("");
+    // Leaving Design mode always ends in After.
+    controller.setActive(false);
+    expect(button.style.color).toBe("rgb(255, 0, 0)");
+  });
+
   it("edits leaf text inline, keeps pasted markup as text, and supports undo/reset/comment", async () => {
     const label = document.querySelector<HTMLElement>("#label")!;
     pointer("pointerdown", label);
