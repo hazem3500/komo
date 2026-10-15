@@ -257,6 +257,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `enabled` | `boolean` | `true` | Set from your build environment to restrict review UI. |
 | `pageRoot` | `HTMLElement` | Sole existing content root, when present | Mounted element inside body to scale in Frame mode. Body and html are not supported. |
 | `pickRoots()` | `() => Element[]` | All of body except komo | Extra roots, besides `pageRoot`, that can be picked for comments and Design mode. By default body-level portals such as dialogs and popovers are pickable; return `[]` to limit picking to `pageRoot`, or return your portal container to allow only it. In Frame, portals keep their own size and position. |
+| `isolateEvents` | `boolean` | `true` | Keep komo's events out of the host page. See [Host events](#host-events). |
 | `source(element)` | `(element: Element) => string \| undefined` | Anchor metadata | Return a repository-relative source path. |
 | `sourceUrl(source, branch)` | `(source: string, branch: string) => string` | GitHub viewer | Custom source or editor link. |
 | `page()` | `() => string` | `location.pathname` | Canonical page identifier. |
@@ -276,6 +277,16 @@ For a restricted CSP or offline deployment, host `emoji-picker-element-data@1.8.
 The lower-level `initComments` export remains available. It requires explicit `endpoint`, `project`, `repo`, and `branch`; it does not infer scope. Existing integrations keep their branch grouping.
 
 The returned controller has `open()`, `close()`, `comment(element)`, `refresh()`, and `destroy()`. Repeated initialization returns the current controller; destroy it before switching projects. SSR returns a no-op controller. In React, use the `useKomo` hook. With Astro view transitions, destroy before swapping the document and initialize after navigation.
+
+### Host events
+
+komo renders in a shadow root, so page listeners see its events as coming from komo's host `<div>`. By default komo stops them at that element:
+
+- **Typing.** `keydown`, `keyup` and `keypress` from komo's inputs don't reach `document` or `window`, so app shortcuts (such as `react-hotkeys-hook` or a custom `keydown` listener) don't fire while someone writes a comment. Keys pressed on komo's buttons still reach the page.
+- **Modals.** `pointerdown`, `mousedown`, `touchstart`, `touchmove`, `touchend`, `click`, `wheel`, `focusin` and `focusout` from komo's UI don't reach page listeners. An open Radix or similar dialog doesn't treat komo as an outside interaction, so it doesn't close, take focus back from the composer, or block the sidebar's scroll.
+- **Focus traps.** When focus moves from the page into komo, komo stops that `focusout` for `document` listeners added after komo mounted, such as Radix's FocusScope.
+
+Limits: capture-phase listeners on `document` or `window` run before komo can stop anything. For example, Radix's Escape handler (`onEscapeKeyDown`) still closes a dialog when Escape is pressed in komo's composer; prevent that with `event.target.closest("[data-branch-comments]")`. Libraries that detect outside clicks in the capture phase, such as Headless UI, need their own check. Modal libraries that hide other content with `aria-hidden` also hide komo from assistive technology. Set `isolateEvents: false` if your app needs to observe these events.
 
 ### CLI
 

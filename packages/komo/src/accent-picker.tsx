@@ -8,7 +8,7 @@ import {
 import { createRoot } from "react-dom/client";
 import { HexColorInput, HexColorPicker } from "react-colorful";
 import { Plus } from "@untitledui/icons/Plus";
-import { el } from "./dom.js";
+import { el, onPage } from "./dom.js";
 
 const PRESETS = [
   ["Lavender", "#c8b5f4"],
@@ -66,8 +66,9 @@ function AccentPicker({
       )
         setOpen(false);
     };
-    document.addEventListener("pointerdown", outside);
-    return () => document.removeEventListener("pointerdown", outside);
+    const listening = new AbortController();
+    onPage(trigger.current!, "pointerdown", outside, { signal: listening.signal });
+    return () => listening.abort();
   }, [open]);
   return (
     <div className="account-accent">

@@ -62,11 +62,15 @@ import {
   age,
   avatar,
   button,
+  editable,
   el,
   googleLogo,
   icon,
   icons,
   initials,
+  isolated,
+  isolatedEvents,
+  onPage,
 } from "./dom.js";
 import { matchesShortcut, resolveShortcuts, withShortcut } from "./shortcuts.js";
 import { styles } from "./styles.js";
@@ -5227,7 +5231,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     },
     { signal: abort.signal },
   );
-  document.addEventListener(
+  onPage<KeyboardEvent>(
+    shadow,
     "keydown",
     (event) => {
       keyboardAction = true;
@@ -5267,9 +5272,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           first?.focus();
         }
       }
-      const typing =
-        target instanceof HTMLElement &&
-        (target.matches("input,textarea,select") || target.isContentEditable);
+      const typing = editable(target);
       if (event.key === "Escape") {
         if (mode || draft || selected || account) dismiss();
         else if (expanded) toggleExpanded(false);
@@ -5295,7 +5298,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     },
     { signal: abort.signal },
   );
-  document.addEventListener(
+  onPage<PointerEvent>(
+    shadow,
     "pointerdown",
     (event) => {
       const path = event.composedPath();
@@ -5464,6 +5468,25 @@ export function initComments(options: CommentsOptions): CommentsController {
   host.addEventListener("keydown", () => polling?.wake(false), {
     signal: abort.signal,
   });
+  // Page listeners see komo's events retargeted to the host <div>. Stop them
+  // here so host shortcuts skip komo's fields and open modals don't treat komo
+  // as outside interaction; komo's own page handlers use onPage().
+  if (options.isolateEvents !== false) {
+    host.setAttribute("data-isolate", "");
+    for (const type of isolatedEvents)
+      host.addEventListener(
+        type,
+        (event) => isolated(event, shadow) && event.stopPropagation(),
+        { passive: true, signal: abort.signal },
+      );
+    // Moving focus into komo fires focusout on the page element, which focus
+    // traps answer by refocusing. Stop it for document listeners added later.
+    document.addEventListener(
+      "focusout",
+      (event) => event.relatedTarget === host && event.stopImmediatePropagation(),
+      { signal: abort.signal },
+    );
+  }
   document.addEventListener(
     "visibilitychange",
     () => {

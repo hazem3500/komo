@@ -16,6 +16,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { onPage } from "./dom.js";
 import { animate } from "motion";
 import { motion, useReducedMotion } from "motion/react";
 import {
@@ -370,8 +371,9 @@ export function MorphingMenu({
       )
         close(false);
     };
-    document.addEventListener("pointerdown", outside);
-    return () => document.removeEventListener("pointerdown", outside);
+    const listening = new AbortController();
+    onPage(rootRef.current!, "pointerdown", outside, { signal: listening.signal });
+    return () => listening.abort();
   }, [expanded]);
 
   useEffect(

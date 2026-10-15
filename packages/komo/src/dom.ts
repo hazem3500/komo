@@ -2,6 +2,35 @@ import { applyAccent } from "./accent.js";
 import type { Identity } from "./types.js";
 import { iconMarkup as icons } from "./icon-markup.js";
 export { icons };
+export const editable = (node?: EventTarget) =>
+  node instanceof HTMLElement &&
+  (node.matches("input,textarea,select") || node.isContentEditable);
+/**
+ * Events komo stops at its shadow host (isolateEvents), so host shortcut
+ * libraries and modal "outside interaction" listeners never see komo's UI.
+ * Key events are stopped only while typing in a komo field.
+ */
+export const isolatedEvents =
+  "pointerdown mousedown touchstart touchmove touchend click wheel focusin focusout keydown keyup keypress".split(" ");
+export const isolated = (event: Event, root: Node) =>
+  root instanceof ShadowRoot &&
+  root.host.hasAttribute("data-isolate") &&
+  (!event.type.startsWith("key") || editable(event.composedPath()[0]));
+/** Listen on document, plus komo's shadow root for the events stopped at its host. */
+export function onPage<E extends Event>(
+  node: Node,
+  type: string,
+  listener: (event: E) => void,
+  options?: AddEventListenerOptions,
+) {
+  const root = node.getRootNode();
+  document.addEventListener(type, listener as EventListener, options);
+  root.addEventListener(
+    type,
+    (event) => isolated(event, root) && listener(event as E),
+    options,
+  );
+}
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className = "",
