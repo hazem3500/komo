@@ -871,7 +871,12 @@ ${morphingMenuStyles}
 }
 .pin-preview small {
   color: #999;
-  margin-left: auto;
+  margin: 0 30px 0 auto;
+}
+.pin-preview-resolve {
+  position: absolute;
+  top: 17px;
+  right: 10px;
 }
 
 /* Review workspace: shared gutters and a dock aligned to the comment column. */
@@ -1059,10 +1064,12 @@ ${morphingMenuStyles}
   background: #ffffff08;
 }
 .dialog .icon,
+.pin-preview .icon,
 .actions > .icon {
   color: #929292;
 }
-.dialog .icon:hover {
+.dialog .icon:hover,
+.pin-preview .icon:hover {
   background: #ffffff0a;
   color: #eee;
 }
