@@ -321,7 +321,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (!selected) {
       const empty = document.createElement("p");
       empty.className = "design-inspector__empty";
-      empty.textContent = "Select an element to preview styles. Leaf text can be edited inline.";
+      empty.textContent = "Select an element to preview styles. Double-click text to edit it.";
       controls.append(empty);
       title.textContent = "Nothing selected";
       subtitle.textContent = "Click a page element";
@@ -449,7 +449,7 @@ export function createDesignMode(options: DesignModeOptions) {
     textTools?.finish(cancel);
     updateActions();
   }
-  editText.addEventListener("click", () => {
+  editText.addEventListener("click", (event) => {
     if (textTools) return;
     if (!selected) return;
     status.textContent = "Loading inline text editor…";
@@ -465,7 +465,7 @@ export function createDesignMode(options: DesignModeOptions) {
           history.push({ kind: "text", element: result });
         },
       });
-      void textTools.toggle();
+      void textTools.toggle(event);
     }).catch(() => { status.textContent = "Inline text editing is unavailable."; });
   });
   function onMove(event: PointerEvent) {
@@ -492,6 +492,8 @@ export function createDesignMode(options: DesignModeOptions) {
     event.stopImmediatePropagation();
     // Unfold and scroll only once the tap has finished, so the sheet never lands under the finger.
     if (selected) reveal(selected);
+    // The second pointerdown of a double-click already selected the target; edit it where it was clicked.
+    if (event.detail === 2 && !editText.disabled && !textTools?.element) editText.dispatchEvent(new MouseEvent("click", event));
   }
   function onKey(event: KeyboardEvent) {
     if (textTools?.handleKey(event)) {
