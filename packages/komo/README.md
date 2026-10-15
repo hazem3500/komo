@@ -123,9 +123,9 @@ Sources: [Figma layer properties and styles](https://help.figma.com/hc/en-us/art
 - `themes: ThemeAxis[]` are independent axes reviewers can flip, such as light/dark or a product palette. Proposals record the theme state they were made in.
 - `components: ComponentAdapter` identifies the component behind an element (name, props, source), so Design mode shows "Button (variant=secondary)". It works alongside `useKomoInspectable`.
 
-Design proposals also carry a versioned `DesignEdit` record (token swaps, prop changes, text, and a raw CSS fallback) that the CLI and agents can apply.
+Design proposals also map to a versioned `DesignEdit` record (token swaps, shared token values, prop changes, text, and a raw CSS fallback) that agents can apply. The comment keeps the readable proposal text; the CLI reads the record back from it, so older Design mode comments work too. See [Agent CLI](#agent-cli).
 
-The API is landing in stages, and this section is updated as each part ships. Token adapters work today; themes, components and the `DesignEdit` record follow.
+The API is landing in stages, and this section is updated as each part ships. Token adapters and the CLI's `DesignEdit` output work today; themes and components follow, and proposals don't record theme state or component props yet.
 
 #### Token adapters
 
@@ -258,7 +258,7 @@ For an existing inline installation, pass `--project YOUR_PROJECT_KEY --origin h
 
 `--body-file FILE` reads a message from disk; `--body-file -` reads stdin. Use one body source. Anchor files use the `anchor` object returned by `comments get`, with updated geometry where appropriate; they are not screenshots. The API validates selectors, geometry, permissions, and quotas.
 
-Successful commands emit `{ "ok": true, "scope": { ... }, "data": ... }`. Errors emit `{ "ok": false, "error": { "message": "...", "status": ... } }` on stderr and exit with code 1. Prompts are Markdown unless `--json` is present. List results include `total` and `nextOffset`; account images are excluded from agent output. Commands do not automatically retry writes.
+Successful commands emit `{ "ok": true, "scope": { ... }, "data": ... }`. Errors emit `{ "ok": false, "error": { "message": "...", "status": ... } }` on stderr and exit with code 1. Prompts are Markdown unless `--json` is present. Design mode messages include `designEdit`, a validated `DesignEdit` (`komo: "design-edit"`, `version: 1`) with the target selector, component, token adapter and changes. `komo comments prompt` prints it after the message as a fenced `json komo-design-edit` block with a one-line instruction, and `--json` adds a `designEdits` list. A message may also include its own `komo-design-edit` block; malformed, unknown-version or oversized (16 KB) records are ignored. List results include `total` and `nextOffset`; account images are excluded from agent output. Commands do not automatically retry writes.
 
 Automation can supply a project session through `KOMO_TOKEN`. Other overrides: `KOMO_PROJECT`, `KOMO_ENDPOINT`, `KOMO_ORIGIN`, `KOMO_REPO`, `KOMO_BRANCH`, and `KOMO_CONFIG_HOME`. Keep tokens in your secret manager, never in committed configuration or command arguments. A token acts as its reviewer; it does not bypass ownership checks.
 

@@ -15,6 +15,7 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { branchName } from "./config.mjs";
 import { agentWorkflow, agentPrompt } from "../dist/agent-prompt.js";
+import { designEditFromComment, formatDesignEdit } from "./design-edit.mjs";
 
 import { installAgentWorkflow } from "./workflow.mjs";
 
@@ -70,6 +71,7 @@ Overrides: --endpoint URL --origin SITE_URL --repo OWNER/REPO --branch NAME
 Bodies: --body TEXT, --body-file FILE, or --body-file - for stdin.
 Credentials: Google login, or KOMO_TOKEN for non-interactive use. Never commit tokens.
 Results are JSON except prompt (Markdown unless --json). Errors are JSON on stderr.
+Design mode messages also carry designEdit: a parsed komo DesignEdit v1 record.
 `;
 
 function parse(args) {
@@ -428,6 +430,8 @@ export async function runAgent(
           commands: actions,
           auth: "komo login",
           output: "JSON; prompt is Markdown unless --json",
+          designEdit:
+            "Design mode messages carry designEdit (komo DesignEdit v1); prompt prints it as a json komo-design-edit block",
           context: ".komo/project.json or --project KEY",
           overrides: ["--endpoint", "--origin", "--repo", "--branch"],
           body: ["--body", "--body-file", "--body-file -"],
@@ -488,14 +492,21 @@ export async function runAgent(
         ...thread,
         comments: thread.comments
           .filter((comment) => comment.body !== "[Comment deleted]")
-          .map((comment) => ({
-            ...comment,
-            author: {
-              id: comment.author.id,
-              name: comment.author.name,
-              verified: comment.author.verified,
-            },
-          })),
+          .map((comment) => {
+            const designEdit = designEditFromComment(
+              comment.body,
+              thread.anchor?.selector
+            );
+            return {
+              ...comment,
+              author: {
+                id: comment.author.id,
+                name: comment.author.name,
+                verified: comment.author.verified,
+              },
+              ...(designEdit ? { designEdit } : {}),
+            };
+          }),
         resolvedBy: thread.resolvedBy
           ? {
               id: thread.resolvedBy.id,
@@ -524,12 +535,29 @@ export async function runAgent(
                       flags.page === "/" ? "/" : flags.page.replace(/\/$/, ""),
                   }
                 : {}),
+              annotate: (comment) =>
+                comment.designEdit && formatDesignEdit(comment.designEdit),
             }) || "No open comments.";
           if (!flags.json) {
             console.log(prompt);
             return;
           }
-          data = { prompt };
+          const page =
+            flags.page && (flags.page === "/" ? "/" : flags.page.replace(/\/$/, ""));
+          data = {
+            prompt,
+            designEdits: threads
+              .filter((thread) => !thread.resolved && (!page || thread.page === page))
+              .flatMap((thread) =>
+                thread.comments
+                  .filter((comment) => comment.designEdit)
+                  .map((comment) => ({
+                    thread: thread.id,
+                    comment: comment.id,
+                    designEdit: comment.designEdit,
+                  }))
+              ),
+          };
         } else {
           const status = flags.status || "open";
           if (!["open", "resolved", "all"].includes(status))

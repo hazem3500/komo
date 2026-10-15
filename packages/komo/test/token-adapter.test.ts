@@ -6,6 +6,8 @@ import { createAdapterTokenControl, proposedDesignChanges } from "../src/react-p
 import { closestToken, listTokens, resetTokenSwaps, tokenSwapChanges } from "../src/token-adapter.js";
 import { parseDesignComment } from "../src/design-comment.js";
 import type { DesignSystem, DesignToken, TokenAdapter, TokenUsage } from "../src/design-system.js";
+// @ts-expect-error CLI modules are plain JavaScript.
+import { designEditFromComment } from "../cli/design-edit.mjs";
 
 // A class-based adapter like a Tailwind setup: tokens are utility classes.
 const classTokens: DesignToken[] = [
@@ -201,6 +203,10 @@ describe("custom token adapter in Design mode", () => {
       kind: "token", property: "color", from: { path: "color.text.secondary" }, to: { path: "color.text.primary" },
       apply: 'Replace class "text-secondary" with "text-primary"',
     }]);
+    // The CLI reads the same structured change back out of the comment text.
+    expect(designEditFromComment(text, "label")).toEqual({
+      komo: "design-edit", version: 1, target: { selector: "label" }, tokens: "classes", changes: tokenSwapChanges(label),
+    });
     const [section] = parseDesignComment(text);
     expect(section).toMatchObject({ changes: [{ label: "color", token: "color.text.primary", after: "#1f1f1f", apply: { kind: "style", property: "color" } }] });
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
