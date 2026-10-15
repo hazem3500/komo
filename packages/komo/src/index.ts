@@ -276,6 +276,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (!optimistic.busy) run(refresh);
   }
   let filter: "open" | "resolved" | "all" = "open",
+    tagFilter = "",
     allPages = true,
     search = "",
     connection = "Connecting",
@@ -2198,6 +2199,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         (t) =>
           (allPages || t.page === page()) &&
           (filter === "all" || t.resolved === (filter === "resolved")) &&
+          (!tagFilter || !!t.tags?.includes(tagFilter)) &&
           (!search ||
             t.comments.some((c) =>
               `${c.body} ${c.author.name}`
@@ -2428,7 +2430,10 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     const currentPage = page();
     const visible = threads.filter(
-      (t) => t.page === currentPage && !t.resolved,
+      (t) =>
+        t.page === currentPage &&
+        !t.resolved &&
+        (!tagFilter || !!t.tags?.includes(tagFilter)),
     );
     const anchors = anchorPass();
     const stacks = pinStacks(visible, (thread) =>
@@ -3116,8 +3121,14 @@ export function initComments(options: CommentsOptions): CommentsController {
     const searchPanel = panel.querySelector<HTMLElement>(".sidebar-search")!;
     searchPanel.inert = !searchOpen;
     const filterSlot = panel.querySelector<HTMLElement>(".filter-slot")!;
-    if (filterSlot.dataset.value !== filter) {
-      filterSlot.dataset.value = filter;
+    const knownTags = tagsEnabled
+      ? [...new Set(threads.flatMap((t) => t.tags ?? []))].sort()
+      : [];
+    // A tag that no longer exists on any thread stops filtering.
+    if (tagFilter && !knownTags.includes(tagFilter)) tagFilter = "";
+    const filterKey = `${filter} ${tagFilter} ${knownTags}`;
+    if (filterSlot.dataset.value !== filterKey) {
+      filterSlot.dataset.value = filterKey;
       filterSlot.replaceChildren(
         selectionMenu(
           "Filter comments",
@@ -3134,6 +3145,21 @@ export function initComments(options: CommentsOptions): CommentsController {
           },
         ),
       );
+      if (knownTags.length) {
+        const tagMenu = selectionMenu(
+          "Filter by tag",
+          [["", "All tags"], ...knownTags.map((tag) => [tag, `#${tag}`] as const)],
+          tagFilter,
+          (value) => {
+            tagFilter = value;
+            renderList();
+            renderPins();
+          },
+        );
+        tagMenu.classList.add("tag-filter");
+        tagMenu.classList.toggle("active", !!tagFilter);
+        filterSlot.append(tagMenu);
+      }
     }
     const scopeSlot = panel.querySelector<HTMLElement>(".scope-slot")!;
     if (scopeSlot.dataset.value !== String(allPages)) {
