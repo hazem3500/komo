@@ -74,10 +74,10 @@ await writeFile(
 // Raised from 100,000 and 199,000 for group tags: the comment box hooks cost ~220 bytes up front;
 // the tag picker itself loads on demand but still counts toward all-features.
 // Raised again to 101,000 / 202,000 for the sidebar tag filter and its Tag icon (~530 bytes).
-// All-features raised to 205,500 for the on-demand design comment cards (~3.6 KB gzip).
+// All-features raised to 206,500 for the on-demand design comment cards, their Before/After morph and B shortcut.
 // Initial raised to 101,400 for host event isolation (~340 bytes): it has to run
 // at mount, before any host modal opens, so it cannot load on demand.
-if (report.initial.gzip > 101_400 || report.coreFeatures.gzip > 205_500)
+if (report.initial.gzip > 101_400 || report.coreFeatures.gzip > 206_500)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

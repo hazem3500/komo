@@ -116,6 +116,8 @@ interface Applied {
   pinBefore: Array<() => void>;
 }
 const applied = new Map<string, Applied>();
+// Before/After switches that may still be on screen, newest last.
+const visibleToggles = new Set<HTMLElement>();
 // Reverts that are still animating back, finished once their transition ends.
 const settling = new Map<string, { timer: ReturnType<typeof setTimeout>; finish(): void }>();
 
