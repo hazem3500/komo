@@ -4875,11 +4875,18 @@ export function initComments(options: CommentsOptions): CommentsController {
       h = dialog.offsetHeight;
     if (pin && x + w > window.innerWidth - right) x = pin.x - w - 20;
     // Right, then left, then below, then above the region, 14px clear of it.
+    // A region too wide for either side takes the roomier of below and above,
+    // shortening the card to fit rather than covering the region.
     if (around && !compactSidebar && !follow) {
+      const below = bottom - around.bottom - 14,
+        above = around.top - 26;
       if (around.right + 14 + w <= window.innerWidth - right) [x, y] = [around.right + 14, around.top];
       else if (around.left - 14 - w >= 12) [x, y] = [around.left - 14 - w, around.top];
-      else if (around.bottom + 14 + h <= bottom) [x, y] = [around.left, around.bottom + 14];
-      else if (around.top - 14 - h >= 12) [x, y] = [around.left, around.top - 14 - h];
+      else if (Math.max(below, above) >= Math.min(h, 200)) {
+        const room = below >= h || below >= above ? below : above;
+        dialog.style.maxHeight = `${room}px`;
+        [x, y] = [around.left, room === below ? around.bottom + 14 : around.top - 14 - Math.min(h, room)];
+      }
     }
     cardFollow.place(
       dialogKey,
