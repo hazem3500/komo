@@ -27,6 +27,8 @@ export function cssText(element: Element, values: Map<string, string>): string {
 /**
  * One proposal for everything previewed on the element. Token-bound properties
  * are described by the token section, so they are not repeated as raw CSS.
+ * `context` lines (theme, component, props) join the first section, after its
+ * header and target; a section's own Component line wins over the context's.
  */
 export function designProposal(
   element: Element,
@@ -34,13 +36,21 @@ export function designProposal(
   before: (property: string) => string | undefined,
   bound: Set<string> | undefined,
   sections: Array<string | undefined>,
+  context: string[] = [],
 ): string | undefined {
   const rows = [...values ?? []].filter(([property]) => !bound?.has(property))
     .map(([property, value]) => `- ${property}: ${before(property) || "(unset)"} → ${value}`);
-  return [
+  const parts = [
     rows.length ? `Proposed style changes (preview only)\nTarget: ${cssSelector(element)}\n${rows.join("\n")}` : "",
     ...sections,
-  ].filter(Boolean).join("\n\n") || undefined;
+  ].filter((part): part is string => !!part);
+  if (parts[0] && context.length) {
+    const lines = parts[0].split("\n");
+    const extra = context.filter((line) => !line.startsWith("Component: ") || !lines.some((own) => own.startsWith("Component: ")));
+    lines.splice(lines[1]?.startsWith("Target: ") ? 2 : 1, 0, ...extra);
+    parts[0] = lines.join("\n");
+  }
+  return parts.join("\n\n") || undefined;
 }
 
 /**

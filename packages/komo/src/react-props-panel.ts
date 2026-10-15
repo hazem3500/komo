@@ -171,6 +171,37 @@ export function proposedReactChanges(element: HTMLElement): string | undefined {
   ].join("\n");
 }
 
+const oneLine = (value: unknown) => String(value).replace(/\s+/g, " ").trim();
+
+/**
+ * Context lines for a proposal, so agents and the CLI know what the change was
+ * made in: "Theme: mode=dark", "Component: PromoCard (src/card.tsx:19)" and
+ * 'Props: tone="calm"'. The registered React component wins, then the app's
+ * component adapter, then the registered component around the element.
+ */
+export function designContext(element: HTMLElement, design?: DesignSystem): string[] {
+  const theme = Object.entries(themeState(design)).map(([axis, option]) => `${oneLine(axis)}=${oneLine(option)}`).join(", ");
+  let identity: { name: string; source?: string; props?: Record<string, unknown> } | null | undefined;
+  const own = inspectableFor(element);
+  if (!own) try { identity = design?.components?.identify(element); } catch { /* An adapter that throws names nothing. */ }
+  const registered = own ? { root: element, component: own } : identity?.name ? undefined : inspectableAncestor(element);
+  if (registered) {
+    const { definition, props } = registered.component;
+    // Props as the page had them, before this session's previews.
+    identity = { name: definition.name, source: `${definition.source}:${definition.line}`, props: { ...props, ...Object.fromEntries(originals.get(registered.root) ?? []) } };
+  }
+  const props = Object.entries(identity?.props ?? {})
+    .filter(([, value]) => value === null || ["boolean", "number"].includes(typeof value) || (typeof value === "string" && value.length <= 80))
+    .slice(0, 12)
+    // A stray arrow would read as a change on the comment card.
+    .map(([name, value]) => `${oneLine(name)}=${JSON.stringify(value).replace(/→/g, "\\u2192")}`);
+  return [
+    theme && `Theme: ${theme}`,
+    identity?.name && `Component: ${oneLine(identity.name)}${identity.source ? ` (${oneLine(identity.source)})` : ""}`,
+    props.length && `Props: ${props.join(", ")}`,
+  ].filter((line): line is string => !!line);
+}
+
 export function proposedDesignChanges(element: HTMLElement): string | undefined {
   return [proposedReactChanges(element), proposedDesignTokenChanges(element), proposedTokenSwaps(element)]
     .filter((value): value is string => !!value)

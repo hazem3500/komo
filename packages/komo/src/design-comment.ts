@@ -75,8 +75,12 @@ export function parseDesignComment(body: string): DesignBlock[] {
     const section: DesignSection = { title: TITLES[kind] ?? `${kind[0].toUpperCase()}${kind.slice(1)} changes`, changes: [] };
     for (const line of lines.slice(1)) {
       if (line.startsWith("Target: ")) section.target = line.slice(8);
-      else if (line.startsWith("Component: ")) section.component = line.slice(11);
-      else if (line.startsWith("Source: ")) section.source = line.slice(8);
+      else if (line.startsWith("Component: ")) {
+        // "Component: PromoCard (src/card.tsx:19)" names the source in parentheses.
+        const [, name, source] = /^(.*?)(?: \((.+)\))?$/.exec(line.slice(11))!;
+        section.component = name;
+        if (source) section.source = source;
+      } else if (line.startsWith("Source: ")) section.source = line.slice(8);
       else {
         const item = line.includes("→") ? change(line, kind) : null;
         // Previews can record a property that ended where it started.

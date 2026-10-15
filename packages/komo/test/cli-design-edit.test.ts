@@ -102,6 +102,50 @@ describe("design edits from comment bodies", () => {
     });
   });
 
+  it("reads the theme, component and token-bound prop context lines", () => {
+    const body = `Proposed style changes (preview only)
+Target: #promo
+Theme: mode=dark, density=compact, broken
+Component: PromoCard (examples/react-props/src/card.tsx:19)
+Props: title="Hi, \\"you\\"", tone="calm", compact=false, visits=3, maybe=null
+- padding: 16px → 24px
+
+Proposed React prop changes (preview only)
+Component: PromoCard
+Source: examples/react-props/src/card.tsx:19
+- brandColor: "var(--color-muted)" → "var(--color-brand)" [color.brand]
+- tone: "calm" → "bold" [custom value]`;
+    expect(designEditFromComment(body, "article")).toEqual({
+      komo: "design-edit",
+      version: 1,
+      target: {
+        selector: "#promo",
+        component: {
+          name: "PromoCard",
+          source: "examples/react-props/src/card.tsx:19",
+          props: { title: 'Hi, "you"', tone: "calm", compact: false, visits: 3, maybe: null },
+        },
+      },
+      theme: { mode: "dark", density: "compact" },
+      changes: [
+        { kind: "css", property: "padding", from: "16px", to: "24px" },
+        { kind: "prop", name: "brandColor", from: "var(--color-muted)", to: "var(--color-brand)", token: "color.brand" },
+        { kind: "prop", name: "tone", from: "calm", to: "bold" },
+      ],
+    });
+    // A component without a source, and context lines in a later section, still count.
+    const later = designEditFromComment("Proposed inline text change (preview only)\n- Text: \"a\" → \"b\"\n\nProposed style changes (preview only)\nTheme: mode=light\nComponent: Hero\n- gap: 4px → 8px", "h1");
+    expect(later.target.component).toEqual({ name: "Hero" });
+    expect(later.theme).toEqual({ mode: "light" });
+  });
+
+  it("validates the optional prop token in fenced edits", () => {
+    const edit = (token: unknown) => JSON.stringify({ komo: "design-edit", version: 1, target: { selector: "a" }, changes: [{ kind: "prop", name: "tone", from: "a", to: "b", token }] });
+    expect(parseDesignEdit(edit("color.brand")).changes[0].token).toBe("color.brand");
+    expect(parseDesignEdit(edit(undefined)).changes[0]).not.toHaveProperty("token");
+    expect(parseDesignEdit(edit(3))).toBeNull();
+  });
+
   it("returns null for ordinary comments and empty proposals", () => {
     expect(designEditFromComment("Make this smaller.", "h1")).toBeNull();
     expect(designEditFromComment("Proposed style changes (preview only)\n- gap: 4px → 4px", "h1")).toBeNull();

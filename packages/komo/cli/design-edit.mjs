@@ -42,8 +42,9 @@ function change(value) {
         ? { kind: "token-value", path: value.path, from: value.from, to: value.to }
         : null;
     case "prop":
+      if (value.token !== undefined && !text(value.token, 200, false)) return null;
       return text(value.name, 100, false) && scalar(value.from) && scalar(value.to)
-        ? { kind: "prop", name: value.name, from: value.from, to: value.to }
+        ? { kind: "prop", name: value.name, from: value.from, to: value.to, ...(value.token ? { token: value.token } : {}) }
         : null;
     case "text":
       return text(value.from, 4000) && text(value.to, 4000)
@@ -166,15 +167,51 @@ function proseChange(line, kind) {
   if (!match) return null;
   const [, label, before] = match;
   if (kind === "inline text") return { kind: "text", from: unquote(before), to: unquote(match[3]) };
-  if (kind === "React prop") return { kind: "prop", name: label, from: propValue(before), to: propValue(notes(match[3]).value) };
+  if (kind === "React prop") {
+    // "- brandColor: … → "var(--color-brand)" [color.brand]" binds a style token.
+    const to = notes(match[3]);
+    const token = to.notes.find((note) => PATH.test(note));
+    return { kind: "prop", name: label, from: propValue(before), to: propValue(to.value), ...(token ? { token } : {}) };
+  }
   if (kind === "style") return { kind: "css", property: label, from: unset(before), to: unset(match[3]) };
   return null;
+}
+
+/** "PromoCard (src/card.tsx:19)" → { name, source }. */
+function identity(value) {
+  const [, name, source] = /^(.*?)(?: \((.+)\))?$/.exec(value.trim());
+  return name ? { name: name.slice(0, 200), ...(source ? { source: source.slice(0, 500) } : {}) } : undefined;
+}
+/** "mode=dark, density=compact" → { mode: "dark", density: "compact" }. */
+function themeLine(value) {
+  const theme = {};
+  for (const pair of value.split(",").slice(0, 20)) {
+    const at = pair.indexOf("=");
+    const axis = pair.slice(0, at).trim(),
+      option = pair.slice(at + 1).trim();
+    if (at > 0 && axis.length <= 100 && option && option.length <= 100) theme[axis] = option;
+  }
+  return Object.keys(theme).length ? theme : undefined;
+}
+/** 'tone="calm", compact=false, visits=3' → { tone: "calm", compact: false, visits: 3 }. */
+function propsLine(value) {
+  const props = {};
+  const pair = /([^\s=,]+)=("(?:[^"\\]|\\.)*"|[^,]*)(?:,\s*|$)/gy;
+  let match;
+  while ((match = pair.exec(value)) && Object.keys(props).length < 50) {
+    const prop = propValue(match[2].trim());
+    if (match[1].length <= 100 && scalar(prop) && prop !== undefined) props[match[1]] = prop;
+    if (pair.lastIndex >= value.length) break;
+  }
+  return Object.keys(props).length ? props : undefined;
 }
 
 /** Build a DesignEdit from the human-readable proposal sections; null if none. */
 export function designEditFromProse(body, selector) {
   let target = "",
-    component;
+    component,
+    props,
+    theme;
   const adapters = new Set(),
     changes = [];
   for (const chunk of body.split(/\r?\n(?:[ \t]*\r?\n)+/)) {
@@ -183,8 +220,11 @@ export function designEditFromProse(body, selector) {
     if (!header) continue;
     for (const line of lines.slice(1)) {
       if (line.startsWith("Target: ")) target ||= line.slice(8).trim();
-      else if (line.startsWith("Component: ")) component = { name: line.slice(11).trim() };
-      else if (line.startsWith("Source: ") && component) component.source = line.slice(8).trim();
+      // The first section's context lines name the theme and component for the whole proposal.
+      else if (line.startsWith("Theme: ")) theme ||= themeLine(line.slice(7));
+      else if (line.startsWith("Component: ")) component ||= identity(line.slice(11));
+      else if (line.startsWith("Props: ")) props ||= propsLine(line.slice(7));
+      else if (line.startsWith("Source: ") && component) component.source ||= line.slice(8).trim().slice(0, 500);
       else if (line.startsWith("Token adapter: ")) {
         for (const id of line.slice(15).split(",")) if (id.trim()) adapters.add(id.trim());
       } else if (line.startsWith("Apply: ")) {
@@ -202,7 +242,8 @@ export function designEditFromProse(body, selector) {
   return validateDesignEdit({
     komo: "design-edit",
     version: 1,
-    target: { selector: target || selector, ...(component ? { component } : {}) },
+    target: { selector: target || selector, ...(component ? { component: props ? { ...component, props } : component } : {}) },
+    ...(theme ? { theme } : {}),
     ...(adapters.size ? { tokens: [...adapters].join(", ") } : {}),
     changes,
   });

@@ -1,7 +1,7 @@
 import { createElement, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useKomo, useKomoDesignTokens, useKomoInspectable, type InspectableComponent, type InspectableScalar, type KomoDesignToken } from "../../../src/react.js";
-import type { DesignToken, TokenAdapter, TokenUsage } from "../../../src/types.js";
+import type { DesignToken, ThemeAxis, TokenAdapter, TokenUsage } from "../../../src/types.js";
 import manifest from "../.generated/manifest.json";
 import { PromoCard, type PromoCardProps } from "./card.js";
 
@@ -74,6 +74,13 @@ const query = new URLSearchParams(location.search);
 const appShell = query.has("shell");
 const sidebar = query.get("sidebar") === "frame" ? "background" : undefined;
 const classAdapter = query.get("tokens") === "classes";
+// ?theme adds a light/dark axis, so Design mode comments name the theme they were made in.
+const themes: ThemeAxis[] | undefined = query.has("theme") ? [{
+  id: "mode",
+  options: [{ id: "light" }, { id: "dark" }],
+  current: () => document.documentElement.dataset.mode ?? "light",
+  apply(id) { document.documentElement.dataset.mode = id; },
+}] : undefined;
 
 function Demo() {
   const [headline, setHeadline] = useState("Inspect safe props in the flow of a real page.");
@@ -95,7 +102,7 @@ function Demo() {
     repo: "tjcages/komo",
     branch: "main",
     ...(sidebar ? { sidebar } : {}),
-    ...(classAdapter ? { design: { tokens: classTokens } } : {}),
+    ...(classAdapter || themes ? { design: { ...(classAdapter ? { tokens: classTokens } : {}), ...(themes ? { themes } : {}) } } : {}),
   });
   useKomoDesignTokens({ tokens: themeTokens, enabled: true });
   const updateProps = (next: Record<string, string | number | boolean | undefined>) =>
