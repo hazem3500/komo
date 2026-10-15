@@ -438,6 +438,25 @@ export function initComments(options: CommentsOptions): CommentsController {
     /* Storage may be unavailable on embedded previews. */
   }
   const exitingDialogs = new Map<HTMLElement, (() => void) | undefined>();
+  // Design mode proposals render as change cards; the module loads on first use.
+  const designProposal = /^Proposed .+ \(preview only\)$/m;
+  let designComments: Promise<typeof import("./design-comment.js")> | undefined;
+  let summarizeDesign: ((body: string) => string) | undefined;
+  const loadDesignComments = () =>
+    (designComments ??= import("./design-comment.js").then((module) => {
+      summarizeDesign = module.summarizeDesignComment;
+      // Pin labels were drawn with the placeholder; refresh them with summaries.
+      if (!destroyed) {
+        pinSnapshot = "";
+        renderPins(true);
+      }
+      return module;
+    }));
+  /** Short text for pins and previews; design proposals read as a summary, not raw text. */
+  const commentText = (body: string) =>
+    designProposal.test(body)
+      ? (summarizeDesign?.(body) ?? (void loadDesignComments(), "Design change"))
+      : body;
   let draftText = "",
     draftTags: string[] = [],
     guestName = "",
@@ -2511,7 +2530,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         pins.append(area);
       }
       const pin = button(
-        `Comment ${number}: ${thread.comments[0]?.body.slice(0, 100) ?? ""}`,
+        `Comment ${number}: ${commentText(thread.comments[0]?.body ?? "").slice(0, 100)}`,
         () => selectThread(thread),
         `pin${thread.id === selected ? " active" : ""}${thread.resolved ? " resolved" : ""}${rect.attached ? "" : " detached"}`,
       );
@@ -2553,7 +2572,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           "pin-preview-open",
         );
         open.textContent = "";
-        open.append(authorRow(message), el("p", "hover-message", message.body));
+        open.append(authorRow(message), el("p", "hover-message", commentText(message.body)));
         pinPreview.append(open);
         pinPreview.hidden = false;
         const point = indicatorPoint(pin, rect);
@@ -3268,7 +3287,14 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
       if (tagsEnabled && thread.tags?.length)
         meta.append(el("span", "tag-list", thread.tags.map((tag) => `#${tag}`).join(" ")));
-      card.append(el("p", "preview", first.body), header, meta);
+      const preview = el("p", "preview", first.body);
+      if (designProposal.test(first.body)) {
+        preview.textContent = "Design change";
+        void loadDesignComments().then(({ summarizeDesignComment }) => {
+          preview.textContent = summarizeDesignComment(first.body);
+        });
+      }
+      card.append(preview, header, meta);
       const item = el("div", "thread-item");
       item.dataset.thread = thread.id;
       const quickResolve = button(
@@ -3548,8 +3574,24 @@ export function initComments(options: CommentsOptions): CommentsController {
       return item;
     }
     const content = el("div", "message-content");
-    const message = el("p", "message-text");
+    const design = designProposal.test(comment.body);
+    const message = el(design ? "div" : "p", "message-text");
     appendMessageLinks(message, comment.body);
+    if (design)
+      void loadDesignComments().then(({ renderDesignComment }) =>
+        renderDesignComment(message, comment.body, {
+          key: comment.id,
+          resolve(selector) {
+            try {
+              if (selector) return document.querySelector(selector) ?? resolveAnchor(thread.anchor);
+            } catch {
+              /* Not a valid selector; fall back to the comment's anchor. */
+            }
+            return resolveAnchor(thread.anchor);
+          },
+          note: appendMessageLinks,
+        }),
+      );
     content.append(message);
     if (comment.body !== "[Comment deleted]") {
       const reaction = button(
@@ -3946,6 +3988,16 @@ export function initComments(options: CommentsOptions): CommentsController {
     { from: HTMLElement; to: string | undefined; started: number }
   >();
   function renderDialog() {
+    // Undo Before/After previews from comments that are no longer on screen.
+    void designComments?.then(({ resetDesignPreviews }) =>
+      resetDesignPreviews(
+        new Set(
+          account
+            ? []
+            : threads.find((item) => item.id === selected)?.comments.map((item) => item.id),
+        ),
+      ),
+    );
     let disposePreviousAccentPicker = disposeAccentPicker;
     disposeAccentPicker = undefined;
     closePicker?.(true);
