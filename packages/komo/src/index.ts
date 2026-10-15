@@ -1661,7 +1661,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       expanded,
       window.innerHeight,
       account,
-      designActive,
+      // Always fit the whole page beside the sidebar; app shells sized to the
+      // viewport otherwise lose their left edge (navigation) off-screen.
+      true,
     );
     const useFrame = layout.framed;
     host.style.setProperty("--review-viewport-height", `${viewportHeight}px`);
@@ -1674,17 +1676,19 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (useFrame) {
       appliedScale = layout.scale;
       const effective = appliedScale * zoom;
+      // Scale with a transform, not zoom: the page lays out at the real
+      // viewport width, so roots sized with 100vw/100vh fit the frame.
       Object.assign(surface.style, {
         position: "fixed",
-        transform: "translate(0, 0)",
+        transform: `scale(${appliedScale})`,
         transformOrigin: "top left",
-        left: `${layout.left / effective}px`,
-        top: `${layout.top / effective}px`,
+        left: `${layout.left / zoom}px`,
+        top: `${layout.top / zoom}px`,
         width: `${window.innerWidth / zoom}px`,
         boxSizing: "border-box",
         height: `${layout.height / effective}px`,
         paddingBottom: savedStyle.paddingBottom,
-        zoom: String(appliedScale),
+        zoom: savedStyle.zoom,
         overflow: "hidden auto",
         borderRadius: `${12 / effective}px`,
         background: pageBackground,
@@ -1735,8 +1739,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       const after = useFrame
         ? pageFrameBounds()
         : { left: 0, top: 0, width: window.innerWidth };
-      const effective = appliedScale * zoom;
-      const start = `translate(${(before.left - after.left) / effective}px, ${(before.top - after.top) / effective}px) scale(${before.width / after.width})`;
+      // Translate in page pixels before the frame's own scale.
+      const start = `translate(${(before.left - after.left) / zoom}px, ${(before.top - after.top) / zoom}px) scale(${(appliedScale * before.width) / after.width})`;
       surface.style.transformOrigin = useFrame ? "top left" : `0 ${scroll}px`;
       if (!useFrame) {
         document.body.style.background = "#080808";
@@ -1751,7 +1755,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       pageMotion = animate(
         surface,
         {
-          transform: [start, "translate(0px, 0px) scale(1)"],
+          transform: [start, `translate(0px, 0px) scale(${appliedScale})`],
         },
         { duration: 0.25, ease: [0.32, 0.72, 0, 1] },
       );

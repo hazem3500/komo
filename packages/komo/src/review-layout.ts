@@ -20,9 +20,10 @@ export function reviewLayout(
   const right = desktop ? SIDEBAR_WIDTH + PAGE_GAP : 0;
   const scale = desktop ? (fit ? Math.min(PAGE_SCALE, (width - right - PAGE_GAP) / width) : PAGE_SCALE) : 1;
   const sheetTop = mobile ? (account ? 0 : height * 0.18) : height;
-  const frameHeight = mobile ? pageHeight : height * (desktop ? PAGE_SCALE : 1);
+  // A fitted frame is the viewport scaled down, so pages sized with 100vh fill it exactly.
+  const frameHeight = mobile ? pageHeight : desktop ? height * (fit ? scale : PAGE_SCALE) : height;
   const left = desktop ? (fit ? PAGE_GAP : width - right - width * scale) : 0;
-  const top = desktop ? (height * (1 - PAGE_SCALE)) / 2 : 0;
+  const top = desktop ? (height - frameHeight) / 2 : 0;
   return {
     desktop,
     mobile,
