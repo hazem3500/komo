@@ -93,14 +93,42 @@ export function MorphingMenu({
   useLayoutEffect(() => {
     const tip = tooltipRef.current;
     if (!tip || !tooltip) return;
+    // Clamp to what is actually visible: the viewport without its scrollbar,
+    // cut by clipping ancestors such as the docked sidebar.
+    let left = 0;
+    let top = 0;
+    let right = document.documentElement.clientWidth;
+    let bottom = window.innerHeight;
+    for (
+      let node: Node | null = tip.parentNode;
+      node instanceof Element && node !== document.body;
+      node =
+        node.parentNode instanceof ShadowRoot
+          ? node.parentNode.host
+          : node.parentNode
+    ) {
+      const style = getComputedStyle(node);
+      const box = node.getBoundingClientRect();
+      if (style.overflowX !== "visible") {
+        left = Math.max(left, box.left);
+        right = Math.min(right, box.right);
+      }
+      if (style.overflowY !== "visible") {
+        top = Math.max(top, box.top);
+        bottom = Math.min(bottom, box.bottom);
+      }
+    }
+    tip.style.maxWidth = `${Math.max(0, right - left - 16)}px`;
+    tip.style.left = `${tooltip.x}px`;
+    tip.style.top = `${tooltip.y}px`;
     const rect = tip.getBoundingClientRect();
     const dx = Math.max(
-      8 - rect.left,
-      Math.min(0, window.innerWidth - 8 - rect.right),
+      left + 8 - rect.left,
+      Math.min(0, right - 8 - rect.right),
     );
     const dy = Math.max(
-      8 - rect.top,
-      Math.min(0, window.innerHeight - 8 - rect.bottom),
+      top + 8 - rect.top,
+      Math.min(0, bottom - 8 - rect.bottom),
     );
     tip.style.left = `${tooltip.x + dx}px`;
     tip.style.top = `${tooltip.y + dy}px`;
