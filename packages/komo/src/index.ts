@@ -3691,6 +3691,8 @@ export function initComments(options: CommentsOptions): CommentsController {
           key: comment.id,
           resolve: designTarget(thread),
           note: appendMessageLinks,
+          // The element can grow under the dialog; place it again once the change settles.
+          onSwitch: () => positionDialog(),
         });
       if (designModule) show(designModule);
       else void loadDesignComments().then(show);
