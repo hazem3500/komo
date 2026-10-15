@@ -176,13 +176,23 @@ describe("design mode preview inspector", () => {
     expect(nested.querySelector("strong")!.firstChild).toBe(rich);
   });
 
-  it("edits button text but keeps private text and form controls read-only", async () => {
+  it("edits button and component text but keeps private text read-only", async () => {
     const edit = () => shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button[aria-label='Edit selected text inline']")!;
     const status = () => shadow.querySelector(".design-inspector__status")?.textContent;
     pointer("pointerdown", button);
     edit().click();
     await vi.waitFor(() => expect(button.getAttribute("contenteditable")).toBe("true"));
     button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
+    // Text inside a registered React component is editable even without a mapped textProp.
+    const card = document.createElement("article");
+    card.dataset.komoInspectable = "promo-card";
+    card.innerHTML = "<p>Preview interactions: <span>3</span></p>";
+    page.append(card);
+    const body = card.querySelector("p")!;
+    pointer("pointerdown", body);
+    edit().click();
+    await vi.waitFor(() => expect(body.getAttribute("contenteditable")).toBe("true"));
+    body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
     const secret = document.createElement("span");
     secret.dataset.private = "true";
     secret.innerHTML = "do <b>not</b> edit";
