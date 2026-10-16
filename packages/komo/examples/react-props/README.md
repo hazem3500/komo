@@ -8,7 +8,7 @@ complex types are read-only. The generator currently targets explicitly marked
 exported function components with a named props declaration; it does not claim
 coverage for every React component form or interpret `defaultProps`. The
 component supplies a state callback, so the preview uses React's normal rerender
-path. Komo never reads React Fiber internals or rewrites source files.
+path. Komo's core never reads React Fiber internals or rewrites source files.
 
 The fixture's heading registers `textProp: "text"` for one leaf `<h2>`. This
 opt-in mapping lets Design mode edit that prop through the app's state callback
@@ -32,9 +32,18 @@ light/dark theme axis. With `?theme`, the top of the Design panel switches the
 page between light and dark; the token chips follow, and leaving Design mode
 puts the original theme back.
 
-The demo uses React 19. The adapter uses public hooks, ref callbacks, and state
-updates compatible with the package's React 18.2+ / 19 peer range, but React 18
-has not been exercised in this prototype. In SSR frameworks, call the hook from
+Add `?components=react` to try the opt-in `@hazem3500/komo/adapters/react-fiber` adapter:
+pick the "Design systems" badge and Design mode shows a read-only **Discovered props**
+group (name, props, where it was rendered) for a component that is not registered. The
+registered card keeps its editable props. `?components=badge` renders the same badge with
+no adapter, so nothing is discovered. `?react=18` loads the React 18 build of the demo
+(`.generated/react-props-18.js`, bundled against the `komo-react18-fixture` workspace
+package); the default build uses React 19. `source-map.ts` is demo-only: it maps React 19's
+bundled stack positions back to source, as an unbundled dev server would.
+
+The demo uses React 19 by default. The adapter uses public hooks, ref callbacks, and state
+updates compatible with the package's React 18.2+ / 19 peer range; the demo is built and
+driven in Chrome against React 18.3 and 19.2. In SSR frameworks, call the hook from
 a client component after hydration; server-rendered props are never exposed by
 the inspector.
 

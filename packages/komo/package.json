@@ -56,6 +56,10 @@
       "types": "./dist/adapters/css-variables.d.ts",
       "import": "./dist/adapters/css-variables.js"
     },
+    "./adapters/react-fiber": {
+      "types": "./dist/adapters/react-fiber.d.ts",
+      "import": "./dist/adapters/react-fiber.js"
+    },
     "./adapters/class-theme": {
       "types": "./dist/adapters/class-theme.d.ts",
       "import": "./dist/adapters/class-theme.js"
@@ -102,6 +106,7 @@
     "esbuild": "^0.25.0",
     "jsdom": "^30.1.0",
     "motion": "^12.43.0",
+    "playwright-core": "1.64.1",
     "react": "19.2.7",
     "react-colorful": "^5.8.1",
     "react-dom": "19.2.7",

@@ -29,7 +29,7 @@ import {
   type KomoDesignToken,
   type RegisteredDesignTokenSource,
 } from "./design-tokens.js";
-import type { DesignSystem, DesignToken, ThemeAxis, TokenAdapter, TokenUsage } from "./design-system.js";
+import type { ComponentIdentity, DesignSystem, DesignToken, ThemeAxis, TokenAdapter, TokenUsage } from "./design-system.js";
 import {
   closestToken,
   hasTokenSwaps,
@@ -171,6 +171,19 @@ export function proposedReactChanges(element: HTMLElement): string | undefined {
   ].join("\n");
 }
 
+/**
+ * What the app's component adapter names for `element`. A component registered
+ * with useKomoInspectable wins: on its root, and around any element inside it
+ * unless the adapter names a component nested within the registered root.
+ */
+function adapterIdentity(element: Element, design?: DesignSystem): ComponentIdentity | null {
+  if (inspectableFor(element)) return null;
+  let identity: ComponentIdentity | null | undefined;
+  try { identity = design?.components?.identify(element); } catch { /* An adapter that throws names nothing. */ }
+  const owner = inspectableAncestor(element);
+  return identity?.name && (!owner || (owner.root !== identity.element && owner.root.contains(identity.element))) ? identity : null;
+}
+
 const oneLine = (value: unknown) => String(value).replace(/\s+/g, " ").trim();
 
 /**
@@ -181,10 +194,9 @@ const oneLine = (value: unknown) => String(value).replace(/\s+/g, " ").trim();
  */
 export function designContext(element: HTMLElement, design?: DesignSystem): string[] {
   const theme = Object.entries(themeState(design)).map(([axis, option]) => `${oneLine(axis)}=${oneLine(option)}`).join(", ");
-  let identity: { name: string; source?: string; props?: Record<string, unknown> } | null | undefined;
+  let identity: { name: string; source?: string; props?: Record<string, unknown> } | null | undefined = adapterIdentity(element, design);
   const own = inspectableFor(element);
-  if (!own) try { identity = design?.components?.identify(element); } catch { /* An adapter that throws names nothing. */ }
-  const registered = own ? { root: element, component: own } : identity?.name ? undefined : inspectableAncestor(element);
+  const registered = own ? { root: element, component: own } : identity ? undefined : inspectableAncestor(element);
   if (registered) {
     const { definition, props } = registered.component;
     // Props as the page had them, before this session's previews.
@@ -817,9 +829,16 @@ export function createReactPropsPanel(
   onEdit: () => void,
   styleRoot?: ShadowRoot,
   select?: (root: HTMLElement) => void,
+  design?: DesignSystem,
 ): HTMLElement | null {
   const component = inspectableFor(element);
-  if (!component) return insideComponent(element, select, styleRoot);
+  if (!component) {
+    const found = adapterIdentity(element, design);
+    let discovered: HTMLElement | null = null;
+    try { discovered = (found && design?.components?.panel?.(found)) || null; } catch { /* A panel that throws shows nothing. */ }
+    if (discovered) ensurePanelStyles(styleRoot);
+    return discovered ?? insideComponent(element, select, styleRoot);
+  }
   ensurePanelStyles(styleRoot);
   const group = document.createElement("details");
   group.className = "design-group design-react-group";
