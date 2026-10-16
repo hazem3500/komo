@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { useKomo, useKomoDesignTokens, useKomoInspectable, type InspectableComponent, type InspectableScalar, type KomoDesignToken } from "../../../src/react.js";
 import type { DesignToken, ThemeAxis, TokenAdapter, TokenUsage } from "../../../src/types.js";
 import { discoverCssTokens } from "../../../src/adapters/css-variables.js";
+import { discoverReactComponents } from "../../../src/adapters/react-fiber.js";
+import { sourceResolver } from "./source-map.js";
 import manifest from "../.generated/manifest.json";
 import { PromoCard, type PromoCardProps } from "./card.js";
 
@@ -84,12 +86,39 @@ const classAdapter = query.get("tokens") === "classes";
 const cssAdapter = query.get("tokens") === "css" ? discoverCssTokens() : null;
 // ?theme adds a light/dark axis: Design mode shows a switcher for it, and comments
 // name the theme they were made in.
+// ?components=react discovers React components Komo was not told about (read-only, opt-in).
+// React 18 records the JSX call site on the fiber; React 19 records an Error stack.
+// ?components=badge renders the same component with no adapter, to show discovery is off by default.
+const fiberAdapter = query.get("components") === "react"
+  ? discoverReactComponents({
+      resolveSource: query.get("react") === "18"
+        ? (file, line) => `${file.replace(/^.*?(examples\/)/, "$1").replace(/^\//, "")}:${line}`
+        : await sourceResolver(document.querySelector<HTMLScriptElement>("script[data-bundle]")?.dataset.bundle ?? "./.generated/react-props.js"),
+    })
+  : null;
 const themes: ThemeAxis[] | undefined = query.has("theme") ? [{
   id: "mode",
   options: [{ id: "light" }, { id: "dark" }],
   current: () => document.documentElement.dataset.mode ?? "light",
   apply(id) { document.documentElement.dataset.mode = id; },
 }] : undefined;
+
+// Not registered with useKomoInspectable: Design mode finds it, read-only, only through the fiber adapter.
+function TeamBadge({ team, seats, active, tags, owner, icon, authToken, onOpen }: {
+  team: string; seats: number; active: boolean; tags: string[]; owner: { name: string; role: string };
+  icon: ReturnType<typeof createElement>; authToken: string; onOpen(): void;
+}) {
+  return (
+    <aside className="team-badge" data-token={authToken ? "set" : "none"}>
+      <span aria-hidden>{icon}</span>
+      <div>
+        <strong>{team}</strong>
+        <small>{owner.name} · {seats} seats · {active ? "active" : "paused"} · {tags.join(", ")}</small>
+      </div>
+      <button type="button" onClick={onOpen}>Open</button>
+    </aside>
+  );
+}
 
 function Demo() {
   const [headline, setHeadline] = useState("Inspect safe props in the flow of a real page.");
@@ -111,7 +140,7 @@ function Demo() {
     repo: "tjcages/komo",
     branch: "main",
     ...(sidebar ? { sidebar } : {}),
-    ...(classAdapter || cssAdapter || themes ? { design: { ...(classAdapter ? { tokens: classTokens } : cssAdapter ? { tokens: cssAdapter } : {}), ...(themes ? { themes } : {}) } } : {}),
+    ...(classAdapter || cssAdapter || themes || fiberAdapter ? { design: { ...(classAdapter ? { tokens: classTokens } : cssAdapter ? { tokens: cssAdapter } : {}), ...(themes ? { themes } : {}), ...(fiberAdapter ? { components: fiberAdapter } : {}) } } : {}),
   });
   useKomoDesignTokens({ tokens: themeTokens, enabled: true });
   const updateProps = (next: Record<string, string | number | boolean | undefined>) =>
@@ -126,6 +155,18 @@ function Demo() {
         the token the card already uses; type a custom value or pick another token,
         or edit a shared theme value to preview it everywhere it applies.
       </p>
+      {(fiberAdapter || query.get("components") === "badge") && (
+        <TeamBadge
+          team="Design systems"
+          seats={12}
+          active
+          tags={["tokens", "motion", "a11y", "docs", "review", "release", "support"]}
+          owner={{ name: "Rin", role: "lead" }}
+          icon={<b>★</b>}
+          authToken="demo-secret-not-shown"
+          onOpen={() => {}}
+        />
+      )}
       {classAdapter && (
         <>
           <style>{utilityCss}</style>

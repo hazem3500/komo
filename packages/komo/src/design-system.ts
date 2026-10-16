@@ -1,6 +1,8 @@
 // Design-system adapters: how a site tells Design mode about its tokens,
 // themes, and components. komo never guesses from computed styles or reads
-// framework internals; the app answers through these adapters.
+// framework internals; the app answers through these adapters. The one
+// exception is opt-in: `@hazem3500/komo/adapters/react-fiber` is an adapter an app
+// can install to read React's private fields.
 //
 //   initKomo({ design: { tokens, themes, components } })
 //
@@ -118,10 +120,16 @@ export interface ComponentIdentity {
 export interface ComponentAdapter {
   /**
    * The nearest component for `element`, or null. Apps may use any strategy,
-   * including reading their framework's internals; komo itself never does.
-   * Works alongside `useKomoInspectable`, which still provides editable props.
+   * including reading their framework's internals; komo's core never does.
+   * Works alongside `useKomoInspectable`, which still provides editable props
+   * and always takes precedence over what an adapter identifies.
    */
   identify(element: Element): ComponentIdentity | null;
+  /**
+   * Read-only panel content for an identity this adapter returned, or null.
+   * The Design panel shows it under the picked element's other controls.
+   */
+  panel?(identity: ComponentIdentity): HTMLElement | null;
 }
 
 export interface DesignSystem {

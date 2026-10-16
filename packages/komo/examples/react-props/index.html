@@ -9,6 +9,12 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./.generated/react-props.js"></script>
+    <script type="module">
+      // ?react=18 loads the React 18 build of the same demo.
+      const bundle = new URLSearchParams(location.search).get("react") === "18" ? "./.generated/react-props-18.js" : "./.generated/react-props.js";
+      const script = Object.assign(document.createElement("script"), { type: "module", src: bundle });
+      script.dataset.bundle = bundle;
+      document.head.append(script);
+    </script>
   </body>
 </html>

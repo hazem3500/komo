@@ -118,7 +118,7 @@ export interface UseKomoInspectableOptions {
 
 /**
  * Opt one React DOM root into the Design mode prop inspector. The component
- * must provide its own state update callback; Komo never reads Fiber internals
+ * must provide its own state update callback; Komo's core never reads Fiber internals
  * or writes the host application's source files.
  */
 export function useKomoInspectable(
