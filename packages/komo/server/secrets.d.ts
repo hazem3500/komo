@@ -6,6 +6,8 @@ interface Env {
     body: string,
     headers: Record<string, string>
   ) => Promise<void>;
+  /** Optional server secret mixed into access token hashes. Changing it revokes every token. */
+  KOMO_TOKEN_PEPPER?: string;
   KOMO_HOSTED?: string;
   KOMO_PAUSED?: string;
   /** Enables Google Cloud IAP sign-in: the IAP backend service audience. */

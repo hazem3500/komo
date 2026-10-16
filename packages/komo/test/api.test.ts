@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { Script } from "node:vm";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -1946,4 +1947,396 @@ it("paginates tied timestamps with scoped cursors while preserving offset client
   expect((await read(`revision=${first.revision}`)).notModified).toBe(true);
   for (const cursor of ["bad", "[]", '[1,{}]', '[null,"id"]'])
     expect((await request(`/threads?cursor=${encodeURIComponent(cursor)}`, "GET", undefined, undefined, "pagination")).status).toBe(400);
+});
+
+describe("personal access tokens", () => {
+  const sha = (value: string) =>
+    createHash("sha256").update(value).digest("hex");
+  const sql = async (query: string) => {
+    const { stdout } = await promisify(execFile)(
+      "pnpm",
+      [
+        "exec",
+        "wrangler",
+        "d1",
+        "execute",
+        "DB",
+        "--local",
+        "--persist-to",
+        join(directory, "state"),
+        "--config",
+        join(directory, "wrangler.json"),
+        "--json",
+        "--command",
+        query,
+      ],
+      { cwd: root, timeout: 45000 }
+    );
+    return JSON.parse(stdout)[0].results as Record<string, unknown>[];
+  };
+  const account = (
+    path: string,
+    method: string,
+    session: string | undefined,
+    data?: unknown
+  ) => request(path, method, data, session, "shared", "owner/site", "_komo");
+  const create = async (
+    session: string,
+    data: Record<string, unknown> = {}
+  ) => {
+    const response = await account("/account/tokens", "POST", session, {
+      name: "CI bot",
+      scopes: ["comments:read", "comments:write"],
+      expiresInDays: 30,
+      ...data,
+    });
+    return { response, body: (await response.json()) as any };
+  };
+  const post = (token: string, project: string, text = "From a bot") =>
+    request(
+      "/threads",
+      "POST",
+      { page: "/bots", anchor, body: text },
+      token,
+      "shared",
+      "owner/site",
+      project
+    );
+  beforeAll(async () => {
+    await sql(
+      `INSERT INTO users(id,name,verified) VALUES('google:stranger-pat','Stranger',1);
+       INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES('${sha("stranger-pat-session")}','google:stranger-pat','_komo',9999999999999);
+       INSERT INTO users(id,name,verified) VALUES('google:pat-misc','Misc',1),('google:pat-cli','CLI',1);
+       INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES('${sha("pat-misc-session")}','google:pat-misc','_komo',9999999999999),('${sha("pat-cli-session")}','google:pat-cli','_komo',9999999999999);`
+    );
+  }, 120000);
+
+  it("serves the account page with a locked-down CSP", async () => {
+    const response = await fetch(`http://localhost:${port}/account`);
+    expect(response.status).toBe(200);
+    const csp = response.headers.get("content-security-policy")!;
+    const nonce = csp.match(/script-src 'nonce-([^']+)'/)![1];
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).not.toContain("unsafe-inline");
+    const html = await response.text();
+    expect(html).toContain("Access tokens");
+    expect(html).toContain(`<script nonce="${nonce}">`);
+    // The inline client must at least parse.
+    const script = html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)![1];
+    expect(() => new Script(script)).not.toThrow();
+  });
+
+  it("refuses guests and anonymous callers", async () => {
+    for (const method of ["GET", "POST"]) {
+      const guest = await account(
+        "/account/tokens",
+        method,
+        "guest-management-token",
+        method === "POST"
+          ? { name: "x", scopes: ["comments:read"] }
+          : undefined
+      );
+      expect(guest.status).toBe(403);
+      expect((await guest.json()).error).toContain("Sign in with Google");
+      expect(
+        (await account("/account/tokens", method, undefined, undefined)).status
+      ).toBe(401);
+    }
+  });
+
+  it("creates, lists, uses and revokes a token without storing it", async () => {
+    const { response, body } = await create("owner-token");
+    expect(response.status).toBe(201);
+    const token = body.token as string;
+    expect(token).toMatch(/^komo_pat_[a-z0-9]{12}_[A-Za-z0-9_-]{43}$/);
+    expect(body.item).toMatchObject({
+      name: "CI bot",
+      last4: token.slice(-4),
+      scopes: ["comments:read", "comments:write"],
+      projects: null,
+      lastUsedAt: null,
+    });
+    expect(body.item.expiresAt).toBeGreaterThan(Date.now());
+
+    const listed = await (
+      await account("/account/tokens", "GET", "owner-token")
+    ).json();
+    const item = listed.tokens.find((t: any) => t.id === body.item.id);
+    expect(item.prefix).toBe(`komo_pat_${body.item.id}`);
+    expect(JSON.stringify(listed)).not.toContain(token.slice(-43));
+    expect(listed.projects).toEqual(
+      expect.arrayContaining(["other", "owned"])
+    );
+
+    const me = await request("/me", "GET", undefined, token, "shared", "owner/site", "test");
+    expect(me.status).toBe(200);
+    expect((await me.json()).user.id).toBe("google:fixture");
+
+    // Nothing at rest contains the token or its secret.
+    const secret = token.slice(-43);
+    const rows = await sql(
+      `SELECT * FROM personal_access_tokens WHERE id='${body.item.id}'`
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].token_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(rows[0].last_used_at).not.toBeNull();
+    const everything = JSON.stringify([
+      rows,
+      await sql("SELECT * FROM audit_log"),
+      await sql("SELECT * FROM sessions"),
+      await sql("SELECT * FROM rate_limits"),
+    ]);
+    expect(everything).not.toContain(secret);
+    expect(everything).not.toContain(token);
+
+    // Use is audit-logged at most once a minute per token.
+    for (let i = 0; i < 3; i++)
+      await request("/me", "GET", undefined, token, "shared", "owner/site", "test");
+    const audit = await sql(
+      `SELECT action FROM audit_log WHERE target='${body.item.id}' ORDER BY at`
+    );
+    expect(audit.map((row) => row.action)).toEqual([
+      "token.create",
+      "token.use",
+    ]);
+
+    expect(
+      (await account(`/account/tokens/${body.item.id}`, "DELETE", "owner-token")).status
+    ).toBe(200);
+    expect(
+      (await account(`/account/tokens/${body.item.id}`, "DELETE", "owner-token")).status
+    ).toBe(404);
+    const after = await (
+      await account("/account/tokens", "GET", "owner-token")
+    ).json();
+    expect(after.tokens.some((t: any) => t.id === body.item.id)).toBe(false);
+    const revoked = await request("/me", "GET", undefined, token, "shared", "owner/site", "test");
+    expect(revoked.status).toBe(401);
+    expect(
+      (await sql(`SELECT action FROM audit_log WHERE target='${body.item.id}' ORDER BY at`)).map(
+        (row) => row.action
+      )
+    ).toContain("token.revoke");
+  });
+
+  it("rejects bad, expired, and other users' tokens", async () => {
+    const { body } = await create("pat-misc-session", { name: "Short lived" });
+    const token = body.token as string;
+    const use = (value: string) =>
+      request("/me", "GET", undefined, value, "shared", "owner/site", "test");
+    expect((await use(token)).status).toBe(200);
+    expect((await use(`${token.slice(0, -4)}AAAA`)).status).toBe(401);
+    expect((await use("komo_pat_garbage")).status).toBe(401);
+    expect(
+      (await use(`komo_pat_${"x".repeat(12)}_${"y".repeat(43)}`)).status
+    ).toBe(401);
+    await sql(
+      `UPDATE personal_access_tokens SET expires_at=1 WHERE id='${body.item.id}'`
+    );
+    const expired = await use(token);
+    expect(expired.status).toBe(401);
+    expect((await expired.json()).error).toContain("expired");
+    const listed = await (
+      await account("/account/tokens", "GET", "pat-misc-session")
+    ).json();
+    expect(
+      listed.tokens.find((t: any) => t.id === body.item.id).expired
+    ).toBe(true);
+    // Another user cannot revoke it.
+    expect(
+      (await account(`/account/tokens/${body.item.id}`, "DELETE", "owner-token")).status
+    ).toBe(404);
+  });
+
+  it("enforces scopes and keeps tokens away from account management", async () => {
+    const readOnly = (await create("owner-token", { name: "reader", scopes: ["comments:read"] })).body.token;
+    const writer = (await create("owner-token", { name: "writer", scopes: ["comments:write"] })).body.token;
+    const denied = await post(readOnly, "test");
+    expect(denied.status).toBe(403);
+    expect((await denied.json()).error).toContain("comments:write");
+    const written = await post(writer, "test", "Written by a token");
+    expect(written.status).toBe(201);
+    const { id } = await written.json();
+    const edited = (token: string) =>
+      request(`/threads/${id}`, "PATCH", { resolved: true }, token, "shared", "owner/site", "test");
+    expect((await edited(readOnly)).status).toBe(403);
+    expect((await edited(writer)).status).toBe(200);
+    // Comments written by a token belong to its owner.
+    const read = await (
+      await request("/threads", "GET", undefined, readOnly, "shared", "owner/site", "test")
+    ).json();
+    expect(
+      read.threads.find((t: any) => t.id === id).comments[0].author.id
+    ).toBe("google:fixture");
+
+    // Tokens cannot mint tokens, edit profiles, or reach management routes.
+    for (const [path, method, data] of [
+      ["/account/tokens", "POST", { name: "x", scopes: ["comments:read"] }],
+      ["/account/tokens", "GET", undefined],
+    ] as const)
+      expect((await account(path, method, writer, data)).status).toBe(403);
+    expect(
+      (await request("/me", "PATCH", { name: "Hijack", avatarUrl: "" }, writer, "shared", "owner/site", "test")).status
+    ).toBe(403);
+    expect(
+      (await request("/usage", "GET", undefined, writer, "shared", "owner/site", "test")).status
+    ).toBe(403);
+    expect(
+      (await request("/me", "DELETE", undefined, writer, "shared", "owner/site", "test")).status
+    ).toBe(403);
+    expect(
+      (await account("/account/tokens", "POST", writer, { name: "x", scopes: ["comments:read"] })).status
+    ).toBe(403);
+  });
+
+  it("limits tokens to selected projects and to the owner's own access", async () => {
+    const limited = (
+      await create("owner-token", { name: "other only", projects: ["other"] })
+    ).body;
+    expect(limited.item.projects).toEqual(["other"]);
+    expect((await post(limited.token, "other")).status).toBe(201);
+    const wrong = await post(limited.token, "test");
+    expect(wrong.status).toBe(403);
+    expect((await wrong.json()).error).toContain("project");
+    expect(
+      (await create("owner-token", { projects: ["test"] })).response.status
+    ).toBe(400);
+    expect(
+      (await create("owner-token", { projects: ["nope"] })).response.status
+    ).toBe(400);
+    for (const bad of [
+      { scopes: [] },
+      { scopes: ["admin"] },
+      { name: "" },
+      { expiresInDays: 9999 },
+      { expiresInDays: "soon" },
+    ])
+      expect((await create("stranger-pat-session", bad)).response.status).toBe(400);
+
+    // A token never exceeds its owner: private projects still need an invite.
+    await sql(
+      `INSERT INTO project_settings(project,access) VALUES('demo','private');
+       INSERT INTO project_access(project,user_id) VALUES('demo','google:fixture');`
+    );
+    try {
+      const owner = (await create("owner-token", { name: "private reader", scopes: ["comments:read"] })).body.token;
+      const stranger = (await create("stranger-pat-session", { name: "stranger", scopes: ["comments:read"] })).body.token;
+      const writeOnly = (await create("owner-token", { name: "no read", scopes: ["comments:write"] })).body.token;
+      const read = (token: string) =>
+        request("/threads", "GET", undefined, token, "shared", "owner/site", "demo");
+      expect((await read(owner)).status).toBe(200);
+      expect((await read(stranger)).status).toBe(403);
+      expect((await read(writeOnly)).status).toBe(403);
+      expect((await request("/threads", "GET", undefined, undefined, "shared", "owner/site", "demo")).status).toBe(401);
+    } finally {
+      await sql(
+        `DELETE FROM project_access WHERE project='demo'; DELETE FROM project_settings WHERE project='demo';`
+      );
+    }
+  });
+
+  it("rate-limits token creation", async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 11; i++)
+      statuses.push(
+        (await create("manage-control", { name: `bot ${i}`, scopes: ["comments:read"] })).response.status
+      );
+    expect(statuses.slice(0, 10)).toEqual(Array(10).fill(201));
+    expect(statuses[10]).toBe(429);
+  });
+
+  it("signs in the CLI with a stdin token, whoami, logout, and env precedence", async () => {
+    const created = (await create("pat-cli-session", { name: "CLI bot" })).body;
+    const token = created.token as string;
+    const other = (await create("pat-cli-session", { name: "Env bot" })).body.token as string;
+    const home = join(directory, "pat-credentials");
+    const project = join(directory, "pat-project");
+    const { mkdir, readdir, stat } = await import("node:fs/promises");
+    await mkdir(join(project, ".komo"), { recursive: true });
+    await writeFile(
+      join(project, ".komo/project.json"),
+      JSON.stringify({
+        project: "cli",
+        endpoint: `http://localhost:${port}`,
+        origin,
+        repo: "owner/site",
+        scope: "project",
+      })
+    );
+    const cli = (args: string[], stdin?: string, env: Record<string, string> = {}) =>
+      new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve) => {
+        const child = spawn(
+          process.execPath,
+          [join(root, "packages/komo/cli/index.mjs"), ...args],
+          {
+            cwd: project,
+            env: { ...process.env, KOMO_TOKEN: "", KOMO_CONFIG_HOME: home, KOMO_BRANCH: "shared", ...env },
+          }
+        );
+        let stdout = "", stderr = "";
+        child.stdout.on("data", (d) => (stdout += d));
+        child.stderr.on("data", (d) => (stderr += d));
+        child.on("close", (code) => resolve({ code, stdout, stderr }));
+        child.stdin.end(stdin ?? "");
+      });
+
+    // A token on the command line is refused and never saved.
+    for (const args of [
+      ["login", "--token", token],
+      ["login", `--token=${token}`],
+      ["login", token],
+    ]) {
+      const refused = await cli(args);
+      expect(refused.code).not.toBe(0);
+      expect(refused.stderr).toContain("stdin");
+    }
+    expect(await readdir(home).catch(() => [])).toEqual([]);
+    // A bad token on stdin is verified against the API and not saved.
+    const bad = await cli(["login", "--token"], `komo_pat_${"a".repeat(12)}_${"b".repeat(43)}\n`);
+    expect(bad.code).not.toBe(0);
+    expect(await readdir(home).catch(() => [])).toEqual([]);
+    expect((await cli(["login", "--token"], "not-a-token")).code).not.toBe(0);
+
+    const login = await cli(["login", "--token"], `${token}\n`);
+    expect(login.code).toBe(0);
+    expect(JSON.parse(login.stdout).data.user.id).toBe("google:pat-cli");
+    expect(login.stdout + login.stderr).not.toContain(token.slice(-43));
+    const [file] = await readdir(home);
+    expect(file).toMatch(/^pat-[0-9a-f]{64}\.json$/);
+    expect((await stat(join(home, file))).mode & 0o777).toBe(0o600);
+    expect((await stat(home)).mode & 0o777).toBe(0o700);
+    expect(JSON.parse(await readFile(join(home, file), "utf8")).token).toBe(token);
+
+    const whoami = JSON.parse((await cli(["whoami"])).stdout);
+    expect(whoami.data).toMatchObject({ auth: "token", user: { id: "google:pat-cli" } });
+    expect((await cli(["comments", "list"])).code).toBe(0);
+
+    // Stored token beats a login session; KOMO_TOKEN beats both.
+    const sessionFile = join(
+      home,
+      `${sha(`http://localhost:${port}\ncli`)}.json`
+    );
+    await writeFile(sessionFile, JSON.stringify({ token: "stale-session" }));
+    expect(JSON.parse((await cli(["whoami"])).stdout).data.auth).toBe("token");
+    const envWho = await cli(["whoami"], undefined, { KOMO_TOKEN: other });
+    expect(JSON.parse(envWho.stdout).data.auth).toBe("env");
+    const brokenEnv = await cli(["whoami"], undefined, {
+      KOMO_TOKEN: `komo_pat_${"c".repeat(12)}_${"d".repeat(43)}`,
+    });
+    expect(brokenEnv.code).not.toBe(0);
+    expect(brokenEnv.stderr).toContain("invalid, expired, or revoked");
+
+    // Revoking on the server fails the CLI with a clear message.
+    await account(`/account/tokens/${created.item.id}`, "DELETE", "pat-cli-session");
+    const revoked = await cli(["whoami"]);
+    expect(revoked.code).not.toBe(0);
+    expect(revoked.stderr).toContain("revoked");
+
+    const logout = await cli(["logout"]);
+    expect(logout.code).toBe(0);
+    expect(await readdir(home)).toEqual([]);
+    const after = await cli(["whoami"]);
+    expect(after.code).not.toBe(0);
+    expect(after.stderr).toContain("Not signed in");
+  });
 });

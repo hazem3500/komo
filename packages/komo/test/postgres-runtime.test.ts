@@ -160,3 +160,107 @@ run(
     ).toEqual({ comments: 0, bytes: 0 });
   },
 );
+
+run(
+  "Node PostgreSQL stores only a hash of personal access tokens and enforces them",
+  async () => {
+    const hash = async (value: string) =>
+      Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
+        ),
+        (byte) => byte.toString(16).padStart(2, "0"),
+      ).join("");
+    await db
+      .prepare("INSERT INTO users(id,name,verified) VALUES(?,?,1),(?,?,0)")
+      .bind("google:pat-owner", "Owner", "guest:pat", "Guest")
+      .run();
+    for (const [session, user] of [
+      ["pat-owner-session", "google:pat-owner"],
+      ["pat-guest-session", "guest:pat"],
+    ])
+      await db
+        .prepare(
+          "INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES(?,?,?,?)",
+        )
+        .bind(await hash(session), user, "review", 9999999999999)
+        .run();
+    const call = async (
+      path: string,
+      method: string,
+      token?: string,
+      body?: unknown,
+    ) => {
+      const response = await worker.fetch(
+        new Request(
+          `http://localhost:8080${path}${path.includes("?") ? "&" : "?"}project=review&repo=team%2Fsite&branch=pr-pat`,
+          {
+            method,
+            headers: {
+              Origin:
+                path.startsWith("/account") ? "http://localhost:8080" : "http://localhost:3000",
+              ...(body ? { "Content-Type": "application/json" } : {}),
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: body ? JSON.stringify(body) : undefined,
+          },
+        ) as unknown as Parameters<typeof worker.fetch>[0],
+        env,
+        { waitUntil: () => {} } as unknown as ExecutionContext,
+      );
+      return {
+        status: response.status,
+        data: (await response.json()) as Record<string, any>,
+      };
+    };
+    expect(
+      (await call("/account/tokens", "GET", "pat-guest-session")).status,
+    ).toBe(403);
+    const made = await call("/account/tokens", "POST", "pat-owner-session", {
+      name: "Pg bot",
+      scopes: ["comments:read"],
+      expiresInDays: 7,
+      projects: [],
+    });
+    expect(made.status).toBe(201);
+    const token = made.data.token as string;
+    expect(token).toMatch(/^komo_pat_[a-z0-9]{12}_[A-Za-z0-9_-]{43}$/);
+    const rows = await db
+      .prepare("SELECT * FROM personal_access_tokens")
+      .all<Record<string, unknown>>();
+    expect(rows.results).toHaveLength(1);
+    expect(JSON.stringify(rows.results)).not.toContain(token.slice(-43));
+    expect(rows.results[0].token_hash).toMatch(/^[0-9a-f]{64}$/);
+
+    expect((await call("/me", "GET", token)).data.user.id).toBe(
+      "google:pat-owner",
+    );
+    expect((await call("/threads", "GET", token)).status).toBe(200);
+    // Read-only: writes are refused.
+    expect(
+      (
+        await call("/threads", "POST", token, {
+          body: "x",
+          page: "/p",
+          anchor: { x: 0, y: 0, width: 0, height: 0, pageX: 0, pageY: 0, viewportWidth: 1 },
+        })
+      ).status,
+    ).toBe(403);
+    const audit = await db
+      .prepare("SELECT action FROM audit_log WHERE target=? ORDER BY at")
+      .bind(made.data.item.id)
+      .all<{ action: string }>();
+    expect(audit.results.map((row) => row.action)).toEqual([
+      "token.create",
+      "token.use",
+    ]);
+    expect(
+      (await call(`/account/tokens/${made.data.item.id}`, "DELETE", "pat-owner-session")).status,
+    ).toBe(200);
+    expect((await call("/me", "GET", token)).status).toBe(401);
+    await db
+      .prepare("UPDATE personal_access_tokens SET revoked_at=NULL,expires_at=1")
+      .run();
+    expect((await call("/me", "GET", token)).status).toBe(401);
+  },
+);

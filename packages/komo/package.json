@@ -28,7 +28,9 @@
     "server/import-project.ts",
     "server/digest.ts",
     "server/project-sites.ts",
-    "server/iap.ts"
+    "server/iap.ts",
+    "server/tokens.ts",
+    "server/account-page.ts"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

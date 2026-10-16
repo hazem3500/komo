@@ -47,8 +47,9 @@ export const agentCommands = [
 export const agentHelp = `
 Agent commands:
   komo login                 Sign in with Google once for this project
-  komo whoami                Check the current session
-  komo logout                Revoke and remove the saved session
+  komo login --token         Save an access token read from stdin (bots and CI)
+  komo whoami                Check the current credentials
+  komo logout                Revoke the saved session and remove saved credentials
   komo comments list         Read open feedback as JSON
   komo comments get ID       Read a thread with all replies and context
   komo comments prompt       Export open feedback as an agent prompt
@@ -69,13 +70,14 @@ ${Object.entries(actions)
 Settings: .komo/project.json (searched upward), or --project KEY.
 Overrides: --endpoint URL --origin SITE_URL --repo OWNER/REPO --branch NAME
 Bodies: --body TEXT, --body-file FILE, or --body-file - for stdin.
-Credentials: Google login, or KOMO_TOKEN for non-interactive use. Never commit tokens.
+Credentials: KOMO_TOKEN, then a saved access token, then a Google login session. Never commit tokens.
+Create access tokens at /account on your komo server; pass one with: printf %s "$TOKEN" | komo login --token
 Results are JSON except prompt (Markdown unless --json). Errors are JSON on stderr.
 Design mode messages also carry designEdit: a parsed komo DesignEdit v1 record.
 `;
 
 function parse(args) {
-  const booleans = new Set(["--json", "--remove", "--no-open"]);
+  const booleans = new Set(["--json", "--remove", "--no-open", "--token"]);
   const values = new Set([
     "--out",
     "--file",
@@ -186,14 +188,50 @@ function credentialPath(config, env) {
     `${key}.json`
   );
 }
-async function readToken(path, env) {
-  if (env.KOMO_TOKEN) return env.KOMO_TOKEN;
+const PERSONAL_TOKEN = /^komo_pat_[a-z0-9]{12}_[A-Za-z0-9_-]{43}$/;
+// A personal access token works for every project on one server, so it is
+// stored per endpoint, beside the per-project login sessions.
+function personalTokenPath(config, env) {
+  const key = createHash("sha256").update(config.endpoint).digest("hex");
+  return join(
+    env.KOMO_CONFIG_HOME || join(homedir(), ".config", "komo"),
+    `pat-${key}.json`
+  );
+}
+async function readSaved(path) {
   try {
-    return JSON.parse(await readFile(path, "utf8")).token;
+    return JSON.parse(await readFile(path, "utf8")).token || null;
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
     return null;
   }
+}
+// Precedence: KOMO_TOKEN, then a saved access token, then a login session.
+async function readCredentials(sessionPath, patPath, env) {
+  const saved = { session: await readSaved(sessionPath), pat: await readSaved(patPath) };
+  const [source, token] = env.KOMO_TOKEN
+    ? ["env", env.KOMO_TOKEN]
+    : saved.pat
+      ? ["token", saved.pat]
+      : saved.session
+        ? ["session", saved.session]
+        : [null, null];
+  return { source, token, saved };
+}
+async function readTokenFromStdin() {
+  if (process.stdin.isTTY)
+    throw Error("Pipe the token on stdin, for example: printf %s \"$TOKEN\" | komo login --token");
+  const chunks = [];
+  let bytes = 0;
+  for await (const chunk of process.stdin) {
+    bytes += chunk.length;
+    if (bytes > 512) throw Error("That does not look like a komo access token.");
+    chunks.push(chunk);
+  }
+  const token = Buffer.concat(chunks).toString("utf8").trim();
+  if (!PERSONAL_TOKEN.test(token))
+    throw Error("Expected a komo access token (komo_pat_…) on stdin.");
+  return token;
 }
 async function saveToken(path, token) {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
@@ -234,7 +272,9 @@ export function apiClient(config, token) {
     if (!response.ok) {
       const error = Error(
         response.status === 401
-          ? "Session missing or expired. Run komo login."
+          ? token?.startsWith("komo_pat_")
+            ? "Access token invalid, expired, or revoked. Create a new one at /account."
+            : "Session missing or expired. Run komo login."
           : result.error || `Request failed (${response.status}).`
       );
       error.status = response.status;
@@ -404,8 +444,16 @@ export async function runAgent(
   args,
   { cwd = process.cwd(), env = process.env } = {}
 ) {
+  if (args.some((arg) => arg.includes("komo_pat_") || arg.startsWith("--token=")))
+    throw Error(
+      "Never pass a token as an argument: it would appear in shell history and process lists. Pipe it on stdin: printf %s \"$TOKEN\" | komo login --token"
+    );
   const { flags, positional } = parse(args);
   const [command, action = "list", threadId, commentId] = positional;
+  if (flags.token && (command !== "login" || positional.length > 1))
+    throw Error(
+      "Use --token only as: printf %s \"$TOKEN\" | komo login --token. The token itself goes on stdin, never in an argument."
+    );
   if (command === "agents") {
     if (
       action !== "setup" ||
@@ -428,7 +476,7 @@ export async function runAgent(
         {
           version: 1,
           commands: actions,
-          auth: "komo login",
+          auth: "KOMO_TOKEN, komo login --token (stdin), or komo login",
           output: "JSON; prompt is Markdown unless --json",
           designEdit:
             "Design mode messages carry designEdit (komo DesignEdit v1); prompt prints it as a json komo-design-edit block",
@@ -461,27 +509,46 @@ export async function runAgent(
     throw Error("Unexpected positional arguments. Run komo --help.");
   const config = await configuration(flags, cwd, env),
     path = credentialPath(config, env);
-  const token = await readToken(path, env),
+  const patPath = personalTokenPath(config, env);
+  const { source, token, saved } = await readCredentials(path, patPath, env),
     request = apiClient(config, token);
   if (command !== "logout" && config.repo === config.project) {
     const metadata = await request("config");
     if (metadata.repo) config.repo = metadata.repo;
   }
   let data;
-  if (command === "login") data = { user: await login(config, path, flags) };
+  if (command === "login" && flags.token) {
+    const given = await readTokenFromStdin();
+    // Verify against the API before saving, so a typo never replaces a working token.
+    const { user } = await apiClient(config, given)("me");
+    await saveToken(patPath, given);
+    data = { user, auth: "token" };
+  } else if (command === "login")
+    data = { user: await login(config, path, flags) };
   else {
     if (!token)
-      throw Error("No saved session. Run komo login, or set KOMO_TOKEN.");
+      throw Error(
+        "Not signed in. Run komo login, pipe a token to komo login --token, or set KOMO_TOKEN."
+      );
     if (command === "project")
       data = await runProject(action, flags, request, config, cwd);
-    else if (command === "whoami") data = await request("me");
+    else if (command === "whoami") data = { ...(await request("me")), auth: source };
     else if (command === "logout") {
-      try {
-        await request("me", "DELETE");
-      } catch (error) {
-        if (error.status !== 401 && error.status !== 404) throw error;
-      }
+      // Only login sessions are revoked here. Access tokens are revoked on
+      // the account page, so logout never destroys a token other jobs share.
+      const session = env.KOMO_TOKEN && !env.KOMO_TOKEN.startsWith("komo_pat_")
+        ? env.KOMO_TOKEN
+        : saved.session;
+      if (session)
+        try {
+          await apiClient(config, session)("me", "DELETE");
+        } catch (error) {
+          if (error.status !== 401 && error.status !== 404) throw error;
+        }
       await rm(path, { force: true });
+      await rm(patPath, { force: true });
+      if (env.KOMO_TOKEN)
+        console.error("KOMO_TOKEN is still set in this environment; unset it to stop using it.");
       data = { signedOut: true };
     } else if (["list", "get", "prompt"].includes(action)) {
       let threads = (
