@@ -52,6 +52,10 @@
       "types": "./dist/adapters/tailwind.d.ts",
       "import": "./dist/adapters/tailwind.js"
     },
+    "./adapters/css-variables": {
+      "types": "./dist/adapters/css-variables.d.ts",
+      "import": "./dist/adapters/css-variables.js"
+    },
     "./adapters/class-theme": {
       "types": "./dist/adapters/class-theme.d.ts",
       "import": "./dist/adapters/class-theme.js"
