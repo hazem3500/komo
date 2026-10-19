@@ -1,6 +1,5 @@
 export const designPanelStyles = `
-/* Property controls: compact 28px fields in a two-column grid, icon or letter
-   glyphs instead of a label column, and quiet section headers. */
+/* Property controls keep essential labels above compact value rows. */
 .design-inspector__controls > * + * { border-top:1px solid #ffffff0d; }
 .design-group { padding:0 12px 10px; }
 .design-section > .design-group { padding-bottom:12px; }
@@ -28,7 +27,6 @@ export const designPanelStyles = `
 .design-field:has(.design-field__glyph) { --lead:22px; }
 .design-field--color { --lead:26px; }
 .design-field > input:not([type="color"]),.design-field > select { flex:1; box-sizing:border-box; width:100%; min-width:0; height:100%; margin:0; padding:0 8px; border:0; border-radius:6px; outline:0; box-shadow:none; background:none; color:#f1efeb; font:inherit; font-size:11px; font-variant-numeric:tabular-nums; text-overflow:ellipsis; }
-.design-field > :is(input,select):focus-visible { outline:0; }
 .design-field input[type="number"] { appearance:textfield; -moz-appearance:textfield; }
 .design-field input::-webkit-inner-spin-button { appearance:none; }
 .design-field__glyph { flex:none; display:grid; place-items:center; width:22px; height:100%; margin-right:-6px; color:#77736f; font-size:10px; font-weight:600; cursor:ew-resize; user-select:none; touch-action:none; }

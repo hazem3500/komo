@@ -62,15 +62,16 @@ describe("token picker", () => {
     expect(row(all, "card").querySelector<HTMLElement>(".komo-tokens__shadow")).not.toBeNull();
     const title = row(all, "Title");
     expect(title.querySelector(".komo-tokens__ag")!.textContent).toBe("Ag");
-    expect(title.querySelector(".komo-tokens__meta")!.textContent).toBe("type-title600 · 16px/1.5");
+    expect(title.title).toContain("type-title");
+    expect(title.querySelector(".komo-tokens__meta")).toBeNull();
     expect(row(all, "bold").querySelector<HTMLElement>(".komo-tokens__ag")!.style.fontWeight).toBe("700");
     expect(row(all, "serif").querySelector<HTMLElement>(".komo-tokens__ag")!.style.fontFamily).toContain("Georgia");
     const fast = row(all, "fast");
     expect(fast.querySelector(".komo-tokens__pv")!.childElementCount).toBe(0);
-    expect(fast.querySelector(".komo-tokens__meta")!.textContent).toBe("duration-fast150ms");
-    // States as chips, the description as a muted line and in the tooltip.
-    expect([...row(all, "tint").querySelectorAll(".komo-tokens__states > i")].map((chip) => chip.textContent)).toEqual(["hover", "active", "disabled"]);
-    expect(row(all, "Primary").querySelector(".komo-tokens__desc")!.textContent).toBe("Body copy");
+    expect(fast.title).toContain("150ms");
+    // Secondary details remain accessible without adding extra visible rows.
+    expect(row(all, "tint").title).toContain("hover");
+    expect(row(all, "Primary").querySelector(".komo-tokens__desc")).toBeNull();
     expect(row(all, "Primary").title).toContain("Body copy");
     expect(picker()!.querySelector("[role=listbox]")!.getAttribute("aria-label")).toBe("Tokens for none");
   });
@@ -113,15 +114,15 @@ describe("token picker", () => {
     expect(picker()!.textContent).toContain("No matching tokens");
   });
 
-  it("pins the current token at the top, selected and active", () => {
+  it("marks the current token in its group without a duplicate Current card", () => {
     const { rows, root, search } = mount({ current: "color.text.secondary" });
-    const [first] = rows();
+    const first = rows().find(row => row.getAttribute("aria-selected") === "true")!;
     expect(first.textContent).toContain("secondary");
     expect(first.getAttribute("aria-selected")).toBe("true");
-    expect(first.parentElement!.querySelector("small")!.textContent).toBe("Current");
+    expect(first.parentElement!.querySelector("small")!.textContent).toBe("Text");
     expect(rows().filter((item) => item.textContent!.includes("secondary"))).toHaveLength(1);
     expect(search().getAttribute("aria-activedescendant")).toBe(first.id);
-    expect(root.activeElement).toBe(search());
+    expect(root.activeElement).toBe(root.querySelector("[role=listbox]"));
     expect(search().getAttribute("role")).toBe("combobox");
   });
 
@@ -156,14 +157,15 @@ describe("token picker", () => {
     expect(again.chosen).toEqual(["color.text.primary"]);
   });
 
-  it("splits color swatches by theme when the adapter's values differ", async () => {
+  it("shows the current theme swatch while retaining other theme values in details", async () => {
     const { rows } = mount({
       themes: () => [
         { label: "Light", values: new Map([["color.text.primary", "#1f1f1f"], ["color.text.secondary", "#6b6b6b"]]) },
         { label: "Dark", values: new Map([["color.text.primary", "#f1efeb"], ["color.text.secondary", "#6b6b6b"]]) },
       ],
     });
-    await vi.waitFor(() => expect(rows()[0].querySelectorAll(".komo-tokens__sw > span")).toHaveLength(2));
+    await vi.waitFor(() => expect(rows()[0].querySelectorAll(".komo-tokens__sw > span")).toHaveLength(1));
+    await vi.waitFor(() => expect(rows()[0].title).toContain("Light"));
     expect(rows()[0].title).toContain("Light #1f1f1f, Dark #f1efeb");
     expect(rows()[1].querySelectorAll(".komo-tokens__sw > span")).toHaveLength(1);
   });
@@ -173,7 +175,7 @@ describe("token picker", () => {
     const { rows } = mount({ tokens: [token] });
     const option = rows()[0];
     expect(option.querySelector("[data-unresolved]")?.textContent).toBe("?");
-    expect(option.querySelector(".komo-tokens__meta")?.textContent).toContain("Unresolved value");
+    expect(option.title).toContain("Unresolved");
     expect(option.getAttribute("aria-label")).toContain(token.ref);
     expect(option.getAttribute("aria-label")).toContain(token.value);
     expect(option.getAttribute("aria-label")).toContain("no swatch available");
@@ -193,16 +195,16 @@ describe("token picker", () => {
     const { rows, press, chosen } = mount({ current: "color.text.secondary", onPreview: preview, onSelect: committed });
     document.body.append(element);
     expect(preview).not.toHaveBeenCalled();
-    const hover = () => rows()[1].dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
+    const hover = () => rows()[0].dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
     hover();
     expect(element.style.color).toBe("rgb(31, 31, 31)");
     hover();
     expect(preview).toHaveBeenCalledTimes(1);
     expect(press("ArrowLeft").defaultPrevented).toBe(false);
     expect(press("ArrowRight").defaultPrevented).toBe(false);
-    press("ArrowUp");
-    expect(element.style.color).toBe("rgb(18, 52, 86)");
     press("ArrowDown");
+    expect(element.style.color).toBe("rgb(18, 52, 86)");
+    press("ArrowUp");
     expect(element.style.color).toBe("rgb(31, 31, 31)");
     expect(chosen).toEqual([]);
     expect(committed).not.toHaveBeenCalled();
@@ -289,7 +291,7 @@ describe("token field suggestions", () => {
     const { grid, label, swaps, element } = field("color", "rgb(31, 31, 31)");
     const line = grid.querySelector<HTMLElement>(".design-token-match")!;
     expect(line.hidden).toBe(false);
-    expect(line.textContent).toBe("Matches PrimaryUse token");
+    expect(line.textContent).toBe("Same color as PrimaryUse token");
     expect(label.dataset.tokenMode).toBe("custom");
     line.querySelector("button")!.click();
     expect(swaps).toHaveLength(1);

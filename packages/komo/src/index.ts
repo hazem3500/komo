@@ -79,7 +79,7 @@ import {
   reducedMotion,
   setAvatarResolver,
 } from "./dom.js";
-import { matchesShortcut, resolveShortcuts, withShortcut } from "./shortcuts.js";
+import { matchesShortcut, resolveShortcuts } from "./shortcuts.js";
 import { styles } from "./styles.js";
 import type {
   Anchor,
@@ -2424,13 +2424,17 @@ export function initComments(options: CommentsOptions): CommentsController {
     const items: ToolbarItem[] = [
       {
         id: "browse",
-        label: withShortcut("Browse website", shortcuts.browse),
+        label: "Browse website",
+        group: "Modes",
+        shortcut: shortcuts.browse,
         icon: glyph("pointer"),
         onSelect: () => setMode(false),
       },
       {
         id: "comment",
-        label: withShortcut("Add comment", shortcuts.comment),
+        label: "Add comment",
+        group: "Modes",
+        shortcut: shortcuts.comment,
         icon: glyph("comment"),
         onSelect: () => setMode(!commentMode),
       },
@@ -2438,7 +2442,9 @@ export function initComments(options: CommentsOptions): CommentsController {
         ? [
             {
               id: "design",
-              label: withShortcut("Design mode", shortcuts.design),
+              label: "Design mode",
+        group: "Modes",
+        shortcut: shortcuts.design,
               icon: glyph("design"),
               onSelect: () => setDesignMode(!designActive),
             },
@@ -2446,20 +2452,16 @@ export function initComments(options: CommentsOptions): CommentsController {
         : []),
       {
         id: "comments",
-        label: options.onboarding
-          ? expanded
-            ? "Close project sidebar"
-            : "Project settings"
-          : `${withShortcut(
-              expanded ? "Close comment sidebar" : "View all comments",
-              shortcuts.comments,
-            )}${expanded ? "" : ` · ${threads.filter((t) => !t.resolved).length} open`}`,
+        group: "Comments & view",
+        label: options.onboarding ? expanded ? "Close project panel" : "Project settings" : expanded ? "Close comments panel" : "All comments",
+        shortcut: options.onboarding ? null : shortcuts.comments,
+        count: options.onboarding || expanded ? undefined : threads.filter(t => !t.resolved).length,
         icon: glyph("expand"),
         onSelect: () => toggleExpanded(!expanded),
       },
       {
         id: "account",
-        expandedOrder: -1,
+        group: "Account & help",
         label: api.user
           ? `${api.user.name} · Account`
           : options.onboarding?.inProject
@@ -2477,11 +2479,12 @@ export function initComments(options: CommentsOptions): CommentsController {
       },
       {
         id: "copy-prompts",
+        group: "Comments & view",
         keepOpenOnSelect: true,
         label:
           copiedPrompt === "all"
             ? "Copied prompt"
-            : "Copy all comments for agent",
+            : "Copy comments for agent",
         icon: glyph(copiedPrompt === "all" ? "check" : "copy"),
         showInBar: false,
         onSelect: () => run(() => copyPrompt("all")),
@@ -2492,6 +2495,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         ? [
             {
               id: "layout",
+              group: "Comments & view",
               label: sidebarMode === "edge" ? "Frame view" : "Floating view",
               icon: glyph("expand"),
               showInBar: false,
@@ -2501,14 +2505,14 @@ export function initComments(options: CommentsOptions): CommentsController {
         : []),
       {
         id: "dismiss",
-        label: shortcuts.restore
-          ? `Dismiss inline feedback · ${shortcuts.restore.label} to restore`
-          : "Dismiss inline feedback",
+        group: "Feedback",
+        label: "Dismiss feedback",
         icon: glyph("close"),
         onSelect: dismissToolbar,
       },
       {
         id: "visibility",
+        group: "Comments & view",
         label: hidden ? "Show comment pins" : "Hide comment pins",
         icon: glyph("comment"),
         showInBar: false,
@@ -2519,6 +2523,11 @@ export function initComments(options: CommentsOptions): CommentsController {
         },
       },
     ];
+    items.push({ id: "shortcuts", group: "Account & help", label: "Keyboard shortcuts", icon: glyph("info"), showInBar: false,
+      onSelect: () => { void import("./shortcut-help.js").then(({ showShortcutHelp }) => showShortcutHelp(shadow, [
+        ...items, { label: "Restore feedback", shortcut: shortcuts.restore, group: "Feedback" },
+      ], designEnabled)); },
+    });
     if (connection === "Offline")
       items.push({
         id: "retry",
@@ -2545,15 +2554,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             (toolbarPlacement && toolbarPlacement.y < window.innerHeight / 2
               ? "top"
               : "bottom")),
-      activeId: account
-        ? "account"
-        : designActive
-          ? "design"
-        : commentMode
-          ? "comment"
-          : expanded
-            ? "comments"
-            : "browse",
+      activeId: designActive ? "design" : commentMode ? "comment" : "browse",
       label: "Website review",
       moreLabel: "More review tools",
     });

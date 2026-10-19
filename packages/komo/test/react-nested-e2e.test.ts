@@ -42,7 +42,7 @@ beforeAll(async () => {
         const frame=new URLSearchParams(location.search).has('frame');
         const reflow=new URLSearchParams(location.search).has('reflow');
         if(!frame&&!reflow)document.body.append(document.createElement('aside'));
-        const tokens=tailwindTokens({tokens:[{path:'color.primary',label:'Primary',type:'color',class:'text-primary',properties:['color'],value:'#b42318'},{path:'color.secondary',label:'Secondary',type:'color',class:'text-secondary',properties:['color'],value:'#2468ff'}]});
+        const tokens=tailwindTokens({tokens:[{path:'color.primary',label:'Primary',type:'color',class:'text-primary',properties:['color'],value:'#b42318'},{path:'color.secondary',label:'Secondary',type:'color',class:'text-secondary',properties:['color'],value:'#2468ff'},...Array.from({length:8},(_,index)=>({path:'color.fixture'+index,label:'Supplemental '+index,type:'color',class:'text-fixture-'+index,properties:['color'],value:'#123456'}))]});
         window.komo=initKomo({endpoint:location.origin,project:'nested-props',repo:'example/review',branch:'fixture',pageRoot:frame||reflow?document.querySelector('main'):undefined,sidebar:frame||reflow?'background':'edge',frame:{scale:frame},restoreOpen:false,design:{components:adapter,tokens}});
       `, resolveDir: process.cwd(), loader: "ts" },
       alias: { react: dirname(require.resolve("react/package.json")), "react-dom": dirname(require.resolve("react-dom/package.json")) },
@@ -54,7 +54,7 @@ beforeAll(async () => {
     const version = url.searchParams.get("react") === "18" ? 18 : 19;
     if (url.pathname === "/") {
       response.setHeader("content-type", "text/html");
-      response.end(`<style>body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:80px}button{font:inherit}.button-tertiary{padding:18px;background:#eee;border:1px solid #ccc;border-radius:10px}.button-primary{padding:18px;background:#6941c6;color:white;border:1px solid #53389e;border-radius:10px}.text-primary{color:#b42318}.text-secondary{color:#2468ff}output{display:block;margin-top:16px}</style><main></main><script type="module" src="/${version}/entry.js"></script>`);
+      response.end(`<style>body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:80px}button{font:inherit}.button-tertiary{padding:18px;background:#eee;border:1px solid #ccc;border-radius:10px}.button-primary{padding:18px;background:#6941c6;color:white;border:1px solid #53389e;border-radius:10px}.text-primary{color:#b42318}.text-secondary{color:#2468ff}[class*=text-fixture-]{color:#123456}output{display:block;margin-top:16px}</style><main></main><script type="module" src="/${version}/entry.js"></script>`);
       return;
     }
     try {
@@ -91,7 +91,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     const grid = layout.getByRole("option", { name: "grid", exact: true });
     await grid.hover();
     expect(await target.evaluate(node => getComputedStyle(node).display)).toBe("grid");
-    const tick = await page.locator("output").textContent();
+    const tick = await page.locator("[data-parent-commit]").textContent();
     await page.waitForFunction(previous => Number(document.querySelector("output")?.textContent) >= Number(previous) + 2, tick);
     expect(await layout.evaluate(node => node === (window as any).popupQA.layout)).toBe(true);
     await page.keyboard.press("Escape");
@@ -100,6 +100,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await field.locator("select[data-picker]").click();
     const popup = page.locator(".komo-tokens");
     await popup.waitFor();
+    await popup.getByRole("button", { name: "Tokens", exact: true }).click();
     const search = popup.getByRole("combobox", { name: "Search tokens for color", exact: true });
     await search.fill("Primary");
     await popup.evaluate(node => (window as any).popupQA.tokens = node);
@@ -107,7 +108,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await primary.hover();
     expect(await target.evaluate(node => getComputedStyle(node).color)).toBe("rgb(180, 35, 24)");
     const active = await search.getAttribute("aria-activedescendant");
-    const next = await page.locator("output").textContent();
+    const next = await page.locator("[data-parent-commit]").textContent();
     await page.waitForFunction(previous => Number(document.querySelector("output")?.textContent) >= Number(previous) + 2, next);
     expect(await popup.evaluate(node => node === (window as any).popupQA.tokens)).toBe(true);
     expect(await search.inputValue()).toBe("Primary");
@@ -118,6 +119,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     expect(await target.getAttribute("class")).toBe(baseline.className);
     expect(await target.getAttribute("style")).toBe(baseline.style);
     await field.locator("select[data-picker]").click();
+    await popup.getByRole("button", { name: "Tokens", exact: true }).click();
     await popup.getByRole("option").filter({ hasText: "Primary" }).click();
     expect(await target.evaluate(node => getComputedStyle(node).color)).toBe("rgb(180, 35, 24)");
     await page.getByRole("button", { name: "Undo", exact: true }).click();

@@ -6,7 +6,7 @@ import {
   type CSSProperties,
 } from "react";
 import { createRoot } from "react-dom/client";
-import { HexColorInput, HexColorPicker } from "react-colorful";
+import { HexColorInput, HexColorPicker, RgbColorPicker } from "react-colorful";
 import { Plus } from "@untitledui/icons/Plus";
 import { el, onPage } from "./dom.js";
 
@@ -148,4 +148,12 @@ export function accentPicker(
   const root = createRoot(element);
   root.render(<AccentPicker initial={initial} onChange={onChange} />);
   return { element, destroy: () => root.unmount() };
+}
+
+export function inlineColorPicker(initial: { r: number; g: number; b: number }, onChange: (color: typeof initial) => void) {
+  const element = el("div", "komo-custom__picker");
+  const root = createRoot(element);
+  const update = (color: typeof initial) => root.render(<RgbColorPicker color={color} onChange={onChange} />);
+  update(initial);
+  return { element, update, destroy: () => root.unmount() };
 }

@@ -1,3 +1,4 @@
+import { inlineStyleSnapshot } from "./design-preview.js";
 import { previewStyle, watchPopup } from "./design-popup.js";
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
 import {
@@ -287,7 +288,7 @@ function ensurePanelStyles(styleRoot?: ShadowRoot): void {
  */
 function pickerTrigger(select: HTMLSelectElement, options: () => Omit<TokenPickerOptions, "trigger">) {
   select.dataset.picker = "token";
-  select.setAttribute("aria-haspopup", "listbox");
+  select.setAttribute("aria-haspopup", "dialog");
   select.setAttribute("aria-expanded", "false");
   let loaded: typeof import("./token-picker.js") | undefined;
   const show = (toggle: boolean) => import("./token-picker.js").then((picker) => {
@@ -320,6 +321,25 @@ function pickerTrigger(select: HTMLSelectElement, options: () => Omit<TokenPicke
   };
 }
 
+/** Custom uses the field's existing transaction handlers for one undoable commit. */
+function customPickerValue(element: DesignTarget, property: string, input?: HTMLElement | null): TokenPickerOptions["custom"] {
+  if (!(input instanceof HTMLInputElement) || input.type === "number") return;
+  return {
+    value: getComputedStyle(element).getPropertyValue(property).trim(),
+    onPreview(value) {
+      const before = inlineStyleSnapshot(element, property);
+      element.style.setProperty(property, value, "important");
+      return before.restore;
+    },
+    onSelect(value) {
+      input.dispatchEvent(new Event("focus"));
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    },
+  };
+}
+
 /**
  * "Matches Text primary · Use token" under a field whose off-token value equals a
  * relevant token's value. Only a suggestion: the field stays unbound until Use token.
@@ -343,7 +363,8 @@ function matchSuggestion(field: HTMLElement | null | undefined, row: HTMLElement
       if (!line.isConnected) (field ?? row.parentElement)?.after(line);
       line.hidden = !match;
       use = then;
-      text.textContent = match ? `Matches ${match.label || match.path}` : "";
+      const propertyLabel = (field ?? row.parentElement)?.dataset.fieldLabel;
+      text.textContent = match ? `${propertyLabel ? `${propertyLabel} · ` : ""}Same ${match.type === "color" ? "color" : "value"} as ${match.label || match.path}` : "";
       text.title = match ? `${match.path}${match.ref ? ` · ${match.ref}` : ""} · ${match.value}` : "";
       button.setAttribute("aria-label", match ? `Use token ${match.label || match.path}` : "Use token");
     },
@@ -422,6 +443,7 @@ export function createElementTokenControl(
     tokens: available.map(asToken),
     property,
     current: select.value,
+    custom: customPickerValue(element, property, row.parentElement?.querySelector("[data-property]")),
     onPreview: token => {
       const target = available.find(item => item.path === token.path)!;
       return previewStyle(element, property, `var(${target.cssVariable})`);
@@ -434,7 +456,7 @@ export function createElementTokenControl(
     const linked = binding?.mode === "token" ? available.find((token) => token.path === binding.tokenPath) : undefined;
     const active = linked ?? declared?.token;
     select.value = active?.path ?? "custom";
-    chip.textContent = active?.path ?? "";
+    chip.textContent = active ? `Uses ${active.path}` : "";
     const was = binding?.declaredPath;
     const mode = linked ? "token" : declared ? "connected" : was ? "override" : "custom";
     row.dataset.mode = mode;
@@ -529,7 +551,18 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
         if (dial) dial.value = field.kind === "color" && toHex ? toHex(input.value) : input.value;
       };
       const control = attach(field, label, input, refresh);
-      if (control) label.append(control);
+      if (control) {
+        label.append(control);
+        const swatch = label.querySelector<HTMLInputElement>('input[type="color"]');
+        const trigger = control.querySelector("select");
+        const open = (event: Event) => {
+          event.preventDefault();
+          trigger?.focus();
+          trigger?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+        };
+        swatch?.addEventListener("click", open);
+        swatch?.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") open(event); });
+      }
     }
   };
   const adapter = design?.tokens;
@@ -626,6 +659,7 @@ export function createAdapterTokenControl(
     return detached ? undefined : effective && "path" in effective ? effective.path : undefined;
   };
   const picker = pickerTrigger(select, () => ({ tokens, property, current: current(), themes,
+    custom: customPickerValue(element, property, input),
     onPreview: token => {
       const undo = previewToken(adapter, element, property, token);
       refresh?.();
@@ -636,7 +670,7 @@ export function createAdapterTokenControl(
     const path = current();
     const token = path ? tokens.find((item) => item.path === path) : undefined;
     select.value = path && available.some((item) => item.path === path) ? path : "";
-    chip.textContent = token ? tokenName(token) : path ?? "";
+    chip.textContent = token ? `Uses ${tokenName(token)}` : path ? `Uses ${path}` : "";
     const mode = !path ? "custom" : swapped ? "token" : "connected";
     row.dataset.mode = mode;
     (label ?? row.parentElement)?.setAttribute("data-token-mode", mode);

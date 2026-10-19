@@ -450,6 +450,22 @@ ${morphingMenuStyles}
 .toolbar .morphing-menu__shortcut {
   padding: 0;
 }
+.komo-kbd { display:inline-flex; gap:3px; white-space:nowrap; }
+.komo-kbd kbd { padding:0 4px; border:1px solid currentColor; border-radius:4px; font:inherit; font-size:10px; line-height:17px; opacity:.75; }
+.morphing-menu__trailing { display:flex; align-items:center; gap:6px; margin-left:auto; flex:none; }
+.morphing-menu__count { font-size:11px; font-variant-numeric:tabular-nums; opacity:.7; }
+.morphing-menu__section + .morphing-menu__section { border-top:1px solid #ffffff18; margin-top:4px; padding-top:4px; }
+.morphing-menu__section h3 { margin:5px 12px 2px; font:inherit; font-size:10px; opacity:.6; }
+.morphing-menu__row { font-size:12px; }
+.morphing-menu__label { min-width:0; }
+.morphing-menu__tooltip .komo-kbd { margin-left:8px; }
+.komo-shortcuts { box-sizing:border-box; width:min(360px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow:auto; padding:20px; border:1px solid #ffffff28; border-radius:16px; background:#232323; color:#f1efeb; font:12px/1.5 system-ui; }
+.komo-shortcuts::backdrop { background:#0006; }
+.komo-shortcuts h2 { font-size:16px; margin:0 0 12px; }
+.komo-shortcuts h3 { font-size:11px; color:#aaa; margin:14px 0 6px; }
+.komo-shortcuts > div { display:flex; justify-content:space-between; gap:12px; padding:6px 0; }
+.komo-shortcuts p { color:#aaa; }
+.komo-shortcuts button { font:inherit; color:inherit; border:1px solid #ffffff30; border-radius:6px; background:#ffffff0a; padding:6px 12px; }
 .toolbar .review-avatar {
   display: grid;
   place-items: center;

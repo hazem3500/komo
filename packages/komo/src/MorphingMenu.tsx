@@ -16,6 +16,8 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { renderKbd, shortcutKeys } from "./kbd.js";
+import type { Shortcut } from "./shortcuts.js";
 import { onPage } from "./dom.js";
 import { animate } from "motion";
 import { useReducedMotion } from "motion/react";
@@ -35,6 +37,9 @@ export type MenuAction = {
   onSelect?: () => void;
   keepOpenOnSelect?: boolean;
   expandedOrder?: number;
+  group?: string;
+  shortcut?: Shortcut | null;
+  count?: number;
 };
 
 // One level of children keeps the component small and the navigation predictable.
@@ -478,13 +483,18 @@ export function MorphingMenu({
             {swapping ? swap(item.label) : item.label}
           </span>
         )}
+        {!inBar && <span className="morphing-menu__trailing">
+          {item.count !== undefined && <span className="morphing-menu__count" aria-label={`${item.count} open comments`}>{item.count}</span>}
+          {item.shortcut && <Keycaps shortcut={item.shortcut} />}
+        </span>}
         {!inBar && hasChildren && <Chevron />}
       </>
     );
     const props = {
       className: inBar ? "morphing-menu__shortcut" : "morphing-menu__row",
       "data-menu-item": item.id,
-      "aria-label": item.label,
+      "aria-label": item.count === undefined ? item.label : `${item.label}, ${item.count} open comments`,
+      "aria-keyshortcuts": item.shortcut ? shortcutKeys(item.shortcut).aria : undefined,
       "aria-current": active
         ? hasChildren
           ? ("true" as const)
@@ -529,7 +539,7 @@ export function MorphingMenu({
       onClick={() => close(true, "more")}
     >
       <XClose aria-hidden="true" />
-      <span className="morphing-menu__label">Close drawer</span>
+      <span className="morphing-menu__label">Close menu</span>
     </button>
   );
 
@@ -638,10 +648,15 @@ export function MorphingMenu({
           aria-hidden={view.kind !== "main"}
           inert={view.kind !== "main"}
         >
-          {[...items]
-            .sort((a, b) => (a.expandedOrder ?? 0) - (b.expandedOrder ?? 0))
-            .map((item) => control(item, false))}
           {closeControl}
+          {[...new Set(items.map(item => item.group ?? ""))].map(group => (
+            <section key={group} aria-label={group || undefined} className="morphing-menu__section">
+              {group && <h3>{group}</h3>}
+              {[...items].filter(item => (item.group ?? "") === group)
+                .sort((a, b) => (a.expandedOrder ?? 0) - (b.expandedOrder ?? 0))
+                .map(item => control(item, false))}
+            </section>
+          ))}
         </div>
         {groups.map((group) => {
           const visible = view.kind === "group" && view.id === group.id;
@@ -677,6 +692,7 @@ export function MorphingMenu({
           style={{ left: tooltip.x, top: tooltip.y }}
         >
           {tooltip.label}
+          {items.find(item => item.label === tooltip.label)?.shortcut && <Keycaps shortcut={items.find(item => item.label === tooltip.label)!.shortcut!} />}
         </div>
       )}
     </nav>
@@ -747,4 +763,10 @@ function SwappingLabel({
       {children}
     </span>
   );
+}
+
+function Keycaps({ shortcut }: { shortcut: Shortcut }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => { ref.current?.replaceChildren(renderKbd(shortcut)); }, [shortcut.label]);
+  return <span ref={ref} />;
 }

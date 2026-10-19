@@ -10,7 +10,6 @@ export function selectionViews(options: {
 }) {
   const glyph = (path: string) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
   const preciseKey = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘-click" : "Ctrl-click";
-  const hint = el("p", "design-inspector__pick-hint", `${preciseKey} inner target · Alt+↑ parent · Alt+↓ child`);
   const empty = el("div", "design-inspector__empty");
   const hints = el("ul");
   const line = (...parts: string[]) => {
@@ -41,7 +40,7 @@ export function selectionViews(options: {
   });
   pending.append(label, review, copy, button("Reset all previews", options.reset));
   return {
-    hint, empty, pending,
+    empty, pending,
     icons: {
       undo: glyph("M5.5 3.5 2.5 6.5l3 3m-3-3h7a4 4 0 0 1 0 8h-2"),
       reset: glyph("M2.5 2.5v3h3M3 5.5a5.5 5.5 0 1 1-.5 2.5"),

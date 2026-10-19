@@ -1,5 +1,6 @@
 import type { MenuItem, MorphingMenuProps } from "./MorphingMenu.js";
 import { button, el, icon, type icons } from "./dom.js";
+import { shortcutKeys } from "./kbd.js";
 import type { Identity } from "./types.js";
 
 export type ToolbarIcon =
@@ -103,7 +104,8 @@ export function createToolbar(
           },
           "morphing-menu__shortcut",
         );
-        control.title = item.label;
+        control.title = item.shortcut ? `${item.label} · ${shortcutKeys(item.shortcut).spoken}` : item.label;
+        if (item.shortcut) control.setAttribute("aria-keyshortcuts", shortcutKeys(item.shortcut).aria);
         control.dataset.menuItem = item.id;
         if (item.id === props.activeId)
           control.setAttribute("aria-current", "page");
