@@ -18,7 +18,7 @@ import {
 } from "react";
 import { onPage } from "./dom.js";
 import { animate } from "motion";
-import { motion, useReducedMotion } from "motion/react";
+import { useReducedMotion } from "motion/react";
 import {
   drawerCollapse,
   drawerExpandCompress as compress,
@@ -156,6 +156,42 @@ export function MorphingMenu({
   const dismissItem = barItems.find((item) => item.id === "dismiss");
   const primaryBarItems = barItems.filter((item) => item.id !== "dismiss");
   const groups = items.filter((item) => item.children?.length);
+  const barPositions = useRef(new Map<string, [number, number]>());
+  const barMotion = useRef(new Map<string, ReturnType<typeof animate>>());
+  const barKey = barItems.map((item) => item.id).join("|");
+  useLayoutEffect(() => {
+    const next = new Map<string, [number, number]>();
+    const moves = [...(barRef.current?.querySelectorAll<HTMLElement>("[data-menu-item]") ?? [])].map((node) => {
+      const id = node.dataset.menuItem!;
+      const position: [number, number] = [node.offsetLeft, node.offsetTop];
+      next.set(id, position);
+      return { node, id, position, before: barPositions.current.get(id) };
+    });
+    for (const { node, id, position, before } of moves) {
+      if (reducedMotion || openedWithKeyboard.current) {
+        barMotion.current.get(id)?.complete();
+        barMotion.current.delete(id);
+      } else if (before && (before[0] !== position[0] || before[1] !== position[1])) {
+        barMotion.current.get(id)?.complete();
+        barMotion.current.set(
+          id,
+          animate(node, {
+            x: [before[0] - position[0], 0],
+            y: [before[1] - position[1], 0],
+          }, spring),
+        );
+      }
+    }
+    for (const [id, motion] of barMotion.current)
+      if (!next.has(id)) {
+        motion.stop();
+        barMotion.current.delete(id);
+      }
+    barPositions.current = next;
+  }, [barKey, edge, view, reducedMotion]);
+  useEffect(() => () => {
+    for (const motion of barMotion.current.values()) motion.stop();
+  }, []);
 
   function hideTooltip() {
     clearTimeout(tooltipTimer.current);
@@ -479,15 +515,9 @@ export function MorphingMenu({
         {content}
       </a>
     ) : (
-      <motion.button
-        layout={inBar ? "position" : false}
-        transition={reducedMotion ? { duration: 0 } : spring}
-        key={item.id}
-        type="button"
-        {...props}
-      >
+      <button key={item.id} type="button" {...props}>
         {content}
-      </motion.button>
+      </button>
     );
   }
 
@@ -576,9 +606,7 @@ export function MorphingMenu({
           }}
         >
           {primaryBarItems.map((item) => control(item, true))}
-          <motion.button
-            layout="position"
-            transition={reducedMotion ? { duration: 0 } : spring}
+          <button
             type="button"
             className="morphing-menu__shortcut"
             data-menu-item="more"
@@ -601,7 +629,7 @@ export function MorphingMenu({
             }}
           >
             <ChevronSelectorVertical aria-hidden="true" />
-          </motion.button>
+          </button>
           {dismissItem && control(dismissItem, true)}
         </div>
         <div

@@ -3,11 +3,10 @@ export const designModeStyles = `
    widget shadow root and never become site styles. */
 .design-outline {
   position:fixed; z-index:1; pointer-events:none; box-sizing:border-box;
-  border:2px solid var(--accent,#bda6ef); border-radius:8px;
-  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent,#bda6ef) 22%,transparent), 0 2px 12px #0003;
-  transition:all 80ms ease;
+  outline:2px solid var(--accent,#bda6ef); outline-offset:2px;
+  transition:opacity 80ms ease;
 }
-.design-outline[data-kind="hover"] { border-style:dashed; opacity:.8; }
+.design-outline[data-kind="hover"] { outline-style:dashed; opacity:.8; }
 /* The inspector replaces the Comments view inside Komo's shared sidebar surface. */
 .design-inspector {
   position:absolute; inset:0; z-index:9;

@@ -9,13 +9,14 @@ export interface TagEditorOptions {
   suggestions: readonly string[];
   onAdd(tag: string): void;
   onRemove(tag: string): void;
+  /** An existing header action can replace the inline add button. */
+  trigger?: HTMLButtonElement;
 }
 
 // Matches the dialog's own fields: muted fill, hairline inset, no accent ring.
 // The option menu is attached to komo's root so no container can clip it. In
 // the composer the tag row grows when the picker opens, instead of spilling over
-// the text above it. In threads the row lines up with message text (16px gutter,
-// 24px avatar, 8px gap) and sits under the last message's bottom padding.
+// the text above it.
 // Comments stay out of the string: they would ship in the bundle.
 const css = `
 .tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; min-height: 24px; font-size: 12px; }
@@ -59,7 +60,6 @@ const css = `
 .new-comment-composer .draft-body .tag-slot { grid-row: 2; grid-column: 2; align-self: start; min-width: 0; padding-top: 2px; }
 .new-comment-composer .draft-body:has(.tag-slot) .send { align-self: start; }
 .new-comment-composer .draft-body:not(:has(.avatar)) .tag-slot { grid-column: 1; }
-.thread-tags { margin-top: -10px; padding: 0 16px 12px 48px; }
 `;
 
 /** Lowercase and validate a typed tag; returns null when it isn't a valid tag. */
@@ -91,6 +91,13 @@ export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
 
   function render(focusInput = false) {
     closeMenu();
+    slot.hidden = !!options.trigger && !tags.length && !typing;
+    if (options.trigger) {
+      const label = tags.length ? "Manage tags" : "Add tag";
+      options.trigger.title = label;
+      options.trigger.setAttribute("aria-label", label);
+      options.trigger.setAttribute("aria-expanded", String(typing));
+    }
     const style = document.createElement("style");
     style.textContent = css;
     const row = document.createElement("div");
@@ -106,10 +113,18 @@ export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
       remove.type = "button";
       remove.textContent = "×";
       remove.setAttribute("aria-label", `Remove tag ${tag}`);
+      remove.addEventListener("pointerdown", (event) => event.preventDefault());
       remove.addEventListener("click", () => {
+        const focused = slot.getRootNode() instanceof ShadowRoot
+          ? (slot.getRootNode() as ShadowRoot).activeElement === remove
+          : document.activeElement === remove;
+        const index = tags.indexOf(tag);
         tags = tags.filter((item) => item !== tag);
         options.onRemove(tag);
-        render();
+        render(typing);
+        if (focused && !typing)
+          (slot.querySelectorAll<HTMLButtonElement>(".tag-chip button")[Math.min(index, tags.length - 1)]
+            ?? options.trigger ?? slot.querySelector<HTMLButtonElement>(".tag-add"))?.focus();
       });
       chip.append(label, remove);
       row.append(chip);
@@ -140,6 +155,7 @@ export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
         // Stay open so several tags can be added in a row.
         typing = tags.length < MAX_TAGS;
         render(typing);
+        if (!typing) options.trigger?.focus({ preventScroll: true });
       };
       const highlight = (index: number) => {
         active = index;
@@ -203,11 +219,13 @@ export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
           } else {
             typing = false;
             render();
+            options.trigger?.focus({ preventScroll: true });
           }
         } else if (event.key === "Escape") {
           event.preventDefault();
           typing = false;
           render();
+          options.trigger?.focus({ preventScroll: true });
         } else if (event.key === "Backspace" && !input.value && tags.length) {
           const last = tags.at(-1)!;
           tags = tags.slice(0, -1);
@@ -255,7 +273,7 @@ export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
       if (focusInput || typing) input.focus({ preventScroll: true });
       return;
     }
-    if (tags.length < MAX_TAGS) {
+    if (!options.trigger && tags.length < MAX_TAGS) {
       const add = document.createElement("button");
       add.type = "button";
       add.className = "tag-add";
@@ -269,5 +287,11 @@ export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
     }
     swap(style, row);
   }
+  if (options.trigger)
+    options.trigger.onclick = () => {
+      typing = tags.length < MAX_TAGS;
+      render(typing);
+      if (!typing) slot.querySelector<HTMLButtonElement>(".tag-chip button")?.focus();
+    };
   render();
 }

@@ -9,6 +9,7 @@ export type { KomoConfig } from "./config.js";
 import { adaptivePolling } from "./polling.js";
 import { pinDirection } from "./pin-direction.js";
 import { pinStacks } from "./pin-stacks.js";
+import { drawHighlight } from "./highlight.js";
 import { OptimisticQueue } from "./optimistic.js";
 import { agentPrompt } from "./agent-prompt.js";
 import { accentPicker } from "./lazy-accent-picker.js";
@@ -3914,23 +3915,30 @@ export function initComments(options: CommentsOptions): CommentsController {
     tags: readonly string[],
     onAdd: (tag: string) => void,
     onRemove: (tag: string) => void,
+    trigger?: HTMLButtonElement,
   ) {
     const slot = el("div", "tag-slot");
+    slot.hidden = !!trigger && !tags.length;
     const show = ({ tagEditor }: typeof import("./tag-editor.js")) =>
       tagEditor(slot, {
         tags,
         suggestions: [...new Set(threads.flatMap((item) => item.tags ?? []))].sort(),
         onAdd,
         onRemove,
+        trigger,
       });
     // Render synchronously once loaded, so redraws keep the dialog's height.
     if (tagModule) show(tagModule);
-    else
+    else {
+      let open = false;
+      if (trigger) trigger.onclick = () => { open = true; };
       void import("./tag-editor.js").then((module) => {
         tagModule = module;
         show(module);
+        if (open && trigger?.isConnected) trigger.click();
         positionDialog();
       });
+    }
     return slot;
   }
   /** Save a tag change without re-rendering the open dialog, so typing continues. */
@@ -4305,6 +4313,7 @@ export function initComments(options: CommentsOptions): CommentsController {
 
     const controls = el("div", "row");
     const thread = threads.find((t) => t.id === selected) ?? null;
+    let tagAction: HTMLButtonElement | undefined;
     if (thread && !account) {
       const copy = (label: string, value: () => string) => ({
         label,
@@ -4362,6 +4371,15 @@ export function initComments(options: CommentsOptions): CommentsController {
         copy("Copy selector", () => thread.anchor.selector),
       ]);
       controls.append(more);
+      if (tagsEnabled) {
+        tagAction = button(
+          thread.tags?.length ? "Manage tags" : "Add tag",
+          () => {},
+          "icon thread-tag-action",
+          "tag",
+        );
+        controls.append(tagAction);
+      }
       const resolve = button(
         thread.resolved ? "Reopen comment" : "Resolve comment",
         () => toggleResolved(thread, captureNoticePosition(thread.anchor)),
@@ -4704,10 +4722,9 @@ export function initComments(options: CommentsOptions): CommentsController {
           thread.tags ?? [],
           (tag) => saveTag(thread, { tag }),
           (tag) => saveTag(thread, { untag: tag }),
+          tagAction,
         );
         slot.classList.add("thread-tags");
-        // Tags belong to the whole thread: under the sidebar header, or
-        // under the first author in the floating card.
         const author = messages.querySelector(".message > .row");
         if (panel || !author) messages.before(slot);
         else author.after(slot);
@@ -5333,7 +5350,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     pins.toggleAttribute("data-outlined", !!target && docked && outlineShown);
     if (target) {
       const element = anchorElement(thread.anchor);
-      outline(target, element, framed && !!element && surface.contains(element));
+      outline(target, spot.width && spot.height ? null : element, framed && !!element && surface.contains(element));
       if (docked && !outlineShown) hoverOutline.style.opacity = "0";
       return;
     }
@@ -5363,30 +5380,12 @@ export function initComments(options: CommentsOptions): CommentsController {
     element: Element | null,
     inFrame: boolean,
   ) {
-    const bounds = inFrame
-      ? surface.getBoundingClientRect()
-      : {
-          left: 0,
-          top: 0,
-          right: window.innerWidth,
-          bottom: window.innerHeight,
-        };
-    const left = Math.max(0, bounds.left, rect.left),
-      top = Math.max(bounds.top, rect.top);
-    const right = Math.min(bounds.right, rect.right),
-      bottom = Math.min(bounds.bottom, rect.bottom);
-    if (right <= left || bottom <= top) {
-      hoverOutline.style.opacity = "0";
-      return;
-    }
-    Object.assign(hoverOutline.style, {
-      opacity: "1",
-      left: `${left}px`,
-      top: `${top}px`,
-      width: `${right - left}px`,
-      height: `${bottom - top}px`,
-      borderRadius: element ? getComputedStyle(element).borderRadius : "",
-    });
+    hoverOutline.style.opacity = drawHighlight(
+      hoverOutline,
+      rect,
+      element,
+      inFrame ? surface.getBoundingClientRect() : undefined,
+    ) ? "1" : "0";
   }
   function scheduleHover() {
     if (hoverFrame) return;
@@ -5860,36 +5859,6 @@ export function initComments(options: CommentsOptions): CommentsController {
     ["scroll", () => { hoverCard = focusCard = ""; setHot(); }],
   ] as const)
     sidebar.addEventListener(type, handle, { capture: true, signal: abort.signal });
-  // Frame mode: a click on the framed site closes the sidebar, like a scrim.
-  // Armed on pointerdown so a press that only dismisses a draft or selection
-  // keeps the sidebar open; click (not pointerdown) so scrolling never closes.
-  let frameCloseArmed = false;
-  surface.addEventListener(
-    "pointerdown",
-    (event) => {
-      frameCloseArmed =
-        event.button === 0 &&
-        expanded &&
-        framed &&
-        !edgeSidebar &&
-        !mode &&
-        !account &&
-        !selected &&
-        !draft;
-    },
-    { capture: true, signal: abort.signal },
-  );
-  surface.addEventListener(
-    "click",
-    (event) => {
-      if (!frameCloseArmed || !expanded || edgeSidebar) return;
-      frameCloseArmed = false;
-      event.preventDefault();
-      event.stopPropagation();
-      toggleExpanded(false);
-    },
-    { capture: true, signal: abort.signal },
-  );
   polling = adaptivePolling({
     interval: Math.max(2000, options.pollInterval ?? 4000),
     enabled: () =>
