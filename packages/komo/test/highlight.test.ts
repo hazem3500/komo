@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { drawHighlight } from "../src/highlight";
+import { drawHighlight, watchHighlight } from "../src/highlight";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -41,6 +41,52 @@ it("uses the border box rather than content width when measuring scale", () => {
   const { element, rect, node } = target("16px", 0.75, "content-box");
   drawHighlight(node, rect, element);
   expect(node.style.borderRadius).toBe("12px");
+});
+
+it("scales a scientific radius serialization as one length", () => {
+  const { element, rect, node } = target("8px", 0.665625);
+  const computed = getComputedStyle(element);
+  vi.spyOn(window, "getComputedStyle").mockImplementation(() => new Proxy(computed, {
+    get(object, key) { return key === "borderRadius" ? "3.40282e+38px" : Reflect.get(object, key); },
+  }));
+  drawHighlight(node, rect, element);
+  expect(node.style.borderRadius).toBe(`${3.40282e38 * 0.665625}px`);
+});
+
+it("coalesces target and ancestor changes, ignores feedback and unrelated churn, and disconnects on teardown", async () => {
+  const host = document.createElement("div"), parent = document.createElement("section");
+  const target = parent.appendChild(document.createElement("button"));
+  const unrelated = document.createElement("aside");
+  document.body.append(host, parent, unrelated);
+  const update = vi.fn(), abort = new AbortController();
+  watchHighlight(host, () => [target], update, abort.signal);
+  host.className = "chrome";
+  unrelated.className = "host-update";
+  await new Promise(resolve => setTimeout(resolve, 40));
+  expect(update).not.toHaveBeenCalled();
+  target.className = "rounded";
+  parent.style.setProperty("--radius", "20px");
+  await vi.waitFor(() => expect(update).toHaveBeenCalledOnce());
+  target.remove();
+  await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+  abort.abort();
+  parent.className = "after-destroy";
+  await new Promise(resolve => setTimeout(resolve, 40));
+  expect(update).toHaveBeenCalledTimes(2);
+});
+
+it("follows running target animations and stops scheduling after abort", async () => {
+  const host = document.createElement("div"), element = document.createElement("button");
+  document.body.append(host, element);
+  const update = vi.fn(), abort = new AbortController();
+  element.getAnimations = () => [{ playState: "running" }] as Animation[];
+  watchHighlight(host, () => [element], update, abort.signal);
+  element.style.borderRadius = "24px";
+  await vi.waitFor(() => expect(update.mock.calls.length).toBeGreaterThan(1));
+  abort.abort();
+  const count = update.mock.calls.length;
+  await new Promise(resolve => setTimeout(resolve, 60));
+  expect(update).toHaveBeenCalledTimes(count);
 });
 
 it("softens transparent text at Frame scale while keeping visible square surfaces square", () => {

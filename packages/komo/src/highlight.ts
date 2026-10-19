@@ -28,7 +28,7 @@ export function drawHighlight(
     const scale = width ? (rect.right - rect.left) / width : 1;
     // Percentages scale with the overlay box; only absolute lengths need scaling.
     radius = css.borderRadius.replace(
-      /([\d.]+)px/g,
+      /([+-]?[\d.]+(?:e[+-]?\d+)?)px/gi,
       (_, value) => `${+value * scale}px`,
     );
     const stroke = (prefix: string) =>
@@ -51,4 +51,36 @@ export function drawHighlight(
     clipPath: `inset(${Math.max(bounds.top - rect.top, -4)}px ${Math.max(rect.right - bounds.right, -4)}px ${Math.max(rect.bottom - bounds.bottom, -4)}px ${Math.max(Math.max(0, bounds.left) - rect.left, -4)}px)`,
   });
   return true;
+}
+
+/** Follow style-only changes and live transitions, without observing feedback chrome. */
+export function watchHighlight(host: HTMLElement, targets: () => Array<Element | null>, update: () => void, signal: AbortSignal, lost?: () => void) {
+  if (signal.aborted) return;
+  const document = host.ownerDocument, view = document.defaultView!;
+  let frame = 0;
+  function schedule() {
+    if (frame || signal.aborted || !targets().some(Boolean)) return;
+    frame = view.requestAnimationFrame(() => {
+      frame = 0;
+      update();
+      for (const target of targets())
+        for (let node = target; node?.isConnected; node = node.parentElement)
+          if (node.getAnimations?.().some(animation => animation.playState === "running")) {
+            schedule();
+            return;
+          }
+    });
+  }
+  const relevant = (node: Node) => node !== host && !host.contains(node) && targets().some(target =>
+    target && (!target.isConnected || node.contains(target) || target.contains(node) || (node instanceof Element && node.closest("style"))),
+  );
+  const observer = new MutationObserver(records => {
+    const primary = targets()[0];
+    if (primary && !primary.isConnected) lost?.();
+    if (records.some(record => relevant(record.target))) schedule();
+  });
+  observer.observe(document.documentElement, { attributes: true, childList: true, characterData: true, subtree: true });
+  for (const type of ["transitionrun", "animationstart"])
+    document.addEventListener(type, event => { if (event.target instanceof Node && relevant(event.target)) schedule(); }, { capture: true, signal });
+  signal.addEventListener("abort", () => { observer.disconnect(); view.cancelAnimationFrame(frame); }, { once: true });
 }

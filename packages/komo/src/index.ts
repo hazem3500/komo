@@ -9,7 +9,7 @@ export type { KomoConfig } from "./config.js";
 import { adaptivePolling } from "./polling.js";
 import { pinDirection } from "./pin-direction.js";
 import { pinStacks } from "./pin-stacks.js";
-import { drawHighlight } from "./highlight.js";
+import { drawHighlight, watchHighlight } from "./highlight.js";
 import { createFramePortals, preserveFrameStyles } from "./frame-portals.js";
 import { OptimisticQueue } from "./optimistic.js";
 import { agentPrompt } from "./agent-prompt.js";
@@ -5440,11 +5440,13 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     outline(hoverTarget.getBoundingClientRect(), hoverTarget, framed && surface.contains(hoverTarget));
   }
+  let outlinedElement: Element | null = null;
   function outline(
     rect: { left: number; top: number; right: number; bottom: number },
     element: Element | null,
     inFrame: boolean,
   ) {
+    outlinedElement = element;
     hoverOutline.style.opacity = drawHighlight(
       hoverOutline,
       rect,
@@ -5819,6 +5821,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     subtree: true,
     characterData: true,
   });
+  watchHighlight(host, () => hoverOutline.style.opacity !== "0" ? [outlinedElement] : [], scheduleHover, abort.signal);
   dialogs.addEventListener("pointerdown", (event) => {
     if (account && event.target === dialogs) dismiss();
   });
