@@ -44,7 +44,7 @@ beforeAll(async () => {
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
     if (path === "/") {
       response.setHeader("content-type", "text/html");
-      response.end(`<style>body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:120px;display:flex;gap:80px;align-items:flex-start}article{box-sizing:border-box;width:260px;height:160px;padding:20px;border:1px solid #bbb;border-radius:12px;background:#eee}</style><main><article id="card-a">First review card</article><article id="card-b">Second review card</article></main><script type="module" src="/entry.js"></script>`);
+      response.end(`<style>html,body{overscroll-behavior:none}body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:120px;display:flex;gap:80px;align-items:flex-start}article{box-sizing:border-box;width:260px;height:160px;padding:20px;border:1px solid #bbb;border-radius:12px;background:#eee}</style><main><article id="card-a">First review card</article><article id="card-b">Second review card</article></main><script type="module" src="/entry.js"></script>`);
       return;
     }
     try {
