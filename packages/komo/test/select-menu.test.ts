@@ -161,6 +161,32 @@ describe("select menu", () => {
     expect(list()).toBeNull();
   });
 
+  it("previews field values without change events and restores exact styles on cancel or replacement", async () => {
+    const { container, select, list, down, pointer, press, changes, inputs } = mount();
+    const element = document.createElement("p");
+    element.style.setProperty("font-weight", "500", "important");
+    document.body.append(element);
+    select.dataset.property = "font-weight";
+    for (const [i, option] of [...select.options].entries()) option.value = option.textContent = String(400 + i * 100);
+    select.value = "500";
+    attach(container, element);
+    down(select);
+    pointer("pointermove", list()!.querySelectorAll("[role=option]")[2]);
+    expect(element.style.fontWeight).toBe("600");
+    expect(changes).toEqual([]);
+    expect(inputs).toEqual([]);
+    press("Escape");
+    expect(element.style.fontWeight).toBe("500");
+    expect(element.style.getPropertyPriority("font-weight")).toBe("important");
+    down(select);
+    press("ArrowUp");
+    expect(element.style.fontWeight).toBe("400");
+    select.remove();
+    await new Promise(done => setTimeout(done, 0));
+    expect(list()).toBeNull();
+    expect(element.style.fontWeight).toBe("500");
+  });
+
   it("selects with a click and keeps the change for a new value only", () => {
     const { select, list, down, changes } = mount();
     down(select);

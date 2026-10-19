@@ -1,3 +1,4 @@
+import { popupBounds, popupStyles, previewStyle, watchPopup } from "./design-popup.js";
 // Komo-styled popups for the Design panel's native selects. The select stays the
 // focusable trigger and the value store, so `.value`, `change`, `disabled` and
 // labels keep working; only its system popup is replaced by a listbox that lives
@@ -5,9 +6,10 @@
 // select in a container, including ones added later (props, tokens, theme).
 // The trigger's chevron ships here too, so a select only looks custom once it is.
 // Comments stay out of the CSS string: they would ship in the bundle.
-const css = `.design-field>select{appearance:none;padding-right:20px;cursor:pointer;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 7px center/8px no-repeat}.komo-select{position:absolute;z-index:20;box-sizing:border-box;width:max-content;max-height:240px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px;border-radius:10px;background:#232323;box-shadow:0 0 0 1px #ffffff14,0 12px 32px #0008;color:#d9d6d1;font-size:11px;font-weight:400;line-height:1.2;text-align:left;cursor:default;transform-origin:top;animation:komo-select-in var(--duration-fast,250ms) var(--ease-smooth-out,cubic-bezier(.22,1,.36,1)) backwards}.komo-select[data-up]{transform-origin:bottom}@keyframes komo-select-in{from{opacity:0;transform:scale(.97)}}@media (prefers-reduced-motion:reduce){.komo-select{animation:none}}.komo-select [role=option]{display:flex;align-items:center;gap:8px;min-height:26px;padding:0 8px;border-radius:6px;white-space:nowrap;cursor:pointer}.komo-select [role=option] span{flex:1;overflow:hidden;text-overflow:ellipsis}.komo-select [data-active]{background:#ffffff14;color:#f1efeb}.komo-select [aria-selected=true]{color:#f1efeb}.komo-select [aria-selected=true]::after{content:'';flex:none;width:7px;height:3.5px;margin:-3px 1px 0 0;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-select [aria-disabled=true]{opacity:.4;cursor:default}.komo-select small{display:block;padding:8px 8px 4px;color:#77736f;font-size:10px;font-weight:500}.komo-select [role=group]+[role=group],.komo-select [role=option]+[role=group]{margin-top:4px;border-top:1px solid #ffffff0d}@media (pointer:coarse){.komo-select{font-size:13px}.komo-select [role=option]{min-height:40px}}`;
+const css = `.design-field>select{appearance:none;padding-right:20px;cursor:pointer;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 7px center/8px no-repeat}.komo-select{width:max-content;max-height:240px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px;line-height:1.2}.komo-select [role=option]{display:flex;align-items:center;gap:8px;min-height:26px;padding:0 8px;border-radius:6px;white-space:nowrap;cursor:pointer}.komo-select [role=option] span{flex:1;overflow:hidden;text-overflow:ellipsis}.komo-select [data-active]{background:#ffffff14;color:#f1efeb}.komo-select [aria-selected=true]{color:#f1efeb}.komo-select [aria-selected=true]::after{content:'';flex:none;width:7px;height:3.5px;margin:-3px 1px 0 0;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-select [aria-disabled=true]{opacity:.4;cursor:default}.komo-select small{display:block;padding:8px 8px 4px;color:#77736f;font-size:10px;font-weight:500}.komo-select [role=group]+[role=group],.komo-select [role=option]+[role=group]{margin-top:4px;border-top:1px solid #ffffff0d}@media (pointer:coarse){.komo-select{font-size:13px}.komo-select [role=option]{min-height:40px}}`;
 
 const containers = new WeakSet<HTMLElement>();
+const targets = new WeakMap<HTMLElement, HTMLElement | SVGElement>();
 const styled = new WeakSet<Node>();
 let count = 0;
 let current: { select: HTMLSelectElement; close(): void } | undefined;
@@ -16,14 +18,15 @@ let current: { select: HTMLSelectElement; close(): void } | undefined;
  * Replace the system popup of every select inside `container`, now and later.
  * Called on each render, it also closes a popup whose select was just replaced.
  */
-export function attach(container: HTMLElement): void {
+export function attach(container: HTMLElement, element?: HTMLElement | SVGElement): void {
+  if (element) targets.set(container, element);
   if (current && !current.select.isConnected) current.close();
   // Style the root the panel is in now; a container rendered detached gets it on a later call.
   const root = container.getRootNode();
   if ((root instanceof ShadowRoot || root === document) && !styled.has(root)) {
     styled.add(root);
     const style = document.createElement("style");
-    style.textContent = css;
+    style.textContent = popupStyles + css;
     (root instanceof ShadowRoot ? root : document.head).append(style);
   }
   if (containers.has(container)) return;
@@ -47,11 +50,11 @@ export function attach(container: HTMLElement): void {
     const select = target(event);
     if (!select || event.button) return;
     event.preventDefault();
-    if (!press) toggle(select);
+    if (!press) toggle(select, targets.get(container));
   }, true);
   container.addEventListener("pointerup", (event) => {
     const select = target(event);
-    if (select && press && !far(event)) toggle(select);
+    if (select && press && !far(event)) toggle(select, targets.get(container));
   }, true);
   // A compatibility mousedown, or a tap's touchend (which would bring a mousedown and click),
   // reaches the system picker. A cancelled pointerdown already holds back a pen's mousedown.
@@ -62,7 +65,7 @@ export function attach(container: HTMLElement): void {
     if (!select || current?.select === select || event.ctrlKey || event.metaKey) return;
     if (!["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) return;
     event.preventDefault();
-    open(select);
+    open(select, targets.get(container));
   }, true);
 }
 
@@ -71,28 +74,15 @@ let press: PointerEvent | undefined;
 // The panel and the list only scroll vertically, so only vertical travel makes a drag.
 const far = (event: MouseEvent) => press && Math.abs(event.clientY - press.clientY) > 10;
 
-function toggle(select: HTMLSelectElement) {
+function toggle(select: HTMLSelectElement, element?: HTMLElement | SVGElement) {
   if (current?.select === select) return current.close();
   // Focusing a select from a tap can show the system picker on iOS, so taps leave focus be.
   if (!press) select.focus();
-  open(select);
+  open(select, element);
 }
 
-/** The nearest box that clips the popup: a scrolling ancestor, else the viewport. */
-function bounds(from: Element) {
-  const view = { top: 0, left: 0, bottom: innerHeight, right: innerWidth };
-  for (let node = from.parentElement; node; node = node.parentElement)
-    if (/auto|scroll|hidden/.test(getComputedStyle(node).overflowY)) {
-      const rect = node.getBoundingClientRect();
-      return {
-        top: Math.max(rect.top, 0), left: Math.max(rect.left, 0),
-        bottom: Math.min(rect.bottom, view.bottom), right: Math.min(rect.right, view.right),
-      };
-    }
-  return view;
-}
 
-function open(select: HTMLSelectElement): void {
+function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): void {
   current?.close();
   // Only presses made on the open list count as drags, so an assistive click is never one.
   press = undefined;
@@ -131,9 +121,22 @@ function open(select: HTMLSelectElement): void {
     }
   }
   let active = -1;
+  const property = select.dataset.property;
+  let undoPreview: (() => void) | undefined;
+  const restorePreview = () => {
+    const undo = undoPreview;
+    undoPreview = undefined;
+    undo?.();
+  };
   const enabled = items.flatMap((item, index) => item.option.disabled ? [] : [index]);
-  const activate = (index: number) => {
+  const activate = (index: number, preview = true) => {
     if (!(index >= 0)) return;
+    if (index !== active && preview) {
+      restorePreview();
+      if (element && property && !items[index].option.selected) {
+        undoPreview = previewStyle(element, property, items[index].option.value);
+      }
+    }
     items[active]?.node.removeAttribute("data-active");
     active = index;
     const node = items[index].node;
@@ -159,8 +162,9 @@ function open(select: HTMLSelectElement): void {
   const listeners = new AbortController();
   const { signal } = listeners;
   function close() {
-    if (current?.select !== select) return;
+    if (current?.close !== close) return;
     current = undefined;
+    restorePreview();
     listeners.abort();
     list.remove();
     select.setAttribute("aria-expanded", "false");
@@ -201,6 +205,7 @@ function open(select: HTMLSelectElement): void {
   addEventListener("scroll", scrolled, { capture: true, signal });
   select.getRootNode().addEventListener("scroll", scrolled, { capture: true, signal });
   addEventListener("resize", close, { signal });
+  watchPopup(select, close, signal);
   select.addEventListener("blur", close, { signal });
   list.addEventListener("mousedown", (event) => event.preventDefault(), { signal });
   list.addEventListener("pointermove", (event) => {
@@ -224,7 +229,7 @@ function open(select: HTMLSelectElement): void {
   select.setAttribute("aria-controls", id);
   // A select laid over a small icon anchors to its whole field instead.
   const anchor = (select.offsetWidth < 60 ? host : select).getBoundingClientRect();
-  const box = bounds(host);
+  const box = popupBounds(host);
   const origin = (list.offsetParent ?? host).getBoundingClientRect();
   // As wide as the trigger, or its longest option, within the panel.
   const width = Math.min(Math.max(anchor.width, list.offsetWidth + 2, 120), box.right - box.left - 8);
@@ -239,6 +244,6 @@ function open(select: HTMLSelectElement): void {
   list.style.left = `${Math.max(box.left + 4, Math.min(anchor.left, box.right - width - 4)) - origin.left}px`;
   list.style.top = `${(up ? anchor.top - shown - 4 : anchor.bottom + 4) - origin.top}px`;
   list.toggleAttribute("data-up", up);
-  activate(items.findIndex((item) => item.option.selected && !item.option.disabled));
+  activate(items.findIndex((item) => item.option.selected && !item.option.disabled), false);
   if (active < 0) step(0);
 }

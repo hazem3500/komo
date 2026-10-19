@@ -1,3 +1,4 @@
+import { popupBounds, popupStyles, watchPopup } from "./design-popup.js";
 // Design mode's token picker: a searchable listbox of `DesignToken`s with a
 // preview per type, sticky group headings, the current token pinned first and
 // the field's relevant tokens by default. It is driven only by token data, so
@@ -22,10 +23,12 @@ export interface TokenPickerOptions {
   current?: string;
   /** Values per theme option, for split swatches; resolved lazily. */
   themes?: () => Promise<ThemeValues[]> | ThemeValues[] | undefined;
+  /** Transient preview; its undo runs before another preview, cancellation or a commit. */
+  onPreview?(token: DesignToken): () => void;
   onSelect(token: DesignToken): void;
 }
 
-const css = `.komo-tokens{position:absolute;z-index:20;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;border-radius:10px;background:#232323;box-shadow:0 0 0 1px #ffffff14,0 12px 32px #0008;color:#d9d6d1;font-size:11px;font-weight:400;line-height:1.25;text-align:left;cursor:default;transform-origin:top;animation:komo-tokens-in var(--duration-fast,250ms) var(--ease-smooth-out,cubic-bezier(.22,1,.36,1)) backwards}.komo-tokens[data-up]{transform-origin:bottom}@keyframes komo-tokens-in{from{opacity:0;transform:scale(.97)}}@media (prefers-reduced-motion:reduce){.komo-tokens{animation:none}}.komo-tokens__bar{display:flex;gap:4px;padding:6px 6px 2px}.komo-tokens__bar input{flex:1;min-width:0;height:28px;box-sizing:border-box;margin:0;padding:0 8px;border:0;border-radius:6px;outline:0;box-shadow:none;background:#ffffff0a;color:#f1efeb;font:inherit}.komo-tokens__bar input::placeholder{color:#77736f}.komo-tokens__bar input:focus{outline:0;box-shadow:inset 0 0 0 1px #bda6ef}.komo-tokens__bar button{flex:none;height:28px;padding:0 8px;border:0;border-radius:6px;background:none;color:#898680;font:inherit;white-space:nowrap;cursor:pointer}.komo-tokens__bar button:hover{background:#ffffff0f;color:#f1efeb}.komo-tokens__bar button[aria-pressed=true]{background:#bda6ef24;color:#e6dcfb}.komo-tokens__bar button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.komo-tokens [role=listbox]{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:0 4px 4px}.komo-tokens small{position:sticky;top:0;z-index:1;display:block;padding:8px 8px 4px;background:#232323;color:#77736f;font-size:10px;font-weight:500}.komo-tokens [role=option]{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:1px 8px;box-sizing:border-box;min-height:28px;padding:4px 8px;border-radius:6px;cursor:pointer}.komo-tokens [data-active]{background:#ffffff14;color:#f1efeb}.komo-tokens__name{display:flex;align-items:center;gap:4px;min-width:0}.komo-tokens__name>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.komo-tokens__name>span{flex:none;max-width:100%}.komo-tokens__name>i{min-width:0;padding:1px 4px;border-radius:4px;background:#ffffff0d;color:#898680;font-size:9px;font-style:normal}.komo-tokens__desc{grid-column:2/-1;overflow:hidden;color:#77736f;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.komo-tokens__meta{display:flex;align-items:center;gap:6px;max-width:160px;min-width:0;color:#77736f;font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}.komo-tokens__meta span{overflow:hidden;text-overflow:ellipsis}.komo-tokens__meta span+span{flex:none;max-width:90px;color:#898680}.komo-tokens [aria-selected=true] .komo-tokens__meta::after{content:'';flex:none;width:7px;height:3.5px;margin:-3px 1px 0 0;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-tokens__pv{display:flex;align-items:center;height:16px;overflow:hidden}.komo-tokens__sw{display:flex;width:16px;height:16px;border-radius:4px;overflow:hidden;background:repeating-conic-gradient(#ffffff40 0 25%,#ffffff0d 0 50%) 0 0/8px 8px;outline:1px solid #ffffff1f;outline-offset:-1px}.komo-tokens__sw>span{flex:1}.komo-tokens__dim{height:4px;min-width:2px;border-radius:2px;background:#bda6ef}.komo-tokens__corner{width:12px;height:12px;box-sizing:border-box;border:solid #bda6ef;border-width:1.5px 0 0 1.5px}.komo-tokens__shadow{width:16px;height:12px;margin-left:2px;border-radius:3px;background:#f1efeb}.komo-tokens__ag{color:#f1efeb;font-size:13px;line-height:1;white-space:nowrap}.komo-tokens__empty{padding:12px 8px;color:#77736f}@media (pointer:coarse){.komo-tokens{font-size:13px}.komo-tokens [role=option]{min-height:40px}.komo-tokens__bar input,.komo-tokens__bar button{height:36px}}`;
+const css = `.komo-tokens{display:flex;flex-direction:column;overflow:hidden}.komo-tokens__bar{flex:none;display:flex;gap:4px;padding:8px;background:#232323;border-bottom:1px solid #ffffff0d}.komo-tokens__bar input{flex:1;min-width:0;height:28px;box-sizing:border-box;margin:0;padding:0 8px;border:0;border-radius:6px;outline:0;box-shadow:none;background:#ffffff0a;color:#f1efeb;font:inherit}.komo-tokens__bar input::placeholder{color:#77736f}.komo-tokens__bar input:focus{outline:0;box-shadow:inset 0 0 0 1px #bda6ef}.komo-tokens__bar button{flex:none;height:28px;padding:0 8px;border:0;border-radius:6px;background:none;color:#898680;font:inherit;white-space:nowrap;cursor:pointer}.komo-tokens__bar button:hover{background:#ffffff0f;color:#f1efeb}.komo-tokens__bar button[aria-pressed=true]{background:#bda6ef24;color:#e6dcfb}.komo-tokens__bar button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.komo-tokens [role=listbox]{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:0 4px 4px}.komo-tokens small{position:sticky;top:0;z-index:1;display:block;padding:8px 8px 4px;background:#232323;color:#77736f;font-size:10px;font-weight:500}.komo-tokens [role=option]{display:grid;grid-template-columns:20px minmax(0,1fr) 14px;align-items:center;gap:4px 8px;box-sizing:border-box;min-height:48px;padding:8px;border-radius:7px;cursor:pointer}.komo-tokens [data-active]{background:#ffffff14;color:#f1efeb}.komo-tokens [aria-selected=true] .komo-tokens__name{color:#e6dcfb}.komo-tokens__name{grid-column:2;min-width:0;font-weight:500}.komo-tokens__name>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.komo-tokens__check{grid-column:3;justify-self:center}.komo-tokens [aria-selected=true] .komo-tokens__check{width:7px;height:3.5px;margin-top:-3px;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-tokens__meta,.komo-tokens__desc,.komo-tokens__states{grid-column:2/-1;min-width:0}.komo-tokens__meta{display:grid;gap:2px;color:#a5a19b;font-size:10px;font-variant-numeric:tabular-nums}.komo-tokens__meta span,.komo-tokens__desc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.komo-tokens__meta span+span,.komo-tokens__desc{color:#898680;font-size:10px}.komo-tokens__states{display:flex;flex-wrap:wrap;gap:4px}.komo-tokens__states i{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 5px;border-radius:4px;background:#ffffff0a;color:#aaa69f;font-size:9px;font-style:normal}.komo-tokens__pv{display:flex;align-items:center;height:16px;overflow:hidden}.komo-tokens__sw{display:flex;width:16px;height:16px;border-radius:4px;overflow:hidden;background:repeating-conic-gradient(#ffffff40 0 25%,#ffffff0d 0 50%) 0 0/8px 8px;outline:1px solid #ffffff1f;outline-offset:-1px}.komo-tokens__sw>span{flex:1}.komo-tokens__sw>[data-unresolved]{display:grid;place-items:center;background:#393939;color:#b6b1aa;font-size:10px}.komo-tokens__dim{height:4px;min-width:2px;border-radius:2px;background:#bda6ef}.komo-tokens__corner{width:12px;height:12px;box-sizing:border-box;border:solid #bda6ef;border-width:1.5px 0 0 1.5px}.komo-tokens__shadow{width:16px;height:12px;margin-left:2px;border-radius:3px;background:#f1efeb}.komo-tokens__ag{color:#f1efeb;font-size:13px;line-height:1;white-space:nowrap}.komo-tokens__hint{flex:none;padding:7px 10px;border-top:1px solid #ffffff0d;color:#aaa69f;font-size:10px}.komo-tokens__empty{padding:12px 8px;color:#77736f}@media (pointer:coarse){.komo-tokens{font-size:13px}.komo-tokens [role=option]{min-height:40px}.komo-tokens__bar input,.komo-tokens__bar button{height:36px}}`;
 
 const styled = new WeakSet<Node>();
 /** Rows built per batch; the rest are built as the list scrolls or the keyboard reaches them. */
@@ -72,7 +75,8 @@ function preview(token: DesignToken, themes: readonly ThemeValues[]): HTMLElemen
     const values = themes.map((theme) => theme.values.get(token.path)).filter((item): item is string => !!item);
     for (const color of new Set(values).size > 1 ? values : [value]) {
       const half = document.createElement("span");
-      half.style.background = color;
+      if (resolvedColor(color)) half.style.background = color;
+      else { half.dataset.unresolved = ""; half.textContent = "?"; }
       swatch.append(half);
     }
   } else if (type === "dimension" || type === "letterSpacing") {
@@ -97,6 +101,13 @@ function preview(token: DesignToken, themes: readonly ThemeValues[]): HTMLElemen
   return box;
 }
 
+function resolvedColor(value: string): boolean {
+  if (!value || /var\(/i.test(value)) return false;
+  const style = document.createElement("span").style;
+  style.color = value;
+  return !!style.color;
+}
+
 function row(token: DesignToken, id: string, selected: boolean, themes: readonly ThemeValues[]): HTMLElement {
   const node = document.createElement("div");
   node.id = id;
@@ -107,21 +118,30 @@ function row(token: DesignToken, id: string, selected: boolean, themes: readonly
   const label = document.createElement("span");
   label.textContent = tokenLabel(token);
   name.append(label);
-  for (const state of token.states ?? []) {
-    const chip = document.createElement("i");
-    chip.textContent = state;
-    name.append(chip);
-  }
+  const check = document.createElement("span");
+  check.className = "komo-tokens__check";
+  check.setAttribute("aria-hidden", "true");
   const meta = document.createElement("span");
   meta.className = "komo-tokens__meta";
   const shown = token.type === "typography" ? fontSummary(token.value ?? "") : token.value ?? "";
-  for (const text of [token.ref, shown]) {
+  const unresolved = token.type === "color" && !resolvedColor(token.value);
+  for (const text of [token.ref, unresolved ? `Unresolved value · ${shown || "not supplied"}` : shown]) {
     if (!text) continue;
     const item = document.createElement("span");
     item.textContent = text;
     meta.append(item);
   }
-  node.append(preview(token, themes), name, meta);
+  node.append(preview(token, themes), name, check, meta);
+  if (token.states?.length) {
+    const states = document.createElement("span");
+    states.className = "komo-tokens__states";
+    for (const state of token.states) {
+      const chip = document.createElement("i");
+      chip.textContent = state;
+      states.append(chip);
+    }
+    node.append(states);
+  }
   if (token.description) {
     const description = document.createElement("span");
     description.className = "komo-tokens__desc";
@@ -132,24 +152,12 @@ function row(token: DesignToken, id: string, selected: boolean, themes: readonly
     const value = theme.values.get(token.path);
     return value && token.type === "color" ? [`${theme.label} ${value}`] : [];
   });
-  node.title = [token.path, token.ref, perTheme.length > 1 ? perTheme.join(", ") : token.value, token.states?.length ? `States: ${token.states.join(", ")}` : "", token.description]
+  node.title = [token.label, token.path, token.ref, perTheme.length > 1 ? perTheme.join(", ") : token.value, unresolved ? "Unresolved color value; no swatch available" : "", token.states?.length ? `States: ${token.states.join(", ")}` : "", token.description]
     .filter(Boolean).join(" · ");
+  node.setAttribute("aria-label", node.title);
   return node;
 }
 
-/** The nearest box that clips the popup: a scrolling ancestor, else the viewport. */
-function bounds(from: Element) {
-  const view = { top: 0, left: 0, bottom: innerHeight, right: innerWidth };
-  for (let node = from.parentElement; node; node = node.parentElement)
-    if (/auto|scroll|hidden/.test(getComputedStyle(node).overflowY)) {
-      const rect = node.getBoundingClientRect();
-      return {
-        top: Math.max(rect.top, 0), left: Math.max(rect.left, 0),
-        bottom: Math.min(rect.bottom, view.bottom), right: Math.min(rect.right, view.right),
-      };
-    }
-  return view;
-}
 
 export function isTokenPickerOpen(trigger: HTMLElement): boolean {
   return open?.trigger === trigger;
@@ -168,7 +176,7 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
   if ((root instanceof ShadowRoot || root === document) && !styled.has(root)) {
     styled.add(root);
     const style = document.createElement("style");
-    style.textContent = css;
+    style.textContent = popupStyles + css;
     (root instanceof ShadowRoot ? root : document.head).append(style);
   }
   const id = `komo-tokens-${++count}`;
@@ -199,6 +207,12 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
   bar.append(search);
   if (relevant.length && relevant.length < tokens.length) bar.append(widen);
   box.append(bar, list);
+  if (options.onPreview) {
+    const hint = document.createElement("div");
+    hint.className = "komo-tokens__hint";
+    hint.textContent = "↑↓ preview · Enter to apply · Esc to cancel";
+    box.append(hint);
+  }
   // Lowercase haystacks are built once, so each keystroke is a plain scan.
   const haystack = new Map(tokens.map((token) => [token, `${tokenLabel(token)} ${token.label ?? ""} ${token.path} ${token.ref ?? ""} ${token.value ?? ""}`.toLowerCase()]));
   let themes: readonly ThemeValues[] = [];
@@ -207,6 +221,14 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
   let active = -1;
   let groupNode: HTMLElement = list;
   let groupName: string | undefined;
+  let undoPreview: (() => void) | undefined;
+  let previewed = -1;
+  const restorePreview = () => {
+    const undo = undoPreview;
+    undoPreview = undefined;
+    previewed = -1;
+    undo?.();
+  };
 
   const build = (upTo: number) => {
     for (; built < Math.min(upTo, items.length); built++) {
@@ -229,8 +251,14 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
     }
   };
   const node = (index: number) => list.querySelector<HTMLElement>(`#${id}-${index}`);
-  const activate = (index: number, scroll = true) => {
+  const activate = (index: number, scroll = true, preview = true) => {
     if (index < 0 || index >= items.length) return;
+    if (index !== previewed && preview) {
+      restorePreview();
+      previewed = index;
+      const token = items[index].token;
+      if (token.path !== options.current) undoPreview = options.onPreview?.(token);
+    }
     build(index + BATCH);
     node(active)?.removeAttribute("data-active");
     active = index;
@@ -243,7 +271,8 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
     if (top < list.scrollTop) list.scrollTop = top - 4;
     else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight + 4;
   };
-  const render = () => {
+  const render = (preview = false) => {
+    restorePreview();
     const terms = search.value.toLowerCase().split(/\s+/).filter(Boolean);
     const pool = all ? tokens : relevant;
     const matches = terms.length ? pool.filter((token) => terms.every((term) => haystack.get(token)!.includes(term))) : pool;
@@ -274,15 +303,16 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
       return;
     }
     build(BATCH);
-    activate(0, false);
+    activate(0, false, preview);
   };
 
   const listeners = new AbortController();
   const { signal } = listeners;
   const coarse = !!globalThis.matchMedia?.("(pointer:coarse)")?.matches;
   function close(focus = false) {
-    if (open?.trigger !== trigger) return;
+    if (open?.close !== close) return;
     open = undefined;
+    restorePreview();
     listeners.abort();
     box.remove();
     trigger.setAttribute("aria-expanded", "false");
@@ -294,12 +324,12 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
     const token = items[index]?.token;
     if (!token) return;
     close(true);
-    options.onSelect(token);
+    if (token.path !== options.current) options.onSelect(token);
   };
-  search.addEventListener("input", render, { signal });
+  search.addEventListener("input", () => render(true), { signal });
   widen.addEventListener("click", () => {
     all = !all;
-    render();
+    render(true);
     if (!coarse) search.focus({ preventScroll: true });
   }, { signal });
   addEventListener("keydown", (event) => {
@@ -310,7 +340,7 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (key === "Escape") close(true);
     else if (key === "Tab") return close();
-    else if (path[0] !== search) return;
+    else if (path[0] !== search && path[0] !== trigger) return;
     else if (key === "ArrowDown" || key === "ArrowUp") activate(clamp(active + (key === "ArrowDown" ? 1 : -1), 0, items.length - 1));
     else if (key === "PageDown" || key === "PageUp") activate(clamp(active + (key === "PageDown" ? 8 : -8), 0, items.length - 1));
     else if (key === "Enter") choose(active);
@@ -330,6 +360,7 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
   addEventListener("scroll", scrolled, { capture: true, signal });
   root.addEventListener("scroll", scrolled, { capture: true, signal });
   addEventListener("resize", () => close(), { signal });
+  watchPopup(trigger, () => close(), signal);
   list.addEventListener("mousedown", (event) => event.preventDefault(), { signal });
   const indexOf = (event: Event) => {
     const option = (event.target as Element).closest?.("[role=option]");
@@ -337,7 +368,7 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
   };
   list.addEventListener("pointermove", (event) => {
     const index = indexOf(event);
-    if (index >= 0 && index !== active) activate(index, false);
+    if (index >= 0) activate(index, false);
   }, { signal });
   // The picker sits inside the field's <label>; a click there would refocus the field's input.
   box.addEventListener("click", (event) => {
@@ -353,7 +384,7 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
   trigger.setAttribute("aria-controls", id);
   // As wide as the panel allows, up to 340px, anchored to the field; flips up when there is more room.
   const anchor = host.getBoundingClientRect();
-  const area = bounds(host);
+  const area = popupBounds(host);
   const origin = (box.offsetParent ?? host).getBoundingClientRect();
   const width = clamp(area.right - area.left - 8, 120, 340);
   const below = area.bottom - anchor.bottom - 8;
@@ -368,7 +399,7 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
   box.toggleAttribute("data-up", up);
   if (options.current) {
     const index = items.findIndex((item) => item.token.path === options.current);
-    if (index >= 0) activate(index);
+    if (index >= 0) activate(index, true, false);
   }
   // Touch keeps the keyboard down until the search field is tapped.
   if (!coarse) search.focus({ preventScroll: true });
@@ -384,7 +415,7 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
     groupName = undefined;
     build(upTo);
     list.scrollTop = scroll;
-    activate(at, false);
+    activate(at, false, false);
   }, () => {});
   return () => close();
 }

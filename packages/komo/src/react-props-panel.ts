@@ -1,3 +1,4 @@
+import { previewStyle } from "./design-popup.js";
 import type { DesignTarget } from "./design-target.js";
 import {
   inspectableAncestor,
@@ -38,6 +39,7 @@ import {
   listTokens,
   markOffToken,
   offTokenMarker,
+  previewToken,
   proposedTokenSwaps,
   resetAllTokenSwaps,
   resetTokenSwaps,
@@ -404,6 +406,10 @@ export function createElementTokenControl(
     tokens: available.map(asToken),
     property,
     current: select.value,
+    onPreview: token => {
+      const target = available.find(item => item.path === token.path)!;
+      return previewStyle(element, property, `var(${target.cssVariable})`);
+    },
     onSelect: (token) => choose(token.path),
   }));
   const update = () => {
@@ -592,7 +598,8 @@ export function createAdapterTokenControl(
   let detached = false;
   const suggestion = matchSuggestion(label, row);
   const current = () => detached ? undefined : swappedToken(element, property)?.path ?? (usage && "path" in usage ? usage.path : undefined);
-  pickerTrigger(select, () => ({ tokens, property, current: current(), themes, onSelect: choose }));
+  pickerTrigger(select, () => ({ tokens, property, current: current(), themes,
+    onPreview: token => previewToken(adapter, element, property, token), onSelect: choose }));
   const update = () => {
     const swapped = swappedToken(element, property);
     const path = detached ? undefined : swapped?.path ?? (usage && "path" in usage ? usage.path : undefined);

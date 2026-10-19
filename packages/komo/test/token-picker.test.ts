@@ -69,7 +69,7 @@ describe("token picker", () => {
     expect(fast.querySelector(".komo-tokens__pv")!.childElementCount).toBe(0);
     expect(fast.querySelector(".komo-tokens__meta")!.textContent).toBe("duration-fast150ms");
     // States as chips, the description as a muted line and in the tooltip.
-    expect([...row(all, "tint").querySelectorAll(".komo-tokens__name > i")].map((chip) => chip.textContent)).toEqual(["hover", "active", "disabled"]);
+    expect([...row(all, "tint").querySelectorAll(".komo-tokens__states > i")].map((chip) => chip.textContent)).toEqual(["hover", "active", "disabled"]);
     expect(row(all, "Primary").querySelector(".komo-tokens__desc")!.textContent).toBe("Body copy");
     expect(row(all, "Primary").title).toContain("Body copy");
     expect(picker()!.querySelector("[role=listbox]")!.getAttribute("aria-label")).toBe("Tokens for none");
@@ -166,6 +166,78 @@ describe("token picker", () => {
     await vi.waitFor(() => expect(rows()[0].querySelectorAll(".komo-tokens__sw > span")).toHaveLength(2));
     expect(rows()[0].title).toContain("Light #1f1f1f, Dark #f1efeb");
     expect(rows()[1].querySelectorAll(".komo-tokens__sw > span")).toHaveLength(1);
+  });
+
+  it("explains unresolved colors and exposes full long values to the active option", () => {
+    const token: DesignToken = { path: "color.text.success-interactive", label: "A very long success interactive text token", type: "color", value: "rgb(var(--missing-channels))", ref: "data-[interactive=true]:hover:text-success-interactive", properties: ["color"], states: ["hover", "active", "disabled"] };
+    const { rows } = mount({ tokens: [token] });
+    const option = rows()[0];
+    expect(option.querySelector("[data-unresolved]")?.textContent).toBe("?");
+    expect(option.querySelector(".komo-tokens__meta")?.textContent).toContain("Unresolved value");
+    expect(option.getAttribute("aria-label")).toContain(token.ref);
+    expect(option.getAttribute("aria-label")).toContain(token.value);
+    expect(option.getAttribute("aria-label")).toContain("no swatch available");
+    expect(option.querySelector(".komo-tokens__name i")).toBeNull();
+  });
+
+  it("previews hover and keyboard movement, then rolls back before one commit", () => {
+    const element = document.createElement("p");
+    element.style.setProperty("color", "#123456", "important");
+    const committed = vi.fn(() => expect(element.style.getPropertyValue("color")).toBe("rgb(18, 52, 86)"));
+    const preview = vi.fn((token: DesignToken) => {
+      const value = element.style.color;
+      const priority = element.style.getPropertyPriority("color");
+      element.style.setProperty("color", token.value, priority);
+      return () => element.style.setProperty("color", value, priority);
+    });
+    const { rows, press, chosen } = mount({ current: "color.text.secondary", onPreview: preview, onSelect: committed });
+    document.body.append(element);
+    expect(preview).not.toHaveBeenCalled();
+    const hover = () => rows()[1].dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
+    hover();
+    expect(element.style.color).toBe("rgb(31, 31, 31)");
+    hover();
+    expect(preview).toHaveBeenCalledTimes(1);
+    expect(press("ArrowLeft").defaultPrevented).toBe(false);
+    expect(press("ArrowRight").defaultPrevented).toBe(false);
+    press("ArrowUp");
+    expect(element.style.color).toBe("rgb(18, 52, 86)");
+    press("ArrowDown");
+    expect(element.style.color).toBe("rgb(31, 31, 31)");
+    expect(chosen).toEqual([]);
+    expect(committed).not.toHaveBeenCalled();
+    press("Enter");
+    expect(committed).toHaveBeenCalledTimes(1);
+    expect(element.style.getPropertyPriority("color")).toBe("important");
+  });
+
+  it("restores previews on filter changes, cancellation, replacement and detached triggers", async () => {
+    const element = document.createElement("p");
+    const onPreview = (token: DesignToken) => {
+      const value = element.style.color;
+      element.style.color = token.value;
+      return () => { element.style.color = value; };
+    };
+    const first = mount({ onPreview });
+    document.body.append(element);
+    first.press("ArrowDown");
+    expect(element.style.color).toBe("rgb(107, 107, 107)");
+    first.type("no match");
+    expect(element.style.color).toBe("");
+    first.type("primary");
+    expect(element.style.color).toBe("rgb(31, 31, 31)");
+    first.press("Escape");
+    expect(element.style.color).toBe("");
+    const oldClose = openTokenPicker({ trigger: first.trigger, tokens, property: "color", onPreview, onSelect: vi.fn() });
+    const close = openTokenPicker({ trigger: first.trigger, tokens, property: "color", onPreview, onSelect: vi.fn() });
+    oldClose();
+    expect(first.picker()).not.toBeNull();
+    first.press("ArrowDown");
+    expect(element.style.color).toBe("rgb(107, 107, 107)");
+    first.trigger.remove();
+    await vi.waitFor(() => expect(first.picker()).toBeNull());
+    expect(element.style.color).toBe("");
+    close();
   });
 
   it("builds rows lazily and filters 700 tokens quickly", () => {

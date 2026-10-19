@@ -257,6 +257,7 @@ export function createDesignMode(options: DesignModeOptions) {
     updateActions();
   }
   function renderControls() {
+    cancelPreview();
     controls.replaceChildren();
     syncEmpty();
     if (!selected) {
@@ -540,6 +541,7 @@ export function createDesignMode(options: DesignModeOptions) {
   }
   function setActive(value: boolean) {
     if (!value) {
+      cancelPreview();
       textTools?.finish();
       if (active) {
         suspendedBefore = showingBefore;
@@ -597,6 +599,7 @@ export function createDesignMode(options: DesignModeOptions) {
     options.onExit();
   });
   function resetAll() {
+    cancelPreview();
     showBefore(false);
     for (const [element, properties] of originals)
       for (const [property, original] of properties) restore(element, property, original);
@@ -607,6 +610,9 @@ export function createDesignMode(options: DesignModeOptions) {
     reactPanelModule?.resetPreviews();
     previewTargets.clear();
     updateActions();
+  }
+  function cancelPreview() {
+    options.root.dispatchEvent(new Event("komo-preview-cancel"));
   }
   function proposalFor(element: DesignTarget, create: typeof import("./design-export.js")["designProposal"]) {
     return create(element, changed.get(element), property => originals.get(element)?.get(property)?.computed,
