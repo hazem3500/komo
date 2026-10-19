@@ -1,6 +1,7 @@
 import { build } from "esbuild";
 import { mkdir, writeFile, readFile, rm, cp } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { pages, escape } from "../src/content.mjs";
 const require = createRequire(
   new URL("../../komo/package.json", import.meta.url)
@@ -101,10 +102,10 @@ const bundle = await build({
   metafile: true,
   entryNames: "[name]-[hash]",
   entryPoints: {
-    site: new URL("../src/site.ts", import.meta.url).pathname,
-    "demo-github": new URL("../src/demo/github.ts", import.meta.url).pathname,
+    site: fileURLToPath(new URL("../src/site.ts", import.meta.url)),
+    "demo-github": fileURLToPath(new URL("../src/demo/github.ts", import.meta.url)),
   },
-  outdir: new URL("assets/", out).pathname,
+  outdir: fileURLToPath(new URL("assets/", out)),
   bundle: true,
   splitting: true,
   format: "esm",
