@@ -105,7 +105,7 @@ const themes: ThemeAxis[] | undefined = query.has("theme") ? [{
   apply(id) { document.documentElement.dataset.mode = id; },
 }] : undefined;
 
-// ?portal opens a modal portalled to body, as Radix and most dialog libraries do,
+// ?portal opens a modal portalled to body, as most dialog libraries do,
 // and mounts a toast a second later; Frame view should scale both with the page.
 function BodyPortals() {
   const [open, setOpen] = useState(true);
@@ -164,7 +164,7 @@ function Demo() {
     repo: "tjcages/komo",
     branch: "main",
     ...(sidebar ? { sidebar } : {}),
-    // Portals make body children ambiguous, so name the page root, as Radix apps do.
+    // Portals make body children ambiguous, so name the page root, as portal-heavy apps do.
     ...(query.has("portal") ? { pageRoot: document.getElementById("root")! } : {}),
     ...(classAdapter || cssAdapter || themes || fiberAdapter ? { design: { ...(classAdapter ? { tokens: classTokens } : cssAdapter ? { tokens: cssAdapter } : {}), ...(themes ? { themes } : {}), ...(fiberAdapter ? { components: fiberAdapter } : {}) } } : {}),
   });
