@@ -30,7 +30,8 @@ beforeAll(async () => {
         popover.style.transform='translate('+Math.round(box.left+20)+'px,'+Math.round(box.top)+'px)';
       }
       grid.addEventListener('pointerdown',event=>{
-        qa.events.push({trusted:event.isTrusted,pointer:event.pointerType,y:event.clientY});
+        const root=document.querySelector('main');
+        qa.events.push({trusted:event.isTrusted,pointer:event.pointerType,y:event.clientY,moving:root.getAnimations().some(animation=>animation.playState==='running'),transform:getComputedStyle(root).transform});
         qa.slot=Math.floor((event.clientY-grid.getBoundingClientRect().top)/60);
         tile.style.top=qa.slot*60+'px';tile.hidden=false;popover.hidden=false;
         popover.textContent='Selected row '+qa.slot;position();
@@ -38,7 +39,7 @@ beforeAll(async () => {
       scroller.scrollTop=500;
       scroller.addEventListener('scroll',position);window.addEventListener('resize',position);
       window.fetch=async()=>Response.json({threads:[],guests:true});
-      window.mountGridQA=()=>initKomo({endpoint:location.origin,project:'grid-review',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',frame:{scale:new URLSearchParams(location.search).get('mode')==='scaled'},restoreOpen:false,pollInterval:60000});
+      window.mountGridQA=()=>initKomo({endpoint:location.origin,project:'grid-review',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',frame:{scale:new URLSearchParams(location.search).get('mode')==='scaled'},restoreOpen:false,shortcuts:new URLSearchParams(location.search).has('parity')?{comments:'Shift+L'}:undefined,pollInterval:60000});
       window.komo=window.mountGridQA();
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -68,6 +69,54 @@ afterAll(async () => {
 });
 
 describe.skipIf(!chrome).each(["reflow", "scaled"])("Frame style attributes in %s", mode => {
+  it.each(["no-preference", "reduce"] as const)("matches native pointer and configured shortcut motion with reduced motion=%s", async reducedMotion => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion });
+    await page.goto(`${origin}/?mode=${mode}&parity=1`);
+    await page.waitForFunction(() => !!(window as any).komo);
+    const original = await page.evaluate(() => (window as any).gridQA.styles());
+    const trace = async (run: () => Promise<unknown>) => {
+      await page.evaluate(() => {
+        const trace = (window as any).motionQA = { frames: [] as string[], samples: [] as number[], done: false };
+        const root = document.querySelector("main")!;
+        let count = 0;
+        const sample = () => {
+          const transform = getComputedStyle(root).transform;
+          trace.samples.push(transform === "none" ? 1 : new DOMMatrix(transform).a);
+          for (const animation of root.getAnimations()) {
+            const frames = JSON.stringify((animation.effect as KeyframeEffect).getKeyframes());
+            if (!trace.frames.includes(frames)) trace.frames.push(frames);
+          }
+          if (count++ < 24) requestAnimationFrame(sample);
+          else trace.done = true;
+        };
+        requestAnimationFrame(sample);
+      });
+      await run();
+      await page.waitForFunction(() => (window as any).motionQA.done);
+      return page.evaluate(() => (window as any).motionQA as { frames: string[]; samples: number[] });
+    };
+    const key = () => page.keyboard.press("Shift+L");
+    const button = () => page.getByRole("button", { name: /View all comments|Close comment sidebar/ }).click();
+    for (const opening of [true, false]) {
+      if (!opening) { await button(); await page.waitForTimeout(300); }
+      const keyboard = await trace(key);
+      if (reducedMotion === "reduce") expect(keyboard.frames).toEqual([]);
+      else expect(keyboard.frames.length).toBeGreaterThan(0);
+      if (mode === "reflow") expect(keyboard.samples.every(value => value === 1)).toBe(true);
+      await trace(button);
+      const pointer = await trace(button);
+      expect(pointer.frames).toEqual(keyboard.frames);
+      if (mode === "reflow") expect(pointer.samples.every(value => value === 1)).toBe(true);
+      if (opening) await trace(button);
+    }
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => (window as any).gridQA.styles())).toEqual(original);
+    expect(await page.locator("main").evaluate(node => node.getAnimations().length)).toBe(0);
+    await page.evaluate(() => (window as any).komo.destroy());
+    expect(await page.evaluate(() => (window as any).gridQA.styles())).toEqual(original);
+    await page.close();
+  });
+
   it.each(["no-preference", "reduce"] as const)("preserves absent attributes through close, dismiss and interrupted motion with reduced motion=%s", async reducedMotion => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion });
     await page.goto(`${origin}/?mode=${mode}`);
@@ -101,6 +150,39 @@ describe.skipIf(!chrome).each(["reflow", "scaled"])("Frame style attributes in %
 });
 
 describe.skipIf(!chrome).each([false, true])("native grid coordinates with touch=%s", touch => {
+  it("keeps logical input correct during rapid native key and pointer reflow motion", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: touch, reducedMotion: "no-preference" });
+    const page = await context.newPage();
+    await page.goto(`${origin}/?parity=1`);
+    await page.waitForFunction(() => !!(window as any).komo);
+    const original = await page.evaluate(() => (window as any).gridQA.styles());
+    const client = touch ? await context.newCDPSession(page) : null;
+    for (let index = 0; index < 6; index++) {
+      await page.locator("#popover").evaluate(node => { (node as HTMLElement).hidden = true; });
+      if (index % 2) await page.getByRole("button", { name: /Close comment sidebar/ }).click();
+      else await page.keyboard.press("Shift+L");
+      const point = await page.locator("#grid").evaluate(node => {
+        const box = node.getBoundingClientRect();
+        return { x: box.left + 280, y: box.top + 15 * 60 + 15 };
+      });
+      if (client) {
+        await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
+        await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      } else await page.mouse.click(point.x, point.y);
+      expect(await page.evaluate(() => (window as any).gridQA.slot)).toBe(15);
+      await page.waitForFunction(() => {
+        const qa = (window as any).gridQA;
+        return Math.abs(qa.tile.getBoundingClientRect().top - qa.popover.getBoundingClientRect().top) < 1;
+      });
+    }
+    expect(await page.evaluate(() => (window as any).gridQA.events.every((event: any) => event.trusted && event.moving && event.transform === "none"))).toBe(true);
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => (window as any).gridQA.styles())).toEqual(original);
+    await page.evaluate(() => (window as any).komo.destroy());
+    expect(await page.evaluate(() => (window as any).gridQA.styles())).toEqual(original);
+    await context.close();
+  });
+
   it("preserves selected local data and virtual-anchor geometry through Frame, scroll, resize and teardown", async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: touch });
     const page = await context.newPage();

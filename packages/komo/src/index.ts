@@ -695,7 +695,14 @@ export function initComments(options: CommentsOptions): CommentsController {
     themeWatch.observe(node, { attributes: true });
   let accountOpenTimer = 0;
   let pageMotion: Animation | undefined;
-  let keyboardAction = false;
+  function fadePage() {
+    const opacity = Number(getComputedStyle(surface).opacity);
+    // Reflow preserves native input coordinates and fixed descendants; fade without a transform.
+    return surface.animate([{ opacity: opacity * 0.94 }, { opacity }], {
+      duration: 250,
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    });
+  }
   // True while reopening a remembered sidebar on load: skip the open motion.
   let restoring = false;
   const openStore = openState(
@@ -921,7 +928,10 @@ export function initComments(options: CommentsOptions): CommentsController {
     nodes().forEach((node, index) => {
       const from = before[index];
       if (!node?.isConnected || !from?.width) return;
-      if (node === surface && options.frame?.scale !== true) return;
+      if (node === surface && options.frame?.scale !== true) {
+        layoutMotions.push(fadePage());
+        return;
+      }
       if (node !== surface)
         node.getAnimations().forEach((motion) => motion.cancel());
       const to = node.getBoundingClientRect();
@@ -1795,31 +1805,31 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     if (
       useFrame !== wasFramed &&
-      options.frame?.scale === true &&
-      !keyboardAction &&
       !switchingSidebar &&
       !restoring &&
       !reducedMotion()
     ) {
-      const after = useFrame
-        ? surface.getBoundingClientRect()
-        : { left: 0, top: 0, width: window.innerWidth };
-      // Translate in page pixels before the frame's own scale.
-      const start = `translate(${(before.left - after.left) / zoom}px, ${(before.top - after.top) / zoom}px) scale(${(appliedScale * before.width) / after.width})`;
-      surface.style.transformOrigin = useFrame ? "top left" : `0 ${scroll}px`;
-      if (!useFrame) {
-        html.style.background = document.body.style.background = "#080808";
-        surface.style.background = pageBackground;
-        // Short pages still need to cover the viewport while the frame expands.
-        const minHeight = getComputedStyle(surface).minHeight;
-        surface.style.minHeight = `max(${minHeight === "auto" ? "0px" : minHeight}, ${window.innerHeight / zoom}px)`;
-      }
       pins.style.opacity = "0";
       pageTransitioning = true;
-      pageMotion = surface.animate(
-        [{ transform: start }, { transform: `translate(0px, 0px) scale(${appliedScale})` }],
-        { duration: 250, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
-      );
+      if (options.frame?.scale === true) {
+        const after = useFrame
+          ? surface.getBoundingClientRect()
+          : { left: 0, top: 0, width: window.innerWidth };
+        // Translate in page pixels before the frame's own scale.
+        const start = `translate(${(before.left - after.left) / zoom}px, ${(before.top - after.top) / zoom}px) scale(${(appliedScale * before.width) / after.width})`;
+        surface.style.transformOrigin = useFrame ? "top left" : `0 ${scroll}px`;
+        if (!useFrame) {
+          html.style.background = document.body.style.background = "#080808";
+          surface.style.background = pageBackground;
+          // Short pages still need to cover the viewport while the frame expands.
+          const minHeight = getComputedStyle(surface).minHeight;
+          surface.style.minHeight = `max(${minHeight === "auto" ? "0px" : minHeight}, ${window.innerHeight / zoom}px)`;
+        }
+        pageMotion = surface.animate(
+          [{ transform: start }, { transform: `translate(0px, 0px) scale(${appliedScale})` }],
+          { duration: 250, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
+        );
+      } else pageMotion = fadePage();
       const currentMotion = pageMotion;
       void currentMotion.finished.then(() => {
         if (destroyed || pageMotion !== currentMotion) return;
@@ -5693,10 +5703,6 @@ export function initComments(options: CommentsOptions): CommentsController {
     shadow,
     "keydown",
     (event) => {
-      keyboardAction = true;
-      queueMicrotask(() => {
-        keyboardAction = false;
-      });
       const target = event.composedPath()[0];
       if ((account || (compactSidebar && expanded)) && event.key === "Tab") {
         const scope = account ? dialogs : designActive ? shadow.querySelector(".design-inspector") ?? shadow : shadow;
