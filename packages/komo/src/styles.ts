@@ -579,6 +579,8 @@ ${morphingMenuStyles}
 }
 .thread-card .row {
   gap: 7px;
+  min-width: 0;
+  padding-right: 28px;
 }
 .thread-card .avatar {
   width: 20px;
@@ -589,23 +591,31 @@ ${morphingMenuStyles}
   font-size: 11px;
   font-weight: 500;
   color: #b2b2b2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .thread-card small {
   margin-left: auto;
   font-size: 10px;
+  flex: none;
+  white-space: nowrap;
 }
-.thread-card .meta {
-  margin-top: 7px;
-  padding-left: 0;
-  font-size: 11px;
-  gap: 8px;
-}
-.thread-card .meta:has(.page:empty) > :empty {
-  display: none;
-}
-.thread-card .meta:has(.page:empty):has(span:last-child:empty) {
-  display: none;
-}
+.card-page-row { display:flex; align-items:center; gap:6px; min-width:0; margin-top:8px; color:#999; font-size:11px; }
+.card-page-row .page { min-width:0; max-width:none; flex:1; }
+.card-page-row svg { width:13px; height:13px; }
+.card-status { display:block; margin-top:8px; color:#999; font-size:11px; }
+.card-page-row[hidden], .card-status[hidden], .sidebar-replies[hidden] { display:none; }
+.card-tags { display:flex; flex-wrap:wrap; gap:5px; min-width:0; margin-top:10px; }
+.card-tag { min-width:0; max-width:100%; padding:2px 7px; border-radius:6px; color:var(--accent,#bda6ef); background:color-mix(in srgb,var(--accent,#bda6ef) 10%,transparent); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+.card-reply-toggle { display:flex; width:max-content; max-width:calc(100% - 24px); min-height:30px; margin:0 12px 10px; padding:4px 7px; gap:6px; border-radius:6px; white-space:nowrap; font-size:11px; color:#aaa; }
+.card-reply-toggle:hover, .card-reply-toggle[aria-expanded="true"] { background:#ffffff0a; color:#ddd; }
+.card-reply-toggle svg { width:14px; height:14px; }
+.card-reply-toggle svg:last-child { margin-left:2px; transition:rotate 150ms ease; }
+.card-reply-toggle[aria-expanded="true"] svg:last-child { rotate:180deg; }
+.thread-card:focus-visible, .card-reply-toggle:focus-visible, .card-resolve:focus-visible { outline:2px solid var(--accent,#bda6ef); outline-offset:-2px; }
+@media (prefers-reduced-motion:reduce) { .card-reply-toggle svg:last-child { transition:none; } }
 :host(.review-open) .panel .thread-card::after {
   left: 14px;
   right: 14px;
@@ -901,7 +911,7 @@ ${morphingMenuStyles}
   padding: 16px 12px;
 }
 .thread-card .preview {
-  margin-bottom: 12px;
+  margin: 10px 0 0;
 }
 .thread-card::after {
   left: 12px;
@@ -1141,33 +1151,35 @@ ${morphingMenuStyles}
 }
 .sidebar-replies {
   position: relative;
-  margin: 16px 0 0 9px;
-  padding-left: 18px;
+  margin: 0 12px 14px 20px;
+  padding: 2px 0 2px 12px;
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 .sidebar-replies::before {
   content: "";
   position: absolute;
   left: 0;
   top: 0;
-  bottom: 8px;
+  bottom: 0;
   width: 1px;
   background: #ffffff16;
 }
 .sidebar-reply {
-  display: flex;
+  display: grid;
+  grid-template-columns: 20px minmax(0,1fr);
   align-items: flex-start;
   gap: 8px;
   text-align: left;
 }
+.sidebar-reply .avatar { width:20px; height:20px; font-size:8px; }
 .sidebar-reply > div {
   min-width: 0;
 }
 .sidebar-reply p {
   font-size: 13px;
   line-height: 1.5;
-  margin-top: 4px;
+  margin: 4px 0 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: #d9d9d9;
@@ -1175,6 +1187,7 @@ ${morphingMenuStyles}
 .reply-meta {
   font-size: 11px;
   color: #999;
+  overflow-wrap: anywhere;
 }
 .floating-notice {
   display: flex;

@@ -1291,3 +1291,70 @@ it.each([false, true])("keeps tag actions in the thread header (sidebar=%s)", as
   expect(shadow.activeElement).toBe(trigger);
   localStorage.clear();
 });
+
+it.each([1, 3])("keeps route, tags and %s reply previews separate from thread navigation", async (count) => {
+  const { CommentsApi } = await import("../src/api");
+  const navigate = vi.fn();
+  const config = { ...options, restoreOpen: false as const, onboarding: undefined, navigate };
+  const api = new CommentsApi(config);
+  const author = { id: "cards", name: "Long Example Reviewer Name", verified: true };
+  api.save({ token: "cards-session", user: author });
+  const destination = "/projects/123456789/calendar/a-long-destination?view=week#entry";
+  const comment = (id: string, body: string) => ({ id, body, author, createdAt: 1, editedAt: null, reactions: {} });
+  const main = {
+    id: "with-replies", page: destination, resolved: false, resolvedBy: null, createdAt: 1, updatedAt: 2,
+    tags: ["a long tag name for wrapping", "another long tag name"],
+    anchor: { selector: "#target", text: "", x: .5, y: .5, width: 0, height: 0, pageX: 0, pageY: 0, viewportWidth: 1200 },
+    comments: [comment("main", "A multiline main body.\nAnother line."), ...Array.from({ length: count }, (_, index) => comment(`reply-${index}`, `Reply ${index}\nA second line.`))],
+  };
+  const plain = { ...main, id: "plain", page: "/", tags: [], comments: [comment("plain-c", "Plain comment")] };
+  localStorage.setItem(`${api.sessionKey}:${JSON.stringify([config.repo, "local"])}:threads`, JSON.stringify({ token: api.token, threads: [main, plain] }));
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+  layoutBody();
+  controller = initComments(config);
+  controller.open();
+  const shadow = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
+  const panel = shadow.querySelector<HTMLElement>(".panel")!;
+  const item = panel.querySelector<HTMLElement>('[data-thread="with-replies"]')!;
+  const card = item.querySelector<HTMLButtonElement>(".thread-card")!;
+  const route = item.querySelector<HTMLElement>(".page")!;
+  const tags = item.querySelector<HTMLElement>(".card-tags")!;
+  const toggle = item.querySelector<HTMLButtonElement>(".card-reply-toggle")!;
+  const previews = item.querySelector<HTMLElement>(".sidebar-replies")!;
+  const resolve = item.querySelector<HTMLButtonElement>(".card-resolve")!;
+  expect(route.textContent).toBe(destination);
+  expect(route.title).toBe(new URL(destination, location.origin).href);
+  expect(card.getAttribute("aria-description")).toContain(route.title);
+  expect(tags.previousElementSibling?.textContent).toBe(main.comments[0].body);
+  expect(tags.children).toHaveLength(2);
+  expect(card.contains(toggle)).toBe(false);
+  expect(card.contains(resolve)).toBe(false);
+  expect(card.contains(previews)).toBe(false);
+  expect(toggle.textContent).toBe(`${count} ${count === 1 ? "reply" : "replies"}`);
+  expect(toggle.getAttribute("aria-controls")).toBe(previews.id);
+  expect(previews.hidden).toBe(true);
+  toggle.focus();
+  toggle.click();
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(previews.hidden).toBe(false);
+  expect(previews.querySelectorAll(".sidebar-reply")).toHaveLength(count);
+  expect(panel.hasAttribute("data-thread")).toBe(false);
+  expect(navigate).not.toHaveBeenCalled();
+  toggle.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+  expect(previews.hidden).toBe(true);
+  expect(shadow.activeElement).toBe(toggle);
+  expect(shadow.host.classList.contains("review-open")).toBe(true);
+  const empty = panel.querySelector<HTMLElement>('[data-thread="plain"]')!;
+  expect(empty.querySelector<HTMLElement>(".card-page-row")!.hidden).toBe(true);
+  expect(empty.querySelector<HTMLElement>(".card-status")!.hidden).toBe(true);
+  expect(empty.querySelector(".card-tags")).toBeNull();
+  expect(empty.querySelector(".card-reply-toggle")).toBeNull();
+  expect(empty.querySelector(".sidebar-replies")).toBeNull();
+  card.click();
+  await vi.waitFor(() => expect(navigate).toHaveBeenCalledOnce());
+  const url = navigate.mock.calls[0][0] as URL;
+  expect(url.pathname + url.hash).toBe("/projects/123456789/calendar/a-long-destination#entry");
+  expect(url.searchParams.get("view")).toBe("week");
+  expect(url.searchParams.get("comment")).toBe(main.id);
+  localStorage.clear();
+});
