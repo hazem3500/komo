@@ -56,6 +56,16 @@ try {
   await writeFile(
     join(root, "smoke.mjs"),
     `
+    import assert from 'node:assert/strict';
+    import server from '@hazem3500/komo/server';
+    import metadata from '@hazem3500/komo/package.json' with { type: 'json' };
+    assert.equal(metadata.name, '@hazem3500/komo');
+    assert.ok(import.meta.resolve('@hazem3500/komo/server').endsWith('/dist/server.js'));
+    assert.ok(import.meta.resolve('@hazem3500/komo/package.json').endsWith('/komo/package.json'));
+    assert.equal(typeof server.scheduled, 'function');
+    const health = await server.fetch(new Request('https://example.test/health'), {}, { waitUntil() {} });
+    assert.equal(health.status, 200);
+    assert.deepEqual(await health.json(), { ok: true });
     import { initKomo } from '@hazem3500/komo';
     import { defineKomo } from '@hazem3500/komo/setup';
     import { useKomo } from '@hazem3500/komo/react';
@@ -77,9 +87,21 @@ try {
   `,
   );
   run(process.execPath, ["smoke.mjs"]);
+  run(process.execPath, [
+    "--conditions=workerd",
+    "--input-type=module",
+    "--eval",
+    `import assert from 'node:assert/strict';
+     assert.match(import.meta.resolve('@hazem3500/komo/server'), /\\/server\\/index\\.ts$/);`,
+  ]);
   await writeFile(
     join(root, "consumer.ts"),
     `
+    import server, { type ServerEnv } from '@hazem3500/komo/server';
+    declare const env: ServerEnv;
+    declare const request: Parameters<typeof server.fetch>[0];
+    declare const context: Parameters<typeof server.fetch>[2];
+    server.fetch(request, env, context);
     import { initKomo, type KomoConfig } from '@hazem3500/komo';
     import { defineKomo } from '@hazem3500/komo/setup';
     import { useKomo } from '@hazem3500/komo/react';
@@ -169,16 +191,25 @@ try {
     await readFile(join(root, "komo.config.js"), "utf8"),
     /packed-test.workers.dev/,
   );
-  await build({
-    entryPoints: [join(root, ".komo/index.ts")],
-    bundle: true,
-    platform: "node",
-    format: "esm",
-    loader: { ".txt": "text" },
-    write: false,
-  });
+  for (const conditions of [[], ["workerd"]]) {
+    await build({
+      conditions,
+      entryPoints: [join(root, ".komo/index.ts")],
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      loader: { ".txt": "text" },
+      write: false,
+    });
+  }
+  run(join(source, "node_modules/.bin/wrangler"), [
+    "deploy",
+    "--dry-run",
+    "--config",
+    join(root, ".komo/wrangler.json"),
+  ]);
   console.log(
-    `Packed consumer passed: SSR/types, self-host init/resume, migrations, server bundle (${packed.entryCount} files).`,
+    `Packed consumer passed: SSR/types, Node server/metadata exports, workerd source, self-host init/resume, migrations, server bundles (${packed.entryCount} files).`,
   );
 } finally {
   await rm(root, { recursive: true, force: true });
