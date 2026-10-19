@@ -1,3 +1,4 @@
+import { isDesignTarget, type DesignTarget } from "./design-target.js";
 import type { DesignToken, TokenAdapter, TokenUsage } from "./design-system.js";
 
 /** Explicit bridge from a site's named CSS custom properties into Design mode. */
@@ -25,8 +26,8 @@ export interface RegisteredDesignTokenSource {
   root: HTMLElement;
   tokens: KomoDesignToken[];
   themeEdits: Map<string, { before: string; after: string; inlineBefore: string }>;
-  elementOriginals: Map<HTMLElement, Map<string, { value: string; priority: string }>>;
-  elementBindings: Map<HTMLElement, Map<string, ElementTokenBinding>>;
+  elementOriginals: Map<DesignTarget, Map<string, { value: string; priority: string }>>;
+  elementBindings: Map<DesignTarget, Map<string, ElementTokenBinding>>;
   previousMarker: string | null;
 }
 
@@ -47,12 +48,12 @@ export interface DeclaredTokenReference {
 }
 
 type TokenEdit =
-  | { kind: "element"; element: HTMLElement; property: string; before: string; priority: string; after: string }
+  | { kind: "element"; element: DesignTarget; property: string; before: string; priority: string; after: string }
   | { kind: "theme"; source: RegisteredDesignTokenSource; token: KomoDesignToken; before: string; after: string; inlineBefore: string };
 
 const sources = new Set<RegisteredDesignTokenSource>();
 const byRoot = new WeakMap<HTMLElement, RegisteredDesignTokenSource>();
-const elementEdits = new WeakMap<HTMLElement, TokenEdit[]>();
+const elementEdits = new WeakMap<DesignTarget, TokenEdit[]>();
 const history = new WeakMap<RegisteredDesignTokenSource, TokenEdit[]>();
 
 const propertiesByType: Record<KomoDesignTokenType, ReadonlySet<string>> = {
@@ -199,7 +200,7 @@ export function resetThemeToken(source: RegisteredDesignTokenSource, token: Komo
 
 export function applyTokenToElement(
   source: RegisteredDesignTokenSource,
-  element: HTMLElement,
+  element: DesignTarget,
   token: KomoDesignToken,
   property: string,
   options: { recordHistory?: boolean } = {},
@@ -236,7 +237,7 @@ export function applyTokenToElement(
 /** Keep the token reference as provenance when the user types a custom override. */
 export function noteElementTokenOverride(
   source: RegisteredDesignTokenSource,
-  element: HTMLElement,
+  element: DesignTarget,
   property: string,
   value: string,
 ): void {
@@ -263,7 +264,7 @@ export function noteElementTokenOverride(
 /** Reconcile token provenance after the style editor's undo restores a declaration. */
 export function syncElementTokenBinding(
   source: RegisteredDesignTokenSource,
-  element: HTMLElement,
+  element: DesignTarget,
   property: string,
 ): void {
   const binding = source.elementBindings.get(element)?.get(property);
@@ -287,7 +288,7 @@ export function syncElementTokenBinding(
 
 export function elementTokenBindingFor(
   source: RegisteredDesignTokenSource,
-  element: HTMLElement,
+  element: DesignTarget,
   property: string,
 ): ElementTokenBinding | null {
   const binding = source.elementBindings.get(element)?.get(property);
@@ -348,7 +349,7 @@ function splitSelectors(text: string): string[] {
  */
 export function declaredTokenFor(
   source: RegisteredDesignTokenSource,
-  element: HTMLElement,
+  element: DesignTarget,
   property: string,
   inline = element.style.getPropertyValue(property),
   inlinePriority = element.style.getPropertyPriority(property),
@@ -399,7 +400,7 @@ export function declaredTokenFor(
 /** Drop Komo's element preview for one property and return to the page's own value. */
 export function restoreElementProperty(
   source: RegisteredDesignTokenSource,
-  element: HTMLElement,
+  element: DesignTarget,
   property: string,
 ): void {
   const binding = source.elementBindings.get(element)?.get(property);
@@ -418,17 +419,17 @@ export function compatibleTokens(
   return source.tokens.filter((token) => token.properties.includes(property));
 }
 
-export function hasDesignTokenChanges(element: HTMLElement): boolean {
+export function hasDesignTokenChanges(element: DesignTarget): boolean {
   const source = tokenSourceFor(element);
   return !!source && (source.themeEdits.size > 0 || !!elementEdits.get(element)?.length || !!source.elementBindings.get(element)?.size);
 }
 
-export function canUndoDesignToken(element: HTMLElement | null): boolean {
+export function canUndoDesignToken(element: DesignTarget | null): boolean {
   const source = tokenSourceFor(element);
   return !!source && !!history.get(source)?.length;
 }
 
-export function undoDesignToken(element: HTMLElement): void {
+export function undoDesignToken(element: DesignTarget): void {
   const source = tokenSourceFor(element);
   const edit = source && history.get(source)?.pop();
   if (!source || !edit) return;
@@ -453,7 +454,7 @@ export function undoDesignToken(element: HTMLElement): void {
   if (!edits.length) elementEdits.delete(edit.element);
 }
 
-export function resetDesignTokens(element: HTMLElement): void {
+export function resetDesignTokens(element: DesignTarget): void {
   const source = tokenSourceFor(element);
   if (!source) return;
   for (const [path, edit] of source.themeEdits) {
@@ -484,7 +485,7 @@ export function resetAllDesignTokens(): void {
   }
 }
 
-export function proposedDesignTokenChanges(element: HTMLElement): string | undefined {
+export function proposedDesignTokenChanges(element: DesignTarget): string | undefined {
   const source = tokenSourceFor(element);
   if (!source) return undefined;
   const rows: string[] = [];
@@ -538,7 +539,7 @@ export function cssVariableTokens(): TokenAdapter {
     resolve(element) {
       const source = tokenSourceFor(element);
       const usage: Record<string, TokenUsage> = {};
-      if (!source || !(element instanceof HTMLElement)) return usage;
+      if (!source || !isDesignTarget(element)) return usage;
       const computed = element.ownerDocument.defaultView?.getComputedStyle(element);
       for (const property of new Set(source.tokens.flatMap((token) => token.properties))) {
         const declared = declaredTokenFor(source, element, property);
@@ -549,7 +550,7 @@ export function cssVariableTokens(): TokenAdapter {
     preview(element, property, token) {
       const source = tokenSourceFor(element);
       const match = source?.tokens.find((item) => item.path === token.path);
-      if (!source || !match || !(element instanceof HTMLElement)) return () => {};
+      if (!source || !match || !isDesignTarget(element)) return () => {};
       const value = element.style.getPropertyValue(property);
       const priority = element.style.getPropertyPriority(property);
       applyTokenToElement(source, element, match, property, { recordHistory: false });

@@ -1,3 +1,4 @@
+import { isDesignTarget, pickDesignTarget, type DesignTarget } from "./design-target.js";
 import { designModeStyles } from "./design-mode-styles.js";
 import { el, icon } from "./dom.js";
 import { drawHighlight } from "./highlight.js";
@@ -19,19 +20,21 @@ export interface DesignModeOptions {
   flip?(): void;
   /** The app's design-system adapters; `tokens` replaces CSS-variable token chips. */
   design?: DesignSystem;
+  page?(): string;
+  bounds?(element: Element): { left: number; top: number; right: number; bottom: number } | undefined;
 }
 
 type Edit = {
   kind: "style";
-  element: HTMLElement;
+  element: DesignTarget;
   property: string;
   before: Original;
   after: Original;
 };
 
-type TextEdit = { kind: "text"; element: HTMLElement };
+type TextEdit = { kind: "text"; element: DesignTarget };
 /** A token previewed through the app's adapter; its undo comes from `preview()`. */
-type TokenSwap = { kind?: undefined; element: HTMLElement; undo(): void };
+type TokenSwap = { kind?: undefined; element: DesignTarget; undo(): void };
 
 type Original = { value: string; priority: string; computed?: string };
 
@@ -39,8 +42,6 @@ type Original = { value: string; priority: string; computed?: string };
 const action = (className?: string, text?: string) => Object.assign(el("button", className, text), { type: "button" });
 const media = (query: string) => typeof matchMedia === "function" && matchMedia(query).matches;
 const calm = () => media("(prefers-reduced-motion: reduce)");
-
-const glyph = (path: string) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
 
 export function createDesignMode(options: DesignModeOptions) {
   const style = el("style");
@@ -58,7 +59,16 @@ export function createDesignMode(options: DesignModeOptions) {
   panel.hidden = true;
   const outline = el("div", "design-outline");
   outline.setAttribute("aria-hidden", "true");
+  const prospective = el("div", "design-outline design-outline--prospective");
+  prospective.setAttribute("aria-hidden", "true");
+  prospective.dataset.kind = "hover";
+  prospective.hidden = true;
   const heading = el("div", "design-inspector__heading");
+  let returnAction: { label: string; run(): void } | null = null;
+  const back = action("design-inspector__back");
+  back.hidden = true;
+  back.append(icon("chevron"));
+  back.addEventListener("click", () => returnAction?.run());
   const parent = action("design-inspector__parent");
   parent.hidden = true;
   const title = el("span", "design-inspector__target");
@@ -71,25 +81,24 @@ export function createDesignMode(options: DesignModeOptions) {
   fold.append(icon("chevron"));
   const identity = el("div", "design-inspector__identity");
   identity.append(parent, title, subtitle);
-  heading.append(identity, fold, close);
+  heading.append(back, identity, fold, close);
 
   const controls = el("div", "design-inspector__controls");
   const bar = el("div", "design-inspector__bar");
   const count = el("span", "design-inspector__count");
-  count.title = "Preview only · resets on exit";
+  count.title = "Runtime preview · Undo, Reset or reload to restore";
   const status = el("p", "design-inspector__status");
   status.setAttribute("role", "status");
   const actions = el("div", "design-inspector__actions");
-  const tool = (label: string, markup: string) => {
+  const tool = (label: string) => {
     const button = action("design-inspector__tool");
     button.dataset.tip = label;
     button.setAttribute("aria-label", label);
-    button.innerHTML = markup;
     return button;
   };
-  const undo = tool("Undo", glyph("M5.5 3.5 2.5 6.5l3 3m-3-3h7a4 4 0 0 1 0 8h-2"));
-  const reset = tool("Reset", glyph("M2.5 2.5v3h3M3 5.5a5.5 5.5 0 1 1-.5 2.5"));
-  const copy = tool("Copy CSS", "");
+  const undo = tool("Undo");
+  const reset = tool("Reset");
+  const copy = tool("Copy CSS");
   copy.append(icon("copy"));
   const comment = action("", "Comment");
   const editText = action("design-text-edit", "Edit text");
@@ -109,23 +118,29 @@ export function createDesignMode(options: DesignModeOptions) {
     return button;
   });
   bar.append(count, compare, status, actions);
-  panel.append(heading, controls, bar);
-  options.root.append(style, outline);
+  const pendingSlot = el("div");
+  pendingSlot.hidden = true;
+  let views: ReturnType<typeof import("./design-export.js")["selectionViews"]> | undefined;
+  panel.append(heading, pendingSlot, controls, bar);
+  options.root.append(style, outline, prospective);
   (options.panelRoot ?? options.root).append(panel);
 
   let active = false;
   let closeTimer = 0;
-  let selected: HTMLElement | null = null;
-  let hovered: HTMLElement | null = null;
+  let selected: DesignTarget | null = null;
+  let hovered: DesignTarget | null = null;
+  const page = () => options.page?.() ?? location.pathname;
+  let selectionPage = page();
+  const previewTargets = new Map<DesignTarget, string>();
   let textTools: InlineTextTools | null = null;
   let frame = 0;
   let flipTimer = 0;
-  let flipFor: HTMLElement | null = null;
+  let flipFor: DesignTarget | null = null;
   let flipKind = "";
   let reactPanelModule: typeof import("./react-props-panel.js") | null = null;
   let reactPanelPromise: Promise<typeof import("./react-props-panel.js")> | null = null;
-  const originals = new Map<HTMLElement, Map<string, Original>>();
-  const changed = new Map<HTMLElement, Map<string, string>>();
+  const originals = new Map<DesignTarget, Map<string, Original>>();
+  const changed = new Map<DesignTarget, Map<string, string>>();
   const starts = new WeakMap<Control, Original>();
   const pending = new WeakMap<Control, Edit>();
   const listeners = new AbortController();
@@ -141,12 +156,12 @@ export function createDesignMode(options: DesignModeOptions) {
   const collapsed = new Set<string>();
   const history: Array<Edit | TextEdit | TokenSwap> = [];
 
-  function remember(element: HTMLElement, property: string, value = element.style.getPropertyValue(property), priority = element.style.getPropertyPriority(property)) {
+  function remember(element: DesignTarget, property: string, value = element.style.getPropertyValue(property), priority = element.style.getPropertyPriority(property)) {
     let values = originals.get(element);
     if (!values) originals.set(element, (values = new Map()));
     if (!values.has(property)) values.set(property, { value, priority, computed: getComputedStyle(element).getPropertyValue(property).trim() });
   }
-  function track(element: HTMLElement, property: string) {
+  function track(element: DesignTarget, property: string) {
     let values = changed.get(element);
     if (!values) changed.set(element, (values = new Map()));
     const value = element.style.getPropertyValue(property);
@@ -159,7 +174,7 @@ export function createDesignMode(options: DesignModeOptions) {
   function syncBar() {
     const element = selected;
     const total = element
-      ? (changed.get(element)?.size ?? 0) + Number(!!textTools?.hasChanges(element)) + Number(!!reactPanelModule?.hasReactPropChanges(element)) ||
+      ? (changed.get(element)?.size ?? 0) + Number(element instanceof HTMLElement && !!textTools?.hasChanges(element)) + Number(!!reactPanelModule?.hasReactPropChanges(element)) ||
         Number(!!reactPanelModule?.hasDesignTokenEdit(element))
       : 0;
     count.textContent = total ? `${total} change${total > 1 ? "s" : ""}` : "";
@@ -180,6 +195,7 @@ export function createDesignMode(options: DesignModeOptions) {
     }, 2600);
   }).observe(status, { childList: true, characterData: true, subtree: true });
   let showingBefore = false;
+  let suspendedBefore: boolean | undefined;
   function showBefore(on: boolean) {
     if (on === showingBefore) return;
     if (on && textTools?.element) finishTextEdit();
@@ -202,7 +218,7 @@ export function createDesignMode(options: DesignModeOptions) {
     panel.toggleAttribute("data-before", on);
     updateActions();
   }
-  function restore(element: HTMLElement, property: string, original?: Original) {
+  function restore(element: DesignTarget, property: string, original?: Original) {
     if (original?.value) element.style.setProperty(property, original.value, original.priority);
     else element.style.removeProperty(property);
   }
@@ -244,24 +260,7 @@ export function createDesignMode(options: DesignModeOptions) {
     controls.replaceChildren();
     syncEmpty();
     if (!selected) {
-      const empty = el("div", "design-inspector__empty");
-      const heading = el("strong", "", "Select an element");
-      const hints = el("ul");
-      // Odd parts are keycaps: "", "Click", " to inspect".
-      const hint = (...parts: string[]) => {
-        const line = el("li");
-        parts.forEach((part, index) => {
-          if (index % 2 === 0) line.append(part);
-          else line.append(el("kbd", "", part));
-        });
-        hints.append(line);
-      };
-      hint("", "Click", " to inspect");
-      hint("", "Double-click", " text to edit");
-      if (options.exitKey) hint("", "Esc", " or ", options.exitKey, " to exit");
-      else hint("", "Esc", " to exit");
-      empty.append(icon("design"), heading, hints);
-      controls.append(empty);
+      if (views) controls.append(views.empty);
       // Compact screens fold the sheet to its heading, so the title stays there.
       title.textContent = "Select an element";
       subtitle.textContent = "";
@@ -308,7 +307,7 @@ export function createDesignMode(options: DesignModeOptions) {
         // Switching a theme re-renders the selection, so tokens, values and the outline follow it.
         module.attachThemeSwitcher(controls, options.design, () => select(element), styleRoot);
         const props = module.createReactPropsPanel(element, () => {
-          status.textContent = "React state preview · resets on exit";
+          status.textContent = "Runtime preview · Undo, Reset or reload to restore";
           updateActions();
         }, styleRoot, select, options.design);
         if (props) controls.append(props);
@@ -329,21 +328,38 @@ export function createDesignMode(options: DesignModeOptions) {
   /** With nothing selected, the inspector drops its footer and the sidebar fits the empty state. */
   function syncEmpty() {
     panel.toggleAttribute("data-empty", (comment.hidden = !selected));
+    if (views) views.hint.hidden = !selected;
     panel.parentElement?.toggleAttribute("data-design-empty", active && !selected);
+    const pending = [...previewTargets.keys()].filter(hasChanges);
+    pendingSlot.hidden = !!selected || !pending.length;
+    if (views) views.pending.hidden = pendingSlot.hidden;
+    views?.update(pending.length, pending.some(element => element.isConnected && previewTargets.get(element) === page()));
+  }
+  function hasChanges(element: DesignTarget) {
+    return !!(changed.get(element)?.size || (element instanceof HTMLElement && textTools?.hasChanges(element)) || reactPanelModule?.hasReactPropChanges(element) || reactPanelModule?.hasDesignTokenEdit(element));
+  }
+  function clearSelection() {
+    finishTextEdit();
+    resized?.disconnect();
+    selected = null;
+    hovered = null;
+    outline.hidden = prospective.hidden = true;
+    renderControls();
+    updateActions();
   }
   /** Draw the outline; only a newly picked or hovered target (`retarget`) may move the panel. */
-  function outlineFor(element: HTMLElement | null, kind: "hover" | "selected", retarget = false) {
+  function outlineFor(element: DesignTarget | null, kind: "hover" | "selected", retarget = false, marker = outline) {
     if (!active || !element?.isConnected) {
-      outline.hidden = true;
+      marker.hidden = true;
       return;
     }
     const rect = element.getBoundingClientRect();
     if (!rect.width || !rect.height) {
-      outline.hidden = true;
+      marker.hidden = true;
       return;
     }
-    outline.hidden = false;
-    outline.dataset.kind = kind;
+    marker.hidden = false;
+    marker.dataset.kind = kind;
     // Flip once per target, only when it sits under the panel and would be clear on the other side.
     // Resizes, edits and Before/After redraw the outline but never move the panel.
     if (retarget && (element !== flipFor || kind !== flipKind)) {
@@ -355,26 +371,34 @@ export function createDesignMode(options: DesignModeOptions) {
       if (options.flip && box.width && covers(box.left) && !covers(document.documentElement.clientWidth - box.right))
         flipTimer = window.setTimeout(options.flip, kind === "hover" ? 350 : 0);
     }
-    outline.hidden = !drawHighlight(outline, rect, element);
+    marker.hidden = !drawHighlight(marker, rect, element, options.bounds?.(element));
+  }
+  function renderOutlines(retarget = false) {
+    outlineFor(selected ?? hovered, selected ? "selected" : "hover", retarget);
+    outlineFor(selected && hovered !== selected ? hovered : null, "hover", false, prospective);
   }
   function scheduleOutline() {
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      outlineFor(selected ?? hovered, selected ? "selected" : "hover");
+      if (selected && (!selected.isConnected || selectionPage !== page())) clearSelection();
+      renderOutlines();
     });
   }
   // Style edits resize the selection; the outline follows it.
   const resized = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleOutline) : null;
   function select(element: Element | null) {
-    if (!(element instanceof HTMLElement) || options.host.contains(element)) return;
+    if (!isDesignTarget(element) || !element.isConnected || options.host.contains(element)) return;
     if (textTools?.element && textTools.element !== element) finishTextEdit();
     resized?.disconnect();
     resized?.observe(element);
     selected = element;
     hovered = element;
+    selectionPage = page();
+    previewTargets.set(element, selectionPage);
     renderControls();
     outlineFor(element, "selected", true);
+    prospective.hidden = true;
     updateActions();
   }
   const compact = () => media("(max-width:520px)");
@@ -384,7 +408,7 @@ export function createDesignMode(options: DesignModeOptions) {
     fold.setAttribute("aria-label", panel.hasAttribute("data-folded") ? "Expand inspector" : "Collapse inspector");
   }
   /** On compact screens the inspector is a bottom sheet; keep the selection above it. */
-  function reveal(element: HTMLElement) {
+  function reveal(element: DesignTarget) {
     setFolded(false);
     if (!compact()) return;
     requestAnimationFrame(() => {
@@ -405,9 +429,10 @@ export function createDesignMode(options: DesignModeOptions) {
     copy.disabled = !selected || !(changed.get(selected)?.size);
     comment.disabled = !selected;
     // Nested markup is never editable; the editor checks privacy and interactivity on use.
-    editText.disabled = !!textTools?.busy || !selected?.isConnected;
-    editText.textContent = textTools?.isEditing(selected) ? "Done editing" : "Edit text";
-    editText.setAttribute("aria-label", textTools?.isEditing(selected) ? "Finish inline text editing" : "Edit selected text inline");
+    editText.disabled = !!textTools?.busy || !selected?.isConnected || !(selected instanceof HTMLElement);
+    editText.textContent = textTools?.isEditing(selected instanceof HTMLElement ? selected : null) ? "Done editing" : "Edit text";
+    editText.setAttribute("aria-label", textTools?.isEditing(selected instanceof HTMLElement ? selected : null) ? "Finish inline text editing" : "Edit selected text inline");
+    syncEmpty();
   }
   function finishTextEdit(cancel = false) {
     textTools?.finish(cancel);
@@ -422,7 +447,7 @@ export function createDesignMode(options: DesignModeOptions) {
       textTools = module.bindInlineTextTools({
         button: editText,
         status,
-        selected: () => selected,
+        selected: () => selected instanceof HTMLElement ? selected : null,
         active: () => active,
         onChange: updateActions,
         onCommit(result) {
@@ -433,16 +458,20 @@ export function createDesignMode(options: DesignModeOptions) {
     }).catch(() => { status.textContent = "Inline text editing is unavailable."; });
   });
   function onMove(event: PointerEvent) {
-    if (!active || event.composedPath().includes(options.host)) return;
-    const element = options.targetAt(event.clientX, event.clientY);
-    if (!(element instanceof HTMLElement) || options.host.contains(element)) return;
-    hovered = element;
-    if (!selected) outlineFor(hovered, "hover", true);
+    if (!active) return;
+    if (event.composedPath().includes(options.host)) {
+      hovered = null;
+      renderOutlines();
+      return;
+    }
+    const element = pickDesignTarget(options.targetAt(event.clientX, event.clientY), event.metaKey || event.ctrlKey);
+    hovered = element && !options.host.contains(element) ? element : null;
+    renderOutlines(!selected);
   }
   function onDown(event: PointerEvent) {
-    if (!active || event.composedPath().includes(options.host)) return;
-    const element = options.targetAt(event.clientX, event.clientY);
-    if (!(element instanceof HTMLElement) || options.host.contains(element)) return;
+    if (!active || event.button !== 0 || event.composedPath().includes(options.host)) return;
+    const element = pickDesignTarget(options.targetAt(event.clientX, event.clientY), event.metaKey || event.ctrlKey);
+    if (!element || options.host.contains(element)) return;
     if (textTools?.element && (element === textTools.element || textTools.element.contains(element))) return;
     if (textTools?.element) finishTextEdit();
     event.preventDefault();
@@ -467,10 +496,21 @@ export function createDesignMode(options: DesignModeOptions) {
     // ← Before, → After, B flips, as on design comments; never while typing in a field.
     const key = event.key.toLowerCase();
     const origin = event.composedPath()[0];
+    const typing = origin instanceof HTMLElement && (origin.isContentEditable || origin.matches("input,textarea,select"));
+    if (active && selected && event.altKey && !event.ctrlKey && !event.metaKey && !typing && (key === "arrowup" || key === "arrowdown")) {
+      const next = (key === "arrowup" ? selected.parentElement : [...selected.children].find(element => isDesignTarget(element) && !element.matches("script,style,defs,title,desc,metadata"))) ?? null;
+      if (isDesignTarget(next) && next !== document.body && next !== document.documentElement && !options.host.contains(next)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        select(next);
+        reveal(next);
+      }
+      return;
+    }
     if (
       active && !compare.hidden && !event.metaKey && !event.ctrlKey && !event.altKey &&
       (key === "b" || key === "arrowleft" || key === "arrowright") &&
-      !(origin instanceof HTMLElement && (origin.isContentEditable || origin.matches("input, textarea, select")))
+      !typing
     ) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -479,7 +519,7 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     if (active && !textTools?.element && (event.key === "Enter" || event.key === " ") && !event.composedPath().includes(options.host)) {
       const focused = document.activeElement;
-      if (focused instanceof HTMLElement && focused !== document.body && focused !== document.documentElement) {
+      if (isDesignTarget(focused) && focused !== document.body && focused !== document.documentElement) {
         event.preventDefault();
         event.stopImmediatePropagation();
         select(focused);
@@ -487,27 +527,32 @@ export function createDesignMode(options: DesignModeOptions) {
         return;
       }
     }
-    if (active && event.key === "Escape") {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      setActive(false);
-      options.onExit();
-    }
+    if (event.composedPath().includes(options.host)) escape(event);
+  }
+  function escape(event: KeyboardEvent) {
+    if (!active || event.key !== "Escape") return;
+    if (event.defaultPrevented && !event.composedPath().includes(options.host)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    clearSelection();
+    setActive(false);
+    options.onExit();
   }
   function setActive(value: boolean) {
-    // Leaving Design mode, Comment included, restores the page; posted comments preview with Before/After.
     if (!value) {
-      showBefore(false);
       textTools?.finish();
-      for (const [element, properties] of originals)
-        for (const [property, original] of properties) restore(element, property, original);
-      originals.clear();
-      changed.clear();
-      history.length = 0;
-      textTools?.restoreAll();
-      reactPanelModule?.resetPreviews();
-      updateActions();
+      if (active) {
+        suspendedBefore = showingBefore;
+        showBefore(true);
+      }
+      reactPanelModule?.restoreThemes();
     }
+    if (value && !active && suspendedBefore !== undefined) {
+      const before = suspendedBefore;
+      suspendedBefore = undefined;
+      showBefore(before);
+    }
+    if (value && selected && (!selected.isConnected || selectionPage !== page())) clearSelection();
     clearTimeout(closeTimer);
     closeTimer = 0;
     active = value;
@@ -524,7 +569,8 @@ export function createDesignMode(options: DesignModeOptions) {
       outlineFor(selected, "selected");
       close.focus({ preventScroll: true });
     } else {
-      outline.hidden = true;
+      hovered = null;
+      outline.hidden = prospective.hidden = true;
       panel.setAttribute("aria-hidden", "true");
       panel.dataset.state = "closing";
       if (calm()) {
@@ -546,9 +592,28 @@ export function createDesignMode(options: DesignModeOptions) {
   parent.addEventListener("click", () => select(selected?.parentElement ?? null));
   close.addEventListener("click", () => {
     if (textTools?.element) finishTextEdit();
+    clearSelection();
     setActive(false);
     options.onExit();
   });
+  function resetAll() {
+    showBefore(false);
+    for (const [element, properties] of originals)
+      for (const [property, original] of properties) restore(element, property, original);
+    originals.clear();
+    changed.clear();
+    history.length = 0;
+    textTools?.restoreAll();
+    reactPanelModule?.resetPreviews();
+    previewTargets.clear();
+    updateActions();
+  }
+  function proposalFor(element: DesignTarget, create: typeof import("./design-export.js")["designProposal"]) {
+    return create(element, changed.get(element), property => originals.get(element)?.get(property)?.computed,
+      reactPanelModule?.tokenBoundProperties(element),
+      [(element instanceof HTMLElement ? textTools?.proposal(element) : undefined), reactPanelModule?.proposedDesignChanges(element)],
+      reactPanelModule?.designContext(element, options.design));
+  }
   undo.addEventListener("click", () => {
     const edit = history.pop();
     if (!edit) {
@@ -557,7 +622,7 @@ export function createDesignMode(options: DesignModeOptions) {
         reactPanelModule?.undoReactProp(selected);
         renderControls();
       }
-      status.textContent = "React state preview · resets on exit";
+      status.textContent = "Runtime preview · Undo, Reset or reload to restore";
     } else if (!edit.kind) {
       edit.undo();
       renderControls();
@@ -573,21 +638,26 @@ export function createDesignMode(options: DesignModeOptions) {
     updateActions();
     (undo.disabled ? close : undo).focus({ preventScroll: true });
   });
+  function resetElement(element: DesignTarget) {
+    if (textTools?.isEditing(element instanceof HTMLElement ? element : null)) finishTextEdit(true);
+    const values = changed.get(element);
+    const hasTextValue = (element instanceof HTMLElement && textTools?.hasChanges(element)) ?? false;
+    const hasReactValues = reactPanelModule?.hasReactPropChanges(element) ?? false;
+    const hasTokenValues = reactPanelModule?.hasDesignTokenEdit(element) ?? false;
+    if (!values?.size && !hasTextValue && !hasReactValues && !hasTokenValues) return;
+    if (hasTextValue && element instanceof HTMLElement) textTools?.reset(element);
+    for (const property of values?.keys() ?? []) restore(element, property, originals.get(element)?.get(property));
+    changed.delete(element);
+    originals.delete(element);
+    previewTargets.delete(element);
+    if (hasReactValues) reactPanelModule?.resetReactProps(element);
+    if (hasTokenValues) reactPanelModule?.resetDesignTokenEdits(element);
+    for (let index = history.length - 1; index >= 0; index--)
+      if (history[index].element === element) history.splice(index, 1);
+  }
   reset.addEventListener("click", () => {
     if (!selected) return;
-    if (textTools?.isEditing(selected)) finishTextEdit(true);
-    const values = changed.get(selected);
-    const hasTextValue = textTools?.hasChanges(selected) ?? false;
-    const hasReactValues = reactPanelModule?.hasReactPropChanges(selected) ?? false;
-    const hasTokenValues = reactPanelModule?.hasDesignTokenEdit(selected) ?? false;
-    if (!values?.size && !hasTextValue && !hasReactValues && !hasTokenValues) return;
-    if (hasTextValue) textTools?.reset(selected);
-    for (const property of values?.keys() ?? []) restore(selected, property, originals.get(selected)?.get(property));
-    changed.delete(selected);
-    if (hasReactValues) reactPanelModule?.resetReactProps(selected);
-    if (hasTokenValues) reactPanelModule?.resetDesignTokenEdits(selected);
-    for (let index = history.length - 1; index >= 0; index--)
-      if (history[index].element === selected) history.splice(index, 1);
+    resetElement(selected);
     renderControls();
     outlineFor(selected, "selected");
     updateActions();
@@ -610,15 +680,14 @@ export function createDesignMode(options: DesignModeOptions) {
   comment.addEventListener("click", () => {
     const element = selected;
     if (!element) return;
-    if (textTools?.isEditing(element)) finishTextEdit();
-    void exporter().then(({ designProposal }) => options.onComment(element, designProposal(
-      element,
-      changed.get(element),
-      (property) => originals.get(element)?.get(property)?.computed,
-      reactPanelModule?.tokenBoundProperties(element),
-      [textTools?.proposal(element), reactPanelModule?.proposedDesignChanges(element)],
-      reactPanelModule?.designContext(element, options.design),
-    )), () => { status.textContent = "Comment unavailable · try again"; });
+    if (textTools?.isEditing(element instanceof HTMLElement ? element : null)) finishTextEdit();
+    void exporter().then(({ designProposal }) => {
+      if (!active || selected !== element || !element.isConnected) return;
+      const proposal = proposalFor(element, designProposal);
+      resetElement(element);
+      updateActions();
+      options.onComment(element, proposal);
+    }, () => { status.textContent = "Comment unavailable · try again"; });
   });
   // Editing anything, Undo, Reset or Comment first returns to After.
   const toAfter = () => showBefore(false);
@@ -628,11 +697,47 @@ export function createDesignMode(options: DesignModeOptions) {
   document.addEventListener("pointerdown", onDown, { capture: true, signal: listeners.signal });
   document.addEventListener("click", onClick, { capture: true, signal: listeners.signal });
   document.addEventListener("keydown", onKey, { capture: true, signal: listeners.signal });
+  window.addEventListener("keydown", escape, { signal: listeners.signal });
   window.addEventListener("scroll", scheduleOutline, { capture: true, passive: true, signal: listeners.signal });
   window.addEventListener("resize", scheduleOutline, { passive: true, signal: listeners.signal });
+  const detached = new MutationObserver(() => {
+    if (active && selected && !selected.isConnected) clearSelection();
+    if (hovered && !hovered.isConnected) { hovered = null; renderOutlines(); }
+  });
+  detached.observe(document.body, { childList: true, subtree: true });
+  const selectionReady = exporter().then(module => {
+    if (listeners.signal.aborted) return;
+    views = module.selectionViews({
+      exitKey: options.exitKey,
+      review() {
+        const target = [...previewTargets.keys()].reverse().find(element => element.isConnected && previewTargets.get(element) === page() && hasChanges(element));
+        if (target) select(target);
+      },
+      reset: resetAll,
+      proposals: () => [...previewTargets.keys()].filter(hasChanges).map(element => proposalFor(element, module.designProposal)),
+      message: text => { status.textContent = text; },
+    });
+    style.textContent += views.styles;
+    undo.innerHTML = views.icons.undo;
+    reset.innerHTML = views.icons.reset;
+    panel.insertBefore(views.hint, pendingSlot);
+    pendingSlot.append(views.pending);
+    if (active) renderControls();
+    else syncEmpty();
+  }, () => { status.textContent = "Selection tools unavailable · try again"; });
 
   return {
     setActive,
+    select,
+    clearSelection,
+    setReturnAction(action: { label: string; run(): void } | null) {
+      returnAction = action;
+      back.hidden = !action;
+      if (action) {
+        back.setAttribute("aria-label", action.label);
+        back.title = action.label;
+      }
+    },
     mountPanel(parent: HTMLElement) {
       if (panel.parentElement !== parent) {
         panel.parentElement?.removeAttribute("data-design-empty");
@@ -642,18 +747,21 @@ export function createDesignMode(options: DesignModeOptions) {
     },
     get active() { return active; },
     /** Resolves once the property controls have loaded. */
-    ready,
+    ready: Promise.all([ready, selectionReady]),
     destroy() {
       textTools?.finish(true);
       setActive(false);
+      resetAll();
       clearTimeout(closeTimer);
       clearTimeout(statusTimer);
       clearTimeout(flipTimer);
       resized?.disconnect();
+      detached.disconnect();
       listeners.abort();
       cancelAnimationFrame(frame);
       panel.remove();
       outline.remove();
+      prospective.remove();
       style.remove();
     },
   };

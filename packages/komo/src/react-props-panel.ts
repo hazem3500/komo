@@ -1,3 +1,4 @@
+import type { DesignTarget } from "./design-target.js";
 import {
   inspectableAncestor,
   inspectableFor,
@@ -51,8 +52,8 @@ import {
   tokenTitle,
 } from "./token-adapter.js";
 
-const originals = new Map<HTMLElement, Map<string, InspectableScalar>>();
-const edits = new Map<HTMLElement, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();
+const originals = new Map<DesignTarget, Map<string, InspectableScalar>>();
+const edits = new Map<DesignTarget, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();
 const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
 // React props, inline token chips and shared theme values, in the inspector's compact field style.
@@ -64,7 +65,7 @@ function scalarLabel(value: InspectableScalar): string {
   return value === undefined ? "unset" : JSON.stringify(value) ?? "unset";
 }
 
-const afterProps = new Map<HTMLElement, Record<string, InspectableScalar>>();
+const afterProps = new Map<DesignTarget, Record<string, InspectableScalar>>();
 /** Before/After for React prop previews and shared theme values. */
 export function showDesignBefore(on: boolean): void {
   if (on)
@@ -80,7 +81,7 @@ export function showDesignBefore(on: boolean): void {
   showTokenSwapsBefore(on);
 }
 
-export function hasReactPropChanges(element: HTMLElement): boolean {
+export function hasReactPropChanges(element: DesignTarget): boolean {
   return !!originals.get(element)?.size;
 }
 
@@ -90,7 +91,7 @@ export interface ReactTextEditStart {
 }
 
 /** Only an explicit registered textProp can drive a React-rendered inline edit. */
-export function beginReactTextEdit(element: HTMLElement): ReactTextEditStart | null {
+export function beginReactTextEdit(element: DesignTarget): ReactTextEditStart | null {
   const component = inspectableFor(element);
   const propName = component?.definition.textProp;
   const definition = component?.definition.props.find((prop) => prop.name === propName);
@@ -105,7 +106,7 @@ export function beginReactTextEdit(element: HTMLElement): ReactTextEditStart | n
 
 /** Preview through the registered React state callback; never mutate React's DOM. */
 export function previewReactTextEdit(
-  element: HTMLElement,
+  element: DesignTarget,
   propName: string,
   value: string,
 ): boolean {
@@ -120,7 +121,7 @@ export function previewReactTextEdit(
 }
 
 export function finishReactTextEdit(
-  element: HTMLElement,
+  element: DesignTarget,
   propName: string,
   before: string,
   after: string,
@@ -138,7 +139,7 @@ export function finishReactTextEdit(
   elementEdits.push({ propName, before, after });
 }
 
-export function cancelReactTextEdit(element: HTMLElement, propName: string, before: string): void {
+export function cancelReactTextEdit(element: DesignTarget, propName: string, before: string): void {
   previewReactTextEdit(element, propName, before);
   const baseline = originals.get(element);
   if (baseline?.get(propName) === before && !(edits.get(element) ?? []).some((edit) => edit.propName === propName)) {
@@ -147,11 +148,11 @@ export function cancelReactTextEdit(element: HTMLElement, propName: string, befo
   }
 }
 
-export function canUndoReactProp(element: HTMLElement | null): boolean {
+export function canUndoReactProp(element: DesignTarget | null): boolean {
   return !!element && !!edits.get(element)?.length;
 }
 
-export function proposedReactChanges(element: HTMLElement): string | undefined {
+export function proposedReactChanges(element: DesignTarget): string | undefined {
   const baseline = originals.get(element);
   const component = inspectableFor(element);
   if (!baseline?.size || !component) return undefined;
@@ -195,7 +196,7 @@ const oneLine = (value: unknown) => String(value).replace(/\s+/g, " ").trim();
  * 'Props: tone="calm"'. The registered React component wins, then the app's
  * component adapter, then the registered component around the element.
  */
-export function designContext(element: HTMLElement, design?: DesignSystem): string[] {
+export function designContext(element: DesignTarget, design?: DesignSystem): string[] {
   const theme = Object.entries(themeState(design)).map(([axis, option]) => `${oneLine(axis)}=${oneLine(option)}`).join(", ");
   let identity: { name: string; source?: string; props?: Record<string, unknown> } | null | undefined = adapterIdentity(element, design);
   const own = inspectableFor(element);
@@ -217,7 +218,7 @@ export function designContext(element: HTMLElement, design?: DesignSystem): stri
   ].filter((line): line is string => !!line);
 }
 
-export function proposedDesignChanges(element: HTMLElement): string | undefined {
+export function proposedDesignChanges(element: DesignTarget): string | undefined {
   return [proposedReactChanges(element), proposedDesignTokenChanges(element), proposedTokenSwaps(element)]
     .filter((value): value is string => !!value)
     .join("\n\n") || undefined;
@@ -225,7 +226,7 @@ export function proposedDesignChanges(element: HTMLElement): string | undefined 
 
 export function installCommentCapture(
   button: HTMLButtonElement,
-  selected: () => HTMLElement | null,
+  selected: () => DesignTarget | null,
   onComment: (element: Element, proposal?: string) => void,
 ): void {
   commentHandlers.get(button)?.abort();
@@ -241,19 +242,19 @@ export function installCommentCapture(
   }, { capture: true, signal: controller.signal });
 }
 
-export function canUndoDesignTokenEdit(element: HTMLElement | null): boolean {
+export function canUndoDesignTokenEdit(element: DesignTarget | null): boolean {
   return canUndoDesignToken(element);
 }
 
-export function hasDesignTokenEdit(element: HTMLElement): boolean {
+export function hasDesignTokenEdit(element: DesignTarget): boolean {
   return hasDesignTokenChanges(element) || hasTokenSwaps(element);
 }
 
-export function undoDesignTokenEdit(element: HTMLElement): void {
+export function undoDesignTokenEdit(element: DesignTarget): void {
   undoDesignToken(element);
 }
 
-export function resetDesignTokenEdits(element: HTMLElement): void {
+export function resetDesignTokenEdits(element: DesignTarget): void {
   resetDesignTokens(element);
   resetTokenSwaps(element);
 }
@@ -344,7 +345,7 @@ function themeValues(adapter: TokenAdapter, design?: DesignSystem): (() => Promi
 
 /** Add token references directly to the existing style-property row. */
 export function createElementTokenControl(
-  element: HTMLElement,
+  element: DesignTarget,
   property: string,
   onEdit: (before: string, after: string, tokenPath?: string) => void,
   styleRoot?: ShadowRoot,
@@ -474,18 +475,18 @@ export function createElementTokenControl(
 }
 
 /** Properties whose before/after is described by token provenance instead of raw CSS. */
-export function tokenBoundProperties(element: HTMLElement): Set<string> {
+export function tokenBoundProperties(element: DesignTarget): Set<string> {
   const source = tokenSourceFor(element);
   return new Set([...source?.elementBindings.get(element)?.keys() ?? [], ...swappedProperties(element)]);
 }
 
 export function attachStyleTokenControls<T extends { property: string; kind?: string }>(
-  element: HTMLElement,
+  element: DesignTarget,
   fields: readonly T[],
   container: HTMLElement,
   onEdit: (field: T, input: HTMLInputElement | HTMLSelectElement, before: string) => void,
   styleRoot?: ShadowRoot,
-  valueFor?: (field: T, element: HTMLElement) => string,
+  valueFor?: (field: T, element: DesignTarget) => string,
   toHex?: (value: string) => string,
   design?: DesignSystem,
   onSwap?: (undo: () => void) => void,
@@ -532,7 +533,7 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
 /** A field's token chip, suggestions and off-token marker, driven by the app's adapter. */
 export function createAdapterTokenControl(
   adapter: TokenAdapter,
-  element: HTMLElement,
+  element: DesignTarget,
   property: string,
   tokens: readonly DesignToken[],
   usage: TokenUsage | undefined,
@@ -639,7 +640,7 @@ let themeOpen = false;
  * Token rows reuse the panel's own fields and preview live, like every other field.
  */
 export function createDesignThemePanel(
-  element: HTMLElement,
+  element: DesignTarget,
   panel: ThemeFields,
   onEdit: () => void,
   styleRoot?: ShadowRoot,
@@ -745,17 +746,17 @@ function themeRow(
   return row;
 }
 
-export function noteDesignTokenOverride(element: HTMLElement, property: string, value: string): void {
+export function noteDesignTokenOverride(element: DesignTarget, property: string, value: string): void {
   const source = tokenSourceFor(element);
   if (source) noteElementTokenOverride(source, element, property, value);
 }
 
-export function syncDesignTokenBinding(element: HTMLElement, property: string): void {
+export function syncDesignTokenBinding(element: DesignTarget, property: string): void {
   const source = tokenSourceFor(element);
   if (source) syncElementTokenBinding(source, element, property);
 }
 
-export function undoReactProp(element: HTMLElement): void {
+export function undoReactProp(element: DesignTarget): void {
   const edit = edits.get(element)?.pop();
   const component = inspectableFor(element);
   if (!edit || !component) return;
@@ -864,7 +865,7 @@ export function attachThemeSwitcher(
   focus?.focus({ preventScroll: true });
 }
 
-export function resetReactProps(element: HTMLElement): void {
+export function resetReactProps(element: DesignTarget): void {
   const baseline = originals.get(element);
   const component = inspectableFor(element);
   if (!baseline?.size || !component) return;
@@ -875,7 +876,7 @@ export function resetReactProps(element: HTMLElement): void {
 
 /** Props belong to the registered root; a descendant only points back to it. */
 function insideComponent(
-  element: HTMLElement,
+  element: DesignTarget,
   select: ((root: HTMLElement) => void) | undefined,
   styleRoot?: ShadowRoot,
 ): HTMLElement | null {
@@ -896,7 +897,7 @@ function insideComponent(
 }
 
 function recordChange(
-  element: HTMLElement,
+  element: DesignTarget,
   component: RegisteredInspectableComponent,
   propName: string,
   value: InspectableScalar,
@@ -928,7 +929,7 @@ function recordChange(
 }
 
 export function createReactPropsPanel(
-  element: HTMLElement,
+  element: DesignTarget,
   onEdit: () => void,
   styleRoot?: ShadowRoot,
   select?: (root: HTMLElement) => void,

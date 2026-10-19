@@ -171,14 +171,18 @@ describe("custom token adapter in Design mode", () => {
     expect(label.className).toBe("text-secondary");
   });
 
-  it("takes adapter swaps back when Design mode closes", async () => {
+  it("suspends adapter swaps while inactive and resumes them with Undo intact", async () => {
     await open({ tokens: classAdapter() });
     choose("color", "color.text.primary");
     expect(label.className).toBe("text-primary");
     controller.setActive(false);
     expect(label.className).toBe("text-secondary");
     controller.setActive(true);
-    expect(tool("Undo").disabled).toBe(true);
+    expect(label.className).toBe("text-primary");
+    expect(tool("Undo").disabled).toBe(false);
+    expect(proposedDesignChanges(label)).toContain("color.text.primary");
+    tool("Undo").click();
+    expect(label.className).toBe("text-secondary");
     expect(proposedDesignChanges(label)).toBeUndefined();
   });
 

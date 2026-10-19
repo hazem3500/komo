@@ -211,14 +211,11 @@ export function initComments(options: CommentsOptions): CommentsController {
     refreshing = false,
     knownThreads = !!options.onboarding,
     sessionRevision = 0;
+  let designReturnExpanded: boolean | null = null;
   let threads: Thread[] = [],
     selected: string | null = null,
     draft: Anchor | null = null;
-  type DesignController = {
-    setActive(value: boolean): void;
-    mountPanel(parent: HTMLElement): void;
-    destroy(): void;
-  };
+  type DesignController = ReturnType<typeof import("./design-mode.js").createDesignMode>;
   let designController: DesignController | null = null;
   let designControllerPromise: Promise<DesignController | null> | null = null;
   const optimistic = new OptimisticQueue<Thread[]>(
@@ -1573,16 +1570,19 @@ export function initComments(options: CommentsOptions): CommentsController {
   function restoreCommentsAfterDesign() {
     if (!designReturnToComments) return;
     designReturnToComments = false;
-    toggleExpanded(true);
+    toggleExpanded(designReturnExpanded ?? true);
+    designReturnExpanded = null;
     requestAnimationFrame(() => {
       const list = sidebar.querySelector<HTMLElement>(".list");
       if (list) list.scrollTop = designReturnScrollTop;
-      sidebar.querySelector<HTMLButtonElement>('[data-menu-item="design"]')?.focus({ preventScroll: true });
+      (shadow.querySelector<HTMLElement>('.dialog [aria-label="Comment actions"]') ?? shadow.querySelector<HTMLElement>('[data-menu-item="design"]'))?.focus({ preventScroll: true });
     });
   }
   function setDesignMode(value: boolean) {
     if (options.onboarding || !!draft || (value && !designEnabled)) return;
     if (value) {
+      designReturnExpanded = null;
+      if (!selected) designController?.setReturnAction(null);
       // Keep the shared sidebar open. Its existing drawer morph is the outer
       // surface transition for both Comments and Design; only the content view
       // changes while the comment list and selection context stay mounted.
@@ -2230,9 +2230,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     render();
   }
   function dismissToolbar() {
-    // Hide the complete review surface and stop Design mode from capturing
-    // page interaction; leaving it restores its preview edits. The restore shortcut or
-    // controller.open() can restore Komo for this tab.
+    // Hide feedback without discarding pending Design previews.
     designReturnToComments = false;
     designActive = false;
     designController?.setActive(false);
@@ -4361,6 +4359,11 @@ export function initComments(options: CommentsOptions): CommentsController {
         : "";
       const more = actionMenu("Comment actions", [
         ...messageActions(thread.comments[0], thread),
+        ...(designEnabled ? [{
+          label: "Open in Design",
+          icon: "design" as const,
+          onSelect: () => { void openThreadInDesign(thread); },
+        }] : []),
         ...(sourceHref && /^(https?:|vscode:|cursor:)/.test(sourceHref)
           ? [
               {
@@ -5167,6 +5170,8 @@ export function initComments(options: CommentsOptions): CommentsController {
             host,
             exitKey: shortcuts.design?.label,
             design: options.design,
+            page,
+            bounds: element => framed && surface.contains(element) ? surface.getBoundingClientRect() : undefined,
             flip() {
               if (!edgeSidebar || !expanded || designDragged || edgeMorphing) return;
               const from = sidebar.getBoundingClientRect();
@@ -5196,6 +5201,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             },
             onExit() {
               designActive = false;
+              designController?.setReturnAction(null);
               syncDesignFrame();
               renderToolbar();
               restoreCommentsAfterDesign();
@@ -5218,6 +5224,33 @@ export function initComments(options: CommentsOptions): CommentsController {
         .finally(() => { designControllerPromise = null; });
     }
     return designControllerPromise;
+  }
+  async function openThreadInDesign(thread: Thread) {
+    if (!designEnabled || destroyed) return;
+    if (thread.page !== page()) {
+      const url = new URL(thread.page, location.origin);
+      url.searchParams.set("comment", thread.id);
+      url.searchParams.set("comment-view", "design");
+      await go(url);
+      return;
+    }
+    const target = resolveAnchor(thread.anchor);
+    if (!target || !pickable(target) || !locateAnchor(thread.anchor).attached) {
+      notify("Design is unavailable: this comment’s element isn’t visible on this page.");
+      return;
+    }
+    const returnExpanded = expanded;
+    setDesignMode(true);
+    designReturnExpanded = returnExpanded;
+    const controller = await ensureDesignController();
+    if (!controller || !designActive || destroyed || selected !== thread.id || thread.page !== page()) return;
+    if (!target.isConnected || resolveAnchor(thread.anchor) !== target) {
+      setDesignMode(false);
+      notify("Design is unavailable: this comment’s element has changed.");
+      return;
+    }
+    controller.select(target);
+    controller.setReturnAction({ label: "Back to comment", run: () => setDesignMode(false) });
   }
   function indicatorPoint(
     pin: HTMLElement,
@@ -5691,6 +5724,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
       const typing = editable(target) || editable(active) || event.isComposing;
       if (event.key === "Escape") {
+        if (designActive) return;
         if (event.defaultPrevented && !event.composedPath().includes(host)) return;
         if (mode || draft || selected || account) {
           event.preventDefault();
@@ -5785,6 +5819,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   function checkPage() {
     if (destroyed || page() === lastPage) return;
     lastPage = page();
+    designController?.clearSelection();
+    designController?.setReturnAction(null);
     parkedDraft = null;
     selected = null;
     draft = null;
@@ -5829,12 +5865,15 @@ export function initComments(options: CommentsOptions): CommentsController {
     linking = null;
     const url = new URL(location.href);
     if (destroyed || url.searchParams.get("comment") !== id) return;
+    const inspect = url.searchParams.get("comment-view") === "design";
     url.searchParams.delete("comment");
+    url.searchParams.delete("comment-view");
     history.replaceState(history.state, "", url);
     checkPage();
     if (thread.page !== page()) return;
     if (!expanded) toggleExpanded(true);
     selectThread(thread);
+    if (inspect) void openThreadInDesign(thread);
   }
   function syncSession() {
     const next = new CommentsApi(options);
