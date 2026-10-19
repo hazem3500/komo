@@ -6,7 +6,7 @@
 - Keep browser bundle costs within the existing measured budgets. CLI-only code must not enter browser bundles.
 - Never commit credentials, local databases, generated bundles, or npm tarballs.
 - Preserve API authentication, project boundaries, quotas, and data compatibility.
-- Deliver changes on a feature branch with a pull request and a verified deployed preview. Use preview versions of the existing `komo-site` Worker; do not use Cloudflare Pages. Never merge without approval. Validate locally; hosted CI is not a delivery gate.
+- Deliver changes on a feature branch with a pull request. For package-only changes, verify the packed artifact locally on Boat; Cloudflare credentials and a deployed website preview are not required. Verify website changes locally on Boat; upload a deployed preview when requested, using a preview version of the existing `komo-site` Worker, never Cloudflare Pages. Never merge without approval. Validate locally; hosted CI is not a delivery gate.
 - Keep user-facing copy concise and use the existing components and motion conventions.
 
 ## Linear tracking
