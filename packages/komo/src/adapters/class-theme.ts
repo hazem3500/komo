@@ -56,6 +56,15 @@ export function classTheme(config: ClassThemeOptions): ThemeAxis {
     ...(config.label ? { label: config.label } : {}),
     options: config.options.map(({ id, label }) => ({ id, ...(label ? { label } : {}) })),
     current,
+    subscribe(listener) {
+      let previous = current();
+      const observer = new MutationObserver(() => {
+        const next = current();
+        if (next !== previous) { previous = next; listener(); }
+      });
+      observer.observe(target(), { attributes: true });
+      return () => observer.disconnect();
+    },
     apply(optionId) {
       const option = config.options.find((item) => item.id === optionId);
       if (!option) return;

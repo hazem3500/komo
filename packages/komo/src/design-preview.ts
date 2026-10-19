@@ -84,7 +84,7 @@ export function inlineStyleSnapshot(element: DesignTarget, property: string) {
     return style.cssText;
   };
   const others = without(css);
-  return { value, priority, computed, restore() {
+  return { value, priority, computed, absent: attribute === null, restore() {
     if (without(element.style.cssText) === others) {
       if (attribute === null) {
         // Flush pending CSSOM serialization before removing the attribute.

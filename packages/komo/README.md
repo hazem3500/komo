@@ -274,6 +274,7 @@ initKomo({ project, design: { tokens: tailwindTokens({ tokens }, { themes: [mode
 - Previews replace table classes the new class fully covers, keep everything else in place, and stack; undoing restores the original `class` exactly. Classes outside the table, such as `text-[14px]`, are left alone.
 - `tailwindSpacing({ prefix, scale, steps })` narrows the families (`p`, `px`, `py`, `pt`, `pr`, `pb`, `pl`, `m`, `mx`, …, `gap`, `gap-x`, `gap-y`), the pixels per step (default 4), and the steps (default Tailwind's 0 to 96). Paths are `spacing.<class>`, for example `spacing.p-4`.
 - `classTheme` options take `class`, `attribute`, or both, on `target()` (default `<html>`). An option with neither is the default. With `colorScheme`, applying an option sets `color-scheme` to its `colorScheme` or id, and returning to the starting option restores the page's own value.
+- Theme changes refresh semantic previews, field values, open token pickers and unsaved proposals without adding an edit. `classTheme` observes its target. Custom axes may provide `subscribe(listener): () => void` for host state changes; axes without it detect changes carried on `<html>` or `<body>` attributes. Custom literals and saved comment bodies keep their recorded values.
 
 ## Agent CLI
 

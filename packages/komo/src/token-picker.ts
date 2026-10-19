@@ -1,4 +1,6 @@
 import { popupBounds, popupStyles, watchPopup } from "./design-popup.js";
+import { el } from "./dom.js";
+import { tokensFor, tokenTitle } from "./token-adapter.js";
 // Design mode's token picker: a searchable listbox of `DesignToken`s with a
 // preview per type, sticky group headings, the current token pinned first and
 // the field's relevant tokens by default. It is driven only by token data, so
@@ -34,7 +36,7 @@ const styled = new WeakSet<Node>();
 /** Rows built per batch; the rest are built as the list scrolls or the keyboard reaches them. */
 const BATCH = 60;
 let count = 0;
-let open: { trigger: HTMLElement; close(focus?: boolean): void } | undefined;
+let open: { trigger: HTMLElement; close(focus?: boolean): void; refresh(options?: TokenPickerOptions): void } | undefined;
 
 /** The row's name: `label`, else the last path segment, since the group heading names the rest. */
 export function tokenLabel(token: DesignToken): string {
@@ -59,12 +61,10 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 /** A small visual for the token's type: swatch, bar, corner, shadow card or "Ag". */
 function preview(token: DesignToken, themes: readonly ThemeValues[]): HTMLElement {
-  const box = document.createElement("span");
-  box.className = "komo-tokens__pv";
+  const box = el("span", "komo-tokens__pv");
   box.setAttribute("aria-hidden", "true");
   const part = (name: string) => {
-    const node = document.createElement("span");
-    node.className = `komo-tokens__${name}`;
+    const node = el("span", `komo-tokens__${name}`);
     box.append(node);
     return node;
   };
@@ -74,7 +74,7 @@ function preview(token: DesignToken, themes: readonly ThemeValues[]): HTMLElemen
     const swatch = part("sw");
     const values = themes.map((theme) => theme.values.get(token.path)).filter((item): item is string => !!item);
     for (const color of new Set(values).size > 1 ? values : [value]) {
-      const half = document.createElement("span");
+      const half = el("span");
       if (resolvedColor(color)) half.style.background = color;
       else { half.dataset.unresolved = ""; half.textContent = "?"; }
       swatch.append(half);
@@ -103,88 +103,75 @@ function preview(token: DesignToken, themes: readonly ThemeValues[]): HTMLElemen
 
 function resolvedColor(value: string): boolean {
   if (!value || /var\(/i.test(value)) return false;
-  const style = document.createElement("span").style;
+  const style = el("span").style;
   style.color = value;
   return !!style.color;
 }
 
 function row(token: DesignToken, id: string, selected: boolean, themes: readonly ThemeValues[]): HTMLElement {
-  const node = document.createElement("div");
+  const node = el("div");
   node.id = id;
   node.setAttribute("role", "option");
   node.setAttribute("aria-selected", String(selected));
-  const name = document.createElement("span");
-  name.className = "komo-tokens__name";
-  const label = document.createElement("span");
-  label.textContent = tokenLabel(token);
+  const name = el("span", "komo-tokens__name");
+  const label = el("span", "", tokenLabel(token));
   name.append(label);
-  const check = document.createElement("span");
-  check.className = "komo-tokens__check";
+  const check = el("span", "komo-tokens__check");
   check.setAttribute("aria-hidden", "true");
-  const meta = document.createElement("span");
-  meta.className = "komo-tokens__meta";
+  const meta = el("span", "komo-tokens__meta");
   const shown = token.type === "typography" ? fontSummary(token.value ?? "") : token.value ?? "";
   const unresolved = token.type === "color" && !resolvedColor(token.value);
   for (const text of [token.ref, unresolved ? `Unresolved value · ${shown || "not supplied"}` : shown]) {
     if (!text) continue;
-    const item = document.createElement("span");
-    item.textContent = text;
+    const item = el("span", "", text);
     meta.append(item);
   }
   node.append(preview(token, themes), name, check, meta);
   if (token.states?.length) {
-    const states = document.createElement("span");
-    states.className = "komo-tokens__states";
+    const states = el("span", "komo-tokens__states");
     for (const state of token.states) {
-      const chip = document.createElement("i");
-      chip.textContent = state;
+      const chip = el("i", "", state);
       states.append(chip);
     }
     node.append(states);
   }
   if (token.description) {
-    const description = document.createElement("span");
-    description.className = "komo-tokens__desc";
-    description.textContent = token.description;
+    const description = el("span", "komo-tokens__desc", token.description);
     node.append(description);
   }
   const perTheme = themes.flatMap((theme) => {
     const value = theme.values.get(token.path);
     return value && token.type === "color" ? [`${theme.label} ${value}`] : [];
   });
-  node.title = [token.label, token.path, token.ref, perTheme.length > 1 ? perTheme.join(", ") : token.value, unresolved ? "Unresolved color value; no swatch available" : "", token.states?.length ? `States: ${token.states.join(", ")}` : "", token.description]
+  node.title = [token.label, tokenTitle(token, perTheme.length > 1 ? perTheme.join(", ") : token.value, unresolved ? "Unresolved color value; no swatch available" : "")]
     .filter(Boolean).join(" · ");
   node.setAttribute("aria-label", node.title);
   return node;
 }
 
 
-export function isTokenPickerOpen(trigger: HTMLElement): boolean {
-  return open?.trigger === trigger;
+export function refreshTokenPicker(trigger: HTMLElement, options?: TokenPickerOptions): void {
+  if (open?.trigger === trigger) open.refresh(options);
 }
 
-/** Open the picker for `trigger`, or close it when it is already open there. */
-export function toggleTokenPicker(options: TokenPickerOptions): void {
-  if (isTokenPickerOpen(options.trigger)) open!.close(true);
-  else openTokenPicker(options);
-}
-
-export function openTokenPicker(options: TokenPickerOptions): () => void {
+export function openTokenPicker(options: TokenPickerOptions): () => void;
+export function openTokenPicker(options: TokenPickerOptions, toggle: boolean): (() => void) | void;
+export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
+  if (toggle && open?.trigger === options.trigger) return open.close(true);
   open?.close();
-  const { trigger, tokens, property } = options;
+  const { trigger, property } = options;
+  let tokens = options.tokens;
   const root = trigger.getRootNode();
   if ((root instanceof ShadowRoot || root === document) && !styled.has(root)) {
     styled.add(root);
-    const style = document.createElement("style");
+    const style = el("style");
     style.textContent = popupStyles + css;
     (root instanceof ShadowRoot ? root : document.head).append(style);
   }
   const id = `komo-tokens-${++count}`;
-  const box = document.createElement("div");
-  box.className = "komo-tokens";
-  const bar = document.createElement("div");
-  bar.className = "komo-tokens__bar";
-  const search = document.createElement("input");
+  const box = el("div", "komo-tokens");
+  const bar = el("div", "komo-tokens__bar");
+  const search = el("input");
   search.type = "text";
   search.placeholder = "Search tokens";
   search.autocomplete = "off";
@@ -194,27 +181,26 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
   search.setAttribute("aria-controls", id);
   search.setAttribute("aria-autocomplete", "list");
   search.setAttribute("aria-label", `Search tokens for ${property}`);
-  const list = document.createElement("div");
+  const list = el("div");
   list.id = id;
   list.setAttribute("role", "listbox");
   list.setAttribute("aria-label", `Tokens for ${property}`);
-  const relevant = tokens.filter((token) => token.properties?.includes(property));
+  let relevant = tokensFor(tokens, property);
   let all = !relevant.length;
-  const widen = document.createElement("button");
+  const widen = el("button");
   widen.type = "button";
   widen.textContent = "Show all";
-  widen.title = `Show all ${tokens.length} tokens, not only ${property} tokens`;
+  widen.title = `Show all ${tokens.length} tokens`;
   bar.append(search);
   if (relevant.length && relevant.length < tokens.length) bar.append(widen);
   box.append(bar, list);
   if (options.onPreview) {
-    const hint = document.createElement("div");
-    hint.className = "komo-tokens__hint";
-    hint.textContent = "↑↓ preview · Enter to apply · Esc to cancel";
+    const hint = el("div", "komo-tokens__hint", "↑↓ preview · Enter apply · Esc cancel");
     box.append(hint);
   }
   // Lowercase haystacks are built once, so each keystroke is a plain scan.
-  const haystack = new Map(tokens.map((token) => [token, `${tokenLabel(token)} ${token.label ?? ""} ${token.path} ${token.ref ?? ""} ${token.value ?? ""}`.toLowerCase()]));
+  const haystacks = () => new Map(tokens.map((token) => [token, `${tokenLabel(token)} ${token.path} ${token.ref ?? ""} ${token.value ?? ""}`.toLowerCase()]));
+  let haystack = haystacks();
   let themes: readonly ThemeValues[] = [];
   let items: Array<{ token: DesignToken; group: string }> = [];
   let built = 0;
@@ -223,6 +209,7 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
   let groupName: string | undefined;
   let undoPreview: (() => void) | undefined;
   let previewed = -1;
+  let resuming = false;
   const restorePreview = () => {
     const undo = undoPreview;
     undoPreview = undefined;
@@ -237,9 +224,9 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
         groupName = group;
         groupNode = list;
         if (group) {
-          groupNode = document.createElement("div");
+          groupNode = el("div");
           groupNode.setAttribute("role", "group");
-          const heading = document.createElement("small");
+          const heading = el("small");
           heading.id = `${id}-g${built}`;
           heading.textContent = group;
           groupNode.setAttribute("aria-labelledby", heading.id);
@@ -271,7 +258,9 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
     if (top < list.scrollTop) list.scrollTop = top - 4;
     else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight + 4;
   };
-  const render = (preview = false) => {
+  const render = (preview = false, keep = false) => {
+    const path = keep ? items[active]?.token.path : undefined;
+    const scroll = list.scrollTop, upTo = keep ? built : BATCH;
     restorePreview();
     const terms = search.value.toLowerCase().split(/\s+/).filter(Boolean);
     const pool = all ? tokens : relevant;
@@ -296,14 +285,13 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
     search.removeAttribute("aria-activedescendant");
     widen.setAttribute("aria-pressed", String(all));
     if (!items.length) {
-      const empty = document.createElement("div");
-      empty.className = "komo-tokens__empty";
-      empty.textContent = terms.length ? "No matching tokens" : "No tokens";
+      const empty = el("div", "komo-tokens__empty", terms.length ? "No matching tokens" : "No tokens");
       list.append(empty);
       return;
     }
-    build(BATCH);
-    activate(0, false, preview);
+    build(upTo);
+    activate(Math.max(0, items.findIndex(item => item.token.path === path)), false, preview);
+    if (keep) list.scrollTop = scroll;
   };
 
   const listeners = new AbortController();
@@ -319,7 +307,26 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
     trigger.removeAttribute("aria-controls");
     if (focus && trigger.isConnected) trigger.focus({ preventScroll: true });
   }
-  open = { trigger, close };
+  open = { trigger, close,
+    refresh(next) {
+      if (!next) {
+        resuming ||= previewed >= 0;
+        return restorePreview();
+      }
+      const preview = resuming || previewed >= 0;
+      resuming = false;
+      options = next;
+      tokens = next.tokens;
+      relevant = tokensFor(tokens, property);
+      haystack = haystacks();
+      themes = [];
+      widen.title = `Show all ${tokens.length} tokens`;
+      if (relevant.length && relevant.length < tokens.length) bar.append(widen);
+      else widen.remove();
+      render(preview, true);
+      loadThemes();
+    },
+  };
   const choose = (index: number) => {
     const token = items[index]?.token;
     if (!token) return;
@@ -337,12 +344,12 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
     const path = event.composedPath();
     if (!path.includes(box) && !path.includes(trigger)) return;
     const { key } = event;
+    const step = ({ ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 } as Record<string, number>)[key];
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (key === "Escape") close(true);
     else if (key === "Tab") return close();
     else if (path[0] !== search && path[0] !== trigger) return;
-    else if (key === "ArrowDown" || key === "ArrowUp") activate(clamp(active + (key === "ArrowDown" ? 1 : -1), 0, items.length - 1));
-    else if (key === "PageDown" || key === "PageUp") activate(clamp(active + (key === "PageDown" ? 8 : -8), 0, items.length - 1));
+    else if (step) activate(clamp(active + step, 0, items.length - 1));
     else if (key === "Enter") choose(active);
     else return;
     event.preventDefault();
@@ -403,19 +410,16 @@ export function openTokenPicker(options: TokenPickerOptions): () => void {
   }
   // Touch keeps the keyboard down until the search field is tapped.
   if (!coarse) search.focus({ preventScroll: true });
+  let themeRequest = 0;
   // Values per theme come from the adapter's list(theme), so the page never flips to read them.
-  void Promise.resolve(options.themes?.()).then((values) => {
-    if (!values || values.length < 2 || open?.trigger !== trigger) return;
-    themes = values;
-    const at = active;
-    const scroll = list.scrollTop;
-    const upTo = built;
-    list.replaceChildren();
-    built = 0;
-    groupName = undefined;
-    build(upTo);
-    list.scrollTop = scroll;
-    activate(at, false, false);
-  }, () => {});
+  function loadThemes() {
+    const request = ++themeRequest;
+    void Promise.resolve(options.themes?.()).then((values) => {
+      if (!values || values.length < 2 || open?.close !== close || request !== themeRequest) return;
+      themes = values;
+      render(previewed >= 0, true);
+    }, () => {});
+  }
+  loadThemes();
   return () => close();
 }

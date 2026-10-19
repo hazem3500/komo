@@ -325,4 +325,157 @@ describe("custom token adapter in Design mode", () => {
     await listTokens(adapter, { mode: "dark" });
     expect(adapter.list).toHaveBeenCalledTimes(2);
   });
+  it("refreshes semantic preview DOM, binding details and proposal values when the host theme changes", async () => {
+    const root = document.documentElement;
+    const styles = document.createElement("style");
+    styles.textContent = '[data-review-mode="dark"] .text-secondary{color:#cccccc}[data-review-mode="light"] .text-secondary{color:#555555}';
+    document.head.append(styles);
+    root.setAttribute("data-review-mode", "dark");
+    const values = { dark: ["#eeeeee", "#cccccc"], light: ["#222222", "#555555"] };
+    const adapter: TokenAdapter = {
+      id: "theme-values",
+      list(theme) {
+        const colors = values[(theme?.mode ?? root.getAttribute("data-review-mode")) as keyof typeof values];
+        return classTokens.slice(0, 2).map((token, index) => ({ ...token, value: colors[index] }));
+      },
+      resolve: () => ({ color: { path: "color.text.secondary" } }),
+    };
+    try {
+      await open({ tokens: adapter, themes: [{ id: "mode", options: [{ id: "light" }, { id: "dark" }], current: () => root.getAttribute("data-review-mode")!, apply: id => root.setAttribute("data-review-mode", id) }] });
+      choose("color", "color.text.primary");
+      expect(getComputedStyle(label).color).toBe("rgb(238, 238, 238)");
+      root.setAttribute("data-review-mode", "light");
+      await vi.waitFor(() => expect(getComputedStyle(label).color).toBe("rgb(34, 34, 34)"));
+      expect(picker("color").title).toContain("#222222");
+      expect(picker("color").title).not.toContain("#eeeeee");
+      expect(proposedDesignChanges(label)).toContain("#555555 [color.text.secondary] → #222222 [color.text.primary]");
+      tool("Undo").click();
+      expect(label.style.color).toBe("");
+      expect(getComputedStyle(label).color).toBe("rgb(85, 85, 85)");
+    } finally {
+      styles.remove();
+      root.removeAttribute("data-review-mode");
+    }
+  });
+
+  it("keeps an open picker and its transient option current across an external theme change", async () => {
+    const root = document.documentElement;
+    root.setAttribute("data-review-mode", "dark");
+    const values = { dark: ["#eeeeee", "#cccccc"], light: ["#222222", "#555555"] };
+    let releaseLight: (() => void) | undefined;
+    try {
+      await open({ tokens: {
+        id: "open-theme-values",
+        list(theme) {
+          const tokens = classTokens.slice(0, 2).map((token, index) => ({ ...token, value: values[(theme?.mode ?? "dark") as keyof typeof values][index] }));
+          return theme?.mode === "light" ? new Promise<DesignToken[]>(resolve => { releaseLight = () => resolve(tokens); }) : tokens;
+        },
+        resolve: () => ({ color: { path: "color.text.secondary" } }),
+      }, themes: [{ id: "mode", options: [{ id: "light" }, { id: "dark" }], current: () => root.getAttribute("data-review-mode")!, apply: id => root.setAttribute("data-review-mode", id) }] });
+      choose("color", "color.text.primary");
+      picker("color").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, composed: true }));
+      await vi.waitFor(() => expect(shadow.querySelector(".komo-tokens")).not.toBeNull());
+      const popup = shadow.querySelector(".komo-tokens")!;
+      const search = popup.querySelector<HTMLInputElement>("input")!;
+      search.value = "text";
+      search.dispatchEvent(new Event("input"));
+      search.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, composed: true }));
+      expect(getComputedStyle(label).color).toBe("rgb(204, 204, 204)");
+      await vi.waitFor(() => expect(releaseLight).toBeTypeOf("function"));
+      root.setAttribute("data-review-mode", "light");
+      await new Promise(resolve => setTimeout(resolve, 0));
+      for (const key of ["ArrowUp", "ArrowDown"]) search.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true }));
+      releaseLight!();
+      await vi.waitFor(() => expect(getComputedStyle(label).color).toBe("rgb(85, 85, 85)"));
+      expect(shadow.querySelector(".komo-tokens")).toBe(popup);
+      expect(popup.querySelector("input")).toBe(search);
+      expect(search.value).toBe("text");
+      expect(popup.querySelector("[data-active]")?.getAttribute("aria-label")).toContain("#555555");
+      search.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+      expect(getComputedStyle(label).color).toBe("rgb(34, 34, 34)");
+      tool("Undo").click();
+      expect(label.getAttribute("style")).toBeNull();
+    } finally { root.removeAttribute("data-review-mode"); }
+  });
+
+  it("refreshes semantic history while retaining literal overrides and suspended Before state", async () => {
+    const root = document.documentElement;
+    const styles = document.createElement("style");
+    styles.textContent = '[data-review-mode="dark"] .text-secondary{color:#cccccc}[data-review-mode="light"] .text-secondary{color:#555555}';
+    document.head.append(styles);
+    root.setAttribute("data-review-mode", "dark");
+    const values = { dark: ["#eeeeee", "#cccccc", "#dddddd"], light: ["#222222", "#555555", "#333333"] };
+    const listeners = new Set<() => void>();
+    const axis = {
+      id: "mode", options: [{ id: "light" }, { id: "dark" }],
+      current: () => root.getAttribute("data-review-mode")!,
+      apply(id: string) { root.setAttribute("data-review-mode", id); listeners.forEach(listener => listener()); },
+      subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    };
+    const adapter: TokenAdapter = {
+      id: "history-theme-values",
+      list: theme => [...classTokens.slice(0, 2), { ...classTokens[0], path: "color.text.alternate" }].map((token, index) => ({ ...token, value: values[(theme?.mode ?? "dark") as keyof typeof values][index] })),
+      resolve: () => ({ color: { path: "color.text.secondary" } }),
+    };
+    try {
+      await open({ tokens: adapter, themes: [axis] });
+      choose("color", "color.text.primary");
+      choose("color", "color.text.alternate");
+      axis.apply("light");
+      await vi.waitFor(() => expect(getComputedStyle(label).color).toBe("rgb(51, 51, 51)"));
+      tool("Undo").click();
+      expect(getComputedStyle(label).color).toBe("rgb(34, 34, 34)");
+      const raw = field("color").querySelector<HTMLInputElement>('input[data-property="color"]')!;
+      raw.focus(); raw.value = "#ef3340";
+      raw.dispatchEvent(new Event("input", { bubbles: true }));
+      raw.dispatchEvent(new Event("change", { bubbles: true }));
+      raw.blur();
+      axis.apply("dark");
+      await vi.waitFor(() => expect(picker("color").querySelector('option[value="color.text.primary"]')?.getAttribute("title")).toContain("#eeeeee"));
+      expect(getComputedStyle(label).color).toBe("rgb(239, 51, 64)");
+      expect(field("color").dataset.tokenMode).toBe("custom");
+      tool("Undo").click();
+      expect(getComputedStyle(label).color).toBe("rgb(238, 238, 238)");
+      const sides = () => shadow.querySelectorAll<HTMLButtonElement>(".design-inspector__compare button");
+      sides()[0].click();
+      axis.apply("light");
+      await vi.waitFor(() => expect(picker("color").title).toContain("#222222"));
+      expect(getComputedStyle(label).color).toBe("rgb(85, 85, 85)");
+      sides()[1].click();
+      expect(getComputedStyle(label).color).toBe("rgb(34, 34, 34)");
+      controller.setActive(false);
+      axis.apply("dark");
+      await vi.waitFor(() => expect(picker("color").title).toContain("#eeeeee"));
+      expect(getComputedStyle(label).color).toBe("rgb(204, 204, 204)");
+      controller.setActive(true);
+      expect(getComputedStyle(label).color).toBe("rgb(238, 238, 238)");
+      tool("Reset").click();
+      expect(label.getAttribute("style")).toBeNull();
+      controller.destroy();
+      expect(listeners.size).toBe(0);
+    } finally { styles.remove(); root.removeAttribute("data-review-mode"); }
+  });
+
+  it("keeps a custom literal while its semantic baseline in a new proposal follows the theme", async () => {
+    const root = document.documentElement;
+    root.setAttribute("data-review-mode", "dark");
+    try {
+      await open({ tokens: {
+        id: "custom-theme-baseline",
+        list: theme => classTokens.slice(0, 2).map((token, index) => ({ ...token, value: (theme?.mode === "light" ? ["#222222", "#555555"] : ["#eeeeee", "#cccccc"])[index] })),
+        resolve: () => ({ color: { path: "color.text.secondary" } }),
+      }, themes: [{ id: "mode", options: [{ id: "light" }, { id: "dark" }], current: () => root.getAttribute("data-review-mode")!, apply: id => root.setAttribute("data-review-mode", id) }] });
+      const raw = field("color").querySelector<HTMLInputElement>('input[data-property="color"]')!;
+      raw.focus(); raw.value = "#ef3340";
+      raw.dispatchEvent(new Event("input", { bubbles: true }));
+      raw.dispatchEvent(new Event("change", { bubbles: true })); raw.blur();
+      root.setAttribute("data-review-mode", "light");
+      await vi.waitFor(() => expect(picker("color").querySelector('option[value="color.text.secondary"]')?.getAttribute("title")).toContain("#555555"));
+      expect(getComputedStyle(label).color).toBe("rgb(239, 51, 64)");
+      [...shadow.querySelectorAll<HTMLButtonElement>(".design-inspector__bar button")].find(button => button.textContent === "Comment")!.click();
+      await vi.waitFor(() => expect(proposals[0]).toContain("- color: #555555 → rgb(239, 51, 64)"));
+      expect(proposals[0]).not.toContain("#cccccc");
+    } finally { root.removeAttribute("data-review-mode"); }
+  });
+
 });
