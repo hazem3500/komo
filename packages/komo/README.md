@@ -145,9 +145,9 @@ Without `design.tokens`, Design mode uses the built-in `cssVariableTokens()` ada
 In Design mode, each style field of the picked element:
 
 - shows the token `resolve(element)` reports for that property as a chip;
-- suggests the `list()` tokens whose `properties` include it, grouped by `group`, labelled with `label` (or `path`) and `ref`;
-- marks an `{ offToken }` value with a small dot, "Not from a token · 13px", naming a color or dimension token with exactly that value;
-- previews a chosen token with `preview()`, or by setting its value inline when there is no `preview()`. Undo, Reset and Before/After use the undo it returns. States such as hover appear in the tooltip only; they are not previewed.
+- opens a token picker listing the `list()` tokens whose `properties` include it, with **Show all** for every token. Rows sit under sticky `group` headings and show a preview for the token's `type` (a color swatch, a bar or corner for dimensions, a shadow card, "Ag" in the font), its `label` (or the last path segment), `ref` and value, `states` as chips and `description` as a second line. The current token is pinned first. Search matches label, path, ref and value; arrow keys and Enter choose, Escape closes. With a theme axis of two or three options, color swatches split by option, using `list(theme)` for each, so the page never switches to read them;
+- marks an `{ offToken }` value with a small dot, "Not from a token · 13px", naming a token with exactly that value. Colors compare across hex, `rgb()` and `rgba()` spellings. When a token suggested for the property matches, a "Matches Primary · Use token" line offers it; the field stays unbound until you choose it;
+- previews a chosen token with `preview()`, or by setting its value inline when there is no `preview()`. Undo, Reset and Before/After use the undo it returns. States such as hover are listed, not previewed.
 
 `list()` and `resolve()` may return promises; the panel renders first and the token controls join when they resolve. `list()` is called once per theme state. A comment on a token swap records `Element color: #6b6b6b [color.text.secondary] → #1f1f1f [color.text.primary]`, followed by your `describe()` text on an `Apply:` line.
 

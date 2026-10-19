@@ -30,7 +30,8 @@ export function attach(container: HTMLElement): void {
   containers.add(container);
   const target = (event: Event) => {
     const select = event.composedPath()[0];
-    return select instanceof HTMLSelectElement && !select.disabled && !select.multiple ? select : null;
+    // Token selects open the token picker instead (data-picker).
+    return select instanceof HTMLSelectElement && !select.disabled && !select.multiple && !select.dataset.picker ? select : null;
   };
   container.addEventListener("focusin", (event) => {
     const select = target(event);

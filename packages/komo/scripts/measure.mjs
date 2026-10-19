@@ -27,6 +27,9 @@ const designPanel = (await readdir("dist"))
 const selectMenu = (await readdir("dist"))
   .filter((file) => /^select-menu.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const tokenPicker = (await readdir("dist"))
+  .filter((file) => /^token-picker.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const entry = Object.keys(outputs).find(
   (path) => outputs[path].entryPoint === "dist/index.js"
 );
@@ -64,6 +67,7 @@ const report = {
   optionalInlineTextEditing: await sizes(new Set(inlineTextEditing)),
   optionalDesignPanel: await sizes(new Set(designPanel)),
   optionalSelectMenu: await sizes(new Set(selectMenu)),
+  optionalTokenPicker: await sizes(new Set(tokenPicker)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
   adapterCssVariables: await sizes(new Set(["dist/adapters/css-variables.js"])),
   adapterReactFiber: await sizes(new Set(["dist/adapters/react-fiber.js"])),
@@ -119,8 +123,13 @@ if (report.optionalDesignPanel.gzip > 4_300)
   throw new Error("komo's design panel chunk exceeds its gzip budget.");
 // The Design panel's styled select popups (listbox, keyboard, flip and check marks)
 // load as their own chunk beside the panel, so neither the panel nor the entry grows.
-if (report.optionalSelectMenu.gzip > 3_100)
+// 3,125: token selects (data-picker) are left to the token picker below (+11 bytes).
+if (report.optionalSelectMenu.gzip > 3_125)
   throw new Error("komo's select menu chunk exceeds its gzip budget.");
+// The token picker (search, type previews, sticky groups, lazy rows, keyboard) loads the first
+// time a token field opens. 4,631 measured, plus ~3%.
+if (report.optionalTokenPicker.gzip > 4_775)
+  throw new Error("komo's token picker chunk exceeds its gzip budget.");
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.
