@@ -2542,6 +2542,18 @@ export function initComments(options: CommentsOptions): CommentsController {
       : detachedThreads.has(thread.id)
         ? "Not found on page"
         : "";
+  function updateCardPage(item: Element, thread: Thread) {
+    const route = item.querySelector<HTMLElement>(".page");
+    if (!route) return;
+    const url = new URL(thread.page, location.origin).href;
+    route.textContent = thread.page !== page() ? thread.page : "";
+    route.title = url;
+    route.parentElement!.hidden = !route.textContent;
+    const status = item.querySelector<HTMLElement>(".card-status")!;
+    status.textContent = thread.resolved ? "Resolved" : detachedThreads.has(thread.id) ? "Not found on page" : "";
+    status.hidden = !status.textContent;
+    item.querySelector(".thread-card")!.setAttribute("aria-description", [url, status.textContent].filter(Boolean).join(" · "));
+  }
   let pinsScrolling = false;
   let pinScrollTimer = 0;
   function renderPins(force = false) {
@@ -2581,10 +2593,10 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (detachedThreads.has(thread.id) === !rect.attached) continue;
       if (rect.attached) detachedThreads.delete(thread.id);
       else detachedThreads.add(thread.id);
-      const label = shadow.querySelector(
-        `.thread-item[data-thread="${CSS.escape(thread.id)}"] .page`,
+      const item = shadow.querySelector(
+        `.thread-item[data-thread="${CSS.escape(thread.id)}"]`,
       );
-      if (label) label.textContent = pageLabel(thread);
+      if (item) updateCardPage(item, thread);
     }
     const snapshot = JSON.stringify([
       selected,
@@ -3018,6 +3030,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
   }
   const listItems = new WeakMap<Thread, HTMLElement>();
+  const expandedReplies = new Set<string>();
   /** A thread's one-line summary, as on its list card. */
   function summary(node: HTMLElement, body: string) {
     node.textContent = body;
@@ -3405,7 +3418,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           const reply = thread.comments[index + 1];
           node.textContent = `${reply.author.name} · ${age(reply.createdAt)}`;
         });
-        cached.querySelector(".page")!.textContent = pageLabel(thread);
+        updateCardPage(cached, thread);
         list.append(cached);
         continue;
       }
@@ -3421,23 +3434,22 @@ export function initComments(options: CommentsOptions): CommentsController {
         el("span", "author", first.author.name),
         el("small", "", age(first.createdAt)),
       );
-      const meta = el("div", "meta");
-      meta.append(
-        el("span", "page", pageLabel(thread)),
-        el(
-          "span",
-          "",
-          thread.resolved
-            ? "Resolved"
-            : thread.comments.length > 1
-              ? `${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}`
-              : "",
-        ),
-      );
-      if (tagsEnabled && thread.tags?.length)
-        meta.append(el("span", "tag-list", thread.tags.map((tag) => `#${tag}`).join(" ")));
+      const route = el("div", "card-page-row");
+      route.append(icon("link"), el("span", "page"));
+      const status = el("span", "card-status");
       const preview = summary(el("p", "preview"), first.body);
-      card.append(preview, header, meta);
+      card.append(header, route, status, preview);
+      if (tagsEnabled && thread.tags?.length) {
+        const tags = el("div", "card-tags");
+        tags.setAttribute("role", "group");
+        tags.setAttribute("aria-label", "Tags");
+        for (const tag of thread.tags) {
+          const chip = el("span", "card-tag", `#${tag}`);
+          chip.title = tag;
+          tags.append(chip);
+        }
+        card.append(tags);
+      }
       const item = el("div", "thread-item");
       item.dataset.thread = thread.id;
       const quickResolve = button(
@@ -3448,8 +3460,28 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
       quickResolve.disabled = !canResolve();
       item.append(card, quickResolve);
+      updateCardPage(item, thread);
       if (thread.comments.length > 1) {
-        const replies = el("div", "sidebar-replies");
+        const previews = el("div", "sidebar-replies");
+        previews.id = `replies-${thread.id}`;
+        previews.setAttribute("role", "group");
+        previews.setAttribute("aria-label", `Replies to ${first.author.name}`);
+        const count = `${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}`;
+        const toggle = button(count, () => {
+          if (expandedReplies.has(thread.id)) expandedReplies.delete(thread.id);
+          else expandedReplies.add(thread.id);
+          syncReplies();
+        }, "card-reply-toggle");
+        toggle.replaceChildren(icon("comment"), el("span", "", count), icon("chevron"));
+        toggle.setAttribute("aria-controls", previews.id);
+        const syncReplies = () => {
+          const open = expandedReplies.has(thread.id);
+          previews.hidden = !open;
+          toggle.setAttribute("aria-expanded", String(open));
+          toggle.setAttribute("aria-label", `${open ? "Hide" : "Show"} ${count}`);
+          toggle.title = `${open ? "Hide" : "Show"} ${count}`;
+        };
+        syncReplies();
         for (const reply of thread.comments.slice(1)) {
           const row = el("div", "sidebar-reply");
           row.append(avatar(reply.author));
@@ -3463,9 +3495,17 @@ export function initComments(options: CommentsOptions): CommentsController {
             el("p", "", reply.body),
           );
           row.append(content);
-          replies.append(row);
+          previews.append(row);
         }
-        card.append(replies);
+        item.append(toggle, previews);
+        item.addEventListener("keydown", (event) => {
+          if (event.key !== "Escape" || !expandedReplies.has(thread.id)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          expandedReplies.delete(thread.id);
+          syncReplies();
+          toggle.focus({ preventScroll: true });
+        });
       }
       listItems.set(thread, item);
       list.append(item);
