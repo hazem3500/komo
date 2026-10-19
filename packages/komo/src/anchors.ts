@@ -51,7 +51,7 @@ function stableFor(element: Element, preferred?: string): string | undefined {
 function selectorFor(element: Element): string {
   const parts: string[] = [];
   let node: Element | null = element;
-  while (node && node !== document.body && parts.length < 12) {
+  while (node && node !== document.body && node !== document.documentElement) {
     const stable = stableFor(node);
     if (stable) {
       parts.unshift(stable);
@@ -62,11 +62,14 @@ function selectorFor(element: Element): string {
           (sibling) => sibling.tagName === node!.tagName,
         )
       : [];
-    parts.unshift(
-      `${node.tagName.toLowerCase()}:nth-of-type(${siblings.indexOf(node) + 1})`,
-    );
+    const tag = node.tagName.toLowerCase();
+    parts.unshift(siblings.length > 1
+      ? `${tag}:nth-of-type(${siblings.indexOf(node) + 1})`
+      : tag);
     node = node.parentElement;
   }
+  if (node === document.body) parts.unshift("body");
+  else if (node === document.documentElement) parts.unshift("html");
   return parts.join(" > ");
 }
 function labelFor(element: Element): string {
@@ -221,12 +224,12 @@ type Search = (
   scope: Element,
   anchor: Anchor,
   scoped: boolean,
-) => Element | null;
+) => Element[];
 const search: Search = (scope, anchor, scoped) => {
   const candidates = [
     ...(scoped ? scope.querySelectorAll(anchor.context!.tag!) : scope.children),
   ].filter((candidate) => matches(candidate, anchor));
-  return candidates.length === 1 ? candidates[0] : null;
+  return candidates;
 };
 export function resolveAnchor(
   anchor: Anchor,
@@ -251,21 +254,28 @@ export function resolveAnchor(
   }
   return element;
 }
-/** Require the matched element to be unique in its scope, or among its siblings when the scope is gone. */
+/** Reject competing branches, while preserving the exact target among nested text wrappers. */
 function confirm(element: Element, anchor: Anchor, find: Search) {
   const context = anchor.context;
   if (!context?.tag || !(anchor.text || context.label || context.nearby))
     return element;
   const scope = context.scope ? unique(context.scope) : null;
-  if (scope) return find(scope, anchor, true);
-  return element.parentElement ? find(element.parentElement, anchor, false) : null;
+  const candidates = scope
+    ? find(scope, anchor, true)
+    : element.parentElement ? find(element.parentElement, anchor, false) : [];
+  if (candidates.length === 1) return candidates[0];
+  // Nested wrappers can share all their text; peer branches must remain ambiguous.
+  return candidates.includes(element) && candidates.every((candidate) =>
+    candidate.contains(element) || element.contains(candidate),
+  ) ? element : null;
 }
 function findByContext(anchor: Anchor, find: Search) {
   const context = anchor.context;
   if (!context?.tag || !context.scope || !(anchor.text || context.label || context.nearby))
     return null;
   const scope = unique(context.scope);
-  return scope ? find(scope, anchor, true) : null;
+  const candidates = scope ? find(scope, anchor, true) : [];
+  return candidates.length === 1 ? candidates[0] : null;
 }
 export function locateAnchor(
   anchor: Anchor,
@@ -315,7 +325,7 @@ export function anchorPass() {
   const measured = new Map<Anchor, ReturnType<typeof measure>>();
   const scopes = new WeakMap<
     Element,
-    Map<string, Map<string, Element | null>>
+    Map<string, Map<string, Element[]>>
   >();
   const identities = new WeakMap<Element, string[]>();
   const find: Search = (scope, anchor, scoped) => {
@@ -345,10 +355,12 @@ export function anchorPass() {
             ]),
           );
         const value = signature(identity);
-        index.set(value, index.has(value) ? null : element);
+        const matches = index.get(value);
+        if (matches) matches.push(element);
+        else index.set(value, [element]);
       }
     }
-    return index.get(signature(expected)) ?? null;
+    return index.get(signature(expected)) ?? [];
   };
   const resolve = (anchor: Anchor) => {
     if (!resolved.has(anchor))
