@@ -29,7 +29,8 @@ import {
   type KomoDesignToken,
   type RegisteredDesignTokenSource,
 } from "./design-tokens.js";
-import type { ComponentIdentity, DesignSystem, DesignToken, ThemeAxis, TokenAdapter, TokenUsage } from "./design-system.js";
+import type { ComponentIdentity, DesignSystem, DesignToken, DesignTokenType, ThemeAxis, TokenAdapter, TokenUsage } from "./design-system.js";
+import type { ThemeValues, TokenPickerOptions } from "./token-picker.js";
 import {
   closestToken,
   hasTokenSwaps,
@@ -56,6 +57,8 @@ const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
 // React props, inline token chips and shared theme values, in the inspector's compact field style.
 const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-inside{padding:10px 12px}.design-react-inside button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-react-inside button:hover{text-decoration:underline}.design-react-field.design-field{display:grid;grid-template-columns:76px minmax(0,1fr);gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 8px;border:0;border-radius:6px;background-color:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field.design-field>select{padding-right:20px}.design-react-field input[type=checkbox]{justify-self:end;width:14px;height:14px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 6px center/8px no-repeat;color:#e9e6e1;padding:0 18px 0 6px;font:inherit;font-size:10px;cursor:pointer}.design-react-field .design-token-binding[data-mode=token] select{background-color:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-token-off{position:absolute;top:8px;right:24px;display:grid;place-items:center;width:12px;height:12px}.design-token-off::before{content:'';width:4px;height:4px;border-radius:50%;background:#e7c27d;opacity:.7}.design-token-off[hidden]{display:none}.design-field:has(>.design-token-binding>.design-token-off:not([hidden]))>input[data-property]{padding-right:38px}.design-theme-switch{padding:6px 12px 8px}.design-theme-switch .design-react-field>span{text-transform:capitalize}.design-theme-options{display:flex;min-width:0;padding:2px;border-radius:6px;background:#ffffff0a}.design-theme-options button{flex:1;min-width:0;height:24px;padding:0 6px;border:0;border-radius:4px;background:none;color:#898680;font:inherit;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.design-theme-options button:hover{color:#f1efeb}.design-theme-options button[aria-pressed=true]{background:#ffffff1a;color:#f1efeb}.design-theme-options button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}@media (max-width:520px){.design-theme-options button{height:30px}.design-react-field.design-field>:is(input,select){height:34px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{top:7px}.design-token-off{top:11px}}`;
+// The token picker's "Matches … · Use token" suggestion under an off-token field.
+const matchStyles = `.design-token-match{grid-column:1/-1;display:flex;align-items:center;gap:6px;min-width:0;margin-top:-2px;padding:0 4px;color:#77736f;font-size:10px}.design-token-match[hidden]{display:none}.design-token-match>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-token-match button{flex:none;padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-token-match button:hover{text-decoration:underline}.design-token-match button:focus-visible{outline:1px solid #bda6ef;outline-offset:2px;border-radius:2px}@media (pointer:coarse){.design-token-match button{min-height:32px}}`;
 
 function scalarLabel(value: InspectableScalar): string {
   return value === undefined ? "unset" : JSON.stringify(value) ?? "unset";
@@ -258,9 +261,85 @@ export function resetDesignTokenEdits(element: HTMLElement): void {
 function ensurePanelStyles(styleRoot?: ShadowRoot): void {
   if (!styleRoot || styledRoots.has(styleRoot)) return;
   const style = document.createElement("style");
-  style.textContent = panelStyles;
+  style.textContent = panelStyles + matchStyles;
   styleRoot.append(style);
   styledRoots.add(styleRoot);
+}
+
+/**
+ * The token select keeps its value and labels but opens the token picker, loaded on
+ * demand, instead of a plain list. A mouse opens on press; a touch or pen on a
+ * release that did not move, since a drag that starts there scrolls the panel.
+ */
+function pickerTrigger(select: HTMLSelectElement, options: () => Omit<TokenPickerOptions, "trigger">): void {
+  select.dataset.picker = "token";
+  select.setAttribute("aria-haspopup", "listbox");
+  select.setAttribute("aria-expanded", "false");
+  const show = (toggle: boolean) => import("./token-picker.js").then((picker) => {
+    if (!select.isConnected || select.disabled || (!toggle && picker.isTokenPickerOpen(select))) return;
+    picker.toggleTokenPicker({ trigger: select, ...options() });
+  }, () => {});
+  let press: PointerEvent | undefined;
+  select.addEventListener("pointerdown", (event) => {
+    if (event.button) return;
+    event.preventDefault();
+    press = event.pointerType === "mouse" ? undefined : event;
+    if (press) return;
+    select.focus();
+    void show(true);
+  });
+  select.addEventListener("pointerup", (event) => {
+    if (press && Math.abs(event.clientY - press.clientY) <= 10) void show(true);
+    press = undefined;
+  });
+  for (const type of ["mousedown", "touchend"]) select.addEventListener(type, (event) => { if (event.cancelable) event.preventDefault(); });
+  select.addEventListener("keydown", (event) => {
+    if (event.ctrlKey || event.metaKey || !["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) return;
+    event.preventDefault();
+    void show(false);
+  });
+}
+
+/**
+ * "Matches Text primary · Use token" under a field whose off-token value equals a
+ * relevant token's value. Only a suggestion: the field stays unbound until Use token.
+ */
+function matchSuggestion(field: HTMLElement | null | undefined, row: HTMLElement): { show(match: DesignToken | undefined, use: () => void): void } {
+  const line = document.createElement("div");
+  line.className = "design-token-match";
+  line.hidden = true;
+  const text = document.createElement("span");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "Use token";
+  line.append(text, button);
+  let use = () => {};
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    use();
+  });
+  return {
+    show(match, then) {
+      if (!line.isConnected) (field ?? row.parentElement)?.after(line);
+      line.hidden = !match;
+      use = then;
+      text.textContent = match ? `Matches ${match.label || match.path}` : "";
+      text.title = match ? `${match.path}${match.ref ? ` · ${match.ref}` : ""} · ${match.value}` : "";
+      button.setAttribute("aria-label", match ? `Use token ${match.label || match.path}` : "Use token");
+    },
+  };
+}
+
+/** The adapter's list for each option of the first two- or three-option theme axis, fetched when a picker opens. */
+function themeValues(adapter: TokenAdapter, design?: DesignSystem): (() => Promise<ThemeValues[]>) | undefined {
+  const axis = (Array.isArray(design?.themes) ? design.themes : []).find((item) => Array.isArray(item?.options) && item.options.length > 1 && item.options.length < 4);
+  if (!axis) return undefined;
+  let values: Promise<ThemeValues[]> | undefined;
+  return () => values ??= Promise.all(axis.options.map((option) =>
+    listTokens(adapter, { ...themeState(design), [axis.id]: option.id }).then((list) => ({
+      label: titled(option.label, option.id),
+      values: new Map(list.map((token) => [token.path, token.value])),
+    })))).catch(() => []);
 }
 
 /** Add token references directly to the existing style-property row. */
@@ -311,6 +390,21 @@ export function createElementTokenControl(
     select.append(option);
   }
   const off = offTokenMarker();
+  const asToken = (token: KomoDesignToken): DesignToken => ({
+    path: token.path, type: token.type as DesignTokenType, value: tokenValue(source, token),
+    properties: token.properties, group: token.path.split(".")[0], ref: token.cssVariable,
+  });
+  const suggestion = matchSuggestion(null, row);
+  const choose = (path: string) => {
+    select.value = path;
+    select.dispatchEvent(new Event("change"));
+  };
+  pickerTrigger(select, () => ({
+    tokens: available.map(asToken),
+    property,
+    current: select.value,
+    onSelect: (token) => choose(token.path),
+  }));
   const update = () => {
     const binding = elementTokenBindingFor(source, element, property);
     const declared = binding ? null : declaredTokenFor(source, element, property);
@@ -330,10 +424,10 @@ export function createElementTokenControl(
     select.title = state.textContent || "Choose a token";
     // Like the default adapter's resolve(): no token reference means off-token.
     off.hidden = mode !== "custom";
-    if (mode === "custom") {
-      const value = getComputedStyle(element).getPropertyValue(property).trim();
-      markOffToken(off, value, closestToken(available.map((token) => ({ path: token.path, type: token.type, value: tokenValue(source, token) })), value));
-    }
+    const value = mode === "custom" ? getComputedStyle(element).getPropertyValue(property).trim() : "";
+    const match = mode === "custom" ? closestToken(available.map(asToken), value) : undefined;
+    if (mode === "custom") markOffToken(off, value, match);
+    suggestion.show(match, () => match && choose(match.path));
   };
   const observer = new MutationObserver(update);
   observer.observe(element, { attributes: true, attributeFilter: ["style"] });
@@ -426,11 +520,12 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
   // The app's adapter replaces CSS-variable chips on fields; it may answer
   // asynchronously, so controls join the already-rendered fields when it does.
   ensurePanelStyles(styleRoot);
+  const themes = themeValues(adapter, design);
   return Promise.all([listTokens(adapter, themeState(design)), resolveTokens(adapter, element)]).then(([tokens, usage]) => {
     each((field, label, input, refresh) => createAdapterTokenControl(adapter, element, field.property, tokens, usage[field.property], (undo) => {
       onSwap?.(undo);
       refresh();
-    }, label, input));
+    }, label, input, themes));
   }, () => {});
 }
 
@@ -444,6 +539,7 @@ export function createAdapterTokenControl(
   onSwap: (undo: () => void) => void,
   label?: HTMLElement,
   input?: HTMLElement,
+  themes?: () => Promise<ThemeValues[]>,
 ): HTMLElement | null {
   const available = tokensFor(tokens, property);
   if (!available.length && !usage) return null;
@@ -493,6 +589,9 @@ export function createAdapterTokenControl(
   state.className = "design-token-binding__state";
   state.setAttribute("aria-live", "polite");
   let detached = false;
+  const suggestion = matchSuggestion(label, row);
+  const current = () => detached ? undefined : swappedToken(element, property)?.path ?? (usage && "path" in usage ? usage.path : undefined);
+  pickerTrigger(select, () => ({ tokens, property, current: current(), themes, onSelect: choose }));
   const update = () => {
     const swapped = swappedToken(element, property);
     const path = detached ? undefined : swapped?.path ?? (usage && "path" in usage ? usage.path : undefined);
@@ -505,15 +604,19 @@ export function createAdapterTokenControl(
     dot.hidden = off === undefined || !!swapped;
     state.textContent = token ? `${swapped ? "Preview" : "Uses"} ${tokenTitle(token)}` : path ? `Uses ${path}` : dot.hidden ? "" : dot.title;
     select.title = state.textContent || "Choose a token";
+    suggestion.show(dot.hidden || detached ? undefined : match, () => match && choose(match));
   };
-  select.addEventListener("change", () => {
-    const token = available.find((item) => item.path === select.value);
-    if (!token) return update();
+  function choose(token: DesignToken) {
     detached = false;
     const from: TokenUsage = usage ?? { offToken: getComputedStyle(element).getPropertyValue(property).trim() };
     const fromToken = "path" in from ? tokens.find((item) => item.path === from.path) : undefined;
     onSwap(swapToken(adapter, element, property, token, from, fromToken));
     update();
+  }
+  select.addEventListener("change", () => {
+    const token = available.find((item) => item.path === select.value);
+    if (token) choose(token);
+    else update();
   });
   detach.addEventListener("click", () => {
     detached = true;

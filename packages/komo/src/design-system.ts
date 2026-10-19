@@ -32,10 +32,11 @@ export interface DesignToken {
   value: string;
   /** CSS properties this token may set on an element, e.g. ["color"]. Used to suggest tokens. */
   properties?: string[];
-  /** Display name; defaults to the path. */
+  /** Display name in the picker, e.g. "Primary"; defaults to the last path segment there and to the path elsewhere. */
   label?: string;
   /** Group heading in the picker, e.g. "Text", "Background", "Spacing". */
   group?: string;
+  /** One line shown under the token in the picker, e.g. "Body copy and headings". */
   description?: string;
   /**
    * The adapter's own handle for the token: a CSS variable ("--color-brand"), a

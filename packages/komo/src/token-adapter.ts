@@ -63,18 +63,27 @@ export function tokensFor(tokens: readonly DesignToken[], property: string): Des
 
 /** Colors compare as rgb(), everything else as trimmed lowercase text. */
 function comparable(value: string): string {
-  const text = value.trim().toLowerCase().replace(/\s+/g, "");
+  const text = value.trim().toLowerCase().replace(/\s+/g, " ");
   const hex = /^#([\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/.exec(text)?.[1];
-  if (!hex) return text.replace(/^rgba\((\d+,\d+,\d+),1\)$/, "rgb($1)");
-  const full = hex.length < 5 ? [...hex].map((char) => char + char).join("") : hex;
-  const [r, g, b, a = 255] = full.match(/../g)!.map((pair) => parseInt(pair, 16));
-  return a === 255 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${+(a / 255).toFixed(3)})`;
+  let channels: number[] | undefined;
+  if (hex) {
+    const full = hex.length < 5 ? [...hex].map((char) => char + char).join("") : hex;
+    channels = full.match(/../g)!.map((pair, index) => parseInt(pair, 16) / (index > 2 ? 255 : 1));
+  } else {
+    // rgb() and rgba(), with commas or spaces and a slash, and a number or percentage alpha.
+    const rgb = /^rgba?\(([^)]*)\)$/.exec(text)?.[1].split(/\s*[,/]\s*|\s+/);
+    if (rgb && (rgb.length === 3 || rgb.length === 4) && rgb.every((part) => /^[\d.]+%?$/.test(part)))
+      channels = rgb.map((part, index) => parseFloat(part) * (part.endsWith("%") ? (index > 2 ? 0.01 : 2.55) : 1));
+  }
+  if (!channels) return text.replace(/\s*,\s*/g, ",");
+  const [r, g, b, a = 1] = channels.map((channel, index) => index > 2 ? +channel.toFixed(2) : Math.round(channel));
+  return a === 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${a})`;
 }
 
-/** The token whose value is exactly the off-token value; only colors and dimensions. */
+/** The token whose value is exactly the off-token value, colors compared by channel. */
 export function closestToken(tokens: readonly DesignToken[], value: string): DesignToken | undefined {
   const target = comparable(value);
-  return target ? tokens.find((token) => (token.type === "color" || token.type === "dimension") && comparable(token.value) === target) : undefined;
+  return target ? tokens.find((token) => typeof token.value === "string" && comparable(token.value) === target) : undefined;
 }
 
 export function tokenName(token: DesignToken): string {

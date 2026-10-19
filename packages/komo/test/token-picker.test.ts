@@ -1,0 +1,256 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { openTokenPicker, tokenLabel, type TokenPickerOptions } from "../src/token-picker.js";
+import { createAdapterTokenControl } from "../src/react-props-panel.js";
+import { closestToken } from "../src/token-adapter.js";
+import type { DesignToken, TokenAdapter } from "../src/design-system.js";
+
+const tokens: DesignToken[] = [
+  { path: "color.text.primary", type: "color", value: "#1f1f1f", properties: ["color"], group: "Text", label: "Primary", ref: "text-primary", description: "Body copy" },
+  { path: "color.text.secondary", type: "color", value: "#6b6b6b", properties: ["color"], group: "Text", ref: "text-secondary" },
+  { path: "color.bg.tint", type: "color", value: "rgba(124, 58, 237, 0.16)", properties: ["background-color"], group: "Background", ref: "bg-tint", states: ["hover", "active", "disabled"] },
+  { path: "space.md", type: "dimension", value: "16px", properties: ["padding"], group: "Spacing", ref: "p-md" },
+  { path: "radius.lg", type: "dimension", value: "12px", properties: ["border-radius"], group: "Radius", ref: "rounded-lg" },
+  { path: "shadow.card", type: "shadow", value: "0 1px 2px #0003", properties: ["box-shadow"], group: "Elevation", ref: "shadow-card" },
+  { path: "type.title", type: "typography", value: "600 16px/1.5 Georgia, serif", properties: ["font-size"], group: "Type", label: "Title", ref: "type-title" },
+  { path: "font.weight.bold", type: "fontWeight", value: "700", properties: ["font-weight"], group: "Weight", ref: "font-bold" },
+  { path: "font.family.serif", type: "fontFamily", value: "Georgia, serif", properties: ["font-family"], group: "Family", ref: "font-serif" },
+  { path: "motion.fast", type: "duration", value: "150ms", properties: ["transition-duration"], group: "Motion", ref: "duration-fast" },
+];
+
+function mount(options: Partial<TokenPickerOptions> = {}) {
+  const host = document.createElement("div");
+  const root = host.attachShadow({ mode: "open" });
+  const field = document.createElement("label");
+  field.className = "design-field";
+  const trigger = document.createElement("select");
+  trigger.setAttribute("aria-label", "Style token for color");
+  field.append(trigger);
+  root.append(field);
+  document.body.replaceChildren(host);
+  const chosen: string[] = [];
+  const close = openTokenPicker({ trigger, tokens, property: "color", onSelect: (token) => chosen.push(token.path), ...options });
+  const picker = () => root.querySelector<HTMLElement>(".komo-tokens");
+  const search = () => picker()!.querySelector<HTMLInputElement>("input")!;
+  const rows = () => [...root.querySelectorAll<HTMLElement>(".komo-tokens [role=option]")];
+  const names = () => rows().map((row) => row.querySelector(".komo-tokens__name > span")!.textContent);
+  const type = (text: string) => {
+    search().value = text;
+    search().dispatchEvent(new Event("input"));
+  };
+  const press = (key: string, target: Element = root.activeElement ?? search()) => {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true });
+    target.dispatchEvent(event);
+    return event;
+  };
+  return { root, trigger, chosen, close, picker, search, rows, names, type, press };
+}
+
+const row = (rows: HTMLElement[], text: string) => rows.find((item) => item.textContent!.includes(text))!;
+
+describe("token picker", () => {
+  afterEach(() => document.body.replaceChildren());
+
+  it("previews each type: swatch, bar, corner, shadow card and Ag, and nothing for durations", () => {
+    const { rows, picker } = mount({ property: "none" });
+    const all = rows();
+    expect(all).toHaveLength(tokens.length);
+    expect(row(all, "Primary").querySelector<HTMLElement>(".komo-tokens__sw > span")!.style.background).toBe("rgb(31, 31, 31)");
+    expect(row(all, "tint").querySelector<HTMLElement>(".komo-tokens__sw > span")!.style.background).toContain("rgba(124, 58, 237, 0.16)");
+    expect(row(all, "md").querySelector<HTMLElement>(".komo-tokens__dim")!.style.width).toBe("8px");
+    expect(row(all, "lg").querySelector<HTMLElement>(".komo-tokens__corner")!.style.borderTopLeftRadius).toBe("12px");
+    expect(row(all, "card").querySelector<HTMLElement>(".komo-tokens__shadow")).not.toBeNull();
+    const title = row(all, "Title");
+    expect(title.querySelector(".komo-tokens__ag")!.textContent).toBe("Ag");
+    expect(title.querySelector(".komo-tokens__meta")!.textContent).toBe("type-title600 · 16px/1.5");
+    expect(row(all, "bold").querySelector<HTMLElement>(".komo-tokens__ag")!.style.fontWeight).toBe("700");
+    expect(row(all, "serif").querySelector<HTMLElement>(".komo-tokens__ag")!.style.fontFamily).toContain("Georgia");
+    const fast = row(all, "fast");
+    expect(fast.querySelector(".komo-tokens__pv")!.childElementCount).toBe(0);
+    expect(fast.querySelector(".komo-tokens__meta")!.textContent).toBe("duration-fast150ms");
+    // States as chips, the description as a muted line and in the tooltip.
+    expect([...row(all, "tint").querySelectorAll(".komo-tokens__name > i")].map((chip) => chip.textContent)).toEqual(["hover", "active", "disabled"]);
+    expect(row(all, "Primary").querySelector(".komo-tokens__desc")!.textContent).toBe("Body copy");
+    expect(row(all, "Primary").title).toContain("Body copy");
+    expect(picker()!.querySelector("[role=listbox]")!.getAttribute("aria-label")).toBe("Tokens for none");
+  });
+
+  it("labels rows with label, else the last path segment, under sticky group headings", () => {
+    const { names, root } = mount();
+    expect(names()).toEqual(["Primary", "secondary"]);
+    expect(tokenLabel({ path: "space.md", type: "dimension", value: "16px" })).toBe("md");
+    const group = root.querySelector(".komo-tokens [role=group]")!;
+    expect(group.querySelector("small")!.textContent).toBe("Text");
+    expect(group.getAttribute("aria-labelledby")).toBe(group.querySelector("small")!.id);
+  });
+
+  it("shows the field's tokens by default and every token with Show all", () => {
+    const { names, picker } = mount();
+    const widen = picker()!.querySelector<HTMLButtonElement>(".komo-tokens__bar button")!;
+    expect(widen.textContent).toBe("Show all");
+    expect(widen.getAttribute("aria-pressed")).toBe("false");
+    widen.click();
+    expect(widen.getAttribute("aria-pressed")).toBe("true");
+    expect(names()).toHaveLength(tokens.length);
+    widen.click();
+    expect(names()).toEqual(["Primary", "secondary"]);
+  });
+
+  it("searches label, path, ref and value, case-insensitively", () => {
+    const { names, type, picker } = mount({ property: "none" });
+    type("PRIMARY");
+    expect(names()).toEqual(["Primary"]);
+    type("weight.bold");
+    expect(names()).toEqual(["bold"]);
+    type("rounded-");
+    expect(names()).toEqual(["lg"]);
+    type("150MS");
+    expect(names()).toEqual(["fast"]);
+    type("color text");
+    expect(names()).toEqual(["Primary", "secondary"]);
+    type("nothing like this");
+    expect(names()).toEqual([]);
+    expect(picker()!.textContent).toContain("No matching tokens");
+  });
+
+  it("pins the current token at the top, selected and active", () => {
+    const { rows, root, search } = mount({ current: "color.text.secondary" });
+    const [first] = rows();
+    expect(first.textContent).toContain("secondary");
+    expect(first.getAttribute("aria-selected")).toBe("true");
+    expect(first.parentElement!.querySelector("small")!.textContent).toBe("Current");
+    expect(rows().filter((item) => item.textContent!.includes("secondary"))).toHaveLength(1);
+    expect(search().getAttribute("aria-activedescendant")).toBe(first.id);
+    expect(root.activeElement).toBe(search());
+    expect(search().getAttribute("role")).toBe("combobox");
+  });
+
+  it("moves with the arrow keys, chooses with Enter and gives focus back", () => {
+    const { press, search, chosen, picker, trigger, root } = mount();
+    press("ArrowDown");
+    expect(root.getElementById(search().getAttribute("aria-activedescendant")!)!.textContent).toContain("secondary");
+    press("ArrowUp");
+    press("ArrowUp");
+    expect(root.getElementById(search().getAttribute("aria-activedescendant")!)!.textContent).toContain("Primary");
+    press("ArrowDown");
+    expect(press("Enter").defaultPrevented).toBe(true);
+    expect(chosen).toEqual(["color.text.secondary"]);
+    expect(picker()).toBeNull();
+    expect(root.activeElement).toBe(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("closes on Escape without reaching the page, and chooses on click", () => {
+    const { press, picker, trigger, root, chosen } = mount();
+    let reached = false;
+    const page = () => { reached = true; };
+    document.addEventListener("keydown", page, true);
+    expect(press("Escape").defaultPrevented).toBe(true);
+    document.removeEventListener("keydown", page, true);
+    expect(reached).toBe(false);
+    expect(picker()).toBeNull();
+    expect(root.activeElement).toBe(trigger);
+    expect(chosen).toEqual([]);
+    const again = mount();
+    again.rows()[0].click();
+    expect(again.chosen).toEqual(["color.text.primary"]);
+  });
+
+  it("splits color swatches by theme when the adapter's values differ", async () => {
+    const { rows } = mount({
+      themes: () => [
+        { label: "Light", values: new Map([["color.text.primary", "#1f1f1f"], ["color.text.secondary", "#6b6b6b"]]) },
+        { label: "Dark", values: new Map([["color.text.primary", "#f1efeb"], ["color.text.secondary", "#6b6b6b"]]) },
+      ],
+    });
+    await vi.waitFor(() => expect(rows()[0].querySelectorAll(".komo-tokens__sw > span")).toHaveLength(2));
+    expect(rows()[0].title).toContain("Light #1f1f1f, Dark #f1efeb");
+    expect(rows()[1].querySelectorAll(".komo-tokens__sw > span")).toHaveLength(1);
+  });
+
+  it("builds rows lazily and filters 700 tokens quickly", () => {
+    const many: DesignToken[] = Array.from({ length: 700 }, (_, index) => ({
+      path: `color.palette${index % 14}.step${index}`, type: "color", value: `#${(index * 2399).toString(16).padStart(6, "0").slice(-6)}`,
+      properties: ["color"], group: `Palette ${index % 14}`, ref: `--palette-${index}`,
+    }));
+    const start = performance.now();
+    const { rows, type, names, press, search, root } = mount({ tokens: many });
+    const opened = performance.now() - start;
+    expect(rows().length).toBeLessThanOrEqual(60);
+    const typed = performance.now();
+    for (const text of ["s", "st", "ste", "step6", "step69"]) type(text);
+    const filtering = performance.now() - typed;
+    expect(names().sort()).toEqual(["step69", "step690", "step691", "step692", "step693", "step694", "step695", "step696", "step697", "step698", "step699"]);
+    expect(opened).toBeLessThan(250);
+    expect(filtering).toBeLessThan(250);
+    type("");
+    // The keyboard reaches rows that are not built yet.
+    for (let index = 0; index < 80; index++) press("ArrowDown", search());
+    expect(rows().length).toBeGreaterThan(80);
+    expect(root.getElementById(search().getAttribute("aria-activedescendant")!)).not.toBeNull();
+  });
+});
+
+describe("token field suggestions", () => {
+  afterEach(() => document.body.replaceChildren());
+  const adapter: TokenAdapter = { id: "test", list: () => tokens, resolve: () => ({}) };
+
+  function field(property: string, offToken: string) {
+    const grid = document.createElement("div");
+    const label = document.createElement("label");
+    label.className = "design-field";
+    label.dataset.fieldProperty = property;
+    const input = document.createElement("input");
+    input.dataset.property = property;
+    label.append(input);
+    grid.append(label);
+    document.body.replaceChildren(grid);
+    const element = document.createElement("p");
+    document.body.append(element);
+    const swaps: Array<() => void> = [];
+    const control = createAdapterTokenControl(adapter, element, property, tokens, { offToken }, (undo) => swaps.push(undo), label, input)!;
+    label.append(control);
+    return { grid, label, control, swaps, element };
+  }
+
+  it("suggests a relevant token with the same value, binding it only on Use token", () => {
+    const { grid, label, swaps, element } = field("color", "rgb(31, 31, 31)");
+    const line = grid.querySelector<HTMLElement>(".design-token-match")!;
+    expect(line.hidden).toBe(false);
+    expect(line.textContent).toBe("Matches PrimaryUse token");
+    expect(label.dataset.tokenMode).toBe("custom");
+    line.querySelector("button")!.click();
+    expect(swaps).toHaveLength(1);
+    expect(element.style.color).toBe("rgb(31, 31, 31)");
+    expect(label.dataset.tokenMode).toBe("token");
+    expect(line.hidden).toBe(true);
+    swaps[0]();
+  });
+
+  it("only suggests tokens relevant to the property and with exactly that value", () => {
+    // 16px is space.md's value, but space.md is for padding.
+    expect(field("font-size", "16px").grid.querySelector<HTMLElement>(".design-token-match")?.hidden ?? true).toBe(true);
+    expect(field("padding", "15px").grid.querySelector<HTMLElement>(".design-token-match")!.hidden).toBe(true);
+    expect(field("padding", "16px").grid.querySelector<HTMLElement>(".design-token-match")!.textContent).toContain("space.md");
+  });
+
+  it("compares colors across hex, rgb() and rgba() spellings and case", () => {
+    expect(closestToken(tokens, "#1F1F1F")?.path).toBe("color.text.primary");
+    expect(closestToken(tokens, "rgb(31 31 31)")?.path).toBe("color.text.primary");
+    expect(closestToken(tokens, "rgba(31,31,31,1)")?.path).toBe("color.text.primary");
+    expect(closestToken(tokens, "#7C3AED29")?.path).toBe("color.bg.tint");
+    expect(closestToken(tokens, "rgb(124 58 237 / 16%)")?.path).toBe("color.bg.tint");
+    expect(closestToken(tokens, "rgb(32, 31, 31)")).toBeUndefined();
+  });
+
+  it("opens the picker from the token select with the keyboard", async () => {
+    const { label } = field("color", "rgb(1, 2, 3)");
+    const select = label.querySelector<HTMLSelectElement>(".design-token-binding select")!;
+    expect(select.dataset.picker).toBe("token");
+    select.focus();
+    select.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(label.querySelector(".komo-tokens")).not.toBeNull());
+    expect(select.getAttribute("aria-expanded")).toBe("true");
+    expect([...label.querySelectorAll(".komo-tokens [role=option]")].map((option) => option.querySelector(".komo-tokens__name > span")!.textContent)).toEqual(["Primary", "secondary"]);
+  });
+});
