@@ -186,6 +186,49 @@ describe("custom token adapter in Design mode", () => {
     expect(proposedDesignChanges(label)).toBeUndefined();
   });
 
+  it("keeps transient picker previews out of proposals and commits exactly one undo step", async () => {
+    await open({ tokens: classAdapter() });
+    const trigger = picker("color");
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", button: 0 }));
+    await vi.waitFor(() => expect(shadow.querySelector(".komo-tokens")).not.toBeNull());
+    const search = shadow.querySelector<HTMLInputElement>(".komo-tokens input")!;
+    const press = (key: string) => search.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true }));
+    const primary = shadow.querySelectorAll<HTMLElement>('.komo-tokens [role="option"]')[1];
+    for (let i = 0; i < 12; i++) {
+      primary.dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
+      expect(label.className).toBe("text-primary");
+      expect(proposedDesignChanges(label)).toBeUndefined();
+      expect(tool("Undo").disabled).toBe(true);
+      press("ArrowUp");
+      expect(label.className).toBe("text-secondary");
+    }
+    press("ArrowDown");
+    press("Enter");
+    expect(label.className).toBe("text-primary");
+    expect(proposedDesignChanges(label)).toContain("color.text.primary");
+    expect(shadow.querySelector(".komo-tokens")).toBeNull();
+    tool("Undo").click();
+    expect(label.className).toBe("text-secondary");
+    expect(tool("Undo").disabled).toBe(true);
+  });
+
+  it("cancels transient previews before a mode transition suspends committed bindings", async () => {
+    await open({ tokens: classAdapter() });
+    choose("color", "color.text.primary");
+    picker("color").dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", button: 0 }));
+    await vi.waitFor(() => expect(shadow.querySelector(".komo-tokens")).not.toBeNull());
+    shadow.querySelectorAll<HTMLElement>('.komo-tokens [role="option"]')[1]
+      .dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
+    expect(label.className).toBe("text-secondary");
+    controller.setActive(false);
+    expect(shadow.querySelector(".komo-tokens")).toBeNull();
+    expect(label.className).toBe("text-secondary");
+    controller.setActive(true);
+    expect(label.className).toBe("text-primary");
+    tool("Undo").click();
+    expect(label.className).toBe("text-secondary");
+  });
+
   it("falls back to an inline value without preview()", async () => {
     const { preview: _preview, ...adapter } = classAdapter();
     await open({ tokens: adapter });

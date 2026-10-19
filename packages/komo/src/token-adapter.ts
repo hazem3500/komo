@@ -1,3 +1,4 @@
+import { previewStyle } from "./design-popup.js";
 // Design mode's side of an app's TokenAdapter: cached token lists, per-element
 // token swaps with their undo, Before/After, and the proposal text. Loaded with
 // the token controls, never at startup.
@@ -110,25 +111,14 @@ export function markOffToken(dot: HTMLElement, value: string, match?: DesignToke
   dot.setAttribute("aria-label", dot.title);
 }
 
-function inlinePreview(element: Element, property: string, value: string): () => void {
-  const style = (element as HTMLElement).style;
-  if (!style) return () => {};
-  const before = style.getPropertyValue(property);
-  const priority = style.getPropertyPriority(property);
-  style.setProperty(property, value, priority);
-  return () => {
-    if (before) style.setProperty(property, before, priority);
-    else style.removeProperty(property);
-  };
-}
 
-function preview(adapter: TokenAdapter, element: Element, property: string, token: DesignToken): () => void {
+export function previewToken(adapter: TokenAdapter, element: Element, property: string, token: DesignToken): () => void {
   try {
     if (adapter.preview) return adapter.preview(element, property, token) ?? (() => {});
   } catch {
     return () => {};
   }
-  return inlinePreview(element, property, token.value);
+  return previewStyle(element, property, token.value);
 }
 
 /** The latest token komo previewed for a property, if any. */
@@ -157,7 +147,7 @@ export function swapToken(
     token,
     from: first?.from ?? from,
     fromToken: first ? first.fromToken : fromToken,
-    undo: preview(adapter, element, property, token),
+    undo: previewToken(adapter, element, property, token),
   });
   return () => undoTokenSwap(element);
 }
@@ -192,7 +182,7 @@ export function showTokenSwapsBefore(on: boolean): void {
   showingBefore = on;
   for (const [element, stack] of swaps) {
     if (on) for (const swap of [...stack].reverse()) swap.undo();
-    else for (const swap of stack) swap.undo = preview(swap.adapter, element, swap.property, swap.token);
+    else for (const swap of stack) swap.undo = previewToken(swap.adapter, element, swap.property, swap.token);
   }
 }
 

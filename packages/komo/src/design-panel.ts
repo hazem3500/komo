@@ -261,7 +261,7 @@ function section(context: PanelContext, name: string, properties: string[] | nul
 export function renderPanel(container: HTMLElement, context: PanelContext) {
   const { element, changed } = context;
   // Selects open komo's own listbox once that module (fetched with the panel) is in.
-  void selectMenu.then((menu) => menu?.attach(container));
+  void selectMenu.then((menu) => menu?.attach(container, context.element));
   const style = getComputedStyle(element);
   if (element instanceof SVGElement) {
     container.append(
