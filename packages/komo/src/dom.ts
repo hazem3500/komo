@@ -5,7 +5,7 @@ export { icons };
 /** Read on each use: the preference can change while the page is open. */
 export const reducedMotion = () =>
   matchMedia("(prefers-reduced-motion: reduce)").matches;
-export const editable = (node?: EventTarget) =>
+export const editable = (node?: EventTarget | null) =>
   node instanceof HTMLElement &&
   (node.matches("input,textarea,select") || node.isContentEditable);
 /**

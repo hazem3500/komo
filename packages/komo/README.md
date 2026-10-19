@@ -81,7 +81,7 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 - Safe HTTP(S) links and simple Markdown links in comment messages.
 - Searchable sidebar, draggable dock, and Google or guest profiles.
 - Dismiss the toolbar for the current tab with ×; restore it with Shift+K or `controller.open()`. Set `showToolbar: false` to start hidden.
-- Keyboard shortcuts: C to comment, V to browse, D to toggle Design mode, Shift+K to restore. Remap or disable them with `shortcuts`.
+- Keyboard shortcuts: C to comment, V to browse, D to toggle Design mode, L to view all comments, Shift+K to restore. Remap or disable them with `shortcuts`; see [Choosing shortcuts](#choosing-shortcuts).
 - Copy open feedback with selectors, source paths, page URLs, replies, and geometry into an agent.
 - Hosted Cloudflare storage, or your own Worker/D1 or Node/PostgreSQL service.
 
@@ -440,7 +440,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `drawerContainer` | `HTMLElement` | Viewport | Element used to center the drawer before it is dragged. |
 | `autoHideDrawer` | `boolean` | `true` | Set `false` to keep the drawer visible away from the pointer. |
 | `showToolbar` | `boolean` | `true` | Set `false` to keep the toolbar, drawer, and comment pins hidden until `controller.open()` or the restore shortcut. |
-| `shortcuts` | `{ comment?, browse?, design?, restore? }` | `C`, `V`, `D`, `Shift+K` | A key with optional `Ctrl`, `Alt`, `Shift`, or `Meta`, such as `"M"` or `"Shift+J"`. Set `false` to disable one. Escape and Tab are reserved. |
+| `shortcuts` | `{ comment?, browse?, design?, comments?, restore? }` | `C`, `V`, `D`, `L`, `Shift+K` | A key with optional `Ctrl`, `Alt`, `Shift`, or `Meta`, such as `"M"` or `"Shift+J"`. Set `false` to disable one. Escape and Tab are reserved. Tooltips and tips show the configured keys. |
 | `features` | `{ designMode?, tags? }` | All `true` | Set a feature to `false` to remove it from the review UI, e.g. `{ designMode: false, tags: false }`. Existing tags stay stored and remain available to the CLI. |
 | `sidebar` | `"background" \| "edge"` | `"edge"` | `"edge"` (Floating) is a draggable sidebar that parks off and peeks from the viewport edge while closed. `"background"` (Frame) frames the site and shows the sidebar in the scaled review sheet. Account → Sidebar switches the two; that choice is remembered per project. |
 | `restoreOpen` | `"session" \| "always" \| false` | `"session"` | Reopen the sidebar if it was left open: after a reload in the same tab, across tabs and visits, or never. |
@@ -457,6 +457,22 @@ For a restricted CSP or offline deployment, host `emoji-picker-element-data@1.8.
 The lower-level `initComments` export remains available. It requires explicit `endpoint`, `project`, `repo`, and `branch`; it does not infer scope. Existing integrations keep their branch grouping.
 
 The returned controller has `open()`, `close()`, `comment(element)`, `refresh()`, and `destroy()`. Repeated initialization returns the current controller; destroy it before switching projects. SSR returns a no-op controller. In React, use the `useKomo` hook. With Astro view transitions, destroy before swapping the document and initialize after navigation.
+
+### Choosing shortcuts
+
+The single-letter defaults suit content sites that have no shortcuts of their own. Apps usually own bare letters, so prefer Shift+letter bindings, or `false`:
+
+```ts
+shortcuts: {
+  comment: "Shift+C",
+  browse: false,
+  design: "Shift+D",
+  comments: "Shift+L",
+  restore: "Shift+K",
+}
+```
+
+Shortcuts never fire while focus is in a field or editable region, on the page or in komo. Bare letters follow the keyboard layout; with a modifier, komo also matches the physical key, so Caps Lock, other layouts, and macOS Alt characters still work. Bare letters keep working while focus is on komo's own buttons, sidebar, and panels.
 
 ### Host events
 

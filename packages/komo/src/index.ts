@@ -2261,7 +2261,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   function dismissToolbar() {
     // Hide the complete review surface and stop Design mode from capturing
-    // page interaction; leaving it restores its preview edits. Shift+K or
+    // page interaction; leaving it restores its preview edits. The restore shortcut or
     // controller.open() can restore Komo for this tab.
     designReturnToComments = false;
     designActive = false;
@@ -2454,9 +2454,10 @@ export function initComments(options: CommentsOptions): CommentsController {
           ? expanded
             ? "Close project sidebar"
             : "Project settings"
-          : expanded
-            ? "Close comment sidebar"
-            : `View all comments · ${threads.filter((t) => !t.resolved).length} open`,
+          : `${withShortcut(
+              expanded ? "Close comment sidebar" : "View all comments",
+              shortcuts.comments,
+            )}${expanded ? "" : ` · ${threads.filter((t) => !t.resolved).length} open`}`,
         icon: glyph("expand"),
         onSelect: () => toggleExpanded(!expanded),
       },
@@ -5673,7 +5674,10 @@ export function initComments(options: CommentsOptions): CommentsController {
           first?.focus();
         }
       }
-      const typing = editable(target);
+      // Focus may sit in a nested shadow root that composedPath() can't see.
+      let active = document.activeElement;
+      while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+      const typing = editable(target) || editable(active) || event.isComposing;
       if (event.key === "Escape") {
         if (mode || draft || selected || account) dismiss();
         else if (expanded) toggleExpanded(false);
@@ -5695,6 +5699,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       } else if (designEnabled && matchesShortcut(event, shortcuts.design)) {
         event.preventDefault();
         setDesignMode(!designActive);
+      } else if (matchesShortcut(event, shortcuts.comments)) {
+        event.preventDefault();
+        toggleExpanded(!expanded);
       }
     },
     { signal: abort.signal },

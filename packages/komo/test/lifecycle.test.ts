@@ -272,6 +272,87 @@ it("uses configured shortcut keys and labels", () => {
   expect(toolbar.style.display).not.toBe("none");
 });
 
+it("toggles the comment list with L and shows configured bindings in every hint", () => {
+  const mount = (shortcuts?: CommentsOptions["shortcuts"]) => {
+    controller?.destroy();
+    controller = initComments({ ...options, onboarding: undefined, shortcuts });
+    const root = ([...document.body.children].find((node) => node.shadowRoot) as HTMLElement).shadowRoot!;
+    return (id: string) => root.querySelector(`[data-menu-item="${id}"]`)?.getAttribute("aria-label");
+  };
+  const key = (init: KeyboardEventInit) => {
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, composed: true, ...init });
+    document.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+
+  let label = mount();
+  expect(label("comments")).toBe("View all comments · L · 0 open");
+  expect(key({ key: "l" })).toBe(true);
+  expect(label("comments")).toBe("Close comment sidebar · L");
+  // Caps Lock.
+  expect(key({ key: "L" })).toBe(true);
+  expect(label("comments")).toBe("View all comments · L · 0 open");
+
+  label = mount({ comment: "Shift+C", design: "Shift+D", comments: "Shift+L", restore: "Shift+R" });
+  expect(label("comment")).toBe("Add comment · Shift+C");
+  expect(label("design")).toBe("Design mode · Shift+D");
+  expect(label("comments")).toBe("View all comments · Shift+L · 0 open");
+  expect(label("dismiss")).toBe("Dismiss inline feedback · Shift+R to restore");
+  expect(key({ key: "l" })).toBe(false);
+  expect(key({ key: "c" })).toBe(false);
+  // Caps Lock and a layout whose shifted key isn't L both reach Shift+L.
+  expect(key({ key: "l", code: "KeyL", shiftKey: true })).toBe(true);
+  expect(label("comments")).toBe("Close comment sidebar · Shift+L");
+  expect(key({ key: "Ł", code: "KeyL", shiftKey: true })).toBe(true);
+  expect(label("comments")).toBe("View all comments · Shift+L · 0 open");
+
+  label = mount({ comment: false, design: false, comments: false, restore: false });
+  expect(label("comment")).toBe("Add comment");
+  expect(label("design")).toBe("Design mode");
+  expect(label("comments")).toBe("View all comments · 0 open");
+  expect(label("dismiss")).toBe("Dismiss inline feedback");
+  expect(key({ key: "l" })).toBe(false);
+});
+
+it("never fires shortcuts while typing in a page or komo field", () => {
+  controller = initComments({ ...options, onboarding: undefined });
+  const root = ([...document.body.children].find((node) => node.shadowRoot) as HTMLElement).shadowRoot!;
+  const key = (target: EventTarget, init: KeyboardEventInit = { key: "c" }) => {
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, composed: true, ...init });
+    target.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  const input = document.createElement("input");
+  const editor = document.createElement("div");
+  const nested = document.createElement("span");
+  // jsdom doesn't compute isContentEditable.
+  for (const node of [editor, nested])
+    Object.defineProperty(node, "isContentEditable", { value: true });
+  editor.append(nested);
+  document.body.append(input, editor);
+  for (const target of [input, editor, nested])
+    for (const init of [{ key: "c" }, { key: "l" }, { key: "K", shiftKey: true }])
+      expect(key(target, init)).toBe(false);
+
+  // Focus inside a closed shadow root that composedPath() can't see into.
+  const widget = document.createElement("div");
+  const inner = document.createElement("textarea");
+  widget.attachShadow({ mode: "closed" }).append(inner);
+  Object.defineProperty(widget, "shadowRoot", { value: { activeElement: inner } });
+  widget.tabIndex = 0;
+  document.body.append(widget);
+  widget.focus();
+  expect(key(widget)).toBe(false);
+  widget.blur();
+
+  const field = document.createElement("input");
+  root.append(field);
+  expect(key(field)).toBe(false);
+  expect(key(field, { key: "l" })).toBe(false);
+  // Bare letters still work from komo's own non-editable controls.
+  expect(key(root.querySelector('[data-menu-item="browse"]')!, { key: "l" })).toBe(true);
+});
+
 it("dismisses the active Design overlay without intercepting host clicks", async () => {
   controller = initComments({ ...options, onboarding: undefined });
   const host = [...document.body.children].find(

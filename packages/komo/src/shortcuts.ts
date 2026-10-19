@@ -17,6 +17,7 @@ const defaults: Record<ShortcutAction, string> = {
   browse: "V",
   design: "D",
   restore: "Shift+K",
+  comments: "L",
 };
 const modifiers = ["Ctrl", "Alt", "Shift", "Meta"] as const;
 const reserved = new Set(["escape", "tab"]);
@@ -85,14 +86,21 @@ export function matchesShortcut(
     event.metaKey !== shortcut.meta
   )
     return false;
-  if (event.key.toLowerCase() === shortcut.key) return true;
-  // Alt and Shift can change event.key (Alt+C is "ç" on macOS); fall back to the physical key.
   const { key } = shortcut;
+  if (event.key.toLowerCase() === key) return true;
+  // Bare letters follow the keyboard layout. With a modifier, event.key can
+  // change (Alt+C is "ç" on macOS), so match the physical key; a non-Latin
+  // layout falls back to it for bare keys too.
+  const code = /^[a-z]$/.test(key)
+    ? `Key${key.toUpperCase()}`
+    : /^\d$/.test(key) && `Digit${key}`;
   return (
-    key.length === 1 &&
-    (/[a-z]/.test(key)
-      ? event.code === `Key${key.toUpperCase()}`
-      : /[0-9]/.test(key) && event.code === `Digit${key}`)
+    event.code === code &&
+    (shortcut.shift ||
+      shortcut.alt ||
+      shortcut.ctrl ||
+      shortcut.meta ||
+      !/^[a-z\d]$/i.test(event.key))
   );
 }
 

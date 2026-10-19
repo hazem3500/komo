@@ -4,12 +4,40 @@ import { matchesShortcut, resolveShortcuts } from "../src/shortcuts";
 
 const press = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
 
-it("defaults to C, V, D, and Shift+K", () => {
+it("defaults to C, V, D, Shift+K, and L", () => {
   const shortcuts = resolveShortcuts();
   expect(shortcuts.comment?.label).toBe("C");
   expect(shortcuts.browse?.label).toBe("V");
   expect(shortcuts.design?.label).toBe("D");
   expect(shortcuts.restore?.label).toBe("Shift+K");
+  expect(shortcuts.comments?.label).toBe("L");
+});
+
+it("matches modified letters by physical key and bare letters by layout", () => {
+  const { comment, comments, browse } = resolveShortcuts({
+    comment: "Shift+C",
+    comments: "Alt+L",
+    browse: "1",
+  });
+  const bare = resolveShortcuts().comment;
+  const plus = resolveShortcuts({ comment: "+" }).comment;
+  // Caps Lock, a non-US layout, and macOS Alt characters.
+  expect(matchesShortcut(press({ key: "C", code: "KeyC", shiftKey: true }), comment)).toBe(true);
+  expect(matchesShortcut(press({ key: "c", code: "KeyC", shiftKey: true }), comment)).toBe(true);
+  expect(matchesShortcut(press({ key: "Ç", code: "KeyC", shiftKey: true }), comment)).toBe(true);
+  expect(matchesShortcut(press({ key: "¬", code: "KeyL", altKey: true }), comments)).toBe(true);
+  expect(matchesShortcut(press({ key: "Ç", code: "KeyC", altKey: true, shiftKey: true }), comment)).toBe(false);
+  // Bare letters follow the layout, wherever the key sits.
+  expect(matchesShortcut(press({ key: "C", code: "KeyC" }), bare)).toBe(true);
+  expect(matchesShortcut(press({ key: "c", code: "KeyB" }), bare)).toBe(true);
+  expect(matchesShortcut(press({ key: "j", code: "KeyC" }), bare)).toBe(false);
+  // Non-Latin layouts fall back to the physical key.
+  expect(matchesShortcut(press({ key: "с", code: "KeyC" }), bare)).toBe(true);
+  // Digits on a layout that needs Shift for them.
+  expect(matchesShortcut(press({ key: "1", code: "Digit1" }), browse)).toBe(true);
+  expect(matchesShortcut(press({ key: "&", code: "Digit1" }), browse)).toBe(true);
+  expect(matchesShortcut(press({ key: "+", code: "Equal" }), plus)).toBe(true);
+  expect(matchesShortcut(press({ key: "=", code: "Equal" }), plus)).toBe(false);
 });
 
 it("normalizes modifiers and disables shortcuts set to false", () => {
