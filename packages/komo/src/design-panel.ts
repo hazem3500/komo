@@ -1,8 +1,10 @@
 import type { DesignTarget } from "./design-target.js";
 import { designPanelStyles } from "./design-panel-styles.js";
+import { toHex, validStyleValue } from "./design-preview.js";
 
 /** The property controls load as their own chunk, so the Design mode entry stays small. */
 export { designPanelStyles };
+export { toHex };
 
 export type Control = HTMLInputElement | HTMLSelectElement;
 
@@ -27,6 +29,7 @@ export interface PanelContext {
   begin(control: Control, property: string): void;
   apply(control: Control, property: string, value: string | null): void;
   commit(control: Control, property: string, final?: boolean): void;
+  cancel?(control: Control, property: string): void;
   rerender(): void;
 }
 
@@ -58,14 +61,6 @@ const selectMenu = import("./select-menu.js").catch(() => null);
 
 const typography = ["font-family", "font-size", "line-height", "font-weight", "text-align", "color"];
 
-export function toHex(value: string): string {
-  if (/^#[\da-f]{6}$/i.test(value)) return value;
-  if (/^#[\da-f]{3}$/i.test(value)) return `#${[...value.slice(1)].map((char) => char + char).join("")}`;
-  const match = value.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-  if (!match) return "#000000";
-  return `#${match.slice(1, 4).map((part) => Number(part).toString(16).padStart(2, "0")).join("")}`;
-}
-
 /** Opaque colors read as short hex; fully transparent ones as `transparent`; partial alpha stays exact. */
 function shortColor(value: string): string {
   const alpha = value.match(/^rgba\(.*,\s*([\d.]+)\)$/)?.[1];
@@ -85,11 +80,7 @@ export function valueFor(field: Field, element: DesignTarget): string {
 
 function inputValue(field: Field, control: Control): string | null {
   const value = control.value.trim();
-  if (field.kind === "color") {
-    const style = document.createElement("span").style;
-    style.setProperty(field.property, value);
-    return style.getPropertyValue(field.property) ? value : null;
-  }
+  if (field.kind === "color") return validStyleValue(field.property, value);
   if (field.kind === "length") {
     if (!value) return null;
     const number = Number(value);
@@ -100,11 +91,11 @@ function inputValue(field: Field, control: Control): string | null {
     if (!/^(auto|normal|(?:\d+(?:\.\d+)?)(?:px|%|vw|vh|rem|em)?)$/.test(value)) return null;
     return field.kind === "size" && /^[\d.]+$/.test(value) ? `${value}px` : value;
   }
-  return value;
+  return validStyleValue(field.property, value);
 }
 
 /** Shared by every section, including the shared theme tokens. */
-export function fieldControl(field: Field, context: Pick<PanelContext, "element" | "begin" | "apply" | "commit">) {
+export function fieldControl(field: Field, context: Pick<PanelContext, "element" | "begin" | "apply" | "commit" | "cancel">) {
   const { element } = context;
   const box = document.createElement("div");
   box.className = `design-field design-field--${field.kind}`;
@@ -209,6 +200,18 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
   }
   if (control instanceof HTMLInputElement)
     control.addEventListener("keydown", (event) => { if (event.key === "Enter") control.blur(); });
+  box.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !context.cancel) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    context.cancel(control, field.property);
+    control.value = valueFor(field, element);
+    const swatch = box.querySelector<HTMLInputElement>('input[type="color"]');
+    if (swatch) swatch.value = toHex(control.value);
+    queueMicrotask(() => {
+      if (box.dataset.tokenMode !== "custom") box.querySelector<HTMLElement>(".design-token-binding select")?.focus();
+    });
+  });
   box.append(control);
   return box;
 }
@@ -272,7 +275,7 @@ export function renderPanel(container: HTMLElement, context: PanelContext) {
   }
   const touched = (properties: string[]) => properties.some((property) => changed?.has(property));
   // Direct text, or text styles the element sets inline for its children.
-  const text = [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) ||
+  const text = !!element.textContent?.trim() ||
     /(?:^|;)\s*(?:color|font|line-height|text-align)/.test(element.getAttribute("style") ?? "") || touched(typography);
   const flex = /flex|grid/.test(style.display) || touched(["gap"]);
   const fill = shortColor(style.backgroundColor) !== "transparent" || touched(["background-color"]);

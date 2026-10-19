@@ -39,6 +39,64 @@ afterEach(() => {
 });
 
 describe("design comments", () => {
+  it("takes After back when a host replaces the original text structure", async () => {
+    document.body.innerHTML = '<a id="link"><strong>Old title</strong></a>';
+    const target = document.querySelector<HTMLElement>("#link")!;
+    const container = document.body.appendChild(document.createElement("div"));
+    renderDraftProposal(container, text, () => target);
+    expect(target.textContent).toBe("New title");
+    const moved = target.querySelector("strong")!;
+    document.body.append(moved);
+    moved.firstChild!.textContent = "Host moved text";
+    const replacement = document.createElement("em");
+    replacement.textContent = "Host replacement";
+    target.replaceChildren(replacement);
+    await vi.waitFor(() => expect(container.querySelector('.design-toggle button[aria-pressed="true"]')!.textContent).toBe("Before"));
+    expect(target.firstChild).toBe(replacement);
+    expect(target.textContent).toBe("Host replacement");
+    expect(moved.textContent).toBe("Host moved text");
+    expect(container.querySelector<HTMLElement>('[role="status"]')!.hidden).toBe(false);
+  });
+
+  it("keeps Before selected when the page text no longer matches the proposal", () => {
+    document.body.innerHTML = '<a id="link"><strong>Current title</strong></a>';
+    const target = document.querySelector<HTMLElement>("#link")!;
+    target.scrollIntoView = () => {};
+    const container = document.body.appendChild(document.createElement("div"));
+    renderDesignComment(container, text, { key: "stale-text", resolve: () => target, note: () => {} });
+    const [before, after] = container.querySelectorAll<HTMLButtonElement>(".design-toggle button");
+    after.click();
+    expect(target.textContent).toBe("Current title");
+    expect(before.getAttribute("aria-pressed")).toBe("true");
+    expect(after.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelector<HTMLElement>('[role="status"]')!.hidden).toBe(false);
+  });
+
+  it("previews nested text without replacing icons, elements or text nodes", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    document.body.innerHTML = '<a id="link" href="#destination"><svg><title>Icon</title><path d="M0 0h4v4z"/></svg><span>Old <strong>title</strong></span></a>';
+    const target = document.querySelector<HTMLElement>("#link")!;
+    target.scrollIntoView = () => {};
+    const original = target.innerHTML;
+    const icon = target.querySelector("svg");
+    const node = target.querySelector("strong")!.firstChild;
+    const body = 'Proposed inline text change (preview only)\nTarget: #link\n- Text: "IconOld title" → "IconOld heading"';
+    const container = document.body.appendChild(document.createElement("div"));
+    renderDraftProposal(container, body, () => target);
+    expect(target.querySelector("strong")!.textContent).toBe("heading");
+    expect(target.querySelector("svg")).toBe(icon);
+    expect(target.querySelector("strong")!.firstChild).toBe(node);
+    const [before, after] = container.querySelectorAll<HTMLButtonElement>(".design-toggle button");
+    expect(after.getAttribute("aria-pressed")).toBe("true");
+    before.click();
+    expect(target.innerHTML).toBe(original);
+    after.click();
+    expect(target.querySelector("strong")!.textContent).toBe("heading");
+    resetDesignPreviews();
+    expect(target.innerHTML).toBe(original);
+    expect(target.querySelector("strong")!.firstChild).toBe(node);
+  });
+
   it.each(["svg", "path"])("previews and restores %s styles in drafts and posted cards", (kind) => {
     vi.stubGlobal("matchMedia", () => ({ matches: true }));
     document.body.innerHTML = '<svg id="icon"><path id="shape" d="M0 0h10v10z"/></svg><svg id="other"/>';

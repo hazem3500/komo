@@ -171,6 +171,39 @@ describe("custom token adapter in Design mode", () => {
     expect(label.className).toBe("text-secondary");
   });
 
+  it("detaches raw edits, supersedes their inline values with tokens, and undoes in chronological order", async () => {
+    await open({ tokens: classAdapter() });
+    const raw = () => field("color").querySelector<HTMLInputElement>('input[data-property="color"]')!;
+    const edit = (value: string) => {
+      raw().focus();
+      raw().value = value;
+      raw().dispatchEvent(new Event("input", { bubbles: true }));
+      raw().dispatchEvent(new Event("change", { bubbles: true }));
+      raw().blur();
+    };
+    edit("#ef3340");
+    await vi.waitFor(() => expect(field("color").dataset.tokenMode).toBe("custom"));
+    expect(tokenSwapChanges(label)).toEqual([]);
+    choose("color", "color.text.primary");
+    expect(label.style.color).toBe("");
+    expect(label.className).toBe("text-primary");
+    expect(field("color").dataset.tokenMode).toBe("token");
+    edit("#2468ff");
+    await vi.waitFor(() => expect(field("color").dataset.tokenMode).toBe("custom"));
+    expect(label.style.getPropertyPriority("color")).toBe("important");
+    expect(tokenSwapChanges(label)).toEqual([]);
+    tool("Undo").click();
+    expect(label.style.color).toBe("");
+    await vi.waitFor(() => expect(field("color").dataset.tokenMode).toBe("token"));
+    tool("Undo").click();
+    expect(label.style.color).toBe("rgb(239, 51, 64)");
+    await vi.waitFor(() => expect(field("color").dataset.tokenMode).toBe("custom"));
+    tool("Undo").click();
+    expect(label.style.color).toBe("");
+    expect(label.className).toBe("text-secondary");
+    await vi.waitFor(() => expect(field("color").dataset.tokenMode).toBe("connected"));
+  });
+
   it("suspends adapter swaps while inactive and resumes them with Undo intact", async () => {
     await open({ tokens: classAdapter() });
     choose("color", "color.text.primary");
@@ -184,6 +217,23 @@ describe("custom token adapter in Design mode", () => {
     tool("Undo").click();
     expect(label.className).toBe("text-secondary");
     expect(proposedDesignChanges(label)).toBeUndefined();
+  });
+
+  it("coalesces raw color input and never reconnects an equal literal automatically", async () => {
+    await open({ tokens: classAdapter() });
+    const swatch = field("color").querySelector<HTMLInputElement>('input[type="color"]')!;
+    swatch.dispatchEvent(new Event("focus"));
+    for (const value of ["#ef3340", "#2468ff", "#6b6b6b"]) {
+      swatch.value = value;
+      swatch.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    swatch.dispatchEvent(new Event("change", { bubbles: true }));
+    await vi.waitFor(() => expect(field("color").dataset.tokenMode).toBe("custom"));
+    expect(tokenSwapChanges(label)).toEqual([]);
+    tool("Undo").click();
+    expect(label.getAttribute("style")).toBeNull();
+    expect(tool("Undo").disabled).toBe(true);
+    await vi.waitFor(() => expect(field("color").dataset.tokenMode).toBe("connected"));
   });
 
   it("keeps transient picker previews out of proposals and commits exactly one undo step", async () => {

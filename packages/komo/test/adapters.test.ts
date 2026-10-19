@@ -109,6 +109,24 @@ describe("tailwindTokens", () => {
     expect(bare.hasAttribute("class")).toBe(false);
   });
 
+  it("supersedes an inline important value without losing its original declaration or other properties", () => {
+    const adapter = tailwindTokens(table);
+    const element = document.createElement("p");
+    element.className = "text-secondary rounded";
+    element.style.setProperty("color", "rgb(239, 51, 64)", "important");
+    element.style.setProperty("padding", "9px 12px", "important");
+    document.body.append(element);
+    const original = element.getAttribute("style");
+    expect((adapter.resolve(element) as Record<string, unknown>).color).toEqual({ offToken: "rgb(239, 51, 64)" });
+    const undo = adapter.preview!(element, "color", token("color.text.primary"));
+    expect(element.style.color).toBe("");
+    expect(element.style.padding).toBe("9px 12px");
+    expect((adapter.resolve(element) as Record<string, unknown>).color).toEqual({ path: "color.text.primary" });
+    undo();
+    expect(element.getAttribute("style")).toBe(original);
+    expect(element.style.getPropertyPriority("color")).toBe("important");
+  });
+
   it("removes only classes the new token fully replaces", () => {
     const adapter = tailwindTokens(table);
     const element = document.createElement("div");
