@@ -17,6 +17,7 @@ beforeEach(() => {
     "ResizeObserver",
     class {
       observe() {}
+      unobserve() {}
       disconnect() {}
     },
   );
@@ -992,6 +993,52 @@ async function mountForComments(sidebar: "background" | "edge", name: string) {
   };
   return { host, shadow, press, open, capturing, pane, post };
 }
+
+it("frames body-level portals with the page and restores them exactly", async () => {
+  const { host } = await mountForComments("background", "portals");
+  const portal = (css: string) => {
+    const node = document.createElement("div");
+    node.style.cssText = css;
+    document.body.append(node);
+    return node;
+  };
+  const dialog = portal("position: fixed; inset: 0px; translate: 1px 2px;");
+  const original = dialog.style.cssText;
+  const flow = portal("height: 10px;");
+  const anchored = portal("position: fixed; transform: translate(5px, 5px);");
+  const chosen = portal("position: absolute;");
+  const reopen = (include?: (node: HTMLElement) => boolean) => {
+    controller!.destroy();
+    controller = initComments({ ...options, onboarding: undefined, sidebar: "background", pageRoot: document.getElementById("target")!, frame: { include } });
+    controller.open();
+  };
+  controller!.open();
+  const target = document.getElementById("target")!;
+  expect(target.style.transform).toMatch(/scale/);
+  const scale = target.style.transform.match(/scale\(([\d.]+)\)/)![1];
+  // Present on entry: scaled like the page, keeping its own translate inside.
+  expect(dialog.style.scale).toBe(scale);
+  expect(dialog.style.translate).toMatch(/1px/);
+  // komo's host, in-flow content and script-anchored popovers stay as they are.
+  for (const node of [host, flow, anchored, chosen]) expect(node.style.scale).toBe("");
+  // Mounted while framed.
+  const toast = portal("position: fixed; right: 0px; bottom: 0px;");
+  await Promise.resolve();
+  expect(toast.style.scale).toBe(scale);
+  controller!.close();
+  expect(dialog.style.cssText).toBe(original);
+  expect(toast.style.cssText).toBe("position: fixed; right: 0px; bottom: 0px;");
+  // include() overrides the default; destroy() restores too.
+  reopen((node) => node === chosen);
+  expect(chosen.style.scale).toBe(scale);
+  expect(dialog.style.scale).toBe("");
+  controller!.destroy();
+  expect(chosen.style.cssText).toBe("position: absolute;");
+  reopen();
+  expect(dialog.style.scale).toBe(scale);
+  controller!.destroy();
+  expect(dialog.style.cssText).toBe(original);
+});
 
 it("keeps Frame view open while commenting, posting, resolving and in Design mode", async () => {
   const { host, shadow, press, open, capturing, pane, post } = await mountForComments("background", "framer");

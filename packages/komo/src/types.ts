@@ -141,6 +141,13 @@ export interface CommentsOptions {
    */
   pickRoots?: () => Element[];
   /**
+   * Frame view scales body-level portals (dialogs, overlays, toasts) with the
+   * page. By default it frames each position: fixed child of body without an
+   * inline transform; script-positioned popovers already follow their framed
+   * anchors. `include` overrides that choice per body child.
+   */
+  frame?: { include?(element: HTMLElement): boolean };
+  /**
    * Stop komo's own pointer, focus, wheel and typing events at its host
    * element, so page shortcuts and open modals don't react to komo's UI.
    * Defaults to true; set false if the host needs to observe them.

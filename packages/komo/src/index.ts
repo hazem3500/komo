@@ -648,6 +648,41 @@ export function initComments(options: CommentsOptions): CommentsController {
     { position: string; marginBottom: string }
   >();
   const savedHtmlBackground = document.documentElement.style.background;
+  // Frame view maps body-level portals (dialogs, overlays, toasts) like the page:
+  // viewport point p lands at frame offset + p * scale. Individual translate and
+  // scale compose with the portal's own transform, about its own origin.
+  const portals = new Map<HTMLElement, string[]>();
+  let portalFrame: number[] | null = null;
+  function framePortals() {
+    for (const [node, [translate, scale]] of portals)
+      Object.assign(node.style, { translate, scale });
+    const keep = new Set<HTMLElement>();
+    if (portalFrame) {
+      const [left, top, s] = portalFrame;
+      for (const node of document.body.children) {
+        if (!(node instanceof HTMLElement) || node === host || node.contains(surface)) continue;
+        const css = getComputedStyle(node);
+        if (!(options.frame?.include?.(node) ?? (!node.style.transform && css.position === "fixed"))) continue;
+        keep.add(node);
+        if (!portals.has(node)) {
+          portals.set(node, [node.style.translate, node.style.scale]);
+          portalSize.observe(node);
+        }
+        const [x, y] = css.transformOrigin.split(" ").map(parseFloat);
+        const [tx = "0px", ty = "0px"] = css.translate.match(/calc\(.*?\)|[^\s(]+/g) ?? [];
+        node.style.translate = `calc(${left - (1 - s) * (node.offsetLeft + x)}px + ${s} * ${tx === "none" ? "0px" : tx}) calc(${top - (1 - s) * (node.offsetTop + y)}px + ${s} * ${ty})`;
+        node.style.scale = css.scale === "none" ? `${s}` : css.scale.split(" ").map((v) => +v * s).join(" ");
+      }
+    }
+    for (const node of portals.keys())
+      if (!keep.has(node)) {
+        portals.delete(node);
+        portalSize.unobserve(node);
+      }
+  }
+  const portalSize = new ResizeObserver(framePortals);
+  const portalWatch = new MutationObserver(framePortals);
+  portalWatch.observe(document.body, { childList: true });
   const html = document.documentElement;
   // The frame paints the page's own background; re-read it when a theme changes.
   // Frame's dark backdrop sits inline on body and html, so lift it while reading.
@@ -1688,6 +1723,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       }
       host.classList.toggle("review-open", expanded);
       framed = false;
+      portalFrame = null;
+      framePortals();
       pins.style.clipPath = "";
       Object.assign(catcher.style, {
         left: "",
@@ -1775,6 +1812,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       appliedScale = 1;
     }
     framed = useFrame;
+    portalFrame = useFrame ? [layout.left / zoom, layout.top / zoom, appliedScale] : null;
+    framePortals();
     if (!useFrame && options.drawerContainer?.isConnected) {
       const rect = options.drawerContainer.getBoundingClientRect();
       drawerContainerCenter = rect.width
@@ -6015,6 +6054,10 @@ export function initComments(options: CommentsOptions): CommentsController {
       for (const [header, styles] of fixedHeaders)
         Object.assign(header.style, styles);
       fixedHeaders.clear();
+      portalWatch.disconnect();
+      portalSize.disconnect();
+      portalFrame = null;
+      framePortals();
       if (framed || !edgeSidebar) {
         document.documentElement.style.overflow = savedHtmlOverflow;
         Object.assign(surface.style, savedStyle);
