@@ -2454,7 +2454,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         label: api.user
           ? `${api.user.name} · Account`
           : options.onboarding?.inProject
-            ? "Set up komo"
+            ? "Set up inline feedback"
             : "Enter your name",
         icon: { user: api.user },
         onSelect: () => {
@@ -2493,8 +2493,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       {
         id: "dismiss",
         label: shortcuts.restore
-          ? `Dismiss Komo · ${shortcuts.restore.label} to restore`
-          : "Dismiss Komo",
+          ? `Dismiss inline feedback · ${shortcuts.restore.label} to restore`
+          : "Dismiss inline feedback",
         icon: glyph("close"),
         onSelect: dismissToolbar,
       },
@@ -4584,14 +4584,14 @@ export function initComments(options: CommentsOptions): CommentsController {
           );
       } else {
         content.append(
-          el("h2", "", options.onboarding ? "Set up komo" : "Leave comments"),
+          el("h2", "", options.onboarding ? "Set up inline feedback" : "Leave comments"),
         );
         if (options.onboarding?.inProject) {
           content.append(
             el(
               "p",
               "",
-              "Connect komo to start leaving feedback on this site. One site per line.",
+              "Add the sites where you want to leave feedback. One site per line.",
             ),
           );
           const sitesLabel = el(
@@ -4610,7 +4610,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           sitesLabel.append(sitesInput);
           content.append(sitesLabel);
           const connect = button(
-            "Connect komo",
+            "Connect",
             () =>
               run(async () => {
                 if (connectingProject) return;
@@ -4638,7 +4638,7 @@ export function initComments(options: CommentsOptions): CommentsController {
                   await loadProject();
                   render();
                   notify(
-                    "komo is connected. Select an element to leave feedback.",
+                    "Inline feedback is connected. Select an element to comment.",
                   );
                 } finally {
                   connectingProject = false;

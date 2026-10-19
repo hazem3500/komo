@@ -250,7 +250,7 @@ it("uses configured shortcut keys and labels", () => {
     root.querySelector(`[data-menu-item="${id}"]`)!.getAttribute("aria-label");
   expect(label("comment")).toBe("Add comment · M");
   expect(label("browse")).toBe("Browse website");
-  expect(label("dismiss")).toBe("Dismiss Komo · Shift+J to restore");
+  expect(label("dismiss")).toBe("Dismiss inline feedback · Shift+J to restore");
   const key = (init: KeyboardEventInit) => {
     const event = new KeyboardEvent("keydown", {
       bubbles: true,
@@ -307,7 +307,7 @@ it("dismisses the active Design overlay without intercepting host clicks", async
     '[data-menu-item="dismiss"]',
   )!;
   expect(dismiss.getAttribute("aria-label")).toBe(
-    "Dismiss Komo · Shift+K to restore",
+    "Dismiss inline feedback · Shift+K to restore",
   );
   dismiss.click();
   expect(toolbar.style.display).toBe("none");

@@ -81,7 +81,7 @@ export function connectProject(
     "komo-connect",
     "popup,width=600,height=720"
   );
-  if (!popup) return Promise.reject(new Error("Allow popups to connect komo."));
+  if (!popup) return Promise.reject(new Error("Allow popups to set up inline feedback."));
   return new Promise((resolve, reject) => {
     const cleanup = () => {
       window.removeEventListener("message", receive);
@@ -94,7 +94,7 @@ export function connectProject(
       cleanup();
       reject(new Error(message));
     };
-    const cancel = () => fail("Setup closed. Reopen komo to try again.");
+    const cancel = () => fail("Setup closed. Reopen inline feedback to try again.");
     const receive = (event: MessageEvent) => {
       const result = event.data;
       if (
