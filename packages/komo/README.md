@@ -80,10 +80,13 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 - Group tags: add them while writing a comment or on an open thread, with suggestions from tags already in the project.
 - Safe HTTP(S) links and simple Markdown links in comment messages.
 - Searchable sidebar, draggable dock, and Google or guest profiles.
+
 - Dismiss the toolbar for the current tab with ×; restore it with Shift+K or `controller.open()`. Set `showToolbar: false` to start hidden.
 - Keyboard shortcuts: C to comment, V to browse, D to toggle Design mode, L to view all comments, Shift+K to restore. Remap or disable them with `shortcuts`; see [Choosing shortcuts](#choosing-shortcuts).
 - Copy open feedback with selectors, source paths, page URLs, replies, and geometry into an agent.
 - Hosted Cloudflare storage, or your own Worker/D1 or Node/PostgreSQL service.
+
+Comment pins stay anchored during ordinary pointer drags. Authors and verified reviewers can choose **Comment actions → Move pin** to reposition one explicitly: drag it, or use arrow keys (Shift for larger steps), then Enter or **Save position**. Escape or **Cancel move** restores its previous position without saving. Completed moves use the existing thread anchor endpoint and remain attached after reload; the page element itself never moves. Dragging a floating comment card is independent of pin placement.
 
 Design mode edits the rendered page only. Preview styles and inline text edits are temporary and reset when the page refreshes; styles are restored when the Komo widget is destroyed. Use **Copy CSS** to apply a rule in your site stylesheet; Komo does not write source files. Double-click text, or use **Edit text**, to edit it inline. Edits accept plain text only and change text in place: nested markup, links, and buttons keep their structure. Text marked `data-private` or `data-sensitive`, form fields, and text inside graphics, media, or frames stay read-only. An explicitly registered React `textProp` routes edits through the app's state callback. The inspector can select an iframe as one element but cannot edit its isolated contents. Elements inside open or closed shadow roots are not traversed; select the component host instead.
 

@@ -1121,8 +1121,15 @@ ${morphingMenuStyles}
   color: #ccc;
 }
 .pin {
-  touch-action: none;
+  touch-action: manipulation;
 }
+.pin[data-moving] { touch-action:none; cursor:grab; z-index:4; }
+.pin-move { position:fixed; z-index:30; left:50%; bottom:80px; translate:-50% 0; width:min(420px,calc(100vw - 24px)); display:flex; flex-wrap:wrap; gap:8px; padding:14px; border-radius:14px; background:#252525; color:#eee; box-shadow:0 0 0 1px #ffffff20,0 8px 24px #0005; font:12px/1.5 ui-sans-serif,system-ui,sans-serif; pointer-events:auto; }
+.pin-move p { flex-basis:100%; margin:0 0 4px; }
+.pin-move button { min-height:36px; padding:6px 12px; border-radius:8px; }
+.pin-move .primary { background:var(--accent,#c8b5f4); color:#21172f; }
+.pin-move .secondary { background:#ffffff12; color:#eee; }
+.pin-move-status { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
 .pin { padding: 0; overflow: hidden; }
 .pin .avatar {
   position: absolute;
@@ -2536,8 +2543,8 @@ textarea {
 /* Design mode's selection outline marks the open thread's target. */
 .component-hover[data-thread] { outline: 2px solid var(--accent, #bda6ef); background: none; transition: opacity 150ms ease; }
 /* The open thread's pin stays as a quiet marker, and steps away while the outline shows. */
-.pins[data-quiet] .pin.active { scale: .7; opacity: .6; box-shadow: 0 0 0 2px #fff; transition: opacity 150ms ease; }
-.pins[data-outlined] .pin.active { opacity: 0; pointer-events: none; }
+.pins[data-quiet] .pin.active:not([data-moving]) { scale: .7; opacity: .6; box-shadow: 0 0 0 2px #fff; transition: opacity 150ms ease; }
+.pins[data-outlined] .pin.active:not([data-moving]) { opacity: 0; pointer-events: none; }
 .thread-pane .icon:focus-visible { outline: 2px solid var(--accent, #bda6ef); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .component-hover, .pins .pin.active { transition: none; } }
 .thread-back { margin-left: -6px; }
