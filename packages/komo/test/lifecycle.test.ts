@@ -297,7 +297,7 @@ it("toggles the comment list with L and shows configured bindings in every hint"
   expect(label("comment")).toBe("Add comment · Shift+C");
   expect(label("design")).toBe("Design mode · Shift+D");
   expect(label("comments")).toBe("View all comments · Shift+L · 0 open");
-  expect(label("dismiss")).toBe("Dismiss Komo · Shift+R to restore");
+  expect(label("dismiss")).toBe("Dismiss inline feedback · Shift+R to restore");
   expect(key({ key: "l" })).toBe(false);
   expect(key({ key: "c" })).toBe(false);
   // Caps Lock and a layout whose shifted key isn't L both reach Shift+L.
@@ -310,7 +310,7 @@ it("toggles the comment list with L and shows configured bindings in every hint"
   expect(label("comment")).toBe("Add comment");
   expect(label("design")).toBe("Design mode");
   expect(label("comments")).toBe("View all comments · 0 open");
-  expect(label("dismiss")).toBe("Dismiss Komo");
+  expect(label("dismiss")).toBe("Dismiss inline feedback");
   expect(key({ key: "l" })).toBe(false);
 });
 
