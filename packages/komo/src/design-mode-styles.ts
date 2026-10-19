@@ -61,7 +61,6 @@ export const designModeStyles = `
 .design-inspector__actions button:last-child { min-height:34px; margin-left:6px; padding:0 14px; border-radius:8px; background:var(--accent,#bda6ef); color:#211b2d; font-size:12px; font-weight:500; }
 .design-inspector__actions button:last-child:hover:not(:disabled) { background:var(--accent,#bda6ef); color:#211b2d; filter:brightness(1.08); }
 .design-inspector :focus-visible { outline:2px solid var(--accent,#bda6ef); outline-offset:2px; }
-@keyframes design-status { from { opacity:0; translate:0 2px; } }
 @media (max-width:520px) {
   /* A content-sized bottom sheet; folding it leaves only the heading over the page. */
   .design-inspector {

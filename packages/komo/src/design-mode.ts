@@ -1,4 +1,5 @@
 import { isDesignTarget, pickDesignTarget, type DesignTarget } from "./design-target.js";
+import { changePreviewStyles, removeEmptyStyle } from "./design-preview.js";
 import { designModeStyles } from "./design-mode-styles.js";
 import { el, icon } from "./dom.js";
 import { drawHighlight } from "./highlight.js";
@@ -140,6 +141,7 @@ export function createDesignMode(options: DesignModeOptions) {
   let reactPanelModule: typeof import("./react-props-panel.js") | null = null;
   let reactPanelPromise: Promise<typeof import("./react-props-panel.js")> | null = null;
   const originals = new Map<DesignTarget, Map<string, Original>>();
+  const styleless = new WeakSet<DesignTarget>();
   const changed = new Map<DesignTarget, Map<string, string>>();
   const starts = new WeakMap<Control, Original>();
   const pending = new WeakMap<Control, Edit>();
@@ -158,7 +160,10 @@ export function createDesignMode(options: DesignModeOptions) {
 
   function remember(element: DesignTarget, property: string, value = element.style.getPropertyValue(property), priority = element.style.getPropertyPriority(property)) {
     let values = originals.get(element);
-    if (!values) originals.set(element, (values = new Map()));
+    if (!values) {
+      originals.set(element, (values = new Map()));
+      if (!element.hasAttribute("style")) styleless.add(element);
+    }
     if (!values.has(property)) values.set(property, { value, priority, computed: getComputedStyle(element).getPropertyValue(property).trim() });
   }
   function track(element: DesignTarget, property: string) {
@@ -196,21 +201,20 @@ export function createDesignMode(options: DesignModeOptions) {
   }).observe(status, { childList: true, characterData: true, subtree: true });
   let showingBefore = false;
   let suspendedBefore: boolean | undefined;
-  function showBefore(on: boolean) {
+  function showBefore(on: boolean, animate = true) {
     if (on === showingBefore) return;
     if (on && textTools?.element) finishTextEdit();
     showingBefore = on;
     // Morph like design comments: animate exactly the changed properties, then hand them back.
-    const smooth = !calm();
+    const smooth = animate && !calm();
     for (const [element, values] of changed) {
-      const transition = element.style.transition;
-      if (smooth) element.style.transition = [...values.keys()].map((property) => `${property} .3s cubic-bezier(.22,1,.36,1)`).join();
-      for (const [property, value] of values) {
-        const original = originals.get(element)?.get(property);
-        if (on) restore(element, property, original);
-        else element.style.setProperty(property, value, original?.priority);
-      }
-      if (smooth) window.setTimeout(() => (element.style.transition = transition), 320);
+      changePreviewStyles(element, values.keys(), () => {
+        for (const [property, value] of values) {
+          const original = originals.get(element)?.get(property);
+          if (on) restore(element, property, original);
+          else element.style.setProperty(property, value, original?.priority);
+        }
+      }, smooth, styleless.has(element));
     }
     textTools?.showBefore(on);
     reactPanelModule?.showDesignBefore(on);
@@ -221,6 +225,7 @@ export function createDesignMode(options: DesignModeOptions) {
   function restore(element: DesignTarget, property: string, original?: Original) {
     if (original?.value) element.style.setProperty(property, original.value, original.priority);
     else element.style.removeProperty(property);
+    if (styleless.has(element)) removeEmptyStyle(element);
   }
   function preview(control: Control, property: string, value: string | null) {
     if (!selected) return;
@@ -545,14 +550,14 @@ export function createDesignMode(options: DesignModeOptions) {
       textTools?.finish();
       if (active) {
         suspendedBefore = showingBefore;
-        showBefore(true);
+        showBefore(true, false);
       }
       reactPanelModule?.restoreThemes();
     }
     if (value && !active && suspendedBefore !== undefined) {
       const before = suspendedBefore;
       suspendedBefore = undefined;
-      showBefore(before);
+      showBefore(before, false);
     }
     if (value && selected && (!selected.isConnected || selectionPage !== page())) clearSelection();
     clearTimeout(closeTimer);
@@ -600,9 +605,13 @@ export function createDesignMode(options: DesignModeOptions) {
   });
   function resetAll() {
     cancelPreview();
-    showBefore(false);
-    for (const [element, properties] of originals)
-      for (const [property, original] of properties) restore(element, property, original);
+    showBefore(false, false);
+    for (const [element, properties] of originals) {
+      changePreviewStyles(element, properties.keys(), () => {
+        for (const [property, original] of properties) restore(element, property, original);
+      }, false, styleless.has(element));
+      styleless.delete(element);
+    }
     originals.clear();
     changed.clear();
     history.length = 0;
@@ -652,9 +661,12 @@ export function createDesignMode(options: DesignModeOptions) {
     const hasTokenValues = reactPanelModule?.hasDesignTokenEdit(element) ?? false;
     if (!values?.size && !hasTextValue && !hasReactValues && !hasTokenValues) return;
     if (hasTextValue && element instanceof HTMLElement) textTools?.reset(element);
-    for (const property of values?.keys() ?? []) restore(element, property, originals.get(element)?.get(property));
+    changePreviewStyles(element, values?.keys() ?? [], () => {
+      for (const property of values?.keys() ?? []) restore(element, property, originals.get(element)?.get(property));
+    }, false, styleless.has(element));
     changed.delete(element);
     originals.delete(element);
+    styleless.delete(element);
     previewTargets.delete(element);
     if (hasReactValues) reactPanelModule?.resetReactProps(element);
     if (hasTokenValues) reactPanelModule?.resetDesignTokenEdits(element);

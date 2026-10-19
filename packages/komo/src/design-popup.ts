@@ -1,18 +1,6 @@
-import { isDesignTarget } from "./design-target.js";
+export { previewStyle } from "./design-preview.js";
 
 export const popupStyles = `.komo-select,.komo-tokens{position:absolute;z-index:20;box-sizing:border-box;border-radius:10px;background:#232323;box-shadow:0 0 0 1px #ffffff14,0 12px 32px #0008;color:#d9d6d1;font-size:11px;font-weight:400;line-height:1.25;text-align:left;cursor:default;transform-origin:top;animation:komo-popup-in var(--duration-fast,250ms) var(--ease-smooth-out,cubic-bezier(.22,1,.36,1)) backwards}.komo-select[data-up],.komo-tokens[data-up]{transform-origin:bottom}@keyframes komo-popup-in{from{opacity:0;transform:scale(.97)}}@media (prefers-reduced-motion:reduce){.komo-select,.komo-tokens{animation:none}}`;
-
-/** A transient declaration without changing bindings, proposals or history. */
-export function previewStyle(element: Element, property: string, value: string): () => void {
-  if (!isDesignTarget(element)) return () => {};
-  const before = element.style.getPropertyValue(property);
-  const priority = element.style.getPropertyPriority(property);
-  element.style.setProperty(property, value, priority);
-  return () => {
-    if (before) element.style.setProperty(property, before, priority);
-    else element.style.removeProperty(property);
-  };
-}
 
 /** The nearest scrolling or clipping ancestor, bounded by the viewport. */
 export function popupBounds(from: Element) {
