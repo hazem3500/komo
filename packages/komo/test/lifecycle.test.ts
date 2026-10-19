@@ -1243,9 +1243,12 @@ it.each([false, true])("keeps tag actions in the thread header (sidebar=%s)", as
   expect(slot.hidden).toBe(true);
   // Clicking before the lazy editor arrives must still open it.
   trigger.click();
-  await vi.waitFor(() => expect(slot.querySelector("input")).not.toBeNull());
+  await vi.waitFor(() => expect(shadow.querySelector(".tag-popover input")).not.toBeNull());
+  expect(shadow.querySelectorAll(".tag-popover")).toHaveLength(1);
+  expect(slot.previousElementSibling?.classList.contains("message-text")).toBe(true);
+  expect(slot.closest(".message")).toBe(dialog.querySelector(".message"));
   expect(slot.querySelector(".tag-add")).toBeNull();
-  const input = () => slot.querySelector<HTMLInputElement>("input")!;
+  const input = () => shadow.querySelector<HTMLInputElement>(".tag-popover input")!;
   expect(shadow.activeElement).toBe(input());
   input().value = "ui";
   input().dispatchEvent(new Event("input"));
@@ -1258,10 +1261,12 @@ it.each([false, true])("keeps tag actions in the thread header (sidebar=%s)", as
   expect(dialog.isConnected).toBe(true);
   expect(slot.hidden).toBe(false);
   expect(slot.querySelector("input")).toBeNull();
-  const remove = slot.querySelector<HTMLButtonElement>(".tag-chip button")!;
+  trigger.click();
+  const remove = shadow.querySelector<HTMLButtonElement>('.tag-popover-choice[aria-pressed="true"]')!;
   remove.focus();
   remove.click();
   expect(slot.hidden).toBe(true);
+  input().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
   expect(shadow.activeElement).toBe(trigger);
   localStorage.clear();
 });

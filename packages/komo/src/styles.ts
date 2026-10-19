@@ -633,7 +633,7 @@ ${morphingMenuStyles}
 }
 .dialog-head {
   position: absolute;
-  z-index: 1;
+  z-index: 3;
   padding: 0;
   box-shadow: none;
   justify-content: flex-end;
@@ -2515,8 +2515,10 @@ textarea {
 .thread-pane .dialog-head { position: static; height: auto; padding: 0 16px 8px; background: none; gap: 4px; }
 .thread-pane .messages { max-height: none; }
 .thread-pane .composer { margin-top: auto; }
-.message > .thread-tags { margin: 6px 0 0; padding: 0 0 0 32px; }
-.thread-pane .dialog > .thread-tags { margin: -6px 0 4px; padding: 0 16px 8px 36px; }
+.message-content:has(> .thread-tags) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; }
+.message-content:has(> .thread-tags) > .message-text { grid-column: 1; grid-row: 1; }
+.message-content > .thread-tags { grid-column: 1; grid-row: 2; margin: 8px 0 0; }
+.message-content:has(> .thread-tags) > .message-reaction { grid-column: 2; grid-row: 1; }
 .thread-pane .message:first-child > .row { padding-right: 0; }
 /* Design mode's selection outline marks the open thread's target. */
 .component-hover[data-thread] { outline: 2px solid var(--accent, #bda6ef); background: none; transition: opacity 150ms ease; }

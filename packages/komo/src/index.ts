@@ -4725,9 +4725,10 @@ export function initComments(options: CommentsOptions): CommentsController {
           tagAction,
         );
         slot.classList.add("thread-tags");
-        const author = messages.querySelector(".message > .row");
-        if (panel || !author) messages.before(slot);
-        else author.after(slot);
+        const first = messages.querySelector(".message");
+        const body = first?.querySelector(".message-text");
+        if (body) body.after(slot);
+        else first?.append(slot);
       }
       dialog.append(composer(thread));
     } else
