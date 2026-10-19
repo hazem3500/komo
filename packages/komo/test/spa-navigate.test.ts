@@ -121,7 +121,7 @@ function mount(config: Partial<CommentsOptions> = {}) {
     )!;
   const title = () =>
     panel.querySelector(".thread-pane .thread-title")?.textContent;
-  return { card, title };
+  return { card, title, shadow };
 }
 
 it("keeps a full page load without a navigate hook", () => {
@@ -168,14 +168,97 @@ it("routes through navigate and opens the thread once its anchor renders", async
   }
 });
 
-it("falls back to a page load when navigate rejects", async () => {
+it("retains the requested thread when navigate rejects without forcing a page load", async () => {
   const navigate = vi.fn(() => Promise.reject(new Error("blocked")));
-  const { card } = mount({ navigate });
+  const { card, title, shadow } = mount({ navigate });
   card().click();
-  await vi.waitFor(() => expect(assign).toHaveBeenCalledOnce());
-  expect(String(assign.mock.calls[0][0])).toBe(
-    `${location.origin}/other?comment=away`,
-  );
+  await vi.waitFor(() => expect(title()).toBe("Other page thread"));
+  expect(shadow.querySelector(".thread-navigation")?.textContent).toContain("could not be completed");
+  expect(shadow.querySelector<HTMLAnchorElement>(".thread-destination")?.href).toBe(`${location.origin}/other`);
+  expect(assign).not.toHaveBeenCalled();
+  expect(navigate).toHaveBeenCalledOnce();
+});
+
+it("retains the thread after a router redirects and never resolves a current-page lookalike", async () => {
+  document.body.innerHTML = '<button id="target">Unrelated page target</button>';
+  const navigate = vi.fn((url: URL) => {
+    history.pushState({}, "", url);
+    history.replaceState({ guarded: true }, "", "/fallback");
+  });
+  const { card, title, shadow } = mount({ navigate });
+  card().click();
+  await vi.waitFor(() => expect(title()).toBe("Other page thread"));
+  expect(location.pathname).toBe("/fallback");
+  expect(shadow.querySelector(".thread-navigation")?.textContent).toContain("different page");
+  expect(shadow.querySelector<HTMLAnchorElement>(".thread-destination")?.href).toBe(`${location.origin}/other`);
+  expect(shadow.querySelector<HTMLElement>(".outline")?.style.opacity || "0").toBe("0");
+  expect(document.querySelector("#target")?.textContent).toBe("Unrelated page target");
+  expect(assign).not.toHaveBeenCalled();
+  expect(navigate).toHaveBeenCalledOnce();
+});
+
+it("keeps the selected thread through a late host redirect", async () => {
+  document.body.innerHTML = '<button id="target">Destination target</button>';
+  const navigate = vi.fn((url: URL) => { history.pushState({}, "", url); });
+  const { card, title, shadow } = mount({ navigate });
+  card().click();
+  await vi.waitFor(() => expect(title()).toBe("Other page thread"));
+  document.querySelector("#target")!.remove();
+  history.replaceState({ guarded: true }, "", "/fallback");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  await vi.waitFor(() => expect(shadow.querySelector(".thread-navigation")?.textContent).toContain("different page"));
+  expect(title()).toBe("Other page thread");
+  expect(navigate).toHaveBeenCalledOnce();
+  expect(assign).not.toHaveBeenCalled();
+});
+
+it("does not reopen a dismissed request when its router promise settles later", async () => {
+  document.body.innerHTML = '<button id="target">Destination target</button>';
+  let finish!: () => void;
+  const navigate = vi.fn((url: URL) => new Promise<void>(resolve => {
+    finish = () => { history.pushState({}, "", url); window.dispatchEvent(new PopStateEvent("popstate")); resolve(); };
+  }));
+  const { card, title } = mount({ navigate });
+  card().click();
+  controller!.close();
+  finish();
+  await new Promise(resolve => setTimeout(resolve, 150));
+  expect(title()).toBeUndefined();
+  expect(assign).not.toHaveBeenCalled();
+  expect(navigate).toHaveBeenCalledOnce();
+});
+
+it("allows one explicit destination retry after rejection", async () => {
+  let attempt = 0;
+  const navigate = vi.fn((url: URL) => {
+    if (attempt++ === 0) return Promise.reject(new Error("blocked"));
+    history.pushState({ router: true }, "", url);
+    document.body.prepend(Object.assign(document.createElement("section"), { id: "target" }));
+  });
+  const { card, title, shadow } = mount({ navigate });
+  card().click();
+  await vi.waitFor(() => expect(title()).toBe("Other page thread"));
+  shadow.querySelector<HTMLAnchorElement>(".thread-destination")!.click();
+  await vi.waitFor(() => expect(shadow.querySelector(".thread-navigation")).toBeNull());
+  expect(title()).toBe("Other page thread");
+  expect(location.pathname + location.search).toBe("/other");
+  expect(navigate).toHaveBeenCalledTimes(2);
+  expect(assign).not.toHaveBeenCalled();
+});
+
+it("accepts canonical redirects without changing hash or router state", async () => {
+  document.body.innerHTML = '<section id="target"></section>';
+  const navigate = vi.fn((url: URL) => {
+    history.pushState({ canonical: true }, "", url.pathname + "/" + url.search + "#section");
+  });
+  const { card, title, shadow } = mount({ navigate });
+  card().click();
+  await vi.waitFor(() => expect(title()).toBe("Other page thread"));
+  expect(shadow.querySelector(".thread-navigation")).toBeNull();
+  expect(location.pathname + location.search + location.hash).toBe("/other/#section");
+  expect(history.state).toEqual({ canonical: true });
+  expect(navigate).toHaveBeenCalledOnce();
+  expect(assign).not.toHaveBeenCalled();
 });
 
 it.each([false, true])("opens a deep link on load with restored sidebar %s and clears the comment param", async (restored) => {

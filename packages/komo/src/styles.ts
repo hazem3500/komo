@@ -393,6 +393,9 @@ small {
   color: #777268;
   line-height: 1.5;
 }
+.thread-navigation { margin: 0 16px 12px; padding: 10px 12px; border: 1px solid #8883; border-radius: 8px; color: #aaa; }
+.thread-navigation p { margin: 0 0 4px; }
+.thread-destination { color: inherit; text-underline-offset: 3px; overflow-wrap: anywhere; }
 .error {
   background: #fff0e5;
   color: #9c4619;
