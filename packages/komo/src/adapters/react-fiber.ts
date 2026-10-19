@@ -164,13 +164,14 @@ function rootElement(fiber: Fiber): Element | null {
 }
 
 const FRAMEWORK = /jsx[-_](dev[-_])?runtime|react-stack|react[-_.]development|node_modules[\\/](\.[\w-]+[\\/])*(react|react-dom|scheduler)[@\\/]/;
-const FRAME = /(?:\(|@|\bat\s+|^\s*)((?:[a-z][a-z0-9+.-]*:\/\/|\/|[a-z]:\\)[^\s()]*?):(\d+):(\d+)\)?\s*$/i;
+const FRAME = /(?:\(|@|\bat\s+|^\s*)((?:[a-z][a-z0-9+.-]*:\/\/|\/|[a-z]:\\)[^()]*?):(\d+):(\d+)\)?\s*$/i;
 
 const tidy = (file: string) =>
   file
     .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, "")
     .replace(/[?#].*$/, "")
-    .replace(/^\/@fs/, "");
+    .replace(/^\/@fs/, "")
+    .replace(/%20/g, " ");
 
 /**
  * Where the component was written into JSX: the first stack frame outside React. In a bundle

@@ -327,6 +327,8 @@ describe("source locations from debug stacks", () => {
     expect(locate("Error: react-stack-top-frame\n    at jsxDEV (/repo/node_modules/.pnpm/react@19.2.7/node_modules/react/cjs/react-jsx-dev-runtime.development.js:339:1)\n    at /repo/src/Home.tsx:8:3")).toBe("/repo/src/Home.tsx:8");
     expect(locate("jsxDEV@http://localhost/node_modules/react/jsx-dev-runtime.js:5:1\nApp@http://localhost/src/App.tsx:30:9\n")).toBe("/src/App.tsx:30");
     expect(locate("Error\n    at fn (file:///C:/work/app/src/Nav.tsx:4:2)")).toBe("/C:/work/app/src/Nav.tsx:4");
+    expect(locate("Error\n    at Card (/my work/src/Card.tsx:9:3)")).toBe("/my work/src/Card.tsx:9");
+    expect(locate("Error\n    at Card (file:///my%20work/src/Card.tsx:9:3)")).toBe("/my work/src/Card.tsx:9");
   });
 
   it("drops the location when only React frames or unparsable text are present", () => {
