@@ -65,6 +65,10 @@
       "types": "./dist/adapters/react-fiber.d.ts",
       "import": "./dist/adapters/react-fiber.js"
     },
+    "./adapters/react-preview": {
+      "types": "./dist/adapters/react-preview.d.ts",
+      "import": "./dist/adapters/react-preview.js"
+    },
     "./adapters/class-theme": {
       "types": "./dist/adapters/class-theme.d.ts",
       "import": "./dist/adapters/class-theme.js"
@@ -75,6 +79,8 @@
     "./package.json": "./package.json"
   },
   "sideEffects": [
+    "./src/adapters/react-preview.ts",
+    "./dist/adapters/react-preview.js",
     "./dist/chunk-*.js",
     "./dist/picker-*.js"
   ],

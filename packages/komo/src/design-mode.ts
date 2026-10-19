@@ -312,20 +312,18 @@ export function createDesignMode(options: DesignModeOptions) {
         const styleRoot = options.root;
         // Switching a theme re-renders the selection, so tokens, values and the outline follow it.
         module.attachThemeSwitcher(controls, options.design, () => select(element), styleRoot);
-        const props = module.createReactPropsPanel(element, () => {
-          status.textContent = "Runtime preview · Undo, Reset or reload to restore";
+        const recordUndo = (undo?: () => void) => {
+          if (undo) history.push({ element, undo });
           updateActions();
-        }, styleRoot, select, options.design);
-        if (props) controls.append(props);
+        };
+        const props = module.createReactPropsPanel(element, recordUndo, styleRoot, select, options.design, renderControls);
+        if (props) controls.prepend(props);
         module.attachStyleTokenControls(element, panelControls.fields, controls, (field, input, before) => {
           remember(element, field.property, before);
           track(element, field.property);
           starts.set(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
           commit(input, field.property);
-        }, styleRoot, panelControls.valueFor, panelControls.toHex, options.design, (undo) => {
-          history.push({ element, undo });
-          updateActions();
-        });
+        }, styleRoot, panelControls.valueFor, panelControls.toHex, options.design, recordUndo);
         const theme = module.createDesignThemePanel(element, panelControls, updateActions, styleRoot);
         if (theme) controls.append(theme);
       }).catch(() => {});
@@ -552,7 +550,7 @@ export function createDesignMode(options: DesignModeOptions) {
         suspendedBefore = showingBefore;
         showBefore(true, false);
       }
-      reactPanelModule?.restoreThemes();
+      reactPanelModule?.restoreThemes(panel);
     }
     if (value && !active && suspendedBefore !== undefined) {
       const before = suspendedBefore;

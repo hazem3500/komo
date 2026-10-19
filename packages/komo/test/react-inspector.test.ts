@@ -79,15 +79,15 @@ describe("React props inspector bridge", () => {
     document.body.replaceChildren();
   });
 
-  it("shows generated scalar controls and keeps complex props read-only", async () => {
+  it("shows useful declared controls without callback or opaque fields", async () => {
     await vi.waitFor(() => expect(shadow.querySelector(".design-react-group")).not.toBeNull());
     const group = shadow.querySelector<HTMLDetailsElement>(".design-react-group")!;
     expect(group).not.toBeNull();
     expect(group.textContent).toContain("PromoCard");
     expect(group.textContent).toContain("examples/react-props/src/card.tsx:15");
     expect([...shadow.querySelectorAll("style")].some((style) => style.textContent?.includes(".design-token-binding select"))).toBe(true);
-    expect(group.querySelector<HTMLInputElement>('[aria-label^="PromoCard onActivate"]')?.disabled).toBe(true);
-    expect(group.querySelector<HTMLInputElement>('[aria-label^="PromoCard details"]')?.disabled).toBe(true);
+    expect(group.querySelector('[aria-label^="PromoCard onActivate"]')).toBeNull();
+    expect(group.querySelector('[aria-label^="PromoCard details"]')).toBeNull();
     expect(inspectableFor(card)?.props).not.toHaveProperty("onActivate");
   });
 
@@ -157,6 +157,30 @@ describe("React props inspector bridge", () => {
     expect(changes.at(-1)?.title).toBe("Left behind");
     expect(shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:first-child")!.disabled).toBe(false);
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:nth-child(2)")!.click();
+    expect(changes.at(-1)?.title).toBe("A preview title");
+  });
+
+  it("undoes mixed prop and style commits in their actual order", async () => {
+    await vi.waitFor(() => expect(shadow.querySelector(".design-react-group")).not.toBeNull());
+    const title = shadow.querySelector<HTMLInputElement>('[aria-label="PromoCard title"]')!;
+    title.value = "First edit";
+    title.dispatchEvent(new Event("change"));
+    const width = shadow.querySelector<HTMLInputElement>('[data-property="width"]')!;
+    width.dispatchEvent(new Event("focus"));
+    width.value = "123";
+    width.dispatchEvent(new Event("input"));
+    width.dispatchEvent(new Event("change"));
+    const compact = shadow.querySelector<HTMLInputElement>('[aria-label="PromoCard compact"]')!;
+    compact.checked = true;
+    compact.dispatchEvent(new Event("change"));
+    const undo = () => shadow.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
+    undo();
+    expect(changes.at(-1)).toMatchObject({ compact: false, title: "First edit" });
+    expect(card.style.width).toBe("123px");
+    undo();
+    expect(card.style.width).toBe("");
+    expect(changes.at(-1)?.title).toBe("First edit");
+    undo();
     expect(changes.at(-1)?.title).toBe("A preview title");
   });
 

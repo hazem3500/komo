@@ -82,7 +82,7 @@ export interface TokenAdapter {
   describe?(element: Element, property: string, from: TokenUsage, to: DesignToken): string;
 }
 
-/** Theme state: axis id → option id, e.g. { mode: "dark", product: "track" }. */
+/** Theme state: axis id → option id, e.g. { mode: "dark", product: "docs" }. */
 export type ThemeState = Record<string, string>;
 
 export interface ThemeOption {
@@ -105,6 +105,28 @@ export interface ThemeAxis {
 }
 
 export type ComponentPropValue = string | number | boolean | null;
+
+/** The declared, safe subset of a component's runtime props. */
+export interface ComponentProperty {
+  name: string;
+  kind: "string" | "number" | "boolean" | "enum" | "unsupported";
+  required: boolean;
+  values?: Array<string | number | boolean>;
+  typeLabel: string;
+}
+
+export interface ComponentEditor {
+  schema: ComponentProperty[];
+  read(): Record<string, string | number | boolean | undefined>;
+  /** Apply through the host renderer/state callback, preserving other props. */
+  apply(next: Record<string, string | number | boolean | undefined>): void;
+  /** Stop retaining these overrides after the inspector restores their baseline values. */
+  release?(properties: string[]): void;
+  /** Notify after the renderer commits, so computed controls follow the rendered preview. */
+  subscribe?(listener: () => void): () => void;
+  /** False when the original component unmounts; never retarget another instance. */
+  available?(): boolean;
+}
 
 /** What the app knows about the component that renders an element. */
 export interface ComponentIdentity {
@@ -131,6 +153,8 @@ export interface ComponentAdapter {
    * The Design panel shows it under the picked element's other controls.
    */
   panel?(identity: ComponentIdentity): HTMLElement | null;
+  /** Optional runtime preview editor. Source files are never changed. */
+  editor?(identity: ComponentIdentity): ComponentEditor | null;
 }
 
 export interface DesignSystem {

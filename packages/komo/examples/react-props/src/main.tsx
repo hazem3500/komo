@@ -1,3 +1,4 @@
+import "../../../src/adapters/react-preview.js";
 import { createElement, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -115,11 +116,12 @@ const classAdapter = query.get("tokens") === "classes";
 const cssAdapter = query.get("tokens") === "css" ? discoverCssTokens() : null;
 // ?theme adds a light/dark axis: Design mode shows a switcher for it, and comments
 // name the theme they were made in.
-// ?components=react discovers React components Komo was not told about (read-only, opt-in).
+// ?components=react discovers components; ?edit enables renderer-backed runtime previews.
 // React 18 records the JSX call site on the fiber; React 19 records an Error stack.
 // ?components=badge renders the same component with no adapter, to show discovery is off by default.
 const fiberAdapter = query.get("components") === "react"
   ? discoverReactComponents({
+      edit: query.has("edit"),
       resolveSource: query.get("react") === "18"
         ? (file, line) => `${file.replace(/^.*?(examples\/)/, "$1").replace(/^\//, "")}:${line}`
         : await sourceResolver(document.querySelector<HTMLScriptElement>("script[data-bundle]")?.dataset.bundle ?? "./.generated/react-props.js"),
@@ -181,7 +183,7 @@ function Demo() {
     compact: false,
     visits: 3,
     brandColor: "var(--color-brand)",
-    children: "Edit safe, typed props in Design mode. Unsupported values stay read-only.",
+    children: "Edit safe, typed props in Design mode. Callbacks and opaque values stay outside the editor.",
     details: { featured: true },
     onActivate: () => setProps((current) => ({ ...current, visits: current.visits + 1 })),
   });
@@ -245,7 +247,7 @@ function Demo() {
         <aside className="notes">
           <strong>Explicit registration only</strong>
           The build manifest comes from this component’s TypeScript props. Complex
-          values, children, and callbacks are listed as read-only. Preview updates
+          values, children, and callbacks are omitted from the editor. Preview updates
           go through React state. Theme values use an explicit CSS-variable allowlist;
           shared edits are temporary and source files are never rewritten.
         </aside>

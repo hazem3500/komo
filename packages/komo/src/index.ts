@@ -5688,8 +5688,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       });
       const target = event.composedPath()[0];
       if ((account || (compactSidebar && expanded)) && event.key === "Tab") {
+        const scope = account ? dialogs : designActive ? shadow.querySelector(".design-inspector") ?? shadow : shadow;
         const controls = [
-          ...(account ? dialogs : shadow).querySelectorAll<HTMLElement>(
+          ...scope.querySelectorAll<HTMLElement>(
             "button:not(:disabled),input:not(:disabled):not([type=hidden]),select:not(:disabled),textarea:not(:disabled),summary,a[href],[tabindex]",
           ),
         ].filter(
@@ -5697,7 +5698,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             control.tabIndex >= 0 &&
             control.getClientRects().length > 0 &&
             !control.closest("[inert]") &&
-            (account ||
+            (account || designActive ||
               !compactSidebar ||
               !!control.closest(".panel,.toolbar")),
         );

@@ -71,6 +71,7 @@ const report = {
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
   adapterCssVariables: await sizes(new Set(["dist/adapters/css-variables.js"])),
   adapterReactFiber: await sizes(new Set(["dist/adapters/react-fiber.js"])),
+  adapterReactPreview: await sizes(new Set(["dist/adapters/react-preview.js"])),
   adapterClassTheme: await sizes(new Set(["dist/adapters/class-theme.js"])),
   package: {
     tarball: pack.size,
@@ -141,5 +142,7 @@ if (report.adapterCssVariables.gzip > 2_000)
 // read-only panel rows itself, so none of that lives in core.
 if (report.adapterReactFiber.gzip > 2_800)
   throw new Error("komo's React fiber component adapter exceeds its gzip budget.");
+if (report.adapterReactPreview.gzip > 2_000)
+  throw new Error("komo's opt-in React preview bridge exceeds its gzip budget.");
 if (report.adapterClassTheme.gzip > 1_000)
   throw new Error("komo's class theme adapter exceeds its gzip budget.");

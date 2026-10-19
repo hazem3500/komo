@@ -8,7 +8,7 @@ import type { DesignToken } from "../src/design-system.js";
 
 const table: TailwindTable = {
   tokens: [
-    { path: "color.text.primary", type: "color", class: "text-primary", properties: ["color"], group: "Text", values: { light: "#1f1f1f", dark: "#f5f5f5", "track+dark": "#fce5d8" } },
+    { path: "color.text.primary", type: "color", class: "text-primary", properties: ["color"], group: "Text", values: { light: "#1f1f1f", dark: "#f5f5f5", "docs+dark": "#fce5d8" } },
     { path: "color.text.secondary", type: "color", class: "text-secondary", properties: ["color"], values: { light: "#555", dark: "#bbb" } },
     { path: "color.bg.primary-interactive", type: "color", class: "bg-primary-interactive", properties: ["background-color"], value: "#e57cd8", states: ["hover", "active", "disabled"] },
     { path: "radius.default", type: "dimension", class: ["rounded", "rounded-md"], properties: ["border-radius"], value: "6px" },
@@ -31,9 +31,9 @@ describe("tailwindTokens", () => {
     const adapter = tailwindTokens(table);
     expect(adapter.id).toBe("tailwind");
     const value = (theme: Record<string, string>) => (adapter.list(theme) as DesignToken[])[0];
-    expect(value({ mode: "light", product: "focus" })).toMatchObject({ path: "color.text.primary", value: "#1f1f1f", ref: "text-primary", group: "Text", properties: ["color"] });
-    expect(value({ mode: "dark", product: "focus" }).value).toBe("#f5f5f5");
-    expect(value({ mode: "dark", product: "track" }).value).toBe("#fce5d8");
+    expect(value({ mode: "light", product: "studio" })).toMatchObject({ path: "color.text.primary", value: "#1f1f1f", ref: "text-primary", group: "Text", properties: ["color"] });
+    expect(value({ mode: "dark", product: "studio" }).value).toBe("#f5f5f5");
+    expect(value({ mode: "dark", product: "docs" }).value).toBe("#fce5d8");
     expect(value({ mode: "dark" }).value).toBe("#f5f5f5");
     const list = adapter.list({}) as DesignToken[];
     expect(list.find((item) => item.path === "radius.default")).toMatchObject({ value: "6px", ref: "rounded" });
@@ -185,12 +185,12 @@ describe("classTheme", () => {
 
   it("reads and switches attributes on a custom target", () => {
     const root = document.createElement("div");
-    root.setAttribute("data-theme", "track");
-    const product = classTheme({ id: "product", target: () => root, options: [{ id: "focus", attribute: { "data-theme": "focus" } }, { id: "track", attribute: { "data-theme": "track" } }] });
-    expect(product.current()).toBe("track");
-    product.apply("focus");
-    expect(root.getAttribute("data-theme")).toBe("focus");
-    expect(product.current()).toBe("focus");
+    root.setAttribute("data-theme", "docs");
+    const product = classTheme({ id: "product", target: () => root, options: [{ id: "studio", attribute: { "data-theme": "studio" } }, { id: "docs", attribute: { "data-theme": "docs" } }] });
+    expect(product.current()).toBe("docs");
+    product.apply("studio");
+    expect(root.getAttribute("data-theme")).toBe("studio");
+    expect(product.current()).toBe("studio");
     expect(root.style.colorScheme).toBe("");
   });
 

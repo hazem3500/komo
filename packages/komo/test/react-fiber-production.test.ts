@@ -33,7 +33,7 @@ describe.each([
     expect(result.name).toBe("ProdCard");
     expect(result.props).toEqual({ title: "Hi" });
     expect(result.source).toBeUndefined();
-    expect(result.fields).toEqual({ title: '"Hi"', token: "[redacted]" });
+    expect(result.fields).toEqual({ title: '"Hi"' });
     expect(result.panel).not.toContain("rendered at");
     expect(result.minified).toBeNull();
   });

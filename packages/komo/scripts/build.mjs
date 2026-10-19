@@ -107,7 +107,7 @@ const result = await build({
 // Optional design-system adapters (@hazem3500/komo/adapters/*): self-contained entry
 // points built separately, so core's chunks and their names stay exactly as they were.
 const adapters = await build({
-  entryPoints: ["src/adapters/tailwind.ts", "src/adapters/class-theme.ts", "src/adapters/css-variables.ts", "src/adapters/react-fiber.ts"],
+  entryPoints: ["src/adapters/tailwind.ts", "src/adapters/class-theme.ts", "src/adapters/css-variables.ts", "src/adapters/react-fiber.ts", "src/adapters/react-preview.ts"],
   outdir: "dist/adapters",
   bundle: true,
   format: "esm",

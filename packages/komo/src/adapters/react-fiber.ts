@@ -9,17 +9,19 @@
 // unexpected yields "no component" rather than an error. komo's core never reads them, so this
 // entry point is outside the core bundle and off unless an app installs it.
 //
-// It is for development builds. Production builds drop the debug fields and usually minify
-// component names; names that look minified are not shown. Props are summarized for display
-// (primitives, small arrays and objects, depth and size limits) and never executed: functions,
-// elements, symbols and cycles are described, getters are not invoked. Discovered props are
-// read-only; only a component registered with `useKomoInspectable` is editable, and a
-// registered component always takes precedence over what this adapter finds.
-import type { ComponentAdapter, ComponentIdentity, ComponentPropValue } from "../design-system.js";
+// Useful primitive props are shown without invoking getters or callbacks. Runtime editing
+// is opt-in and uses capabilities supplied by the separate React preview bridge. Explicitly
+// registered components always take precedence.
+import type { ComponentAdapter, ComponentEditor, ComponentIdentity, ComponentProperty, ComponentPropValue } from "../design-system.js";
+import type { ReactPreviewBridge, ReactPreviewRequest } from "./react-preview.js";
 
 export interface DiscoverReactComponentsOptions {
   /** The app's own adapter, asked first; this adapter answers only when it names nothing. */
   adapter?: ComponentAdapter;
+  /** Enable runtime editing when the optional react-preview bridge supports this renderer. */
+  edit?: boolean;
+  /** Declare enums or optional props that discovery cannot infer from their current values. */
+  schema?: (identity: ComponentIdentity) => ComponentProperty[] | undefined;
   /** Component names to show; return false to skip a component (e.g. library wrappers). */
   include?: (name: string) => boolean;
   /**
@@ -32,13 +34,13 @@ export interface DiscoverReactComponentsOptions {
   redact?: (name: string) => boolean;
   /** Most props listed; default 24. */
   maxProps?: number;
-  /** Nesting depth of objects and arrays shown; default 3. */
+  /** @deprecated Opaque values are no longer displayed. */
   maxDepth?: number;
-  /** Most array items or object keys shown per level; default 6. */
+  /** @deprecated Opaque values are no longer displayed. */
   maxItems?: number;
   /** Longest string shown; default 80. */
   maxString?: number;
-  /** Most characters in one summarized prop value; default 240. */
+  /** @deprecated Only bounded primitive values are displayed. */
   maxValue?: number;
 }
 
@@ -47,6 +49,8 @@ interface Discovery {
   props: Array<[name: string, text: string]>;
   hidden: number;
   location?: string;
+  advanced: Array<[name: string, text: string]>;
+  fiber: Fiber;
 }
 
 // Fiber tags: function, class, forward-ref, simple-memo components. These numbers have been
@@ -54,9 +58,10 @@ interface Discovery {
 const COMPONENT_TAGS = new Set([0, 1, 11, 15]);
 const HOST_COMPONENT = 5;
 const HOST_ROOT = 3;
-const ELEMENT_TYPES = ["react.element", "react.transitional.element"];
 const secret = /pass(word|wd)?|secret|token|auth|api[-_]?key|credential|cookie|session|private/i;
 const minified = /^[a-z_$][\w$]?$/i;
+const ignored = (name: string) => /^(key|ref|children|dangerouslySetInnerHTML|suppressHydrationWarning)$|^on[A-Z]|^_|^\$\$/.test(name);
+const technical = (name: string) => /^(className|id|role|tabIndex|asChild)$|^(data-|aria-)/.test(name) && name !== "aria-label";
 
 const discoveries = new WeakMap<ComponentIdentity, Discovery>();
 
@@ -203,65 +208,6 @@ function locate(fiber: Fiber, resolve?: DiscoverReactComponentsOptions["resolveS
   return typeof stack === "string" ? fromStack(stack, resolve) : undefined;
 }
 
-interface Limits {
-  depth: number;
-  items: number;
-  string: number;
-  value: number;
-}
-
-const isElement = (value: object) => ELEMENT_TYPES.some((name) => (value as { $$typeof?: unknown }).$$typeof === Symbol.for(name));
-
-/** A short description of `value`; reads data properties only and never calls anything. */
-function summarize(value: unknown, limits: Limits, seen: object[] = []): string {
-  switch (typeof value) {
-    case "string":
-      return JSON.stringify(text(value, limits.string));
-    case "number":
-    case "boolean":
-    case "undefined":
-      return String(value);
-    case "bigint":
-      return `${value}n`;
-    case "symbol":
-      return attempt(() => String(value)) ?? "Symbol()";
-    case "function":
-      return `ƒ ${attempt(() => nameOf(value)) ?? "anonymous"}()`;
-  }
-  if (value === null) return "null";
-  const object = value as object;
-  if (seen.includes(object)) return "[Circular]";
-  if (isElement(object)) {
-    const type = (object as { type?: unknown }).type;
-    return `<${typeof type === "string" ? type : attempt(() => nameOf(type)) ?? "Component"} />`;
-  }
-  if (typeof Node !== "undefined" && object instanceof Node) return `<${(object as Element).localName ?? "node"}>`;
-  if (Array.isArray(object)) {
-    if (seen.length >= limits.depth) return `Array(${object.length})`;
-    const shown: string[] = [];
-    for (let index = 0; index < Math.min(object.length, limits.items); index++) {
-      const item = Object.getOwnPropertyDescriptor(object, index);
-      shown.push(item && "value" in item ? summarize(item.value, limits, [...seen, object]) : "[getter]");
-    }
-    return `[${shown.join(", ")}${object.length > limits.items ? `, … +${object.length - limits.items}` : ""}]`;
-  }
-  const prototype = Object.getPrototypeOf(object);
-  if (prototype !== Object.prototype && prototype !== null) {
-    const name = attempt(() => nameOf((prototype as { constructor?: unknown }).constructor)) ?? "Object";
-    if (name === "Date") return attempt(() => (object as Date).toISOString()) ?? "Date";
-    if (name === "Map" || name === "Set") return `${name}(${attempt(() => (object as Map<unknown, unknown>).size) ?? "?"})`;
-    return name === "RegExp" ? text(attempt(() => String(object)) ?? "RegExp", limits.string) : `${name} {…}`;
-  }
-  const keys = attempt(() => Object.keys(object)) ?? [];
-  if (!keys.length) return "{}";
-  if (seen.length >= limits.depth) return "{…}";
-  const shown = keys.slice(0, limits.items).map((key) => {
-    const item = Object.getOwnPropertyDescriptor(object, key);
-    return `${text(key, 40)}: ${item && "value" in item ? summarize(item.value, limits, [...seen, object]) : "[getter]"}`;
-  });
-  return `{ ${shown.join(", ")}${keys.length > limits.items ? `, … +${keys.length - limits.items}` : ""} }`;
-}
-
 /** A read-only `design-react-field` row, styled like the registered props. */
 function row(name: string, value: string): HTMLElement {
   const label = document.createElement("label");
@@ -272,7 +218,7 @@ function row(name: string, value: string): HTMLElement {
   const input = document.createElement("input");
   input.value = value;
   input.title = value;
-  input.disabled = true;
+  input.readOnly = true;
   input.setAttribute("aria-label", `${name} (discovered, read-only)`);
   label.append(caption, input);
   return label;
@@ -280,12 +226,8 @@ function row(name: string, value: string): HTMLElement {
 
 /** A `ComponentAdapter` that finds the nearest React component for a picked element. */
 export function discoverReactComponents(options: DiscoverReactComponentsOptions = {}): ComponentAdapter {
-  const limits: Limits = {
-    depth: Math.max(0, options.maxDepth ?? 3),
-    items: Math.max(1, options.maxItems ?? 6),
-    string: Math.max(8, options.maxString ?? 80),
-    value: Math.max(40, options.maxValue ?? 240),
-  };
+  const maxString = Math.max(8, options.maxString ?? 80);
+  const editors = new WeakMap<Element, { fiber: Fiber; editor: ComponentEditor }>();
   const maxProps = Math.max(1, options.maxProps ?? 24);
   const hidden = (name: string) => secret.test(name) || !!attempt(() => options.redact?.(name));
 
@@ -304,16 +246,20 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
     const keys = attempt(() => Object.keys(props)) ?? [];
     const listed: Array<[string, string]> = [];
     const plain: Record<string, ComponentPropValue> = {};
-    for (const key of keys.slice(0, maxProps)) {
+    const advanced: Array<[string, string]> = [];
+    let hiddenCount = 0;
+    for (const key of keys) {
       const descriptor = Object.getOwnPropertyDescriptor(props, key);
       if (!descriptor || !("value" in descriptor)) continue;
       const value = descriptor.value;
-      if (hidden(key)) {
-        listed.push([key, "[redacted]"]);
-        continue;
-      }
-      listed.push([key, text(attempt(() => summarize(value, limits)) ?? "[unreadable]", limits.value)]);
-      if (value === null || ["string", "number", "boolean"].includes(typeof value)) plain[key] = value as ComponentPropValue;
+      if (hidden(key) || ignored(key)) continue;
+      if (value === null) { if (!technical(key)) plain[key] = null; continue; }
+      if (value === undefined ||
+        !(typeof value === "string" || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)))) continue;
+      if ((technical(key) ? advanced : listed).length >= maxProps) { hiddenCount++; continue; }
+      const display = typeof value === "string" ? JSON.stringify(text(value, maxString)) : String(value);
+      if (technical(key)) advanced.push([key, display]);
+      else { listed.push([key, display]); plain[key] = value as ComponentPropValue; }
     }
     const location = locate(fiber, options.resolveSource);
     const identity: ComponentIdentity = {
@@ -322,7 +268,7 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
       element: rootElement(fiber) ?? element,
       ...(location ? { source: location } : {}),
     };
-    discoveries.set(identity, { props: listed, hidden: Math.max(0, keys.length - maxProps), location });
+    discoveries.set(identity, { props: listed, advanced, hidden: hiddenCount, location, fiber });
     return identity;
   }
 
@@ -335,6 +281,30 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
         return null;
       }
     },
+    editor(identity) {
+      const found = discoveries.get(identity);
+      if (!found) return attempt(() => options.adapter?.editor?.(identity)) ?? null;
+      if (!options.edit || found.fiber.tag === 1) return null;
+      const prior = editors.get(identity.element);
+      if (prior && (prior.fiber === found.fiber || prior.fiber.alternate === found.fiber) && prior.editor.available?.() !== false) return prior.editor;
+      const declared = attempt(() => options.schema?.(identity));
+      const schema: ComponentProperty[] = (declared ?? Object.entries(identity.props ?? {}).filter(([, value]) => value !== null).map(([name, value]) => ({
+        name, kind: typeof value as "string" | "number" | "boolean", required: true, typeLabel: typeof value,
+      }))).filter(prop => !hidden(prop.name) && !ignored(prop.name) && prop.kind !== "unsupported");
+      const read: ReactPreviewRequest["current"] = () => attempt(() => {
+        if (!identity.element.isConnected) return null;
+        const fiber = current(found.fiber);
+        let top = fiber;
+        for (let steps = 0; top.return && steps < 5000; steps++) top = top.return;
+        const root = top.stateNode as { current?: Fiber } | undefined;
+        if (top.tag !== HOST_ROOT || root?.current !== top || rootElement(fiber) !== identity.element) return null;
+        return { fiber, root, props: (fiber.memoizedProps ?? {}) as Record<string, unknown> };
+      }) ?? null;
+      const hook = (globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: Record<symbol, ReactPreviewBridge> }).__REACT_DEVTOOLS_GLOBAL_HOOK__;
+      const editor = attempt(() => hook?.[Symbol.for("inline-feedback.react-preview")]?.editor({ schema, current: read }));
+      if (editor) editors.set(identity.element, { fiber: found.fiber, editor });
+      return editor ?? null;
+    },
     panel(identity) {
       const found = discoveries.get(identity);
       if (!found) return attempt(() => options.adapter?.panel?.(identity)) ?? null;
@@ -345,7 +315,8 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
       summary.textContent = "Discovered props";
       const source = document.createElement("small");
       source.className = "design-react-source";
-      source.textContent = `${identity.name} · discovered from React, read-only${found.location ? ` · rendered at ${found.location}` : ""}`;
+      source.textContent = `${identity.name} · read-only${found.location ? ` · rendered at ${found.location}` : ""}`;
+      source.title = options.edit ? "Runtime editing needs the React preview bridge loaded before a supported development renderer, or a component editor adapter." : "Enable a component editor adapter or React runtime previews to edit these props.";
       group.append(summary, source);
       if (!found.props.length) {
         const none = document.createElement("small");
@@ -354,6 +325,15 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
         group.append(none);
       }
       for (const [name, value] of found.props) group.append(row(name, value));
+      if (found.advanced.length) {
+        const advanced = document.createElement("details");
+        advanced.className = "design-react-advanced";
+        const label = document.createElement("summary");
+        label.textContent = "Advanced attributes";
+        advanced.append(label);
+        for (const [name, value] of found.advanced) advanced.append(row(name, value));
+        group.append(advanced);
+      }
       if (found.hidden) {
         const more = document.createElement("small");
         more.className = "design-react-source";

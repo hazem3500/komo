@@ -84,19 +84,21 @@ afterEach(() => {
 });
 
 describe("Design panel theme switcher", () => {
-  it("shows one row per axis at the top, with a segmented control or, past three options, a select", async () => {
+  it("keeps arbitrary theme axes in a compact header menu", async () => {
     const product: ThemeAxis = {
-      id: "product", label: "Product", options: ["focus", "track", "plan", "work"].map((id) => ({ id })),
-      current: () => "track", apply() {},
+      id: "product", label: "Product", options: ["studio", "docs", "plan", "work"].map((id) => ({ id })),
+      current: () => "docs", apply() {},
     };
     await open({ tokens: adapter(), themes: [modeAxis(), product] });
     await vi.waitFor(() => expect(switcher()).not.toBeNull());
-    expect(shadow.querySelector(".design-inspector__controls")!.firstElementChild).toBe(switcher());
-    const rows = [...switcher()!.children].map((row) => row.querySelector("span")!.textContent);
+    expect(switcher()!.parentElement).toBe(shadow.querySelector(".design-inspector__heading"));
+    expect(switcher()!.querySelector("summary")!.getAttribute("aria-label")).toBe("Preview theme");
+    expect((switcher() as HTMLDetailsElement).open).toBe(false);
+    const rows = [...switcher()!.querySelector(".design-theme-popup")!.children].map((row) => row.querySelector("span")!.textContent);
     expect(rows).toEqual(["Mode", "Product"]);
     expect(themeButton("Light").getAttribute("aria-pressed")).toBe("true");
     expect(themeButton("Dark").getAttribute("aria-pressed")).toBe("false");
-    expect(switcher()!.querySelector("select")!.value).toBe("track");
+    expect(switcher()!.querySelector("select")!.value).toBe("docs");
   });
 
   it("applies the option, then lists tokens for the new theme and refreshes the chips and context", async () => {
@@ -193,7 +195,7 @@ describe("Design panel theme switcher", () => {
     await open({ tokens: adapter(), themes: [unreadable, failing, mode] });
     await vi.waitFor(() => expect(switcher()).not.toBeNull());
     // An axis komo can't read is left out; the others still work.
-    expect([...switcher()!.children].map((row) => row.querySelector("span")!.textContent)).toEqual(["Density", "Mode"]);
+    expect([...switcher()!.querySelector(".design-theme-popup")!.children].map((row) => row.querySelector("span")!.textContent)).toEqual(["Density", "Mode"]);
     expect(() => themeButton("Compact").click()).not.toThrow();
     await vi.waitFor(() => expect(themeButton("Compact").getAttribute("aria-pressed")).toBe("true"));
     expect(field().querySelector(".design-token-binding")).not.toBeNull();

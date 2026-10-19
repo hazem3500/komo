@@ -5,15 +5,11 @@
  * small, safe subset that can be edited; the consuming React app supplies a
  * state callback so preview changes go through React's normal render cycle.
  */
+import type { ComponentEditor, ComponentIdentity, ComponentProperty } from "./design-system.js";
+
 export type InspectableScalar = string | number | boolean | undefined;
 
-export interface InspectableProp {
-  name: string;
-  kind: "string" | "number" | "boolean" | "enum" | "unsupported";
-  required: boolean;
-  values?: Array<string | number | boolean>;
-  typeLabel: string;
-}
+export interface InspectableProp extends ComponentProperty {}
 
 export interface InspectableComponent {
   id: string;
@@ -30,6 +26,9 @@ export interface RegisteredInspectableComponent {
   props: Record<string, InspectableScalar>;
   onChange(next: Record<string, InspectableScalar>): void;
   setProps(next: Record<string, InspectableScalar>): void;
+  preview?: "adapter";
+  releaseProps?(properties: string[]): void;
+  subscribe?(listener: () => void): () => void;
 }
 
 export interface ReactPropEdit {
@@ -40,6 +39,34 @@ export interface ReactPropEdit {
 }
 
 const registered = new WeakMap<Element, RegisteredInspectableComponent>();
+const registeredListeners = new WeakMap<RegisteredInspectableComponent, Set<() => void>>();
+const adapted = new WeakMap<Element, { editor: ComponentEditor; component: RegisteredInspectableComponent }>();
+
+/** Adapt once per component root so props share the existing Undo and preview lifecycle. */
+export function adaptComponentEditor(identity: ComponentIdentity, editor: ComponentEditor): RegisteredInspectableComponent {
+  const prior = adapted.get(identity.element);
+  if (prior?.editor === editor) return prior.component;
+  const definition: InspectableComponent = {
+    id: identity.name, name: identity.name, source: identity.source ?? "", line: 0, props: editor.schema,
+  };
+  const component: RegisteredInspectableComponent = {
+    definition,
+    preview: "adapter",
+    releaseProps: names => editor.release?.(names),
+    subscribe: editor.subscribe?.bind(editor),
+    get props() { return safeProps(definition, editor.read()); },
+    onChange: next => editor.apply(next),
+    setProps(next) {
+      if (editor.available?.() === false) return;
+      const validated = safeProps(definition, next);
+      if (Object.keys(validated).length !== Object.keys(next).length || definition.props.some(prop => prop.kind !== "unsupported" && prop.required && !(prop.name in validated)))
+        throw new Error("Component props no longer match the editor schema.");
+      editor.apply(validated);
+    },
+  };
+  adapted.set(identity.element, { editor, component });
+  return component;
+}
 
 function isScalar(value: unknown): value is InspectableScalar {
   return (
@@ -86,10 +113,12 @@ export function registerInspectableRoot(
     (prop) => prop.name === definition.textProp && prop.kind === "string",
   ) ? definition.textProp : undefined;
   const current = safeProps(definition, props);
+  const listeners = new Set<() => void>();
   const record: RegisteredInspectableComponent = {
     definition,
     props: current,
     onChange,
+    subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     setProps(next) {
       const validated = safeProps(definition, next);
       if (Object.keys(validated).length !== Object.keys(next).length) return;
@@ -104,9 +133,11 @@ export function registerInspectableRoot(
   element.dataset.komoInspectable = definition.id;
   if (textProp) element.dataset.komoTextProp = textProp;
   else delete element.dataset.komoTextProp;
+  registeredListeners.set(record, listeners);
   return () => {
     if (registered.get(element) !== record) return;
     registered.delete(element);
+    listeners.clear();
     if (element.dataset.komoInspectable === definition.id)
       delete element.dataset.komoInspectable;
     if (element.dataset.komoTextProp === textProp)
@@ -132,6 +163,7 @@ export function updateInspectableRoot(
   ) ? definition.textProp : undefined;
   if (textProp) element.dataset.komoTextProp = textProp;
   else delete element.dataset.komoTextProp;
+  registeredListeners.get(record)?.forEach(listener => listener());
 }
 
 /**
@@ -142,10 +174,11 @@ export function inspectableFor(
   target: Element | null,
 ): RegisteredInspectableComponent | null {
   const registeredComponent = target && registered.get(target);
-  return registeredComponent &&
+  if (registeredComponent &&
     target.getAttribute("data-komo-inspectable") === registeredComponent.definition.id
-    ? registeredComponent
-    : null;
+  ) return registeredComponent;
+  const adapter = target && adapted.get(target);
+  return adapter && adapter.editor.available?.() !== false ? adapter.component : null;
 }
 
 /** The nearest registered component root strictly above `target`, if any. */
