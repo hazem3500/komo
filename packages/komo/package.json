@@ -1,6 +1,6 @@
 {
   "name": "@hazem3500/komo",
-  "version": "0.9.38",
+  "version": "0.9.39",
   "description": "Point, area, and threaded comments for website branches.",
   "type": "module",
   "license": "MIT",
