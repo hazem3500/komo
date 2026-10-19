@@ -2,7 +2,10 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { drawHighlight } from "../src/highlight";
 
-afterEach(() => { vi.restoreAllMocks(); document.body.replaceChildren(); });
+afterEach(() => {
+  vi.restoreAllMocks();
+  document.body.replaceChildren();
+});
 
 function target(radius: string, scale = 1, sizing = "border-box") {
   const element = document.createElement("button");
@@ -38,6 +41,34 @@ it("uses the border box rather than content width when measuring scale", () => {
   const { element, rect, node } = target("16px", 0.75, "content-box");
   drawHighlight(node, rect, element);
   expect(node.style.borderRadius).toBe("12px");
+});
+
+it("softens transparent text at Frame scale while keeping visible square surfaces square", () => {
+  for (const [surface, expected] of [
+    ["", "2.5px"],
+    ["background:#fff", "0px"],
+    ["background:linear-gradient(#fff,#ddd)", "0px"],
+    ["border-bottom:2px solid #333", "0px"],
+    ["border:2px solid transparent", "2.5px"],
+    ["outline-style:solid;outline-width:2px;outline-color:#333", "0px"],
+    ["outline-style:solid;outline-width:2px;outline-color:transparent", "2.5px"],
+  ]) {
+    const element = document.createElement("span");
+    element.textContent = "Review this text";
+    element.style.cssText = `display:inline-block;box-sizing:border-box;width:200px;height:40px;border-radius:0;background:transparent;${surface}`;
+    document.body.append(element);
+    const node = document.createElement("div");
+    drawHighlight(node, new DOMRect(40, 60, 125, 25), element);
+    expect(node.style.borderRadius, surface).toBe(expected);
+  }
+});
+
+it("preserves explicit corners on a transparent container", () => {
+  const { element, rect, node } = target("0px 12px 0px 4px", 0.5);
+  element.style.border = "none";
+  element.style.background = "transparent";
+  drawHighlight(node, rect, element);
+  expect(node.style.borderRadius).toBe("0px 6px 0px 2px");
 });
 
 it("clips the original card shape instead of making new rounded corners at a Frame edge", () => {

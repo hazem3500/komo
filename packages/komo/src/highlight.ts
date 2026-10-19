@@ -1,4 +1,6 @@
 type Box = { left: number; top: number; right: number; bottom: number };
+const visibleColor = (value: string) =>
+  value && value !== "transparent" && !/(?:^rgba\([^)]*,|\/)\s*0(?:\.0+)?%?\s*\)$/.test(value);
 
 /** Paint the full border shape before clipping, so cropped edges do not gain corners. */
 export function drawHighlight(
@@ -29,6 +31,16 @@ export function drawHighlight(
       /([\d.]+)px/g,
       (_, value) => `${+value * scale}px`,
     );
+    const stroke = (prefix: string) =>
+      !["none", "hidden"].includes(css.getPropertyValue(`${prefix}-style`)) &&
+      parseFloat(css.getPropertyValue(`${prefix}-width`)) > 0 &&
+      visibleColor(css.getPropertyValue(`${prefix}-color`));
+    if (
+      !/[1-9]/.test(radius) &&
+      !visibleColor(css.backgroundColor) &&
+      (!css.backgroundImage || css.backgroundImage === "none") &&
+      !["border-top", "border-right", "border-bottom", "border-left", "outline"].some(stroke)
+    ) radius = `${4 * scale}px`;
   }
   Object.assign(node.style, {
     left: `${rect.left}px`,
