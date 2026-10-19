@@ -2,7 +2,7 @@ import { isDesignTarget, pickDesignTarget, type DesignTarget } from "./design-ta
 import { changePreviewStyles, createStyleEdits, inlineStyleSnapshot, removeEmptyStyle, restoreStyle, type StyleEdit, type StyleOriginal } from "./design-preview.js";
 import { designModeStyles } from "./design-mode-styles.js";
 import { el, icon } from "./dom.js";
-import { drawHighlight } from "./highlight.js";
+import { drawHighlight, watchHighlight } from "./highlight.js";
 import type { Control, PanelContext } from "./design-panel.js";
 import type { InlineTextTools } from "./inline-text-editor.js";
 import type { DesignSystem } from "./design-system.js";
@@ -365,6 +365,7 @@ export function createDesignMode(options: DesignModeOptions) {
     frame = requestAnimationFrame(() => {
       frame = 0;
       if (selected && (!selected.isConnected || selectionPage !== page())) clearSelection();
+      if (hovered && !hovered.isConnected) hovered = null;
       renderOutlines();
     });
   }
@@ -697,11 +698,7 @@ export function createDesignMode(options: DesignModeOptions) {
   window.addEventListener("keydown", escape, { signal: listeners.signal });
   window.addEventListener("scroll", scheduleOutline, { capture: true, passive: true, signal: listeners.signal });
   window.addEventListener("resize", scheduleOutline, { passive: true, signal: listeners.signal });
-  const detached = new MutationObserver(() => {
-    if (active && selected && !selected.isConnected) clearSelection();
-    if (hovered && !hovered.isConnected) { hovered = null; renderOutlines(); }
-  });
-  detached.observe(document.body, { childList: true, subtree: true });
+  watchHighlight(options.host, () => active ? [selected ?? hovered, hovered] : [], scheduleOutline, listeners.signal, clearSelection);
   const selectionReady = exporter().then(module => {
     if (listeners.signal.aborted) return;
     views = module.selectionViews({
@@ -753,7 +750,6 @@ export function createDesignMode(options: DesignModeOptions) {
       clearTimeout(statusTimer);
       clearTimeout(flipTimer);
       resized?.disconnect();
-      detached.disconnect();
       listeners.abort();
       cancelAnimationFrame(frame);
       panel.remove();

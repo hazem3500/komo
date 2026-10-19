@@ -19,13 +19,25 @@ beforeAll(async () => {
     stdin: { contents: `
       import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
+      const radius=new URLSearchParams(location.search).get('case')==='radius';
       const tokens=tailwindTokens({tokens:[
         {path:'color.base',type:'color',class:'text-base',properties:['color'],value:'#575456',label:'Base'},
         {path:'color.primary',type:'color',class:'text-primary',properties:['color'],value:'#6941c6',label:'Primary'},
         {path:'background.base',type:'color',class:'bg-base',properties:['background-color'],value:'#575456',label:'Base'},
-        {path:'background.primary',type:'color',class:'bg-primary',properties:['background-color'],value:'#6941c6',label:'Primary'}
+        {path:'background.primary',type:'color',class:'bg-primary',properties:['background-color'],value:'#6941c6',label:'Primary'},
+        ...(radius?[
+          {path:'radius.small',type:'dimension',class:'radius-small',properties:['border-radius'],value:'8px',label:'Small'},
+          {path:'radius.full',type:'dimension',class:'radius-full',properties:['border-radius'],value:'calc(infinity * 1px)',label:'Full'},
+          {path:'radius.ellipse',type:'dimension',class:'radius-ellipse',properties:['border-radius'],value:'25% 30% 4px 40px / 10px 50% 4px 12px',label:'Elliptical'}
+        ]:[])
       ]});
-      window.fetch=async()=>Response.json({threads:[],guests:true});
+      const qa=window.radiusQA={actions:0,writes:[]};
+      document.querySelector('#target').onclick=()=>qa.actions++;
+      const anchor={selector:'#target',text:'',x:.5,y:.5,width:0,height:0,pageX:0,pageY:0,viewportWidth:1280};
+      const thread={id:'radius-thread',page:location.pathname,anchor,resolved:false,resolvedBy:null,createdAt:Date.now(),updatedAt:Date.now(),comments:[{id:'radius-comment',body:'Synthetic radius conversation',author:{id:'synthetic-reviewer',name:'Example reviewer',verified:true},createdAt:Date.now(),editedAt:null,reactions:{}}]};
+      const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
+      if(radius){const key='branch-comments:'+location.origin+':ownership';localStorage.setItem(key,'synthetic-session');localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));localStorage.setItem(key+':'+JSON.stringify(['example/review','local'])+':threads',JSON.stringify({token:'synthetic-session',threads:[thread]}))}
+      window.fetch=async(input,init)=>{const method=init?.method??(input instanceof Request?input.method:'GET');if(method!=='GET'){qa.writes.push(method);throw Error('Unexpected fixture write')}return Response.json({...(radius?{user}:{}),threads:radius?[thread]:[],guests:true})};
       const mode=new URLSearchParams(location.search).get('mode');
       if(mode==='floating')document.body.append(document.createElement('aside'));
       window.komo=initKomo({endpoint:location.origin,project:'ownership',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens}});
@@ -33,10 +45,10 @@ beforeAll(async () => {
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
   server = createServer(async (request, response) => {
-    const path = new URL(request.url ?? "/", "http://localhost").pathname;
+    const url = new URL(request.url ?? "/", "http://localhost"), path = url.pathname;
     if (path === "/") {
       response.setHeader("content-type", "text/html");
-      response.end('<style>body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:70px}.text-base{color:#575456}.text-primary{color:#6941c6}.bg-base{background-color:#575456}.bg-primary{background-color:#6941c6}</style><main><p id="target" class="text-base bg-base" style="padding: 12px !important;">Example text</p></main><script type="module" src="/entry.js"></script>');
+      response.end('<style>body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:70px}.text-base{color:#575456}.text-primary{color:#6941c6}.bg-base{background-color:#575456}.bg-primary{background-color:#6941c6}button.surface{display:block;width:240px;height:72px;box-sizing:border-box;margin-bottom:32px;border:2px solid #aaa;background:#fff}.radius-small{border-radius:8px}.radius-full{border-radius:calc(infinity * 1px)}.radius-ellipse{border-radius:25% 30% 4px 40px / 10px 50% 4px 12px}</style><main>'+(url.searchParams.get('case')==='radius'?'<button id="target" class="surface radius-small">Primary surface</button><button id="other" class="surface radius-small">Second surface</button>':'<p id="target" class="text-base bg-base" style="padding: 12px !important;">Example text</p>')+'</main><script type="module" src="/entry.js"></script>');
       return;
     }
     try {
@@ -57,6 +69,108 @@ afterAll(async () => {
 });
 
 describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership in %s", mode => {
+  it("follows live modern pill and elliptical radius previews without a bounding-box change", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    page.setDefaultTimeout(4000);
+    await page.goto(`${origin}/?mode=${mode}&case=radius`);
+    await page.waitForFunction(() => !!(window as any).komo);
+    await page.keyboard.press("d");
+    const target = page.locator("#target");
+    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    const pick = await target.boundingBox();
+    await page.mouse.click(pick!.x + pick!.width * 0.75, pick!.y + pick!.height / 2);
+    const field = page.locator('[data-field-property="border-radius"]');
+    await field.locator("select[data-picker]").waitFor();
+    const original = await target.boundingBox();
+    const shape = async (id = "target", marker = ".design-outline:not(.design-outline--prospective)") => page.evaluate(({ id, marker }) => {
+      const element = document.getElementById(id)!;
+      const root = [...document.body.children].find(node => node.shadowRoot)!.shadowRoot!;
+      const outline = root.querySelector<HTMLElement>(marker)!;
+      const radii = (node: Element) => {
+        const css = getComputedStyle(node), rect = node.getBoundingClientRect();
+        const width = parseFloat(css.width), height = parseFloat(css.height);
+        const length = (value: string, size: number) => [...value.replace(/([+-])\s+/g, "$1").matchAll(/([+-]?[\d.]+(?:e[+-]?\d+)?)(px|%)/gi)]
+          .reduce((sum, match) => sum + Number(match[1]) * (match[2] === "%" ? size / 100 : 1), 0);
+        const corners = [css.borderTopLeftRadius, css.borderTopRightRadius, css.borderBottomRightRadius, css.borderBottomLeftRadius].map(value => {
+          const [x, y = x] = value.match(/calc\([^)]*\)|\S+/g)!;
+          return [length(x, width), length(y, height)];
+        });
+        const factor = Math.min(1, width / (corners[0][0] + corners[1][0]), width / (corners[2][0] + corners[3][0]), height / (corners[0][1] + corners[3][1]), height / (corners[1][1] + corners[2][1]));
+        return corners.flatMap(([x, y]) => [x * factor * rect.width / width, y * factor * rect.height / height]);
+      };
+      return { target: radii(element), outline: radii(outline), hidden: outline.hidden || getComputedStyle(outline).opacity === "0" };
+    }, { id, marker });
+    const aligned = async (id?: string, marker?: string) => {
+      await page.waitForFunction(() => !document.querySelector('button[aria-busy="true"]'));
+      await expect.poll(async () => {
+        const result = await shape(id, marker);
+        return result.hidden ? Infinity : Math.max(...result.target.map((radius, index) => Math.abs(radius - result.outline[index])));
+      }).toBeLessThan(0.1);
+    };
+    const open = () => field.locator("select[data-picker]").click();
+    const full = page.locator('.komo-tokens [role="option"]').filter({ hasText: "Full" });
+    await aligned();
+    await open();
+    await full.hover();
+    expect(await target.evaluate(node => parseFloat(getComputedStyle(node).borderTopLeftRadius))).toBeGreaterThan(1e4);
+    await aligned();
+    await page.keyboard.press("ArrowDown");
+    await aligned();
+    expect(await target.boundingBox()).toEqual(original);
+    await page.keyboard.press("Escape");
+    await aligned();
+    expect(await target.getAttribute("class")).toBe("surface radius-small");
+    await open();
+    await full.click();
+    await aligned();
+    await page.getByRole("button", { name: "Before", exact: true }).click();
+    await aligned();
+    await page.getByRole("button", { name: "After", exact: true }).click();
+    await aligned();
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await aligned();
+    await open();
+    await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Elliptical" }).click();
+    await aligned();
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    await aligned();
+    const other = page.locator("#other");
+    await other.hover();
+    await other.evaluate(node => { node.className = "surface radius-full"; });
+    await aligned("other", ".design-outline--prospective");
+    await target.evaluate(node => { node.className = "surface radius-ellipse"; });
+    await aligned();
+    expect(await target.boundingBox()).toEqual(original);
+    await target.evaluate(node => {
+      const style = (node as HTMLElement).style;
+      style.transition = "border-radius 300ms linear";
+      style.borderRadius = "40px 12px 24px 0px / 20px 30px 4px 0px";
+    });
+    await page.waitForTimeout(150);
+    const during = await shape();
+    expect(Math.max(...during.target.map((radius, index) => Math.abs(radius - during.outline[index])))).toBeLessThan(3);
+    await page.waitForTimeout(200);
+    await aligned();
+    await target.evaluate(node => { (node as HTMLElement).style.cssText = ""; });
+    await page.keyboard.press("v");
+    await page.keyboard.press("c");
+    const box = await target.boundingBox();
+    await page.mouse.move(box!.x + box!.width * 0.75, box!.y + box!.height / 2);
+    await aligned("target", ".component-hover");
+    await target.evaluate(node => { node.className = "surface radius-full"; });
+    await aligned("target", ".component-hover");
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => (window as any).komo.open());
+    await page.locator(".thread-card").filter({ hasText: "Synthetic radius conversation" }).click();
+    await page.locator(".thread-title").filter({ hasText: "Synthetic radius conversation" }).waitFor();
+    await page.locator(".thread-title").hover();
+    await target.evaluate(node => { node.className = "surface radius-ellipse"; });
+    await aligned("target", ".component-hover");
+    expect(await page.evaluate(() => (window as any).radiusQA)).toEqual({ actions: 0, writes: [] });
+    await page.evaluate(() => (window as any).komo.destroy());
+    await page.close();
+  });
+
   it.each(["color", "background-color"])("applies %s custom/token previews with exact cancellation and chronological Undo", async property => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(4000);
