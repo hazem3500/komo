@@ -74,6 +74,7 @@ import {
   initials,
   isolated,
   isolatedEvents,
+  isolateEscape,
   onPage,
   reducedMotion,
   setAvatarResolver,
@@ -5868,6 +5869,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   // as outside interaction; komo's own page handlers use onPage().
   if (options.isolateEvents !== false) {
     host.setAttribute("data-isolate", "");
+    isolateEscape(host, abort.signal);
     for (const type of isolatedEvents)
       host.addEventListener(
         type,

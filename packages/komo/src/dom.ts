@@ -19,6 +19,17 @@ export const isolated = (event: Event, root: Node) =>
   root instanceof ShadowRoot &&
   root.host.hasAttribute("data-isolate") &&
   (!event.type.startsWith("key") || editable(event.composedPath()[0]));
+/** Window capture precedes host-dialog document capture, while feedback still receives Escape. */
+export function isolateEscape(host: HTMLElement, signal: AbortSignal) {
+  host.ownerDocument.defaultView?.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key === "Escape" && event.composedPath().includes(host))
+        event.preventDefault();
+    },
+    { capture: true, signal },
+  );
+}
 /** Listen on document, plus komo's shadow root for the events stopped at its host. */
 export function onPage<E extends Event>(
   node: Node,
