@@ -67,6 +67,8 @@ export interface TokenAdapter {
   /**
    * Which token each CSS property of `element` uses, or its off-token value.
    * Return only properties the app can vouch for; komo shows nothing for the rest.
+   * A path declares a semantic binding, including a token rendered as a concrete
+   * inline value. Report custom literals as offToken, even when they match a token.
    */
   resolve(element: Element): Record<string, TokenUsage> | Promise<Record<string, TokenUsage>>;
   /**

@@ -47,6 +47,7 @@ import {
   proposedTokenSwaps,
   refreshTokenSwaps,
   rememberTokenUsage,
+  refreshTokenBaseline,
   resetAllTokenSwaps,
   resetTokenSwaps,
   resolveTokens,
@@ -682,7 +683,7 @@ export function createAdapterTokenControl(
     void (reload?.() ?? Promise.resolve([...tokens])).then(next => {
       if (events.signal.aborted || at !== request) return;
       tokens = next;
-      rememberTokenUsage(element, property, usage, adapter, tokens);
+      refreshTokenBaseline(element, adapter, tokens);
       available = tokensFor(tokens, property);
       populate();
       update();
