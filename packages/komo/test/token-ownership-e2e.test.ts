@@ -51,6 +51,11 @@ beforeAll(async () => {
       response.end('<style>body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:70px}.text-base{color:#575456}.text-primary{color:#6941c6}.bg-base{background-color:#575456}.bg-primary{background-color:#6941c6}button.surface{display:block;width:240px;height:72px;box-sizing:border-box;margin-bottom:32px;border:2px solid #aaa;background:#fff}.radius-small{border-radius:8px}.radius-full{border-radius:calc(infinity * 1px)}.radius-ellipse{border-radius:25% 30% 4px 40px / 10px 50% 4px 12px}</style><main>'+(url.searchParams.get('case')==='radius'?'<button id="target" class="surface radius-small">Primary surface</button><button id="other" class="surface radius-small">Second surface</button>':'<p id="target" class="text-base bg-base" style="padding: 12px !important;">Example text</p>')+'</main><script type="module" src="/entry.js"></script>');
       return;
     }
+    if (path === "/radius.css") {
+      response.setHeader("content-type", "text/css");
+      response.end("#target{border-radius:24px}");
+      return;
+    }
     try {
       const file = resolve(directory, `.${path}`);
       if (!file.startsWith(directory + "/")) throw new Error("outside fixture");
@@ -133,6 +138,32 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Elliptical" }).click();
     await aligned();
     await page.getByRole("button", { name: "Reset", exact: true }).click();
+    await aligned();
+    await page.evaluate(() => {
+      const style = document.createElement("style");
+      style.id = "radius-override";
+      style.textContent = "#target{border-radius:40px}";
+      document.head.append(style);
+    });
+    expect(await target.evaluate(node => getComputedStyle(node).borderRadius)).toBe("40px");
+    await aligned();
+    await page.evaluate(() => { document.querySelector("#radius-override")!.textContent = "#target{border-radius:20px}"; });
+    await aligned();
+    await page.evaluate(() => { document.querySelector("#radius-override")!.remove(); });
+    expect(await target.evaluate(node => getComputedStyle(node).borderRadius)).toBe("8px");
+    await aligned();
+    await page.evaluate(() => new Promise<void>((resolve, reject) => {
+      const link = document.createElement("link");
+      link.id = "radius-link";
+      link.rel = "stylesheet";
+      link.href = "/radius.css";
+      link.onload = () => resolve();
+      link.onerror = () => reject(new Error("fixture stylesheet did not load"));
+      document.head.append(link);
+    }));
+    expect(await target.evaluate(node => getComputedStyle(node).borderRadius)).toBe("24px");
+    await aligned();
+    await page.evaluate(() => { document.querySelector("#radius-link")!.remove(); });
     await aligned();
     const other = page.locator("#other");
     await other.hover();

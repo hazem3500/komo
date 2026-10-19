@@ -89,6 +89,46 @@ it("follows running target animations and stops scheduling after abort", async (
   expect(update).toHaveBeenCalledTimes(count);
 });
 
+it("repaints for stylesheet insertion, editing, removal and load while ignoring unrelated head churn", async () => {
+  const host = document.createElement("div"), element = document.createElement("button");
+  document.body.append(host, element);
+  const update = vi.fn(), abort = new AbortController();
+  watchHighlight(host, () => [element], update, abort.signal);
+  const meta = document.head.appendChild(document.createElement("meta"));
+  meta.content = "unrelated";
+  await new Promise(resolve => setTimeout(resolve, 40));
+  expect(update).not.toHaveBeenCalled();
+  const style = document.createElement("style");
+  style.textContent = "button{border-radius:40px}";
+  document.head.append(style);
+  await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+  style.textContent = "button{border-radius:20px}";
+  await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+  style.firstChild!.textContent = "button{border-radius:12px}";
+  await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(3));
+  style.remove();
+  await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(4));
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  document.head.append(link);
+  await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(5));
+  link.rel = "preload";
+  await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(6));
+  link.rel = "stylesheet";
+  await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(7));
+  link.dispatchEvent(new Event("load"));
+  await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(8));
+  link.remove();
+  await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(9));
+  abort.abort();
+  document.head.append(link);
+  link.dispatchEvent(new Event("load"));
+  await new Promise(resolve => setTimeout(resolve, 40));
+  expect(update).toHaveBeenCalledTimes(9);
+  link.remove();
+  meta.remove();
+});
+
 it("softens transparent text at Frame scale while keeping visible square surfaces square", () => {
   for (const [surface, expected] of [
     ["", "2.5px"],
