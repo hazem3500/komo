@@ -819,6 +819,54 @@ it("does not duplicate Escape guards on repeated initialization and cleans up on
   expect(press()).toHaveBeenCalledOnce();
 });
 
+it("lets a host combobox consume Escape before Frame while retaining feedback-owned Escape", () => {
+  layoutBody();
+  const surface = document.querySelector<HTMLElement>("#target")!;
+  controller = initComments({ ...options, onboarding: undefined, pageRoot: surface, sidebar: "background", restoreOpen: false });
+  controller.open();
+  const host = [...document.body.children].find(node => node.shadowRoot)!;
+  const popup = document.createElement("div"), trigger = document.createElement("button"), picker = document.createElement("div"), input = document.createElement("input");
+  input.setAttribute("role", "combobox");
+  input.value = "Synthetic search";
+  picker.append(input);
+  popup.append(trigger, picker);
+  document.body.append(popup);
+  const listener = new AbortController();
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !event.defaultPrevented && event.composedPath().includes(input)) {
+      event.preventDefault();
+      picker.remove();
+      trigger.focus();
+    }
+  }, { capture: true, signal: listener.signal });
+  const press = (target: EventTarget) => {
+    const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true, cancelable: true });
+    target.dispatchEvent(event);
+    return event;
+  };
+  try {
+    input.focus();
+    const transform = surface.style.transform;
+    expect(press(input).defaultPrevented).toBe(true);
+    expect(picker.isConnected).toBe(false);
+    expect(popup.isConnected).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+    expect(host.classList.contains("review-open")).toBe(true);
+    expect(surface.style.transform).toBe(transform);
+    const field = document.createElement("textarea");
+    host.shadowRoot!.append(field);
+    field.focus();
+    expect(press(field).defaultPrevented).toBe(true);
+    expect(host.classList.contains("review-open")).toBe(false);
+    expect(popup.isConnected).toBe(true);
+    controller.open();
+    expect(press(document.body).defaultPrevented).toBe(true);
+    expect(host.classList.contains("review-open")).toBe(false);
+  } finally {
+    listener.abort();
+  }
+});
+
 /** jsdom has no layout: give the commented element a box so pins render. */
 function layoutBody() {
   const target = document.createElement("main");

@@ -5691,8 +5691,14 @@ export function initComments(options: CommentsOptions): CommentsController {
       while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
       const typing = editable(target) || editable(active) || event.isComposing;
       if (event.key === "Escape") {
-        if (mode || draft || selected || account) dismiss();
-        else if (expanded) toggleExpanded(false);
+        if (event.defaultPrevented && !event.composedPath().includes(host)) return;
+        if (mode || draft || selected || account) {
+          event.preventDefault();
+          dismiss();
+        } else if (expanded) {
+          event.preventDefault();
+          toggleExpanded(false);
+        }
         return;
       }
       if (typing) return;
