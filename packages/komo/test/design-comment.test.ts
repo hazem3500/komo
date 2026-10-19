@@ -39,6 +39,54 @@ afterEach(() => {
 });
 
 describe("design comments", () => {
+  it.each(["replace", "remove"])("invalidates After when a parent %ss the entire owner", async action => {
+    document.body.innerHTML = '<main><a id="link"><strong>Old title</strong></a></main>';
+    const target = document.querySelector<HTMLElement>("#link")!;
+    const container = document.body.appendChild(document.createElement("div"));
+    renderDraftProposal(container, text, () => document.querySelector("#link"));
+    expect(target.textContent).toBe("New title");
+    const replacement = document.createElement("a");
+    replacement.id = "link";
+    replacement.textContent = "Old title";
+    if (action === "replace") target.replaceWith(replacement);
+    else target.remove();
+    const [before, after] = container.querySelectorAll<HTMLButtonElement>(".design-toggle button");
+    await vi.waitFor(() => expect(before.getAttribute("aria-pressed")).toBe("true"));
+    expect(after.disabled).toBe(true);
+    if (action === "remove") document.querySelector("main")!.append(replacement);
+    after.click();
+    expect(replacement.textContent).toBe("Old title");
+    expect(container.querySelector<HTMLElement>('[role="status"]')!.hidden).toBe(false);
+    renderDraftProposal(container, text, () => document.querySelector("#link"));
+    expect(container.querySelectorAll<HTMLButtonElement>(".design-toggle button")[1].disabled).toBe(true);
+    expect(container.querySelector<HTMLElement>('[role="status"]')!.hidden).toBe(false);
+    resetDesignPreviews();
+    replacement.replaceWith(target);
+    target.querySelector("strong")!.firstChild!.textContent = "Host update after cleanup";
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(target.textContent).toBe("Host update after cleanup");
+  });
+
+  it.each(["reparent", "shadow host"])("tracks owner attachment through %s changes", async kind => {
+    const host = document.body.appendChild(document.createElement("section"));
+    const parent = kind === "shadow host" ? host.attachShadow({ mode: "open" }) : host;
+    const target = parent.appendChild(Object.assign(document.createElement("a"), { textContent: "Old title" }));
+    const container = document.body.appendChild(document.createElement("div"));
+    renderDraftProposal(container, text, () => target);
+    expect(target.textContent).toBe("New title");
+    if (kind === "reparent") {
+      const next = document.body.appendChild(document.createElement("section"));
+      next.append(target);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(target.textContent).toBe("New title");
+      next.remove();
+    } else host.remove();
+    await vi.waitFor(() => expect(container.querySelectorAll<HTMLButtonElement>(".design-toggle button")[1].disabled).toBe(true));
+    target.firstChild!.textContent = "Host text after loss";
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(target.textContent).toBe("Host text after loss");
+  });
+
   it("takes After back when a host replaces the original text structure", async () => {
     document.body.innerHTML = '<a id="link"><strong>Old title</strong></a>';
     const target = document.querySelector<HTMLElement>("#link")!;
