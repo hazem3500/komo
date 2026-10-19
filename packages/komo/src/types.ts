@@ -177,9 +177,10 @@ export interface CommentsOptions {
   page?: () => string;
   /**
    * Client-side router navigation for opening a comment on another page, e.g.
-   * (url) => router.navigate({ href: url.pathname + url.search }). komo opens
-   * the thread once its anchor renders. Defaults to a full page load; a
-   * rejection falls back to one.
+   * (url) => router.navigate({ href: url.pathname + url.search + url.hash }).
+   * Defaults to a full page load. With a hook, rejected/redirected navigation
+   * keeps the requested thread open with destination context; it never forces
+   * a reload or retries the router automatically.
    */
   navigate?: (url: URL) => void | Promise<void>;
   pollInterval?: number;

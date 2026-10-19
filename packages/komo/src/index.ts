@@ -215,6 +215,16 @@ export function initComments(options: CommentsOptions): CommentsController {
   let threads: Thread[] = [],
     selected: string | null = null,
     draft: Anchor | null = null;
+  type ThreadRequest = { id: string; inspect: boolean; pending: boolean; rejected: boolean; opened?: boolean };
+  let threadRequest: ThreadRequest | null = null;
+  const cancelledLinks = new Set<string>();
+  function cancelThreadRequest() {
+    if (threadRequest && !threadRequest.opened) cancelledLinks.add(threadRequest.id);
+    threadRequest = null;
+  }
+  function onThreadPage(thread: Thread) {
+    return thread.page === page() && !(threadRequest?.id === thread.id && (threadRequest.pending || threadRequest.rejected));
+  }
   type DesignController = ReturnType<typeof import("./design-mode.js").createDesignMode>;
   let designController: DesignController | null = null;
   let designControllerPromise: Promise<DesignController | null> | null = null;
@@ -552,7 +562,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (pinPreview.hidden || (previewClosing && !immediate)) return;
     // Undo a Before/After preview started from the hover card, keeping the open comment's.
     designModule?.resetDesignPreviews(
-      new Set([...(threads.find((item) => item.id === selected)?.comments.map((item) => item.id) ?? []), "draft"]),
+      new Set([...(threads.find((item) => item.id === selected && onThreadPage(item))?.comments.map((item) => item.id) ?? []), "draft"]),
     );
     previewClosing = true;
     previewMotion?.cancel();
@@ -1032,6 +1042,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     retryConnection();
   }
   function hydrateThreads() {
+    cancelThreadRequest();
     sessionRevision++;
     refreshing = false;
     accessError = "";
@@ -1540,6 +1551,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   // sidebar (or one Design mode framed for a moment) still steps aside.
   const inFrame = () => expanded && !edgeSidebar && !compactSidebar && !designFrame;
   function setMode(value: boolean) {
+    cancelThreadRequest();
     cancelPinMove();
     if (options.onboarding) return;
     if (designActive) {
@@ -2139,6 +2151,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     });
   }
   function toggleExpanded(value: boolean) {
+    if (!value && threadRequest && !threadRequest.opened) cancelThreadRequest();
     if (value !== expanded) cancelPinMove();
     stopLayoutMotion();
     const opening = value && !expanded;
@@ -2216,6 +2229,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     presence.update();
   }
   function dismiss() {
+    cancelThreadRequest();
     cancelPinMove();
     commentMode = false;
     clearTimeout(accountOpenTimer);
@@ -2264,18 +2278,23 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     render();
   }
-  function selectThread(thread: Thread) {
+  function selectThread(thread: Thread, retained = false) {
+    if (!retained) cancelThreadRequest();
     cancelPinMove();
     // Opening from the list keeps keyboard focus in the sidebar.
     focusBack = !!shadow.activeElement?.matches(":focus-visible") && sidebar.contains(shadow.activeElement);
     commentMode = false;
     clearTimeout(accountOpenTimer);
     accountOpenTimer = 0;
-    if (thread.page !== page()) {
+    if (thread.page !== page() && !retained) {
       const url = new URL(thread.page, location.origin);
       url.searchParams.set("comment", thread.id);
       void go(url);
       return;
+    }
+    if (!retained) {
+      cancelledLinks.delete(thread.id);
+      threadRequest = { id: thread.id, inspect: false, pending: false, rejected: false, opened: true };
     }
     openingPreview =
       previewThread === thread.id && !pinPreview.hidden
@@ -2290,9 +2309,9 @@ export function initComments(options: CommentsOptions): CommentsController {
     mode = false;
     const fromMobileSidebar = compactSidebar && expanded;
     if (fromMobileSidebar) toggleExpanded(false);
-    const rect = locateAnchor(thread.anchor);
+    const rect = onThreadPage(thread) ? locateAnchor(thread.anchor) : null;
     if (
-      rect.attached &&
+      rect?.attached &&
       !openingPreview &&
       (fromMobileSidebar || !compactSidebar)
     )
@@ -2703,7 +2722,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           void loadDesignComments().then(({ renderDesignComment }) =>
             renderDesignComment(summary, message.body, {
               key: (hoverPreviewKey = `hover:${message.id}`),
-              resolve: designTarget(thread.anchor),
+              resolve: (selector) => onThreadPage(thread) ? designTarget(thread.anchor)(selector) : null,
               note: (node, text) => (node.textContent = text),
               compact: true,
             }),
@@ -3769,7 +3788,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       const show = ({ renderDesignComment }: typeof import("./design-comment.js")) =>
         renderDesignComment(message, comment.body, {
           key: comment.id,
-          resolve: designTarget(thread.anchor),
+          resolve: (selector) => onThreadPage(thread) ? designTarget(thread.anchor)(selector) : null,
           note: appendMessageLinks,
           // The element can grow under the dialog; place it again once the change settles.
           onSwitch: () => positionDialog(),
@@ -4215,7 +4234,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         new Set([
           ...(account
             ? []
-            : (threads.find((item) => item.id === selected)?.comments.map((item) => item.id) ?? [])),
+            : (threads.find((item) => item.id === selected && onThreadPage(item))?.comments.map((item) => item.id) ?? [])),
           ...(pinPreview.hidden ? [] : [hoverPreviewKey]),
           ...(draft ? ["draft"] : []),
         ]),
@@ -4750,6 +4769,31 @@ export function initComments(options: CommentsOptions): CommentsController {
       dialog.append(content);
     } else if (draft) dialog.append(composer(null));
     else if (thread) {
+      if (!onThreadPage(thread)) {
+        const status = el("div", "notice thread-navigation");
+        status.setAttribute("role", "status");
+        status.append(el("p", "", threadRequest?.id === thread.id && threadRequest.rejected
+          ? "Navigation could not be completed. The conversation is still available."
+          : threadRequest?.pending
+            ? "Opening this comment’s page…"
+            : "The app is on a different page. The conversation is still available."));
+        const destination = el("a", "thread-destination", "Open destination");
+        destination.dataset.focusKey = "thread-destination";
+        destination.href = new URL(thread.page, location.origin).href;
+        destination.title = destination.href;
+        destination.setAttribute("aria-label", `Open destination: ${destination.href}`);
+        destination.setAttribute("aria-disabled", String(!!threadRequest?.pending));
+        destination.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (!threadRequest?.pending) selectThread(thread);
+        });
+        status.append(destination);
+        dialog.append(status);
+      } else if (!resolveAnchor(thread.anchor)) {
+        const status = el("p", "notice thread-navigation thread-anchor-status", "This comment’s element could not be found on this page. The conversation is still available.");
+        status.setAttribute("role", "status");
+        dialog.append(status);
+      }
       const messages = el("div", "messages");
       for (const comment of thread.comments)
         messages.append(renderMessage(comment, thread));
@@ -4998,6 +5042,9 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
     const dialog = dialogs.firstElementChild as HTMLElement | null;
     if (!dialog || account) return;
+    const thread = threads.find((t) => t.id === selected);
+    const missing = dialog.querySelector<HTMLElement>(".thread-anchor-status");
+    if (missing) missing.hidden = !!(thread && onThreadPage(thread) && resolveAnchor(thread.anchor));
     // In the sidebar only the target outline moves; follow a Before/After morph.
     if (dialogs.classList.contains("thread-pane")) {
       const running = outlineUntil;
@@ -5032,8 +5079,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     const bottom = framed ? surface.getBoundingClientRect().bottom - 12 : availableHeight - 92;
     dialog.style.maxHeight = `${bottom - 12}px`;
     (dialogSize ??= new ResizeObserver(() => positionDialog())).observe(dialog);
-    const thread = threads.find((t) => t.id === selected);
-    const anchor = draft ?? thread?.anchor;
+    const anchor = draft ?? (thread && onThreadPage(thread) ? thread.anchor : null);
     // Areas and design changes are about a region: open beside it, not over it.
     let around: { left: number; top: number; right: number; bottom: number } | undefined;
     const pin =
@@ -5124,6 +5170,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     positionNotice();
   }
   function openAccount() {
+    cancelThreadRequest();
     cancelPinMove();
     clearTimeout(accountOpenTimer);
     profileDraft = null;
@@ -5247,6 +5294,10 @@ export function initComments(options: CommentsOptions): CommentsController {
       await go(url);
       return;
     }
+    if (!onThreadPage(thread)) {
+      notify("Design is unavailable until this comment’s page is reached.");
+      return;
+    }
     const target = resolveAnchor(thread.anchor);
     if (!target || !pickable(target) || !locateAnchor(thread.anchor).attached) {
       notify("Design is unavailable: this comment’s element isn’t visible on this page.");
@@ -5361,7 +5412,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       : expanded && !draft && !threadPanel() &&
           sidebar.querySelector(`.list [data-thread="${CSS.escape(hotCard)}"]`) && hotCard;
     const thread = id && threads.find((t) => t.id === id && t.page === page());
-    const spot = thread && locateAnchor(thread.anchor);
+    const spot = thread && onThreadPage(thread) && locateAnchor(thread.anchor);
     const target = spot && spot.attached && (spot.width && spot.height
       ? { left: spot.x, top: spot.y, right: spot.x + spot.width, bottom: spot.y + spot.height }
       : spot.component);
@@ -5507,6 +5558,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     end = start,
     beside = false,
   ) {
+    cancelThreadRequest();
     draftBeside = beside;
     hidePreview();
     element = commentAnchorTarget(element, surface, options.anchorTarget);
@@ -5784,7 +5836,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     designController?.clearSelection();
     designController?.setReturnAction(null);
     parkedDraft = null;
-    selected = null;
+    selected = threadRequest?.id === selected ? selected : null;
     draft = null;
     render();
   }
@@ -5798,44 +5850,68 @@ export function initComments(options: CommentsOptions): CommentsController {
   ).navigation?.addEventListener("navigatesuccess", onNavigate, {
     signal: abort.signal,
   });
-  /** Same-origin navigation through the host router when given, else a page load. */
+  /** A host router owns redirect/rejection decisions; never override them with a reload. */
   async function go(url: URL) {
     if (!options.navigate || url.origin !== location.origin)
       return location.assign(url);
+    const id = url.searchParams.get("comment");
+    if (!id) return;
+    cancelThreadRequest();
+    cancelledLinks.delete(id);
+    const request: ThreadRequest = { id, inspect: url.searchParams.get("comment-view") === "design", pending: true, rejected: false };
+    threadRequest = request;
+    if (selected === id) renderDialog();
     try {
       await options.navigate(url);
     } catch {
-      return location.assign(url);
+      request.rejected = true;
+    }
+    if (destroyed || threadRequest !== request) return;
+    request.pending = false;
+    checkPage();
+    await openRequestedThread(request);
+  }
+  let linking: ThreadRequest | null = null;
+  async function openRequestedThread(request: ThreadRequest) {
+    const thread = threads.find((item) => item.id === request.id);
+    if (!thread || linking === request || request.opened) return;
+    linking = request;
+    // A successful route can render its anchor after the router promise resolves.
+    for (let wait = 0; wait < 5e3 && onThreadPage(thread) && !resolveAnchor(thread.anchor); wait += 100) {
+      await new Promise((done) => setTimeout(done, 100));
+      if (destroyed || threadRequest !== request) break;
+    }
+    if (linking === request) linking = null;
+    if (destroyed || threadRequest !== request || !threads.some((item) => item.id === thread.id)) return;
+    const url = new URL(location.href);
+    if (url.searchParams.get("comment") === request.id) {
+      url.searchParams.delete("comment");
+      url.searchParams.delete("comment-view");
+      history.replaceState(history.state, "", url);
     }
     checkPage();
-    void openDeepLink();
+    request.opened = true;
+    if (!expanded) toggleExpanded(true);
+    selectThread(thread, true);
+    if (request.inspect && onThreadPage(thread)) void openThreadInDesign(thread);
   }
-  let linking: string | null = null;
   /** Open ?comment=<id> once its page and anchor render, then drop the param. */
   async function openDeepLink() {
-    const id = new URL(location.href).searchParams.get("comment");
-    const thread = threads.find((t) => t.id === id);
-    if (!thread || linking === id) return;
-    linking = id;
-    // Routers may commit the URL or render the anchor after navigating.
-    for (
-      let wait = 0;
-      wait < 5e3 && (page() !== thread.page || !resolveAnchor(thread.anchor));
-      wait += 100
-    )
-      await new Promise((done) => setTimeout(done, 100));
-    linking = null;
     const url = new URL(location.href);
-    if (destroyed || url.searchParams.get("comment") !== id) return;
-    const inspect = url.searchParams.get("comment-view") === "design";
-    url.searchParams.delete("comment");
-    url.searchParams.delete("comment-view");
-    history.replaceState(history.state, "", url);
-    checkPage();
-    if (thread.page !== page()) return;
-    if (!expanded) toggleExpanded(true);
-    selectThread(thread);
-    if (inspect) void openThreadInDesign(thread);
+    const id = url.searchParams.get("comment");
+    if (id && cancelledLinks.has(id)) {
+      url.searchParams.delete("comment");
+      url.searchParams.delete("comment-view");
+      history.replaceState(history.state, "", url);
+      return;
+    }
+    const thread = threads.find((t) => t.id === id);
+    if (!thread || threadRequest?.pending) return;
+    if (threadRequest?.id !== thread.id) {
+      cancelThreadRequest();
+      threadRequest = { id: thread.id, inspect: url.searchParams.get("comment-view") === "design", pending: false, rejected: false };
+    }
+    await openRequestedThread(threadRequest);
   }
   function syncSession() {
     const next = new CommentsApi(options);
@@ -5963,6 +6039,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      cancelThreadRequest();
       cancelPinMove();
       polling?.stop();
       designController?.destroy();

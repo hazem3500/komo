@@ -458,7 +458,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `anchorTarget(element)` | `(element: Element) => Element \| undefined` | Declared owners and stable semantic cards | Optional persistent ancestor for comment capture. Offsets stay relative to this owner when hover-only children disappear. Owners cannot cross a dialog/popover boundary. Design inspection continues to target the exact element. |
 | `sourceUrl(source, branch)` | `(source: string, branch: string) => string` | GitHub viewer | Custom source or editor link. |
 | `page()` | `() => string` | `location.pathname` | Canonical page identifier. |
-| `navigate(url)` | `(url: URL) => void \| Promise<void>` | `location.assign` | Route to a comment on another page without reloading, e.g. `(url) => router.navigate({ href: url.pathname + url.search })`. komo opens the thread once its anchor renders; a rejection falls back to a page load. |
+| `navigate(url)` | `(url: URL) => void \| Promise<void>` | `location.assign` | Route to a comment without reloading, e.g. `(url) => router.navigate({ href: url.pathname + url.search + url.hash })`. Rejected or redirected navigation keeps the requested conversation open with destination context; the package never forces a reload or retries your router automatically. Missing elements remain separate from navigation status. |
 | `drawerContainer` | `HTMLElement` | Viewport | Element used to center the drawer before it is dragged. |
 | `autoHideDrawer` | `boolean` | `true` | Set `false` to keep the drawer visible away from the pointer. |
 | `showToolbar` | `boolean` | `true` | Set `false` to keep the toolbar, drawer, and comment pins hidden until `controller.open()` or the restore shortcut. |
