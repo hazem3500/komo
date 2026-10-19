@@ -812,8 +812,9 @@ ${morphingMenuStyles}
   line-height: 1.5;
 }
 .message:first-child > .row {
-  padding-right: 78px;
+  padding-right: var(--thread-actions-width, 78px);
 }
+.dialog:has(.thread-tag-action) { --thread-actions-width: 107px; }
 .dialog-head {
   top: 12px;
   right: 8px;

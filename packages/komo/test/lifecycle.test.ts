@@ -1178,3 +1178,61 @@ it("outlines a hovered or focused list card's target and raises its pin", async 
   expect(shadow.querySelector(".pin.hot")).toBeNull();
   localStorage.clear();
 });
+
+
+it.each([false, true])("keeps tag actions in the thread header (sidebar=%s)", async (sidebar) => {
+  const { CommentsApi } = await import("../src/api");
+  const config = { ...options, restoreOpen: false as const, onboarding: undefined };
+  const api = new CommentsApi(config);
+  api.save({ token: "tags-session", user: { id: "tags", name: "Reviewer", verified: true } });
+  localStorage.setItem(
+    `${api.sessionKey}:${JSON.stringify([config.repo, "local"])}:threads`,
+    JSON.stringify({ token: api.token, threads: [{
+      id: "tagged", page: "/", resolved: false, resolvedBy: null, createdAt: 1, updatedAt: 1, tags: [],
+      anchor: { selector: "#target", text: "", x: .5, y: .5, width: 0, height: 0, pageX: 0, pageY: 0, viewportWidth: 1200 },
+      comments: [{ id: "tagged-c", body: "Tag placement", author: api.user, createdAt: 1, editedAt: null, reactions: {} }],
+    }] }),
+  );
+  vi.stubGlobal("fetch", vi.fn((_, init) => init?.method === "PATCH"
+    ? Promise.resolve(Response.json({ tags: ["ui"] }))
+    : new Promise<Response>(() => {})));
+  layoutBody();
+  controller = initComments(config);
+  if (sidebar) controller.open();
+  const shadow = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
+  shadow.querySelector<HTMLButtonElement>(".pin")!.click();
+  const dialog = shadow.querySelector<HTMLElement>(".dialog")!;
+  expect(!!dialog.closest(".thread-pane")).toBe(sidebar);
+  const trigger = dialog.querySelector<HTMLButtonElement>(".thread-tag-action")!;
+  expect([...trigger.parentElement!.children].map((node) =>
+    (node.querySelector("summary") ?? node).getAttribute("aria-label"),
+  )).toEqual([
+    "Comment actions", "Add tag", "Resolve comment", sidebar ? "Close sidebar" : "Close comment",
+  ]);
+  expect(trigger.title).toBe("Add tag");
+  const slot = dialog.querySelector<HTMLElement>(".thread-tags")!;
+  expect(slot.hidden).toBe(true);
+  // Clicking before the lazy editor arrives must still open it.
+  trigger.click();
+  await vi.waitFor(() => expect(slot.querySelector("input")).not.toBeNull());
+  expect(slot.querySelector(".tag-add")).toBeNull();
+  const input = () => slot.querySelector<HTMLInputElement>("input")!;
+  expect(shadow.activeElement).toBe(input());
+  input().value = "ui";
+  input().dispatchEvent(new Event("input"));
+  input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  expect(slot.querySelector(".tag-chip span")?.textContent).toBe("#ui");
+  expect(trigger.getAttribute("aria-label")).toBe("Manage tags");
+  expect(trigger.title).toBe("Manage tags");
+  input().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+  expect(shadow.activeElement).toBe(trigger);
+  expect(dialog.isConnected).toBe(true);
+  expect(slot.hidden).toBe(false);
+  expect(slot.querySelector("input")).toBeNull();
+  const remove = slot.querySelector<HTMLButtonElement>(".tag-chip button")!;
+  remove.focus();
+  remove.click();
+  expect(slot.hidden).toBe(true);
+  expect(shadow.activeElement).toBe(trigger);
+  localStorage.clear();
+});

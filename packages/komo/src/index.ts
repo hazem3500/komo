@@ -3915,23 +3915,30 @@ export function initComments(options: CommentsOptions): CommentsController {
     tags: readonly string[],
     onAdd: (tag: string) => void,
     onRemove: (tag: string) => void,
+    trigger?: HTMLButtonElement,
   ) {
     const slot = el("div", "tag-slot");
+    slot.hidden = !!trigger && !tags.length;
     const show = ({ tagEditor }: typeof import("./tag-editor.js")) =>
       tagEditor(slot, {
         tags,
         suggestions: [...new Set(threads.flatMap((item) => item.tags ?? []))].sort(),
         onAdd,
         onRemove,
+        trigger,
       });
     // Render synchronously once loaded, so redraws keep the dialog's height.
     if (tagModule) show(tagModule);
-    else
+    else {
+      let open = false;
+      if (trigger) trigger.onclick = () => { open = true; };
       void import("./tag-editor.js").then((module) => {
         tagModule = module;
         show(module);
+        if (open && trigger?.isConnected) trigger.click();
         positionDialog();
       });
+    }
     return slot;
   }
   /** Save a tag change without re-rendering the open dialog, so typing continues. */
@@ -4306,6 +4313,7 @@ export function initComments(options: CommentsOptions): CommentsController {
 
     const controls = el("div", "row");
     const thread = threads.find((t) => t.id === selected) ?? null;
+    let tagAction: HTMLButtonElement | undefined;
     if (thread && !account) {
       const copy = (label: string, value: () => string) => ({
         label,
@@ -4363,6 +4371,15 @@ export function initComments(options: CommentsOptions): CommentsController {
         copy("Copy selector", () => thread.anchor.selector),
       ]);
       controls.append(more);
+      if (tagsEnabled) {
+        tagAction = button(
+          thread.tags?.length ? "Manage tags" : "Add tag",
+          () => {},
+          "icon thread-tag-action",
+          "tag",
+        );
+        controls.append(tagAction);
+      }
       const resolve = button(
         thread.resolved ? "Reopen comment" : "Resolve comment",
         () => toggleResolved(thread, captureNoticePosition(thread.anchor)),
@@ -4705,10 +4722,9 @@ export function initComments(options: CommentsOptions): CommentsController {
           thread.tags ?? [],
           (tag) => saveTag(thread, { tag }),
           (tag) => saveTag(thread, { untag: tag }),
+          tagAction,
         );
         slot.classList.add("thread-tags");
-        // Tags belong to the whole thread: under the sidebar header, or
-        // under the first author in the floating card.
         const author = messages.querySelector(".message > .row");
         if (panel || !author) messages.before(slot);
         else author.after(slot);
