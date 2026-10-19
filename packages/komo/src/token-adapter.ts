@@ -28,7 +28,13 @@ interface Swap {
 const swaps = new Map<Element, Swap[]>();
 const customs = new Map<Element, Set<string>>();
 const usages = new WeakMap<Element, Map<string, TokenUsage | undefined>>();
-const baselines = new WeakMap<Element, Map<string, { adapter: TokenAdapter; style: ReturnType<typeof inlineStyleSnapshot>; token?: DesignToken }>>();
+const baselines = new WeakMap<Element, Map<string, {
+  adapter: TokenAdapter;
+  original: ReturnType<typeof inlineStyleSnapshot>;
+  style: ReturnType<typeof inlineStyleSnapshot>;
+  concrete: boolean;
+  token?: DesignToken;
+}>>();
 let suspendedCustoms = new Map<Element, Map<string, ReturnType<typeof inlineStyleSnapshot>>>();
 const lists = new WeakMap<TokenAdapter, Map<string, Promise<DesignToken[]>>>();
 let showingBefore = false;
@@ -48,12 +54,37 @@ export function rememberTokenUsage(element: Element, property: string, usage: To
       let properties = baselines.get(element);
       if (!properties) baselines.set(element, properties = new Map());
       const original = inlineStyleSnapshot(element, property);
-      const baseline = { adapter, style: original, token: undefined as DesignToken | undefined };
-      baseline.style = { ...original, get computed() { return baseline.token?.value ?? original.computed; } };
-      properties.set(property, baseline);
+      // Keep references and relative expressions; rebase concrete semantic declarations only.
+      const concrete = !!original.value && comparable(original.value) === comparable(original.computed);
+      const existing = properties.get(property);
+      if (existing?.adapter === adapter) {
+        existing.original = original;
+        existing.concrete = concrete;
+      } else {
+        const baseline = { adapter, original, concrete, style: original, token: undefined as DesignToken | undefined };
+        baseline.style = {
+          get value() {
+            const original = baseline.original;
+            if (!baseline.concrete || !baseline.token) return original.value;
+            const style = element.ownerDocument.createElement("span").style;
+            style.setProperty(property, baseline.token.value);
+            return style.getPropertyValue(property) || original.value;
+          },
+          get priority() { return baseline.original.priority; },
+          get absent() { return baseline.original.absent; },
+          get computed() { return baseline.token?.value ?? baseline.original.computed; },
+          restore() {
+            const original = baseline.original;
+            original.restore();
+            if (baseline.concrete && baseline.token && comparable(baseline.token.value) !== comparable(original.value))
+              element.style.setProperty(property, baseline.token.value, original.priority);
+          },
+        };
+        properties.set(property, baseline);
+      }
     }
   }
-  refreshBaseline(element, adapter, tokens);
+  refreshTokenBaseline(element, adapter, tokens);
   return known.get(property);
 }
 
@@ -61,11 +92,13 @@ export function originalTokenUsage(element: Element | null, property: string): T
   return element ? usages.get(element)?.get(property) : undefined;
 }
 
-function refreshBaseline(element: Element, adapter: TokenAdapter, tokens: readonly DesignToken[]) {
+export function refreshTokenBaseline(element: Element, adapter: TokenAdapter, tokens: readonly DesignToken[], restore?: Iterable<string>) {
+  const properties = restore && new Set(restore);
   for (const [property, baseline] of baselines.get(element) ?? []) {
     if (baseline.adapter !== adapter) continue;
     const usage = originalTokenUsage(element, property);
     baseline.token = usage && "path" in usage ? tokens.find(token => token.path === usage.path) : undefined;
+    if (baseline.token && properties?.has(property)) baseline.style.restore();
   }
 }
 
@@ -323,7 +356,10 @@ export function showTokenSwapsBefore(on: boolean): void {
 export function refreshTokenSwaps(adapter: TokenAdapter, tokens: readonly DesignToken[]): void {
   const before = showingBefore;
   if (!before) showTokenSwapsBefore(true);
-  for (const element of new Set([...swaps.keys(), ...customs.keys()])) refreshBaseline(element, adapter, tokens);
+  for (const element of new Set([...swaps.keys(), ...customs.keys()])) {
+    const properties = [...(swaps.get(element) ?? []).filter(swap => swap.adapter === adapter).map(swap => swap.property), ...customs.get(element) ?? []];
+    refreshTokenBaseline(element, adapter, tokens, properties);
+  }
   for (const stack of swaps.values()) for (const swap of stack) {
     if (swap.adapter !== adapter) continue;
     swap.token = tokens.find(token => token.path === swap.token.path) ?? swap.token;

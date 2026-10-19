@@ -154,6 +154,8 @@ In Design mode, each style field of the picked element:
 
 `list()` and `resolve()` may return promises; the panel renders first and the token controls join when they resolve. `list()` is called once per theme state. A comment on a token swap records `Element color: #6b6b6b [color.text.secondary] → #1f1f1f [color.text.primary]`, followed by your `describe()` text on an `Apply:` line.
 
+Returning `{ path: "tone.base" }` declares a semantic binding, including when the host renders that token as a concrete inline value. Its Before/Undo baseline follows the current theme's resolved token value; existing classes, CSS-variable references, declaration priorities and unrelated styles are preserved. Return `{ offToken: value }` for a genuine custom literal, even if it happens to equal a token. Supply current resolved values through `list(theme)` and notify subscribers after applying a theme change.
+
 Writing an adapter for utility classes:
 
 ```ts

@@ -3,7 +3,7 @@
 import { isDesignTarget } from "./design-target.js";
 import { removeEmptyStyle } from "./design-preview.js";
 import { previewText } from "./text-preview.js";
-import { listTokens, originalTokenUsage, previewToken, themeState, watchThemes } from "./token-adapter.js";
+import { listTokens, originalTokenUsage, previewToken, refreshTokenBaseline, themeState, watchThemes } from "./token-adapter.js";
 import type { DesignSystem, DesignToken, TokenAdapter } from "./design-system.js";
 
 export interface DesignChange {
@@ -613,6 +613,10 @@ export function renderDraftProposal(container: HTMLElement, body: string, resolv
         draftBody = runtime.body;
         runtime.options.onUpdate?.(runtime.body);
         const sections = parseDesignComment(runtime.body).filter((block): block is DesignSection => "changes" in block);
+        for (const section of sections) {
+          const element = runtime.resolve(section.target);
+          if (element) refreshTokenBaseline(element, adapter!, tokens, section.changes.flatMap(item => item.apply?.kind === "style" ? [item.apply.property] : []));
+        }
         if (after) apply("draft", sections, runtime.resolve, false, runtime.context);
         const focused = runtime.container.querySelector<HTMLButtonElement>(".design-toggle button:focus")?.textContent;
         renderDesignComment(runtime.container, runtime.body, { key: "draft", resolve: runtime.resolve, tokens: runtime.context, note: (element, text) => element.append(text) });

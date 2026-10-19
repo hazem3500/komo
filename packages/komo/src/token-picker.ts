@@ -143,7 +143,7 @@ function row(token: DesignToken, id: string, selected: boolean, themes: readonly
     const value = theme.values.get(token.path);
     return value && token.type === "color" ? [`${theme.label} ${value}`] : [];
   });
-  node.title = [token.label, tokenTitle(token, perTheme.length > 1 ? perTheme.join(", ") : token.value, unresolved ? "Unresolved color value; no swatch available" : "")]
+  node.title = [token.label, tokenTitle(token, perTheme.length > 1 ? perTheme.join(", ") : token.value, unresolved ? "Unresolved; no swatch available" : "")]
     .filter(Boolean).join(" · ");
   node.setAttribute("aria-label", node.title);
   return node;
@@ -194,10 +194,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   bar.append(search);
   if (relevant.length && relevant.length < tokens.length) bar.append(widen);
   box.append(bar, list);
-  if (options.onPreview) {
-    const hint = el("div", "komo-tokens__hint", "↑↓ preview · Enter apply · Esc cancel");
-    box.append(hint);
-  }
+  if (options.onPreview) box.append(el("div", "komo-tokens__hint", "↑↓ preview · Enter apply · Esc cancel"));
   // Lowercase haystacks are built once, so each keystroke is a plain scan.
   const haystacks = () => new Map(tokens.map((token) => [token, `${tokenLabel(token)} ${token.path} ${token.ref ?? ""} ${token.value ?? ""}`.toLowerCase()]));
   let haystack = haystacks();
