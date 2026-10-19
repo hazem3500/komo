@@ -72,6 +72,7 @@ import {
   isolatedEvents,
   onPage,
   reducedMotion,
+  setAvatarResolver,
 } from "./dom.js";
 import { matchesShortcut, resolveShortcuts, withShortcut } from "./shortcuts.js";
 import { styles } from "./styles.js";
@@ -125,6 +126,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     throw new Error(
       "Use an HTTPS API endpoint without credentials; HTTP is allowed on localhost.",
     );
+  setAvatarResolver(options.avatar);
   const shortcuts = resolveShortcuts(options.shortcuts);
   const designEnabled = options.features?.designMode !== false;
   const tagsEnabled = options.features?.tags !== false;

@@ -46,6 +46,7 @@ While IAP is on:
 - Reading or writing comments requires a session from an IAP-verified account.
 - Missing, forged, expired or wrong-audience assertions are rejected.
 - The rest of the API stays outside IAP: the widget calls it cross-origin with the bearer session from the popup.
+- IAP carries only an email, so reviewers show their initial. Pass the widget's `avatar` option to supply photo URLs; reviewers who signed in with Google OAuth before keep their stored photo.
 
 Make sure clients can't reach the prefixed handlers without going through IAP. The signed assertion check rejects forged headers either way.
 
