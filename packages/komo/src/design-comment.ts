@@ -2,6 +2,7 @@
 // Before/After preview. The comment body stays plain text for agents and the CLI.
 import { isDesignTarget } from "./design-target.js";
 import { removeEmptyStyle } from "./design-preview.js";
+import { previewText } from "./text-preview.js";
 
 export interface DesignChange {
   label: string;
@@ -124,6 +125,17 @@ interface Applied {
 const applied = new Map<string, Applied>();
 // Before/After switches that may still be on screen, newest last.
 const visibleToggles = new Set<HTMLElement>();
+const UNAVAILABLE = "Preview unavailable: the target or its text has changed.";
+
+function loseTextPreview(key: string) {
+  revert(key);
+  for (const toggle of visibleToggles) {
+    if (toggle.dataset.previewKey !== key || !toggle.isConnected) continue;
+    toggle.querySelectorAll("button").forEach((button, index) => button.setAttribute("aria-pressed", String(index === 0)));
+    const status = toggle.closest(".design-comment")?.querySelector<HTMLElement>('[role="status"]');
+    if (status) { status.textContent = UNAVAILABLE; status.hidden = false; }
+  }
+}
 // Reverts that are still animating back, finished once their transition ends.
 const settling = new Map<string, { timer: ReturnType<typeof setTimeout>; finish(): void }>();
 
@@ -140,6 +152,7 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
   const restore: Array<() => void> = [];
   const restoreStyles: Array<() => void> = [];
   const pinBefore: Array<() => void> = [];
+  let unavailable = false;
   for (const section of sections) {
     const element = resolve(section.target);
     for (const item of section.changes) {
@@ -168,18 +181,18 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
           else element.style.removeProperty(item.apply!.property);
           if (absent) removeEmptyStyle(element);
         });
-      } else if (element instanceof HTMLElement && item.apply.kind === "text" && !element.childElementCount) {
-        // Text nodes are edited in place so frameworks keep their references.
-        const node = element.firstChild;
-        if (node instanceof Text) {
-          const previous = node.data;
-          node.data = item.after;
-          restore.push(() => { node.data = previous; });
-        }
+      } else if (item.apply.kind === "text") {
+        const undo = element instanceof HTMLElement ? previewText(element, item.before, item.after, () => loseTextPreview(key)) : undefined;
+        if (undo) restore.push(undo);
+        else unavailable = true;
       }
     }
   }
-  applied.set(key, { restore, restoreStyles, pinBefore });
+  if (unavailable) {
+    for (const undo of [...restore, ...restoreStyles].reverse()) undo();
+    return false;
+  }
+  if (restore.length + restoreStyles.length) applied.set(key, { restore, restoreStyles, pinBefore });
   return restore.length + restoreStyles.length > 0;
 }
 
@@ -347,6 +360,10 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   const root = document.createElement("div");
   root.className = "design-comment";
   root.append(Object.assign(document.createElement("style"), { textContent: css }));
+  const unavailable = document.createElement("p");
+  unavailable.className = "design-source";
+  unavailable.setAttribute("role", "status");
+  unavailable.hidden = true;
   const compact = !!options.compact;
   if (compact) root.dataset.compact = "";
   // Compact cards show the first three rows across all sections and count the rest.
@@ -389,6 +406,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
     // One Before/After switch for the whole comment, shown on its first previewable card.
     if (previewable && !toggles.length && block.changes.some((item) => item.apply)) {
       const toggle = document.createElement("div");
+      toggle.dataset.previewKey = options.key;
       toggle.className = "design-toggle";
       toggle.setAttribute("role", "group");
       toggle.setAttribute("aria-label", "Preview on page");
@@ -401,7 +419,10 @@ export function renderDesignComment(container: HTMLElement, body: string, option
           if (showAfter) element?.scrollIntoView({ block: "center", behavior: "smooth" });
           const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
           if (!reduced) morph(sections, options.resolve);
-          if (showAfter) apply(options.key, sections, options.resolve, !reduced);
+          if (showAfter) {
+            unavailable.hidden = apply(options.key, sections, options.resolve, !reduced);
+            unavailable.textContent = UNAVAILABLE;
+          }
           else revert(options.key, !reduced);
           if (options.onSwitch) setTimeout(options.onSwitch, reduced ? 0 : 480);
           sync();
@@ -453,6 +474,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
     root.append(card);
   }
   if (extra) root.append(Object.assign(document.createElement("span"), { className: "design-source", textContent: `+${extra} more` }));
+  root.append(unavailable);
   sync();
   container.replaceChildren(root);
   if (toggles.length) listenForShortcut();

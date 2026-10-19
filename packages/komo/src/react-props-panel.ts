@@ -36,12 +36,16 @@ import type { ComponentIdentity, DesignSystem, DesignToken, DesignTokenType, The
 import type { ThemeValues, TokenPickerOptions } from "./token-picker.js";
 import {
   closestToken,
+  customTokenOverride,
+  effectiveTokenUsage,
+  hasCustomTokenOverrides,
   hasTokenSwaps,
   listTokens,
   markOffToken,
   offTokenMarker,
   previewToken,
   proposedTokenSwaps,
+  rememberTokenUsage,
   resetAllTokenSwaps,
   resetTokenSwaps,
   resolveTokens,
@@ -54,6 +58,7 @@ import {
   tokensFor,
   tokenTitle,
 } from "./token-adapter.js";
+export { originalTokenStyle as originalDesignTokenStyle } from "./token-adapter.js";
 
 const originals = new Map<DesignTarget, Map<string, InspectableScalar>>();
 const edits = new Map<DesignTarget, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();
@@ -252,7 +257,7 @@ export function canUndoDesignTokenEdit(element: DesignTarget | null): boolean {
 }
 
 export function hasDesignTokenEdit(element: DesignTarget): boolean {
-  return hasDesignTokenChanges(element) || hasTokenSwaps(element);
+  return hasDesignTokenChanges(element) || hasTokenSwaps(element) || hasCustomTokenOverrides(element);
 }
 
 export function undoDesignTokenEdit(element: DesignTarget): void {
@@ -535,7 +540,7 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
     each((field, label, input, refresh) => createAdapterTokenControl(adapter, element, field.property, tokens, usage[field.property], (undo) => {
       onSwap?.(undo);
       refresh();
-    }, label, input, themes));
+    }, label, input, themes, refresh));
   }, () => {});
 }
 
@@ -550,9 +555,11 @@ export function createAdapterTokenControl(
   label?: HTMLElement,
   input?: HTMLElement,
   themes?: () => Promise<ThemeValues[]>,
+  refresh?: () => void,
 ): HTMLElement | null {
   const available = tokensFor(tokens, property);
   if (!available.length && !usage) return null;
+  const initialUsage = rememberTokenUsage(element, property, usage);
   const off = usage && "offToken" in usage ? usage.offToken : undefined;
   const match = off === undefined ? undefined : closestToken(available, off);
   const row = document.createElement("span");
@@ -600,26 +607,37 @@ export function createAdapterTokenControl(
   state.setAttribute("aria-live", "polite");
   let detached = false;
   const suggestion = matchSuggestion(label, row);
-  const current = () => detached ? undefined : swappedToken(element, property)?.path ?? (usage && "path" in usage ? usage.path : undefined);
+  const current = () => {
+    const effective = effectiveTokenUsage(element, property, usage);
+    return detached ? undefined : effective && "path" in effective ? effective.path : undefined;
+  };
   pickerTrigger(select, () => ({ tokens, property, current: current(), themes,
-    onPreview: token => previewToken(adapter, element, property, token), onSelect: choose }));
+    onPreview: token => {
+      const undo = previewToken(adapter, element, property, token);
+      refresh?.();
+      return () => { undo(); refresh?.(); };
+    }, onSelect: choose }));
   const update = () => {
     const swapped = swappedToken(element, property);
-    const path = detached ? undefined : swapped?.path ?? (usage && "path" in usage ? usage.path : undefined);
+    const path = current();
     const token = path ? tokens.find((item) => item.path === path) : undefined;
     select.value = path && available.some((item) => item.path === path) ? path : "";
     chip.textContent = token ? tokenName(token) : path ?? "";
     const mode = !path ? "custom" : swapped ? "token" : "connected";
     row.dataset.mode = mode;
     (label ?? row.parentElement)?.setAttribute("data-token-mode", mode);
-    dot.hidden = off === undefined || !!swapped;
+    dot.hidden = !!path;
+    const effective = effectiveTokenUsage(element, property, usage);
+    const value = effective && "offToken" in effective ? effective.offToken : getComputedStyle(element).getPropertyValue(property).trim() || off || "";
+    const match = path ? undefined : closestToken(available, value);
+    if (!path) markOffToken(dot, value, match);
     state.textContent = token ? `${swapped ? "Preview" : "Uses"} ${tokenTitle(token)}` : path ? `Uses ${path}` : dot.hidden ? "" : dot.title;
     select.title = state.textContent || "Choose a token";
-    suggestion.show(dot.hidden || detached ? undefined : match, () => match && choose(match));
+    suggestion.show(dot.hidden ? undefined : match, () => match && choose(match));
   };
   function choose(token: DesignToken) {
     detached = false;
-    const from: TokenUsage = usage ?? { offToken: getComputedStyle(element).getPropertyValue(property).trim() };
+    const from: TokenUsage = initialUsage ?? { offToken: getComputedStyle(element).getPropertyValue(property).trim() };
     const fromToken = "path" in from ? tokens.find((item) => item.path === from.path) : undefined;
     onSwap(swapToken(adapter, element, property, token, from, fromToken));
     update();
@@ -635,6 +653,14 @@ export function createAdapterTokenControl(
     input?.focus();
   });
   row.append(chip, select, icon, detach, dot, state);
+  const observer = new MutationObserver(update);
+  observer.observe(element, { attributes: true, attributeFilter: ["style", "class"] });
+  const cleanup = new MutationObserver(() => {
+    if (!row.isConnected) { observer.disconnect(); cleanup.disconnect(); }
+  });
+  cleanup.observe(document, { childList: true, subtree: true });
+  const root = label?.getRootNode();
+  if (root instanceof ShadowRoot) cleanup.observe(root, { childList: true, subtree: true });
   update();
   return row;
 }
@@ -756,9 +782,10 @@ function themeRow(
   return row;
 }
 
-export function noteDesignTokenOverride(element: DesignTarget, property: string, value: string): void {
+export function noteDesignTokenOverride(element: DesignTarget, property: string, value: string) {
   const source = tokenSourceFor(element);
   if (source) noteElementTokenOverride(source, element, property, value);
+  return customTokenOverride(element, property);
 }
 
 export function syncDesignTokenBinding(element: DesignTarget, property: string): void {
@@ -1054,35 +1081,28 @@ export function createReactPropsPanel(
   group.append(hint);
 
   const editable = component;
+  const synchronizers: Array<() => void> = [];
   if (refresh && component.subscribe) {
     let frame = 0;
+    let dirty = false;
     const events = new AbortController();
-    const unsubscribe = component.subscribe(() => {
+    const root = group.getRootNode() as ShadowRoot | Document;
+    const schedule = () => {
       if (frame || !group.isConnected) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
         if (!group.isConnected) return;
         const root = group.getRootNode() as ShadowRoot | Document;
         const focused = root.activeElement;
-        if (focused?.closest(".design-inspector__heading")) return;
-        const input = focused instanceof HTMLInputElement && group.contains(focused) ? focused : undefined;
-        const label = focused && group.contains(focused) ? focused.getAttribute("aria-label") : null;
-        const draft = input?.value;
-        const start = input?.selectionStart;
-        const end = input?.selectionEnd;
+        synchronizers.forEach(sync => sync());
+        if (focused?.closest(".design-inspector,.komo-tokens,.komo-select") || root.querySelector(".komo-tokens,.komo-select")) return;
+        dirty = false;
         refresh();
-        queueMicrotask(() => {
-          if (!label) return;
-          const control = [...root.querySelectorAll<HTMLElement>("[aria-label]")].find(node => node.getAttribute("aria-label") === label);
-          if (!control) return;
-          control.focus({ preventScroll: true });
-          if (control instanceof HTMLInputElement && draft !== undefined) {
-            control.value = draft;
-            if (start != null) control.setSelectionRange(start, end ?? start);
-          }
-        });
       });
-    });
+    };
+    const unsubscribe = component.subscribe(() => { dirty = true; schedule(); });
+    const scope = styleRoot ?? root;
+    scope.addEventListener("focusout", () => { queueMicrotask(() => { if (dirty) schedule(); }); }, { signal: events.signal });
     const stop = () => { unsubscribe(); cancelAnimationFrame(frame); events.abort(); };
     queueMicrotask(() => { if (group.isConnected) watchPopup(group, stop, events.signal); else stop(); });
   }
@@ -1162,6 +1182,13 @@ export function createReactPropsPanel(
     reset.title = "Restore the value before editing";
     reset.innerHTML = '<svg viewBox="0 0 16 16"><path d="M2.5 2.5v3h3M3 5.5a5.5 5.5 0 1 1-.5 2.5"/></svg>';
     const syncReset = () => { reset.hidden = !originals.get(element)?.has(prop.name); };
+    synchronizers.push(() => {
+      if (control === (control.getRootNode() as ShadowRoot | Document).activeElement || control.getAttribute("aria-expanded") === "true") return;
+      const latest = editable.props[prop.name];
+      if (control instanceof HTMLInputElement && control.type === "checkbox") control.checked = latest === true;
+      else control.value = latest == null ? "" : String(latest);
+      syncReset();
+    });
     control.addEventListener("change", syncReset);
     reset.addEventListener("click", () => {
       const baseline = originals.get(element);

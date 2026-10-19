@@ -96,7 +96,7 @@ export function designProposal(
     .map(([property, value]) => `- ${property}: ${before(property) || "(unset)"} → ${value}`);
   const parts = [
     rows.length ? `Proposed style changes (preview only)\nTarget: ${cssSelector(element)}\n${rows.join("\n")}` : "",
-    ...sections,
+    ...sections.map(section => section && !/^Target: /m.test(section) ? section.replace("\n", `\nTarget: ${cssSelector(element)}\n`) : section),
   ].filter((part): part is string => !!part);
   if (parts[0] && context.length) {
     const lines = parts[0].split("\n");

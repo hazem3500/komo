@@ -1,3 +1,8 @@
+import { createTextPreviewHistory, holdText, lockedText, restoreText, snapshotText, type TextSnapshot } from "./text-preview.js";
+import { inlineStyleSnapshot } from "./design-preview.js";
+export { createTextPreviewHistory } from "./text-preview.js";
+export type { TextSnapshot, TextPreviewHistory } from "./text-preview.js";
+
 export interface ReactTextBridge {
   beginReactTextEdit(element: HTMLElement): { propName: string; before: string } | null;
   previewReactTextEdit(element: HTMLElement, propName: string, value: string): boolean;
@@ -14,22 +19,10 @@ export interface InlineTextEditResult {
   nodes?: TextSnapshot;
 }
 
-export type TextSnapshot = Array<[Text, string]>;
-
-// Text inside these stays read-only, even within an editable element.
-const lockedText = "script,style,svg,input,textarea,select,[data-private],[data-sensitive]";
-
-function textNodes(element: HTMLElement): Text[] {
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-  const nodes: Text[] = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
-  return nodes;
-}
-
 /** Restore text without touching markup: nested elements keep their nodes, so React keeps its references. */
 function setText(element: HTMLElement, text: string, nodes?: TextSnapshot) {
-  if (nodes && element.childElementCount) for (const [node, value] of nodes) node.data = value;
-  else element.textContent = text;
+  if (nodes) restoreText(nodes, element);
+  else if (element.firstChild instanceof Text && !element.childElementCount) element.firstChild.data = text;
 }
 
 export interface InlineTextEditor {
@@ -39,6 +32,7 @@ export interface InlineTextEditor {
 }
 
 export interface InlineTextEditorOptions {
+  accent?: string;
   loadReactBridge(): Promise<ReactTextBridge>;
   onFinish(result: InlineTextEditResult, cancel: boolean): void;
 }
@@ -67,80 +61,7 @@ export interface InlineTextTools {
   proposal(element: HTMLElement): string | undefined;
   restoreAll(): void;
   /** Show the page's original text, or put the edits back. */
-  showBefore(on: boolean): void;
-}
-
-export interface TextPreviewHistory {
-  record(result: InlineTextEditResult): void;
-  remember(element: HTMLElement, before: string): void;
-  original(element: HTMLElement): string | undefined;
-  reconcile(element: HTMLElement, text: string): void;
-  reset(element: HTMLElement): void;
-  proposal(element: HTMLElement): string | undefined;
-  restoreAll(): void;
-  showBefore(on: boolean): void;
-  undo(): HTMLElement | null;
-}
-
-export function createTextPreviewHistory(): TextPreviewHistory {
-  const originals = new Map<HTMLElement, string>();
-  const snapshots = new Map<HTMLElement, TextSnapshot | undefined>();
-  const edits: InlineTextEditResult[] = [];
-  const afters = new Map<HTMLElement, [string, TextSnapshot | undefined]>();
-  return {
-    record(result) {
-      if (!result.reactProp && result.before !== result.after) {
-        if (!originals.has(result.element)) {
-          originals.set(result.element, result.before);
-          snapshots.set(result.element, result.nodes);
-        }
-        edits.push(result);
-      }
-    },
-    remember(element, before) {
-      if (!originals.has(element)) originals.set(element, before);
-    },
-    original(element) { return originals.get(element); },
-    reconcile(element, text) {
-      if (originals.get(element) === text) originals.delete(element);
-    },
-    reset(element) {
-      const value = originals.get(element);
-      if (value !== undefined) setText(element, value, snapshots.get(element));
-      originals.delete(element);
-      for (let index = edits.length - 1; index >= 0; index--)
-        if (edits[index].element === element) edits.splice(index, 1);
-    },
-    proposal(element) {
-      const before = originals.get(element);
-      const after = element.textContent ?? "";
-      return before !== undefined && before !== after
-        ? `Proposed inline text change (preview only)\n- Text: ${JSON.stringify(before)} → ${JSON.stringify(after)}\n- Source markup is unchanged; refresh resets this preview.`
-        : undefined;
-    },
-    restoreAll() {
-      for (const [element, value] of originals) setText(element, value, snapshots.get(element));
-      originals.clear();
-      edits.length = 0;
-    },
-    showBefore(on) {
-      if (on)
-        for (const [element, value] of originals) {
-          const nodes = snapshots.get(element);
-          afters.set(element, [element.textContent ?? "", nodes?.map(([node]) => [node, node.data])]);
-          setText(element, value, nodes);
-        }
-      else for (const [element, [text, nodes]] of afters) setText(element, text, nodes);
-      if (!on) afters.clear();
-    },
-    undo() {
-      const edit = edits.pop();
-      if (!edit) return null;
-      setText(edit.element, edit.before, edit.nodes);
-      if (originals.get(edit.element) === edit.before) originals.delete(edit.element);
-      return edit.element;
-    },
-  };
+  showBefore(on: boolean, retain?: boolean): void;
 }
 
 export function createInlineTextTools(options: InlineTextToolsOptions): InlineTextTools {
@@ -153,6 +74,7 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
     if (!current) return;
     editor = null;
     current.finish(cancel);
+    history.resume(current.element);
     options.onChange();
   }
 
@@ -169,10 +91,12 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
       return;
     }
     starting = true;
+    history.pause(element);
     options.status.textContent = "Loading inline text editor…";
     options.onChange();
     try {
       const next = await startInlineTextEditor(element, {
+        accent: getComputedStyle(options.button).getPropertyValue("--accent").trim() || "#bda6ef",
         async loadReactBridge() {
           return await import("./react-props-panel.js") as ReactTextBridge;
         },
@@ -197,6 +121,7 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
       options.status.textContent = "Inline text editing is unavailable.";
     } finally {
       starting = false;
+      if (!editor) history.resume(element);
       options.onChange();
     }
   }
@@ -247,7 +172,7 @@ export function textEditBlocker(element: HTMLElement): string | null {
   if (element.matches("script,style,svg,canvas,video,audio,iframe")) return "Graphics, media, and frames can't be edited.";
   if (element.closest("[data-private],[data-sensitive]")) return "This text is marked private, so it stays read-only.";
   if (element.closest("[contenteditable]")) return "This text is already editable on the page.";
-  if (!textNodes(element).some((node) => node.data.trim() && !node.parentElement?.closest(lockedText)))
+  if (!snapshotText(element).some(([node]) => node.data.trim() && !node.parentElement?.closest(lockedText)))
     return "No text here. Double-click the text itself.";
   return null;
 }
@@ -284,7 +209,7 @@ function plainTextAtCaret(element: HTMLElement, text: string) {
   if (offset < 0) return;
   const current = element.textContent ?? "";
   const insertion = text.slice(0, Math.max(0, 500 - current.length));
-  element.textContent = current.slice(0, offset) + insertion + current.slice(offset);
+  setText(element, current.slice(0, offset) + insertion + current.slice(offset));
   placeCaret(element, offset + insertion.length);
 }
 
@@ -303,7 +228,11 @@ export async function startInlineTextEditor(
   const before = reactText?.before ?? (element.textContent ?? "").slice(0, 500);
   // With nested markup, edit text nodes in place and never let the structure change.
   const rich = !reactText && element.childElementCount > 0;
-  const nodes: TextSnapshot | undefined = rich ? textNodes(element).map((node) => [node, node.data]) : undefined;
+  const nodes = reactText ? undefined : snapshotText(element);
+  const editing = nodes?.map(([node, value]) => [node, value] as [Text, string]);
+  const capture = () => { for (const pair of editing ?? []) pair[1] = pair[0].data; };
+  const stopText = editing ? holdText(element, editing) : () => {};
+  const focusStyles = ["outline", "outline-offset", "box-shadow", "white-space"].map(property => inlineStyleSnapshot(element, property));
   const original = {
     role: element.getAttribute("role"),
     label: element.getAttribute("aria-label"),
@@ -329,12 +258,12 @@ export async function startInlineTextEditor(
     if (caret >= 0) placeCaret(element, caret);
   });
   const input = () => {
+    capture();
     if (rich) return;
-    if (element.childElementCount) element.textContent = element.textContent ?? "";
-    if ((element.textContent ?? "").length > 500) element.textContent = (element.textContent ?? "").slice(0, 500);
+    if ((element.textContent ?? "").length > 500) setText(element, (element.textContent ?? "").slice(0, 500));
     if (reactText && bridge) {
       caret = caretOffset(element);
-      if (!bridge.previewReactTextEdit(element, reactText.propName, element.textContent ?? "")) element.textContent = before;
+      if (!bridge.previewReactTextEdit(element, reactText.propName, element.textContent ?? "")) setText(element, before);
     }
   };
   /** Replace a range that sits inside one editable text node; anything that would cross markup is ignored. */
@@ -344,6 +273,7 @@ export async function startInlineTextEditor(
     const removed = range.endOffset - range.startOffset;
     const insertion = text.replace(/[\r\n]+/g, " ").slice(0, Math.max(0, 500 - (element.textContent ?? "").length + removed));
     node.replaceData(range.startOffset, removed, insertion);
+    capture();
     const caretRange = document.createRange();
     caretRange.setStart(node, range.startOffset + insertion.length);
     const selection = document.getSelection();
@@ -353,7 +283,7 @@ export async function startInlineTextEditor(
   const beforeInput = (event: InputEvent) => {
     caret = -1;
     // IME composition cannot be cancelled; it edits the focused text node itself.
-    if (!rich || event.inputType === "insertCompositionText") return;
+    if (reactText || event.inputType === "insertCompositionText") return;
     event.preventDefault();
     const range = event.getTargetRanges()[0] as StaticRange | undefined;
     const type = event.inputType;
@@ -384,11 +314,17 @@ export async function startInlineTextEditor(
   element.setAttribute("aria-multiline", "false");
   element.dataset.komoInlineEditing = "true";
   element.spellcheck = false;
+  element.style.setProperty("outline", `2px solid ${options.accent ?? "#bda6ef"}`, "important");
+  element.style.setProperty("outline-offset", "2px", "important");
+  element.style.setProperty("box-shadow", "none", "important");
+  element.style.setProperty("white-space", "pre-wrap", "important");
   element.focus({ preventScroll: true });
   const selection = document.getSelection();
   const range = document.createRange();
-  range.selectNodeContents(element);
-  range.collapse(false);
+  const last = snapshotText(element).reverse().find(([node]) => !node.parentElement?.closest(lockedText))?.[0];
+  if (last) range.setStart(last, last.length);
+  else range.selectNodeContents(element);
+  range.collapse(true);
   selection?.removeAllRanges();
   selection?.addRange(range);
 
@@ -399,7 +335,8 @@ export async function startInlineTextEditor(
       finished = true;
       listeners.abort();
       keepCaret.disconnect();
-      if (!rich && element.childElementCount) element.textContent = element.textContent ?? "";
+      stopText();
+      for (const style of focusStyles.reverse()) style.restore();
       const after = (element.textContent ?? "").slice(0, 500);
       restoreAttributes();
       if (cancel) {

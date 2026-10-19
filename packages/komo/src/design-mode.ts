@@ -1,5 +1,5 @@
 import { isDesignTarget, pickDesignTarget, type DesignTarget } from "./design-target.js";
-import { changePreviewStyles, removeEmptyStyle } from "./design-preview.js";
+import { changePreviewStyles, createStyleEdits, inlineStyleSnapshot, removeEmptyStyle, restoreStyle, type StyleEdit, type StyleOriginal } from "./design-preview.js";
 import { designModeStyles } from "./design-mode-styles.js";
 import { el, icon } from "./dom.js";
 import { drawHighlight } from "./highlight.js";
@@ -25,19 +25,11 @@ export interface DesignModeOptions {
   bounds?(element: Element): { left: number; top: number; right: number; bottom: number } | undefined;
 }
 
-type Edit = {
-  kind: "style";
-  element: DesignTarget;
-  property: string;
-  before: Original;
-  after: Original;
-};
-
 type TextEdit = { kind: "text"; element: DesignTarget };
 /** A token previewed through the app's adapter; its undo comes from `preview()`. */
 type TokenSwap = { kind?: undefined; element: DesignTarget; undo(): void };
 
-type Original = { value: string; priority: string; computed?: string };
+type Original = StyleOriginal;
 
 /** A plain `type="button"` button; `el` keeps the class and text optional. */
 const action = (className?: string, text?: string) => Object.assign(el("button", className, text), { type: "button" });
@@ -143,8 +135,6 @@ export function createDesignMode(options: DesignModeOptions) {
   const originals = new Map<DesignTarget, Map<string, Original>>();
   const styleless = new WeakSet<DesignTarget>();
   const changed = new Map<DesignTarget, Map<string, string>>();
-  const starts = new WeakMap<Control, Original>();
-  const pending = new WeakMap<Control, Edit>();
   const listeners = new AbortController();
   const exporter = () => import("./design-export.js");
   // Footer tooltips load with the export helpers on the bar's first hover or focus;
@@ -156,7 +146,8 @@ export function createDesignMode(options: DesignModeOptions) {
   bar.addEventListener("pointerover", loadTips);
   bar.addEventListener("focusin", loadTips);
   const collapsed = new Set<string>();
-  const history: Array<Edit | TextEdit | TokenSwap> = [];
+  const history: Array<StyleEdit | TextEdit | TokenSwap> = [];
+  const styleEdits = createStyleEdits(history);
 
   function remember(element: DesignTarget, property: string, value = element.style.getPropertyValue(property), priority = element.style.getPropertyPriority(property)) {
     let values = originals.get(element);
@@ -164,7 +155,7 @@ export function createDesignMode(options: DesignModeOptions) {
       originals.set(element, (values = new Map()));
       if (!element.hasAttribute("style")) styleless.add(element);
     }
-    if (!values.has(property)) values.set(property, { value, priority, computed: getComputedStyle(element).getPropertyValue(property).trim() });
+    if (!values.has(property)) values.set(property, reactPanelModule?.originalDesignTokenStyle(element, property) ?? { ...inlineStyleSnapshot(element, property), value, priority });
   }
   function track(element: DesignTarget, property: string) {
     let values = changed.get(element);
@@ -205,26 +196,27 @@ export function createDesignMode(options: DesignModeOptions) {
     if (on === showingBefore) return;
     if (on && textTools?.element) finishTextEdit();
     showingBefore = on;
+    if (on) reactPanelModule?.showDesignBefore(true);
     // Morph like design comments: animate exactly the changed properties, then hand them back.
     const smooth = animate && !calm();
-    for (const [element, values] of changed) {
-      changePreviewStyles(element, values.keys(), () => {
-        for (const [property, value] of values) {
+    for (const [element, properties] of originals) {
+      const values = changed.get(element);
+      changePreviewStyles(element, properties.keys(), () => {
+        for (const property of properties.keys()) {
           const original = originals.get(element)?.get(property);
           if (on) restore(element, property, original);
-          else element.style.setProperty(property, value, original?.priority);
+          else if (values?.has(property)) element.style.setProperty(property, values.get(property)!, original?.priority);
         }
       }, smooth, styleless.has(element));
     }
-    textTools?.showBefore(on);
-    reactPanelModule?.showDesignBefore(on);
+    textTools?.showBefore(on, animate);
+    if (!on) reactPanelModule?.showDesignBefore(false);
     sides.forEach((button, index) => button.setAttribute("aria-pressed", String(!index === on)));
     panel.toggleAttribute("data-before", on);
     updateActions();
   }
   function restore(element: DesignTarget, property: string, original?: Original) {
-    if (original?.value) element.style.setProperty(property, original.value, original.priority);
-    else element.style.removeProperty(property);
+    restoreStyle(element, property, original);
     if (styleless.has(element)) removeEmptyStyle(element);
   }
   function preview(control: Control, property: string, value: string | null) {
@@ -233,32 +225,15 @@ export function createDesignMode(options: DesignModeOptions) {
     if (value === null) return;
     remember(selected, property);
     // Record token provenance before the override hides the page's own reference.
-    reactPanelModule?.noteDesignTokenOverride(selected, property, value);
-    selected.style.setProperty(property, value, originals.get(selected)?.get(property)?.priority);
+    const binding = reactPanelModule?.noteDesignTokenOverride(selected, property, value);
+    styleEdits.override(control, binding?.undo);
+    selected.style.setProperty(property, value, binding?.priority ?? originals.get(selected)?.get(property)?.priority);
     track(selected, property);
     updateActions();
   }
   function commit(control: Control, property: string, final = true) {
     if (!selected) return;
-    const after = {
-      value: selected.style.getPropertyValue(property),
-      priority: selected.style.getPropertyPriority(property),
-    };
-    const edit = pending.get(control);
-    const before = edit?.before ?? starts.get(control) ?? { value: "", priority: "" };
-    if (after.value === before.value && after.priority === before.priority) {
-      if (edit) history.splice(history.indexOf(edit), 1);
-      pending.delete(control);
-    } else if (edit) edit.after = after;
-    else {
-      const next: Edit = { kind: "style", element: selected, property, before, after };
-      history.push(next);
-      pending.set(control, next);
-    }
-    if (final) {
-      starts.set(control, after);
-      pending.delete(control);
-    }
+    styleEdits.commit(control, selected, property, final);
     updateActions();
   }
   function renderControls() {
@@ -293,12 +268,14 @@ export function createDesignMode(options: DesignModeOptions) {
       changed: changed.get(element),
       collapsed,
       editText,
-      begin: (control, property) => starts.set(control, {
-        value: element.style.getPropertyValue(property),
-        priority: element.style.getPropertyPriority(property),
-      }),
+      begin: (control, property) => styleEdits.begin(control, inlineStyleSnapshot(element, property)),
       apply: preview,
       commit,
+      cancel(control, property) {
+        styleEdits.cancel(control, element, property);
+        track(element, property);
+        updateActions();
+      },
       rerender: renderControls,
     } satisfies PanelContext);
     // Any design-system adapter needs the token and props controls, not only registered elements.
@@ -313,7 +290,9 @@ export function createDesignMode(options: DesignModeOptions) {
         // Switching a theme re-renders the selection, so tokens, values and the outline follow it.
         module.attachThemeSwitcher(controls, options.design, () => select(element), styleRoot);
         const recordUndo = (undo?: () => void) => {
-          if (undo) history.push({ element, undo });
+          const sync = () => { for (const property of originals.get(element)?.keys() ?? []) track(element, property); };
+          if (undo) history.push({ element, undo: () => { undo(); sync(); } });
+          sync();
           updateActions();
         };
         const props = module.createReactPropsPanel(element, recordUndo, styleRoot, select, options.design, renderControls);
@@ -321,7 +300,7 @@ export function createDesignMode(options: DesignModeOptions) {
         module.attachStyleTokenControls(element, panelControls.fields, controls, (field, input, before) => {
           remember(element, field.property, before);
           track(element, field.property);
-          starts.set(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
+          styleEdits.begin(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
           commit(input, field.property);
         }, styleRoot, panelControls.valueFor, panelControls.toHex, options.design, recordUndo);
         const theme = module.createDesignThemePanel(element, panelControls, updateActions, styleRoot);
@@ -501,6 +480,7 @@ export function createDesignMode(options: DesignModeOptions) {
     const key = event.key.toLowerCase();
     const origin = event.composedPath()[0];
     const typing = origin instanceof HTMLElement && (origin.isContentEditable || origin.matches("input,textarea,select"));
+    if (typing && event.key === "Escape" && (origin as HTMLElement).closest("[data-field-property]")) return;
     if (active && selected && event.altKey && !event.ctrlKey && !event.metaKey && !typing && (key === "arrowup" || key === "arrowdown")) {
       const next = (key === "arrowup" ? selected.parentElement : [...selected.children].find(element => isDesignTarget(element) && !element.matches("script,style,defs,title,desc,metadata"))) ?? null;
       if (isDesignTarget(next) && next !== document.body && next !== document.documentElement && !options.host.contains(next)) {
@@ -604,6 +584,7 @@ export function createDesignMode(options: DesignModeOptions) {
   function resetAll() {
     cancelPreview();
     showBefore(false, false);
+    reactPanelModule?.resetPreviews();
     for (const [element, properties] of originals) {
       changePreviewStyles(element, properties.keys(), () => {
         for (const [property, original] of properties) restore(element, property, original);
@@ -614,7 +595,6 @@ export function createDesignMode(options: DesignModeOptions) {
     changed.clear();
     history.length = 0;
     textTools?.restoreAll();
-    reactPanelModule?.resetPreviews();
     previewTargets.clear();
     updateActions();
   }
@@ -643,6 +623,7 @@ export function createDesignMode(options: DesignModeOptions) {
       if (selected === (textTools?.undo() ?? edit.element)) renderControls();
     } else {
       restore(edit.element, edit.property, edit.before);
+      edit.before.bindingUndo?.();
       reactPanelModule?.syncDesignTokenBinding(edit.element, edit.property);
       track(edit.element, edit.property);
       if (selected === edit.element) renderControls();
@@ -659,6 +640,7 @@ export function createDesignMode(options: DesignModeOptions) {
     const hasTokenValues = reactPanelModule?.hasDesignTokenEdit(element) ?? false;
     if (!values?.size && !hasTextValue && !hasReactValues && !hasTokenValues) return;
     if (hasTextValue && element instanceof HTMLElement) textTools?.reset(element);
+    if (hasTokenValues) reactPanelModule?.resetDesignTokenEdits(element);
     changePreviewStyles(element, values?.keys() ?? [], () => {
       for (const property of values?.keys() ?? []) restore(element, property, originals.get(element)?.get(property));
     }, false, styleless.has(element));
@@ -667,7 +649,6 @@ export function createDesignMode(options: DesignModeOptions) {
     styleless.delete(element);
     previewTargets.delete(element);
     if (hasReactValues) reactPanelModule?.resetReactProps(element);
-    if (hasTokenValues) reactPanelModule?.resetDesignTokenEdits(element);
     for (let index = history.length - 1; index >= 0; index--)
       if (history[index].element === element) history.splice(index, 1);
   }

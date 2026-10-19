@@ -1,4 +1,6 @@
 import { previewStyle } from "./design-popup.js";
+import { inlineStyleSnapshot } from "./design-preview.js";
+import { isDesignTarget } from "./design-target.js";
 // Design mode's side of an app's TokenAdapter: cached token lists, per-element
 // token swaps with their undo, Before/After, and the proposal text. Loaded with
 // the token controls, never at startup.
@@ -19,11 +21,50 @@ interface Swap {
   from: TokenUsage;
   fromToken?: DesignToken;
   undo: () => void;
+  inline?: ReturnType<typeof inlineStyleSnapshot>;
+  customBefore: boolean;
 }
 
 const swaps = new Map<Element, Swap[]>();
+const customs = new Map<Element, Set<string>>();
+const usages = new WeakMap<Element, Map<string, TokenUsage | undefined>>();
+let suspendedCustoms = new Map<Element, Map<string, ReturnType<typeof inlineStyleSnapshot>>>();
 const lists = new WeakMap<TokenAdapter, Map<string, Promise<DesignToken[]>>>();
 let showingBefore = false;
+
+function removeCustom(element: Element, property: string) {
+  const properties = customs.get(element);
+  properties?.delete(property);
+  if (!properties?.size) customs.delete(element);
+}
+
+export function rememberTokenUsage(element: Element, property: string, usage: TokenUsage | undefined): TokenUsage | undefined {
+  let known = usages.get(element);
+  if (!known) usages.set(element, known = new Map());
+  if (!known.has(property) || (!swaps.has(element) && !customs.has(element))) known.set(property, usage);
+  return known.get(property);
+}
+
+export function effectiveTokenUsage(element: Element, property: string, fallback?: TokenUsage): TokenUsage | undefined {
+  if (customs.get(element)?.has(property)) return { offToken: getComputedStyle(element).getPropertyValue(property).trim() };
+  const token = swappedToken(element, property);
+  return token ? { path: token.path } : fallback;
+}
+
+export function customTokenOverride(element: Element, property: string): { priority: string; undo?: () => void } | undefined {
+  if (!usages.get(element)?.has(property)) return;
+  let properties = customs.get(element);
+  const previous = properties?.has(property) ?? false;
+  const usage = usages.get(element)?.get(property);
+  const wasToken = !!swappedToken(element, property) || !!usage && "path" in usage;
+  if (!properties) customs.set(element, properties = new Set());
+  properties.add(property);
+  return { priority: "important", ...(!previous && wasToken ? { undo: () => removeCustom(element, property) } : {}) };
+}
+
+export function originalTokenStyle(element: Element, property: string) {
+  return swaps.get(element)?.find(swap => swap.property === property)?.inline;
+}
 
 /** The theme state Design mode lists tokens for: each axis's current option. */
 export function themeState(design?: DesignSystem): ThemeState {
@@ -113,16 +154,26 @@ export function markOffToken(dot: HTMLElement, value: string, match?: DesignToke
 
 
 export function previewToken(adapter: TokenAdapter, element: Element, property: string, token: DesignToken): () => void {
+  const inline = isDesignTarget(element) ? inlineStyleSnapshot(element, property) : undefined;
   try {
-    if (adapter.preview) return adapter.preview(element, property, token) ?? (() => {});
+    if (isDesignTarget(element)) element.style.setProperty(property, "");
+    const undo = adapter.preview ? adapter.preview(element, property, token) : previewStyle(element, property, token.value);
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      undo?.();
+      inline?.restore();
+    };
   } catch {
-    return () => {};
+    inline?.restore();
+    throw new Error("This token could not be previewed.");
   }
-  return previewStyle(element, property, token.value);
 }
 
 /** The latest token komo previewed for a property, if any. */
 export function swappedToken(element: Element, property: string): DesignToken | undefined {
+  if (customs.get(element)?.has(property)) return;
   return [...swaps.get(element) ?? []].reverse().find((swap) => swap.property === property)?.token;
 }
 
@@ -141,20 +192,30 @@ export function swapToken(
   let stack = swaps.get(element);
   if (!stack) swaps.set(element, (stack = []));
   const first = stack.find((swap) => swap.property === property);
+  const inline = isDesignTarget(element) ? inlineStyleSnapshot(element, property) : undefined;
+  const customBefore = customs.get(element)?.has(property) ?? false;
+  const undo = previewToken(adapter, element, property, token);
+  removeCustom(element, property);
   stack.push({
     adapter,
     property,
     token,
     from: first?.from ?? from,
     fromToken: first ? first.fromToken : fromToken,
-    undo: previewToken(adapter, element, property, token),
+    undo, inline, customBefore,
   });
   return () => undoTokenSwap(element);
 }
 
 export function undoTokenSwap(element: Element): void {
   const stack = swaps.get(element);
-  stack?.pop()?.undo();
+  const swap = stack?.pop();
+  swap?.undo();
+  if (swap?.customBefore) {
+    let properties = customs.get(element);
+    if (!properties) customs.set(element, properties = new Set());
+    properties.add(swap.property);
+  } else if (swap) removeCustom(element, swap.property);
   if (stack && !stack.length) swaps.delete(element);
 }
 
@@ -162,27 +223,45 @@ export function hasTokenSwaps(element: Element): boolean {
   return !!swaps.get(element)?.length;
 }
 
+export function hasCustomTokenOverrides(element: Element): boolean {
+  return !!customs.get(element)?.size;
+}
+
 export function resetTokenSwaps(element: Element): void {
   while (swaps.has(element)) undoTokenSwap(element);
+  customs.delete(element);
 }
 
 /** Take back every swap, e.g. when Design mode closes. */
 export function resetAllTokenSwaps(): void {
   for (const element of [...swaps.keys()]) resetTokenSwaps(element);
+  customs.clear();
+  suspendedCustoms.clear();
 }
 
 /** Properties whose change the token section describes. */
 export function swappedProperties(element: Element): string[] {
-  return [...new Set(swaps.get(element)?.map((swap) => swap.property))];
+  return [...new Set(swaps.get(element)?.map((swap) => swap.property))].filter(property => !customs.get(element)?.has(property));
 }
 
 /** Before takes every swap back; After previews them again in order. */
 export function showTokenSwapsBefore(on: boolean): void {
   if (on === showingBefore) return;
   showingBefore = on;
+  if (on) {
+    suspendedCustoms = new Map([...customs].flatMap(([element, properties]) => isDesignTarget(element)
+      ? [[element, new Map([...properties].map(property => [property, inlineStyleSnapshot(element, property)]))] as const] : []));
+  }
   for (const [element, stack] of swaps) {
     if (on) for (const swap of [...stack].reverse()) swap.undo();
-    else for (const swap of stack) swap.undo = previewToken(swap.adapter, element, swap.property, swap.token);
+    else for (const swap of stack) {
+      swap.inline?.restore();
+      swap.undo = previewToken(swap.adapter, element, swap.property, swap.token);
+    }
+  }
+  if (!on) {
+    for (const properties of suspendedCustoms.values()) for (const snapshot of properties.values()) snapshot.restore();
+    suspendedCustoms.clear();
   }
 }
 
@@ -190,7 +269,7 @@ export function showTokenSwapsBefore(on: boolean): void {
 function netSwaps(element: Element): Swap[] {
   const latest = new Map<string, Swap>();
   for (const swap of swaps.get(element) ?? []) latest.set(swap.property, swap);
-  return [...latest.values()].filter((swap) => !("path" in swap.from) || swap.from.path !== swap.token.path);
+  return [...latest.values()].filter((swap) => !customs.get(element)?.has(swap.property) && (!("path" in swap.from) || swap.from.path !== swap.token.path));
 }
 
 function applyText(element: Element, swap: Swap): string | undefined {

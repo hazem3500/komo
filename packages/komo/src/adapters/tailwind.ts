@@ -7,6 +7,8 @@
 // its design-system foundations); komo never parses CSS or the Tailwind config.
 // This module is a separate entry point and never enters the core bundle.
 import type { DesignToken, DesignTokenType, ThemeAxis, ThemeState, TokenAdapter, TokenUsage } from "../design-system.js";
+import { inlineStyleSnapshot } from "../design-preview.js";
+import { isDesignTarget } from "../design-target.js";
 
 /** One utility class (or a set of equivalent classes) that sets design tokens. */
 export interface TailwindToken {
@@ -28,7 +30,7 @@ export interface TailwindToken {
   value?: string;
   /**
    * Values per theme. Keys are option ids ("dark"), "axis=option" pairs ("mode=dark"),
-   * or combinations joined with "+" ("track+dark"). The most specific key that
+   * or combinations joined with "+" ("docs+dark"). The most specific key that
    * fully matches the theme state wins; otherwise `value` is used.
    */
   values?: Record<string, string>;
@@ -74,6 +76,7 @@ interface Entry {
 interface PreviewState {
   original: string | null;
   stack: { property: string; entry: Entry }[];
+  inline: Map<string, ReturnType<typeof inlineStyleSnapshot>>;
 }
 
 const classesOf = (value: string | string[]) => (Array.isArray(value) ? value : [value]).flatMap((item) => item.split(/\s+/)).filter(Boolean);
@@ -186,6 +189,15 @@ export function tailwindTokens(table: TailwindTable, options: TailwindTokensOpti
     resolve(element) {
       const result: Record<string, TokenUsage> = {};
       const won = winners(readClass(element));
+      if (isDesignTarget(element)) {
+        for (const [property, match] of won) {
+          const inline = element.style.getPropertyValue(property);
+          const importantClass = match.name.startsWith("!") || match.name.endsWith("!");
+          if (inline && (!importantClass || element.style.getPropertyPriority(property) === "important")) won.delete(property);
+        }
+        for (const [property, match] of won)
+          if (longhands[property]?.some(longhand => won.get(longhand)?.entry !== match.entry)) won.delete(property);
+      }
       for (const [property, match] of won) result[property] = { path: match.entry.token.path };
       let style: CSSStyleDeclaration | undefined;
       for (const property of offToken) {
@@ -199,8 +211,12 @@ export function tailwindTokens(table: TailwindTable, options: TailwindTokensOpti
     preview(element, property, token) {
       const entry = byPath.get(token.path);
       if (!entry) return () => {};
-      const state = previews.get(element) ?? { original: readClass(element), stack: [] };
+      const state: PreviewState = previews.get(element) ?? { original: readClass(element), stack: [], inline: new Map() };
       previews.set(element, state);
+      if (isDesignTarget(element)) {
+        if (!state.inline.has(property)) state.inline.set(property, inlineStyleSnapshot(element, property));
+        element.style.setProperty(property, "");
+      }
       const item = { property, entry };
       state.stack.push(item);
       render(element, state);
@@ -209,6 +225,10 @@ export function tailwindTokens(table: TailwindTable, options: TailwindTokensOpti
         if (index < 0) return;
         state.stack.splice(index, 1);
         render(element, state);
+        if (!state.stack.some(item => item.property === property)) {
+          state.inline.get(property)?.restore();
+          state.inline.delete(property);
+        }
       };
     },
     describe(element, property, from, to) {

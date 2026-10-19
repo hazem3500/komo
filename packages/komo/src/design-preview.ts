@@ -1,5 +1,100 @@
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
 
+export type StyleOriginal = { value: string; priority: string; computed?: string; restore?(): void; bindingUndo?(): void };
+export type StyleEdit = { kind: "style"; element: DesignTarget; property: string; before: StyleOriginal; after: StyleOriginal };
+
+export function createStyleEdits(history: Array<StyleEdit | { element: DesignTarget; kind?: string }>) {
+  const starts = new WeakMap<Element, StyleOriginal>();
+  const pending = new WeakMap<Element, StyleEdit>();
+  return {
+    begin(control: Element, value: StyleOriginal) { starts.set(control, value); },
+    override(control: Element, undo?: () => void) {
+      const before = starts.get(control);
+      if (undo && before && !before.bindingUndo && !pending.has(control)) before.bindingUndo = undo;
+    },
+    commit(control: Element, element: DesignTarget, property: string, final: boolean) {
+      const after = { value: element.style.getPropertyValue(property), priority: element.style.getPropertyPriority(property) };
+      const edit = pending.get(control);
+      const before = edit?.before ?? starts.get(control) ?? { value: "", priority: "" };
+      if (after.value === before.value && after.priority === before.priority && !before.bindingUndo) {
+        if (edit) history.splice(history.indexOf(edit), 1);
+        pending.delete(control);
+      } else if (edit) edit.after = after;
+      else {
+        const next: StyleEdit = { kind: "style", element, property, before, after };
+        history.push(next);
+        pending.set(control, next);
+      }
+      if (final) { starts.set(control, after); pending.delete(control); }
+    },
+    cancel(control: Element, element: DesignTarget, property: string) {
+      const edit = pending.get(control);
+      if (edit) {
+        restoreStyle(element, property, edit.before);
+        edit.before.bindingUndo?.();
+        history.splice(history.indexOf(edit), 1);
+      }
+      pending.delete(control);
+      starts.delete(control);
+    },
+  };
+}
+
+export function restoreStyle(element: DesignTarget, property: string, original?: StyleOriginal) {
+  if (original?.restore) original.restore();
+  else element.style.setProperty(property, original?.value ?? "", original?.priority);
+}
+
+export function toHex(value: string): string {
+  if (/^#[\da-f]{6}$/i.test(value)) return value;
+  if (/^#[\da-f]{3}$/i.test(value)) return `#${[...value.slice(1)].map((char) => char + char).join("")}`;
+  const match = value.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (!match) return "#000000";
+  return `#${match.slice(1, 4).map((part) => Number(part).toString(16).padStart(2, "0")).join("")}`;
+}
+
+export function validStyleValue(property: string, value: string): string | null {
+  if (!value) return null;
+  let quote = "", depth = 0, escaped = false;
+  for (const character of value) {
+    if (escaped) escaped = false;
+    else if (character === "\\") escaped = true;
+    else if (quote) { if (character === quote) quote = ""; }
+    else if (character === '"' || character === "'") quote = character;
+    else if (character === "(") depth++;
+    else if (character === ")" && --depth < 0) return null;
+  }
+  if (quote || depth || escaped) return null;
+  const style = document.createElement("span").style;
+  style.setProperty(property, value);
+  return style.getPropertyValue(property) ? value : null;
+}
+
+/** Restore one declaration, retaining unrelated edits and the original shorthand when possible. */
+export function inlineStyleSnapshot(element: DesignTarget, property: string) {
+  const attribute = element.getAttribute("style");
+  const css = element.style.cssText;
+  const value = element.style.getPropertyValue(property);
+  const priority = element.style.getPropertyPriority(property);
+  const computed = getComputedStyle(element).getPropertyValue(property).trim();
+  const without = (text: string) => {
+    const style = element.ownerDocument.createElement("span").style;
+    style.cssText = text;
+    style.setProperty(property, "");
+    return style.cssText;
+  };
+  const others = without(css);
+  return { value, priority, computed, restore() {
+    if (without(element.style.cssText) === others) {
+      if (attribute === null) element.removeAttribute("style");
+      else element.setAttribute("style", attribute);
+    } else {
+      element.style.setProperty(property, value, priority);
+      if (attribute === null && !element.style.length) removeEmptyStyle(element);
+    }
+  } };
+}
+
 export function removeEmptyStyle(element: DesignTarget) {
   if (element.style.length) return;
   // Flush SVG's pending style serialization before removing the attribute.
@@ -32,6 +127,7 @@ export function changePreviewStyles(element: DesignTarget, properties: Iterable<
   }
   const value = element.style.getPropertyValue("transition");
   const priority = element.style.getPropertyPriority("transition");
+  const absent = !element.hasAttribute("style");
   const transition = animate ? [...properties].map(property => `${property} .3s cubic-bezier(.22,1,.36,1)`).join() : "none";
   element.style.setProperty("transition", transition, "important");
   const applied = element.style.getPropertyValue("transition");
@@ -40,7 +136,7 @@ export function changePreviewStyles(element: DesignTarget, properties: Iterable<
     if (element.style.getPropertyValue("transition") !== applied || element.style.getPropertyPriority("transition") !== "important") return;
     if (value) element.style.setProperty("transition", value, priority);
     else element.style.removeProperty("transition");
-    if (removeEmpty) removeEmptyStyle(element);
+    if (removeEmpty || absent) removeEmptyStyle(element);
   };
   apply();
   if (animate) transitions.set(element, { restore, timer: window.setTimeout(restore, 320) });

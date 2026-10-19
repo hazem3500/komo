@@ -360,7 +360,7 @@ describe("design mode preview inspector", () => {
     expect(label.textContent).toBe("Selected text");
     edit.click();
     await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
-    label.textContent = "Reset me";
+    label.firstChild!.textContent = "Reset me";
     label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
     label.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:nth-child(2)")!.click();
@@ -368,7 +368,7 @@ describe("design mode preview inspector", () => {
 
     edit.click();
     await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
-    label.textContent = "Comment proposal";
+    label.firstChild!.textContent = "Comment proposal";
     label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
     label.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!.click();
@@ -381,7 +381,7 @@ describe("design mode preview inspector", () => {
     pointer("pointerdown", label);
     shadow.querySelector<HTMLButtonElement>("[aria-label='Edit selected text inline']")!.click();
     await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
-    label.textContent = "Edited";
+    label.firstChild!.textContent = "Edited";
     label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
     label.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
     const color = shadow.querySelector<HTMLInputElement>('[data-property="color"]')!;
@@ -512,7 +512,7 @@ describe("design mode preview inspector", () => {
     pointer("pointerdown", label);
     shadow.querySelector<HTMLButtonElement>("[aria-label='Edit selected text inline']")!.click();
     await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
-    label.textContent = "Not saved";
+    label.firstChild!.textContent = "Not saved";
     label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
     label.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
     expect(label.textContent).toBe("Selected text");
