@@ -4666,6 +4666,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           const save = button("Continue", () => {}, "primary");
           save.type = "submit";
           save.disabled = pending;
+          if (pending) save.setAttribute("aria-busy", "true");
           content.append(save);
         }
         if (guests && (google || github))

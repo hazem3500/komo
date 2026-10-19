@@ -1286,6 +1286,10 @@ ${morphingMenuStyles}
 .account-layer .account button { border-radius: 12px; }
 .account-layer .account .primary { background: #bda6ef; color: #211b2d; font-weight: 600; }
 .account-layer .account .primary:disabled { opacity: .4; cursor: default; }
+.account-layer .account .primary[aria-busy="true"] { opacity: .7; cursor: progress; }
+.account .primary[aria-busy="true"]::after { content: ""; width: 12px; height: 12px; box-sizing: border-box; border: 1.5px solid; border-right-color: transparent; border-radius: 50%; animation: busy-spin .7s linear infinite; }
+@keyframes busy-spin { to { rotate: 1turn; } }
+@media (prefers-reduced-motion: reduce) { .account .primary[aria-busy="true"]::after { animation-duration: 2s; } }
  .account-dialog .dialog-head { top: 16px; right: 14px; }
 .account-layer .account .account-avatar-button { padding: 0; border-radius: 50%; background: transparent; position: relative; transition: filter 150ms ease, transform 150ms ease; }
 .account-avatar-button:hover { filter: brightness(.88); transform: scale(1.025); }

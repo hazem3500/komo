@@ -21,6 +21,7 @@ const themeTokens: KomoDesignToken[] = [
   { path: "color.brand", cssVariable: "--color-brand", type: "color", properties: ["color", "background-color", "border-color"], impactSelector: '.promo-card[data-tone="bold"]' },
   { path: "spacing.card", cssVariable: "--space-card", type: "dimension", properties: ["padding", "gap"], impactSelector: ".promo-card" },
   { path: "typography.body", cssVariable: "--font-body", type: "fontFamily", properties: ["font-family"], impactSelector: "body, .promo-card" },
+  { path: "typography.title", cssVariable: "--font-weight-title", type: "fontWeight", properties: ["font-weight"], impactSelector: ".promo-card h2" },
   { path: "radius.card", cssVariable: "--radius-card", type: "dimension", properties: ["border-radius"], impactSelector: ".promo-card" },
 ];
 
