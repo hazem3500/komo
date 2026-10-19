@@ -431,7 +431,8 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `branch` | `string` | Inferred by `komo sync` | Required only for branch scope. |
 | `enabled` | `boolean` | `true` | Set from your build environment to restrict review UI. |
 | `pageRoot` | `HTMLElement` | Sole existing content root, when present | Mounted element inside body to scale in Frame mode. Body and html are not supported. |
-| `pickRoots()` | `() => Element[]` | All of body except komo | Extra roots, besides `pageRoot`, that can be picked for comments and Design mode. By default body-level portals such as dialogs and popovers are pickable; return `[]` to limit picking to `pageRoot`, or return your portal container to allow only it. In Frame, portals keep their own size and position. |
+| `pickRoots()` | `() => Element[]` | All of body except komo | Extra roots, besides `pageRoot`, that can be picked for comments and Design mode. By default body-level portals such as dialogs and popovers are pickable; return `[]` to limit picking to `pageRoot`, or return your portal container to allow only it. |
+| `frame.include(element)` | `(element: HTMLElement) => boolean` | Fixed body children without an inline transform | Frame scales body-level portals, such as dialogs, overlays and toasts, with the page. Popovers positioned by script with an inline transform already follow their framed anchor and are left alone. Return `true` or `false` to choose per body child; komo's own host is never framed. |
 | `isolateEvents` | `boolean` | `true` | Keep komo's events out of the host page. See [Host events](#host-events). |
 | `source(element)` | `(element: Element) => string \| undefined` | Anchor metadata | Return a repository-relative source path. |
 | `sourceUrl(source, branch)` | `(source: string, branch: string) => string` | GitHub viewer | Custom source or editor link. |

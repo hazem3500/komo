@@ -1,4 +1,5 @@
-import { createElement, useState } from "react";
+import { createElement, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { useKomo, useKomoDesignTokens, useKomoInspectable, type InspectableComponent, type InspectableScalar, type KomoDesignToken } from "../../../src/react.js";
 import type { DesignToken, ThemeAxis, TokenAdapter, TokenUsage } from "../../../src/types.js";
@@ -131,6 +132,28 @@ const themes: ThemeAxis[] | undefined = query.has("theme") ? [{
   apply(id) { document.documentElement.dataset.mode = id; },
 }] : undefined;
 
+// ?portal opens a modal portalled to body, as most dialog libraries do,
+// and mounts a toast a second later; Frame view should scale both with the page.
+function BodyPortals() {
+  const [open, setOpen] = useState(true);
+  const [toast, setToast] = useState(false);
+  useEffect(() => void setTimeout(() => setToast(true), 1000), []);
+  return (
+    <>
+      {open && createPortal(<div className="portal-overlay" onClick={() => setOpen(false)} />, document.body)}
+      {open && createPortal(
+        <div className="portal-dialog" role="dialog" aria-label="Portal dialog">
+          <h2>Body-level dialog</h2>
+          <p>Rendered into body, outside the page root.</p>
+          <button type="button" onClick={() => setOpen(false)}>Close</button>
+        </div>,
+        document.body,
+      )}
+      {toast && createPortal(<div className="portal-toast" role="status">Toast mounted later</div>, document.body)}
+    </>
+  );
+}
+
 // Not registered with useKomoInspectable: Design mode finds it, read-only, only through the fiber adapter.
 function TeamBadge({ team, seats, active, tags, owner, icon, authToken, onOpen }: {
   team: string; seats: number; active: boolean; tags: string[]; owner: { name: string; role: string };
@@ -168,6 +191,8 @@ function Demo() {
     repo: "tjcages/komo",
     branch: "main",
     ...(sidebar ? { sidebar } : {}),
+    // Portals make body children ambiguous, so name the page root, as portal-heavy apps do.
+    ...(query.has("portal") ? { pageRoot: document.getElementById("root")! } : {}),
     ...(classAdapter || cssAdapter || themes || fiberAdapter ? { design: { ...(classAdapter ? { tokens: classTokens } : cssAdapter ? { tokens: cssAdapter } : {}), ...(themes ? { themes } : {}), ...(fiberAdapter ? { components: fiberAdapter } : {}) } } : {}),
   });
   useKomoDesignTokens({ tokens: themeTokens, enabled: true });
@@ -225,6 +250,7 @@ function Demo() {
           shared edits are temporary and source files are never rewritten.
         </aside>
       </div>
+      {query.has("portal") && <BodyPortals />}
       <div className="preview-banner">Fixture only · local test database · no production comments or notifications</div>
     </main>
   );

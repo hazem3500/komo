@@ -622,33 +622,53 @@ export function initComments(options: CommentsOptions): CommentsController {
       for (const record of records) host.removeAttribute(record.attributeName!);
   });
   hostGuard.observe(host, { attributeFilter: ["aria-hidden", "inert"] });
-  const savedStyle = {
-    width: surface.style.width,
-    boxSizing: surface.style.boxSizing,
-    zoom: surface.style.zoom,
-    transformOrigin: surface.style.transformOrigin,
-    transform: surface.style.transform,
-    position: surface.style.position,
-    left: surface.style.left,
-    top: surface.style.top,
-    height: surface.style.height,
-    minHeight: surface.style.minHeight,
-    paddingBottom: surface.style.paddingBottom,
-    overflow: surface.style.overflow,
-    borderRadius: surface.style.borderRadius,
-    background: surface.style.background,
-  };
-  const savedBody = {
-    overflow: document.body.style.overflow,
-    background: document.body.style.background,
-  };
-  const savedHtmlOverflow = document.documentElement.style.overflow;
+  const html = document.documentElement;
+  function rememberStyles<K extends keyof CSSStyleDeclaration>(element: HTMLElement, keys: K[]): Pick<CSSStyleDeclaration, K> {
+    return Object.fromEntries(keys.map((key) => [key, element.style[key]])) as Pick<CSSStyleDeclaration, K>;
+  }
+  const savedStyle = rememberStyles(surface, [
+    "width", "boxSizing", "zoom", "transformOrigin", "transform", "position", "left", "top",
+    "height", "minHeight", "paddingBottom", "overflow", "borderRadius", "background",
+  ]);
+  const savedBody = rememberStyles(document.body, ["overflow", "background"]);
+  const savedHtmlOverflow = html.style.overflow;
   const fixedHeaders = new Map<
     HTMLElement,
     { position: string; marginBottom: string }
   >();
-  const savedHtmlBackground = document.documentElement.style.background;
-  const html = document.documentElement;
+  const savedHtmlBackground = html.style.background;
+  // Frame view maps body-level portals (dialogs, overlays, toasts) like the page:
+  // viewport point p lands at frame offset + p * scale. Individual translate and
+  // scale compose with the portal's own transform, about its own origin.
+  const portals = new Map<HTMLElement, Pick<CSSStyleDeclaration, "translate" | "scale">>();
+  function framePortals() {
+    for (const [node, styles] of portals) Object.assign(node.style, styles);
+    const keep = new Set<HTMLElement>();
+    if (framed && !destroyed) {
+      const s = appliedScale;
+      for (const node of document.body.children) {
+        if (!(node instanceof HTMLElement) || node === host || node.contains(surface)) continue;
+        const css = getComputedStyle(node);
+        if (!(options.frame?.include?.(node) ?? (!node.style.transform && css.position === "fixed"))) continue;
+        keep.add(node);
+        if (!portals.has(node)) {
+          portals.set(node, rememberStyles(node, ["translate", "scale"]));
+          observer.observe(node);
+        }
+        const origin = css.transformOrigin.split(" ").map(parseFloat);
+        const translate = css.translate === "none" ? [] : css.translate.match(/calc\(.*?\)|[^\s(]+/g) ?? [];
+        node.style.translate = [surface.style.left, surface.style.top].map((offset, axis) =>
+          `calc(${parseFloat(offset) - (1 - s) * ([node.offsetLeft, node.offsetTop][axis] + origin[axis])}px + ${s} * ${translate[axis] ?? "0px"})`
+        ).join(" ");
+        node.style.scale = css.scale.replace(/\S+/g, (value) => String(value === "none" ? s : +value * s));
+      }
+    }
+    for (const node of portals.keys())
+      if (!keep.has(node)) {
+        portals.delete(node);
+        observer.unobserve(node);
+      }
+  }
   // The frame paints the page's own background; re-read it when a theme changes.
   // Frame's dark backdrop sits inline on body and html, so lift it while reading.
   function readPageBackground() {
@@ -720,7 +740,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       p,
       toolbar.offsetWidth,
       toolbar.offsetHeight,
-      document.documentElement.clientWidth,
+      html.clientWidth,
       window.innerHeight,
     );
     toolbar.style.left = `${toolbarPlacement.x + toolbar.offsetWidth / 2}px`;
@@ -746,7 +766,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       p,
       sidebar.offsetWidth,
       sidebar.offsetHeight,
-      document.documentElement.clientWidth,
+      html.clientWidth,
       window.innerHeight,
     );
     positionSidebar();
@@ -772,7 +792,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
   }
   function clampSidebarSize() {
-    const vw = document.documentElement.clientWidth;
+    const vw = html.clientWidth;
     const vh = window.innerHeight;
     sidebarWidth = Math.min(
       Math.max(sidebarWidth, EDGE_SIDEBAR_MIN_WIDTH),
@@ -799,12 +819,12 @@ export function initComments(options: CommentsOptions): CommentsController {
       sidebarPlacement,
       sidebarWidth,
       height,
-      document.documentElement.clientWidth,
+      html.clientWidth,
       window.innerHeight,
     );
     const offsets = edgeSidebarOffsets(
       geometry,
-      document.documentElement.clientWidth,
+      html.clientWidth,
     );
     sidebar.style.left = `${geometry.x}px`;
     sidebar.style.top = `${geometry.y}px`;
@@ -1090,7 +1110,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             start,
             e.clientX - startX,
             e.clientY - startY,
-            document.documentElement.clientWidth,
+            html.clientWidth,
             window.innerHeight,
           );
           sidebarWidth = next.width;
@@ -1186,7 +1206,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   if (options.drawerContainer) toolbarSize.observe(options.drawerContainer);
 
   const htmlZoom = () =>
-    (document.documentElement as HTMLElement & { currentCSSZoom?: number })
+    (html as HTMLElement & { currentCSSZoom?: number })
       .currentCSSZoom ?? 1;
   function page() {
     return canonicalPage(options.page?.() ?? location.pathname);
@@ -1642,6 +1662,15 @@ export function initComments(options: CommentsOptions): CommentsController {
     host.style.setProperty("--mobile-pill-scale-x", String(Math.max(0.01, pill.width / Math.max(1, window.innerWidth - 24))));
     host.style.setProperty("--mobile-pill-scale-y", String(Math.max(0.01, pill.height / panelHeight)));
   }
+  function restorePage() {
+    for (const [header, styles] of fixedHeaders)
+      Object.assign(header.style, styles);
+    fixedHeaders.clear();
+    html.style.overflow = savedHtmlOverflow;
+    Object.assign(surface.style, savedStyle);
+    Object.assign(document.body.style, savedBody);
+    html.style.background = savedHtmlBackground;
+  }
   function scalePage() {
     const zoom = htmlZoom();
     const viewportHeight = isCompactReview(
@@ -1657,26 +1686,20 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (appliedViewport === viewportKey) return;
     if (!compactSidebar) stopLayoutMotion();
     appliedViewport = viewportKey;
+    host.style.zoom = String(1 / zoom);
+    host.style.width = `${window.innerWidth}px`;
+    pins.style.opacity = "";
     if (edgeSidebar || compactSidebar) {
       // The edge sidebar floats over the live page: never frame or zoom it.
       pageMotion?.stop();
       pageTransitioning = false;
-      pins.style.opacity = "";
       const scroll = framed ? surface.scrollTop * zoom : null;
       if (framed) {
-        for (const [header, styles] of fixedHeaders)
-          Object.assign(header.style, styles);
-        fixedHeaders.clear();
-        Object.assign(surface.style, savedStyle);
+        restorePage();
         appliedScale = 1;
-        document.documentElement.style.overflow = savedHtmlOverflow;
-        Object.assign(document.body.style, savedBody);
-        document.documentElement.style.background = savedHtmlBackground;
       }
       if (scroll !== null)
         window.scrollTo({ top: scroll, behavior: "instant" });
-      host.style.zoom = String(1 / zoom);
-      host.style.width = `${window.innerWidth}px`;
       // Preserve the fixed bottom inset when Safari's top chrome resizes.
       host.style.height = compactSidebar ? `${window.innerHeight}px` : "";
       host.style.top = compactSidebar ? "" : "0px";
@@ -1688,6 +1711,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       }
       host.classList.toggle("review-open", expanded);
       framed = false;
+      framePortals();
       pins.style.clipPath = "";
       Object.assign(catcher.style, {
         left: "",
@@ -1702,11 +1726,10 @@ export function initComments(options: CommentsOptions): CommentsController {
       : window.scrollY / (zoom * appliedScale);
     const wasFramed = framed;
     const before = framed
-      ? pageFrameBounds()
+      ? surface.getBoundingClientRect()
       : { left: 0, top: 0, width: window.innerWidth };
     pageMotion?.stop();
     pageTransitioning = false;
-    pins.style.opacity = "";
     const layout = reviewLayout(
       window.innerWidth,
       viewportHeight,
@@ -1719,8 +1742,6 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
     const useFrame = layout.framed;
     host.style.setProperty("--review-viewport-height", `${viewportHeight}px`);
-    host.style.zoom = String(1 / zoom);
-    host.style.width = `${window.innerWidth}px`;
     host.style.height = `${viewportHeight}px`;
     host.style.top = "";
     host.classList.toggle("review-open", expanded);
@@ -1750,31 +1771,22 @@ export function initComments(options: CommentsOptions): CommentsController {
           !fixedHeaders.has(header) &&
           getComputedStyle(header).position === "fixed"
         ) {
-          fixedHeaders.set(header, {
-            position: header.style.position,
-            marginBottom: header.style.marginBottom,
-          });
+          fixedHeaders.set(header, rememberStyles(header, ["position", "marginBottom"]));
           header.style.position = "sticky";
           header.style.marginBottom = `-${header.offsetHeight}px`;
         }
       }
-      document.documentElement.style.overflow = "hidden";
+      html.style.overflow = "hidden";
       document.body.style.overflow = "hidden";
-      document.body.style.background = "#080808";
-      document.documentElement.style.background = "#080808";
+      html.style.background = document.body.style.background = "#080808";
       surface.scrollTop = scroll;
     } else {
-      for (const [header, styles] of fixedHeaders)
-        Object.assign(header.style, styles);
-      fixedHeaders.clear();
-      document.documentElement.style.overflow = savedHtmlOverflow;
-      Object.assign(surface.style, savedStyle);
-      Object.assign(document.body.style, savedBody);
-      document.documentElement.style.background = savedHtmlBackground;
+      restorePage();
       if (framed) window.scrollTo({ top: scroll * zoom, behavior: "instant" });
       appliedScale = 1;
     }
     framed = useFrame;
+    framePortals();
     if (!useFrame && options.drawerContainer?.isConnected) {
       const rect = options.drawerContainer.getBoundingClientRect();
       drawerContainerCenter = rect.width
@@ -1789,14 +1801,13 @@ export function initComments(options: CommentsOptions): CommentsController {
       !reducedMotion()
     ) {
       const after = useFrame
-        ? pageFrameBounds()
+        ? surface.getBoundingClientRect()
         : { left: 0, top: 0, width: window.innerWidth };
       // Translate in page pixels before the frame's own scale.
       const start = `translate(${(before.left - after.left) / zoom}px, ${(before.top - after.top) / zoom}px) scale(${(appliedScale * before.width) / after.width})`;
       surface.style.transformOrigin = useFrame ? "top left" : `0 ${scroll}px`;
       if (!useFrame) {
-        document.body.style.background = "#080808";
-        document.documentElement.style.background = "#080808";
+        html.style.background = document.body.style.background = "#080808";
         surface.style.background = pageBackground;
         // Short pages still need to cover the viewport while the frame expands.
         const minHeight = getComputedStyle(surface).minHeight;
@@ -1821,7 +1832,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           surface.style.background = savedStyle.background;
           surface.style.minHeight = savedStyle.minHeight;
           document.body.style.background = savedBody.background;
-          document.documentElement.style.background = savedHtmlBackground;
+          html.style.background = savedHtmlBackground;
         }
         pins.style.opacity = "";
         geometry();
@@ -1842,20 +1853,11 @@ export function initComments(options: CommentsOptions): CommentsController {
         : { left: "", top: "", width: "", height: "" },
     );
   }
-  function pageFrameBounds() {
-    return surface.getBoundingClientRect();
-  }
+  let dockedToolbarStyles: Pick<CSSStyleDeclaration, "left" | "top" | "bottom" | "transform"> | undefined;
   function dockEdgeTabs() {
-    if (toolbar.dataset.edgeTabs !== "true") {
-      toolbar.dataset.savedLeft = toolbar.style.left;
-      toolbar.dataset.savedTop = toolbar.style.top;
-      toolbar.dataset.savedBottom = toolbar.style.bottom;
-      toolbar.dataset.savedTransform = toolbar.style.transform;
-    }
-    toolbar.style.left = "";
-    toolbar.style.top = "";
-    toolbar.style.bottom = "";
-    toolbar.style.transform = "";
+    if (toolbar.dataset.edgeTabs !== "true")
+      dockedToolbarStyles = rememberStyles(toolbar, ["left", "top", "bottom", "transform"]);
+    Object.assign(toolbar.style, { left: "", top: "", bottom: "", transform: "" });
     if (toolbar.parentElement !== sidebar) sidebar.append(toolbar);
     toolbar.dataset.edgeTabs = "true";
     if (expanded) toolbar.dataset.edgeOrient = "horizontal";
@@ -1863,14 +1865,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   function undockEdgeTabs() {
     if (toolbar.dataset.edgeTabs === "true") {
-      toolbar.style.left = toolbar.dataset.savedLeft ?? "";
-      toolbar.style.top = toolbar.dataset.savedTop ?? "";
-      toolbar.style.bottom = toolbar.dataset.savedBottom ?? "";
-      toolbar.style.transform = toolbar.dataset.savedTransform ?? "";
-      delete toolbar.dataset.savedLeft;
-      delete toolbar.dataset.savedTop;
-      delete toolbar.dataset.savedBottom;
-      delete toolbar.dataset.savedTransform;
+      Object.assign(toolbar.style, dockedToolbarStyles);
+      dockedToolbarStyles = undefined;
     }
     delete toolbar.dataset.edgeTabs;
     delete toolbar.dataset.edgeOrient;
@@ -1913,11 +1909,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     return motion;
   }
   function clearEdgeRows() {
-    for (const row of edgeRows()) {
-      row.style.opacity = "";
-      row.style.transform = "";
-      row.style.filter = "";
-    }
+    for (const row of edgeRows())
+      Object.assign(row.style, { opacity: "", transform: "", filter: "" });
     grip.style.opacity = "";
   }
   function pinEdgeBox(
@@ -1925,25 +1918,24 @@ export function initComments(options: CommentsOptions): CommentsController {
     radius: string,
   ) {
     for (const animation of sidebar.getAnimations()) animation.cancel();
-    sidebar.style.transition = "none";
-    sidebar.style.transform = "none";
-    sidebar.style.translate = "none";
-    sidebar.style.opacity = "1";
-    sidebar.style.left = `${box.left}px`;
-    sidebar.style.top = `${box.top}px`;
-    sidebar.style.width = `${box.width}px`;
-    sidebar.style.height = `${box.height}px`;
-    sidebar.style.borderRadius = radius;
+    Object.assign(sidebar.style, {
+      transition: "none", transform: "none", translate: "none", opacity: "1",
+      left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px`,
+      borderRadius: radius,
+    });
   }
   function releaseEdgeBox() {
-    sidebar.style.width = "";
-    sidebar.style.height = "";
-    sidebar.style.borderRadius = "";
-    sidebar.style.transform = "";
-    sidebar.style.opacity = "";
+    Object.assign(sidebar.style, { width: "", height: "", borderRadius: "", transform: "", opacity: "" });
     if (edgeSidebar) positionSidebar();
     void sidebar.offsetWidth;
     sidebar.style.transition = "";
+  }
+  function clearEdgeSurface(menu = drawerMenu()) {
+    delete sidebar.dataset.morphing;
+    delete toolbar.dataset.edgeSurface;
+    delete toolbar.dataset.edgeMorph;
+    delete toolbar.dataset.hidden;
+    if (menu) menu.style.transition = "";
   }
   function stopEdgeMotion(release = false) {
     edgeMorphGeneration += 1;
@@ -1953,12 +1945,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     edgeMorphing = false;
     if (release) sidebar.toggleAttribute("data-tips-ready", expanded);
     if (!release || !wasMorphing) return;
-    delete sidebar.dataset.morphing;
-    delete toolbar.dataset.edgeSurface;
-    delete toolbar.dataset.edgeMorph;
-    const menu = drawerMenu();
-    if (menu) menu.style.transition = "";
-    delete toolbar.dataset.hidden;
+    clearEdgeSurface();
     undockEdgeTabs();
     clearEdgeRows();
     releaseEdgeBox();
@@ -1996,11 +1983,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (settled || generation !== edgeMorphGeneration || destroyed) return;
       settled = true;
       edgeMorphing = false;
-      delete sidebar.dataset.morphing;
-      delete toolbar.dataset.edgeSurface;
-      delete toolbar.dataset.edgeMorph;
-      delete toolbar.dataset.hidden;
-      if (menu) menu.style.transition = "";
+      clearEdgeSurface(menu);
       if (!opening) {
         clearEdgeRows();
         sidebar.style.opacity = "0";
@@ -5036,7 +5019,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         placement,
         dialog.offsetWidth,
         dialog.offsetHeight,
-        document.documentElement.clientWidth,
+        html.clientWidth,
         availableHeight,
       );
       cardFollow.place(dialogKey, dialog, p.x, p.y, follow);
@@ -5143,7 +5126,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             flip() {
               if (!edgeSidebar || !expanded || designDragged || edgeMorphing) return;
               const from = sidebar.getBoundingClientRect();
-              placeSidebar({ x: document.documentElement.clientWidth - from.right, y: from.top });
+              placeSidebar({ x: html.clientWidth - from.right, y: from.top });
               designMoved = true;
               sidebar.animate(
                 [{ transform: `translateX(${from.left - sidebar.getBoundingClientRect().left}px)` }, {}],
@@ -5743,10 +5726,11 @@ export function initComments(options: CommentsOptions): CommentsController {
     },
     { signal: abort.signal },
   );
-  const observer = new ResizeObserver(geometry);
+  const observer = new ResizeObserver(() => { framePortals(); geometry(); });
   observer.observe(surface);
   let mutationTimer = 0;
-  const mutations = new MutationObserver(() => {
+  const mutations = new MutationObserver((records) => {
+    if (records.some((record) => record.target === document.body)) framePortals();
     // Background host churn needs one refresh per burst, not per animation frame.
     if (draft || selected || mode || activeNotice) return geometry();
     if (!mutationTimer)
@@ -5961,6 +5945,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           subtree: true,
           characterData: true,
         });
+        framePortals();
         geometry();
       }
       if (document.hidden || !syncSession()) polling?.wake();
@@ -6012,14 +5997,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       const scroll = framed
         ? surface.scrollTop * htmlZoom()
         : window.scrollY / appliedScale;
-      for (const [header, styles] of fixedHeaders)
-        Object.assign(header.style, styles);
-      fixedHeaders.clear();
+      framePortals();
       if (framed || !edgeSidebar) {
-        document.documentElement.style.overflow = savedHtmlOverflow;
-        Object.assign(surface.style, savedStyle);
-        Object.assign(document.body.style, savedBody);
-        document.documentElement.style.background = savedHtmlBackground;
+        restorePage();
         window.scrollTo({ top: scroll, behavior: "instant" });
       }
       toolbarSize.disconnect();

@@ -27,7 +27,7 @@ function sameConfig(a: KomoConfig, b: KomoConfig): boolean {
     keyof KomoConfig
   >;
   return [...keys].every((key) => {
-    if (key === "shortcuts" || key === "features") {
+    if (key === "shortcuts" || key === "features" || key === "frame") {
       const before = (a[key] ?? {}) as Record<string, unknown>;
       const after = (b[key] ?? {}) as Record<string, unknown>;
       return Object.keys({ ...before, ...after }).every((field) =>
