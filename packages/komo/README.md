@@ -326,6 +326,10 @@ Suggested agent workflow: list open threads, read a thread, inspect the reposito
 
 Mount once after hydration, outside server rendering, and call `destroy()` before changing project or branch. Repeated teardown is safe. komo preserves the host DOM hierarchy: it frames an existing content root, or uses Floating when there is no suitable root. Pass a mounted `pageRoot` with a layout box for explicit Frame support; body, html, detached elements, and `display: contents` are not frameable.
 
+Frame keeps the page unscaled by default and gives its root the available width beside the comments. Native pointer and touch coordinates retain their normal CSS-pixel relationship to the page, including grids and drag controls that subtract `getBoundingClientRect()` from `clientX`/`clientY`. Content can reflow; fixed-width or `100vw` content can scroll within the frame. Viewport units still refer to the browser window. Body-level dialogs and popovers remain bounded to the frame without moving their DOM.
+
+`frame: { scale: true }` explicitly opts into shrinking the original viewport instead. A CSS transform changes visual rectangles without changing local layout dimensions, so arbitrary coordinate-sensitive host handlers may select the wrong value under scaling. This option requires host controls that already account for transforms; komo does not rewrite native events or browser prototypes. Use the default unscaled Frame or Floating for interactive pages that do not support scaling.
+
 ## Bots and CI
 
 Give a bot its own revocable credential instead of sharing your login.
@@ -445,9 +449,10 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `scope` | `"project" \| "branch"` | `"project"` | `"project"` shares comments; `"branch"` separates branches. |
 | `branch` | `string` | Inferred by `komo sync` | Required only for branch scope. |
 | `enabled` | `boolean` | `true` | Set from your build environment to restrict review UI. |
-| `pageRoot` | `HTMLElement` | Sole existing content root, when present | Mounted element inside body to scale in Frame mode. Body and html are not supported. |
+| `pageRoot` | `HTMLElement` | Sole existing content root, when present | Mounted element inside body to frame. Body and html are not supported. |
 | `pickRoots()` | `() => Element[]` | All of body except komo | Extra roots, besides `pageRoot`, that can be picked for comments and Design mode. By default body-level portals such as dialogs and popovers are pickable; return `[]` to limit picking to `pageRoot`, or return your portal container to allow only it. |
-| `frame.include(element)` | `(element: HTMLElement) => boolean` | Fixed portals, including fixed descendants of static wrappers | Frame scales dialogs, overlays and toasts with the page. Script-positioned popovers keep their viewport placement while their content scales. Host transforms, animations and focus are preserved without moving portal DOM. Return `true` to map a whole body child through Frame or `false` to exclude its subtree; komo's own host is never framed. |
+| `frame.scale` | `boolean` | `false` | Reflow at the available width without scaling. Set `true` only for hosts whose interactive controls account for transformed coordinates; keeps the original viewport layout and scales its contents. |
+| `frame.include(element)` | `(element: HTMLElement) => boolean` | Fixed portals, including fixed descendants of static wrappers | Keep body-level dialogs, overlays and toasts inside Frame. Host transforms, animations and focus are preserved without moving portal DOM. Return `true` to map a whole body child through Frame or `false` to exclude its subtree; komo's own host is never framed. |
 | `isolateEvents` | `boolean` | `true` | Keep komo's events out of the host page. See [Host events](#host-events). |
 | `source(element)` | `(element: Element) => string \| undefined` | Anchor metadata | Return a repository-relative source path. |
 | `anchorTarget(element)` | `(element: Element) => Element \| undefined` | Declared owners and stable semantic cards | Optional persistent ancestor for comment capture. Offsets stay relative to this owner when hover-only children disappear. Owners cannot cross a dialog/popover boundary. Design inspection continues to target the exact element. |
@@ -459,7 +464,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `showToolbar` | `boolean` | `true` | Set `false` to keep the toolbar, drawer, and comment pins hidden until `controller.open()` or the restore shortcut. |
 | `shortcuts` | `{ comment?, browse?, design?, comments?, restore? }` | `C`, `V`, `D`, `L`, `Shift+K` | A key with optional `Ctrl`, `Alt`, `Shift`, or `Meta`, such as `"M"` or `"Shift+J"`. Set `false` to disable one. Escape and Tab are reserved. Tooltips and tips show the configured keys. |
 | `features` | `{ designMode?, tags? }` | All `true` | Set a feature to `false` to remove it from the review UI, e.g. `{ designMode: false, tags: false }`. Existing tags stay stored and remain available to the CLI. |
-| `sidebar` | `"background" \| "edge"` | `"edge"` | `"edge"` (Floating) is a draggable sidebar that parks off and peeks from the viewport edge while closed. `"background"` (Frame) frames the site and shows the sidebar in the scaled review sheet. Account → Sidebar switches the two; that choice is remembered per project. |
+| `sidebar` | `"background" \| "edge"` | `"edge"` | `"edge"` (Floating) is a draggable sidebar that parks off and peeks from the viewport edge while closed. `"background"` (Frame) reflows the unscaled page beside the review sidebar. Account → Sidebar switches the two; that choice is remembered per project. |
 | `restoreOpen` | `"session" \| "always" \| false` | `"session"` | Reopen the sidebar if it was left open: after a reload in the same tab, across tabs and visits, or never. |
 | `emojiDataSource` | `string` | jsDelivr emoji data 1.8.0 | Full emoji JSON URL; fetched only after “Choose another emoji”. |
 | `pollInterval` | `number` | `4000` | Refresh interval in milliseconds, minimum 2000. |

@@ -59,6 +59,15 @@ describe("review viewport layout", () => {
     expect(layout.right).toBe(404);
     expect(layout.dockCenter).toBe(1090);
   });
+  it("reflows an unscaled Frame without changing native CSS-pixel dimensions", () => {
+    const layout = reviewLayout(1280, 800, true, 800, false, true, false);
+    expect(layout.scale).toBe(1);
+    expect(layout.left).toBe(24);
+    expect(layout.top).toBe(24);
+    expect(layout.visibleWidth).toBe(852);
+    expect(layout.height).toBe(752);
+    expect(layout.left + layout.visibleWidth).toBe(876);
+  });
 });
 
 describe("mobile composer", () => {

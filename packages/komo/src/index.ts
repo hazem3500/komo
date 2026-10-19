@@ -10,7 +10,7 @@ import { adaptivePolling } from "./polling.js";
 import { pinDirection } from "./pin-direction.js";
 import { pinStacks } from "./pin-stacks.js";
 import { drawHighlight } from "./highlight.js";
-import { createFramePortals } from "./frame-portals.js";
+import { createFramePortals, preserveFrameStyles } from "./frame-portals.js";
 import { OptimisticQueue } from "./optimistic.js";
 import { agentPrompt } from "./agent-prompt.js";
 import { accentPicker } from "./lazy-accent-picker.js";
@@ -633,12 +633,12 @@ export function initComments(options: CommentsOptions): CommentsController {
     "width", "boxSizing", "zoom", "transformOrigin", "transform", "position", "left", "top",
     "height", "minHeight", "paddingBottom", "overflow", "borderRadius", "background",
   ]);
+  const surfaceProperties = Object.keys(savedStyle).map((key) => key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`));
+  const restoreSurface = preserveFrameStyles(surface, surfaceProperties);
   const savedBody = rememberStyles(document.body, ["overflow", "background"]);
-  const savedHtmlOverflow = html.style.overflow;
-  const fixedHeaders = new Map<
-    HTMLElement,
-    { position: string; marginBottom: string }
-  >();
+  const restoreBody = preserveFrameStyles(document.body, ["overflow", "background"]);
+  const restoreHtml = preserveFrameStyles(html, ["overflow", "background"]);
+  const fixedHeaders = new Map<HTMLElement, () => void>();
   const savedHtmlBackground = html.style.background;
   const portalFrame = createFramePortals(surface, host, options.frame?.include, geometry);
   function framePortals() {
@@ -911,6 +911,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     nodes().forEach((node, index) => {
       const from = before[index];
       if (!node?.isConnected || !from?.width) return;
+      if (node === surface && options.frame?.scale !== true) return;
       if (node !== surface)
         node.getAnimations().forEach((motion) => motion.cancel());
       const to = node.getBoundingClientRect();
@@ -1651,13 +1652,11 @@ export function initComments(options: CommentsOptions): CommentsController {
     host.style.setProperty("--mobile-pill-scale-y", String(Math.max(0.01, pill.height / panelHeight)));
   }
   function restorePage() {
-    for (const [header, styles] of fixedHeaders)
-      Object.assign(header.style, styles);
+    for (const restore of fixedHeaders.values()) restore();
     fixedHeaders.clear();
-    html.style.overflow = savedHtmlOverflow;
-    Object.assign(surface.style, savedStyle);
-    Object.assign(document.body.style, savedBody);
-    html.style.background = savedHtmlBackground;
+    restoreSurface();
+    restoreBody();
+    restoreHtml();
   }
   function scalePage() {
     const zoom = htmlZoom();
@@ -1727,6 +1726,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       // Always fit the whole page beside the sidebar; app shells sized to the
       // viewport otherwise lose their left edge (navigation) off-screen.
       true,
+      options.frame?.scale === true,
     );
     const useFrame = layout.framed;
     host.style.setProperty("--review-viewport-height", `${viewportHeight}px`);
@@ -1737,20 +1737,20 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (useFrame) {
       appliedScale = layout.scale;
       const effective = appliedScale * zoom;
-      // Scale with a transform, not zoom: the page lays out at the real
-      // viewport width, so roots sized with 100vw/100vh fit the frame.
+      // Native client coordinates stay in viewport CSS pixels. Reflow by
+      // default so host handlers can use local CSS dimensions without scaling.
       Object.assign(surface.style, {
         position: "fixed",
-        transform: `scale(${appliedScale})`,
+        transform: options.frame?.scale ? `scale(${appliedScale})` : savedStyle.transform,
         transformOrigin: "top left",
         left: `${layout.left / zoom}px`,
         top: `${layout.top / zoom}px`,
-        width: `${window.innerWidth / zoom}px`,
+        width: `${(options.frame?.scale ? window.innerWidth : layout.visibleWidth) / zoom}px`,
         boxSizing: "border-box",
         height: `${layout.height / effective}px`,
         paddingBottom: savedStyle.paddingBottom,
         zoom: savedStyle.zoom,
-        overflow: "hidden auto",
+        overflow: options.frame?.scale ? "hidden auto" : "auto",
         borderRadius: `${12 / effective}px`,
         background: pageBackground,
       });
@@ -1759,7 +1759,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           !fixedHeaders.has(header) &&
           getComputedStyle(header).position === "fixed"
         ) {
-          fixedHeaders.set(header, rememberStyles(header, ["position", "marginBottom"]));
+          fixedHeaders.set(header, preserveFrameStyles(header, ["position", "margin-bottom"]));
           header.style.position = "sticky";
           header.style.marginBottom = `-${header.offsetHeight}px`;
         }
@@ -1783,6 +1783,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     if (
       useFrame !== wasFramed &&
+      options.frame?.scale === true &&
       !keyboardAction &&
       !switchingSidebar &&
       !restoring &&
