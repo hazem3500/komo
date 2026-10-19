@@ -1,5 +1,7 @@
 // Loaded on demand: renders Design mode proposals as a change card with a
 // Before/After preview. The comment body stays plain text for agents and the CLI.
+import { isDesignTarget } from "./design-target.js";
+import { removeEmptyStyle } from "./design-preview.js";
 
 export interface DesignChange {
   label: string;
@@ -147,9 +149,10 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
         const previous = root.style.getPropertyValue(item.apply.property);
         root.style.setProperty(item.apply.property, item.after);
         restore.push(() => previous ? root.style.setProperty(item.apply!.property, previous) : root.style.removeProperty(item.apply!.property));
-      } else if (element instanceof HTMLElement && item.apply.kind === "style") {
+      } else if (isDesignTarget(element) && item.apply.kind === "style") {
         const previous = element.style.getPropertyValue(item.apply.property);
         const priority = element.style.getPropertyPriority(item.apply.property);
+        const absent = !element.hasAttribute("style");
         const property = item.apply.property;
         const pin = () => {
           if (item.before === "(unset)") return false;
@@ -160,7 +163,11 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
         if (smooth && pin()) void getComputedStyle(element).getPropertyValue(property);
         element.style.setProperty(property, item.after, "important");
         pinBefore.push(pin);
-        restoreStyles.push(() => previous ? element.style.setProperty(item.apply!.property, previous, priority) : element.style.removeProperty(item.apply!.property));
+        restoreStyles.push(() => {
+          if (previous) element.style.setProperty(item.apply!.property, previous, priority);
+          else element.style.removeProperty(item.apply!.property);
+          if (absent) removeEmptyStyle(element);
+        });
       } else if (element instanceof HTMLElement && item.apply.kind === "text" && !element.childElementCount) {
         // Text nodes are edited in place so frameworks keep their references.
         const node = element.firstChild;

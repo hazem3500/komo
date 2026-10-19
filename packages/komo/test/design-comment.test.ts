@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   isDesignComment,
   parseDesignComment,
   renderDesignComment,
+  renderDraftProposal,
   resetDesignPreviews,
   shortTarget,
   summarizeDesignComment,
@@ -34,9 +35,37 @@ afterEach(() => {
   resetDesignPreviews();
   document.body.replaceChildren();
   document.documentElement.removeAttribute("style");
+  vi.unstubAllGlobals();
 });
 
 describe("design comments", () => {
+  it.each(["svg", "path"])("previews and restores %s styles in drafts and posted cards", (kind) => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    document.body.innerHTML = '<svg id="icon"><path id="shape" d="M0 0h10v10z"/></svg><svg id="other"/>';
+    const target = document.querySelector<SVGElement>(kind === "svg" ? "#icon" : "#shape")!;
+    target.scrollIntoView = () => {};
+    target.style.setProperty("fill", "currentColor", "important");
+    const original = target.getAttribute("style");
+    const body = `Proposed style changes (preview only)\nTarget: #${target.id}\n- color: rgb(87, 84, 86) → #2468ff\n- fill: currentColor → #ef3340`;
+    const card = document.body.appendChild(document.createElement("div"));
+    renderDraftProposal(card, body, selector => document.querySelector(selector!));
+    expect(target.style.color).toBe("rgb(36, 104, 255)");
+    expect(target.style.fill).toBe("rgb(239, 51, 64)");
+    const [before, after] = card.querySelectorAll<HTMLButtonElement>(".design-toggle button");
+    before.click();
+    expect(target.getAttribute("style")).toBe(original);
+    after.click();
+    expect(target.style.color).toBe("rgb(36, 104, 255)");
+    resetDesignPreviews();
+    expect(target.getAttribute("style")).toBe(original);
+    expect(document.getElementById("other")!.getAttribute("style")).toBeNull();
+    renderDesignComment(card, body, { key: "posted-svg", resolve: selector => document.querySelector(selector!), note: () => {} });
+    card.querySelectorAll<HTMLButtonElement>(".design-toggle button")[1].click();
+    expect(target.style.color).toBe("rgb(36, 104, 255)");
+    resetDesignPreviews();
+    expect(target.getAttribute("style")).toBe(original);
+  });
+
   it("recognises proposals and keeps notes the reviewer wrote around them", () => {
     expect(isDesignComment("Just a comment")).toBe(false);
     expect(isDesignComment(`Tighter please\n\n${style}`)).toBe(true);
