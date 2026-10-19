@@ -293,6 +293,8 @@ describe("IAP sign-in", () => {
       type: "branch-comments:auth",
       user: { id: "google:1234567890", name: "reviewer", verified: true },
     });
+    // IAP carries no picture; hosts supply one with the client `avatar` option.
+    expect(message.user.avatarUrl).toBeUndefined();
 
     const created = await request("threads", "POST", {
       token: message.token,

@@ -472,10 +472,24 @@ async function oauthCallback(
     "Invalid identity."
   );
   const id = `${provider}:${provider === "google" ? profile.sub : profile.id}`;
-  const avatarUrl = profile.picture || profile.avatar_url || "";
-  const safeAvatar = /^https:\/\//.test(avatarUrl) ? avatarUrl : "";
+  // The provider photo (Google's OIDC `picture`) becomes the avatar: plain
+  // HTTPS only, otherwise the initial. Existing users without one (NULL) get it
+  // on their next sign-in; a photo they set or cleared in komo is kept.
+  let safeAvatar: string | null = null;
+  try {
+    const photo = new URL(profile.picture || profile.avatar_url || "");
+    if (
+      photo.protocol === "https:" &&
+      !photo.username &&
+      !photo.password &&
+      photo.href.length <= 2048
+    )
+      safeAvatar = photo.href;
+  } catch {
+    /* Missing or malformed: keep the initial. */
+  }
   await env.DB.prepare(
-    "INSERT INTO users(id,name,verified,avatar_url) VALUES(?,?,1,?) ON CONFLICT(id) DO NOTHING"
+    "INSERT INTO users(id,name,verified,avatar_url) VALUES(?,?,1,?) ON CONFLICT(id) DO UPDATE SET avatar_url=excluded.avatar_url WHERE users.avatar_url IS NULL AND excluded.avatar_url IS NOT NULL"
   )
     .bind(id, (profile.name || profile.login).slice(0, 60), safeAvatar)
     .run();

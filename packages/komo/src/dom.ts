@@ -1,5 +1,5 @@
 import { applyAccent } from "./accent.js";
-import type { Identity } from "./types.js";
+import type { CommentsOptions, Identity } from "./types.js";
 import { iconMarkup as icons } from "./icon-markup.js";
 export { icons };
 /** Read on each use: the preference can change while the page is open. */
@@ -86,18 +86,34 @@ export function age(time: number) {
   return `${Math.floor(minutes / 1440)}d`;
 }
 
+type AvatarResolver = CommentsOptions["avatar"];
+let resolveAvatar: AvatarResolver;
+export const setAvatarResolver = (resolver: AvatarResolver) => {
+  resolveAvatar = resolver;
+};
+/** A safe photo URL: the server's, else the host's resolver for signed-in users. */
+export function avatarSrc(user: Identity) {
+  let url = user.avatarUrl;
+  if (url?.startsWith("data:image/jpeg;base64,")) return url;
+  try {
+    url ||= user.verified ? resolveAvatar?.({ id: user.id, name: user.name }) : "";
+    return new URL(url!).protocol == "https:" ? url : undefined;
+  } catch {
+    /* Missing, malformed or a throwing resolver: keep the initial. */
+  }
+}
 export function avatar(user: Identity) {
   const node = el("span", "avatar", initials(user.name));
   applyAccent(node, user.accentColor);
-  if (
-    user.avatarUrl &&
-    /^(https:\/\/|data:image\/jpeg;base64,)/.test(user.avatarUrl)
-  ) {
+  const src = avatarSrc(user);
+  if (src) {
     const image = el("img");
-    image.src = user.avatarUrl;
     image.alt = "";
     image.referrerPolicy = "no-referrer";
+    image.loading = "lazy";
+    image.decoding = "async";
     image.addEventListener("error", () => image.remove(), { once: true });
+    image.src = src;
     node.append(image);
   }
   return node;

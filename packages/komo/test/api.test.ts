@@ -83,12 +83,19 @@ beforeAll(async () => {
     globalThis.fetch = async (input, init) => {
       const url = String(input);
       if (url === "https://oauth2.googleapis.com/token") {
-        return new URLSearchParams(init?.body).get("code") === "fixture-setup-success"
+        const code = new URLSearchParams(init?.body).get("code");
+        // "fixture-profile:<json>" codes carry the userinfo profile to return.
+        if (code?.startsWith("fixture-profile:")) return Response.json({access_token:code});
+        return code === "fixture-setup-success"
           ? Response.json({access_token:"fixture-google-access"})
           : Response.json({error:"invalid_grant"}, {status:400});
       }
-      if (url === "https://openidconnect.googleapis.com/v1/userinfo")
+      if (url === "https://openidconnect.googleapis.com/v1/userinfo") {
+        const bearer = String(init?.headers?.Authorization ?? "");
+        if (bearer.startsWith("Bearer fixture-profile:"))
+          return Response.json(JSON.parse(bearer.slice("Bearer fixture-profile:".length)));
         return Response.json({sub:"in-project-fixture",name:"Setup Owner",email_verified:true,email:"setup@example.test"});
+      }
       return originalFetch(input, init);
     };
     export default api;
@@ -99,6 +106,7 @@ beforeAll(async () => {
     test: { repo: "owner/site", origins: [origin] },
     cli: { repo: "owner/site", origins: [origin] },
     other: { repo: "owner/site", origins: [origin] },
+    photos: { repo: "owner/site", origins: [origin] },
     demo: { repo: "owner/site", origins: [origin], retainedCommentsPerUser: 3 },
     owned: {
       repo: "owner/site",
@@ -155,7 +163,8 @@ beforeAll(async () => {
   await writeFile(
     seed,
     `
-    INSERT INTO users(id,name,verified) VALUES('google:fixture','Owner',1),('guest:fixture','Guest',0);
+    INSERT INTO users(id,name,verified) VALUES('google:fixture','Owner',1),('guest:fixture','Guest',0),('google:photo-legacy','Legacy',1);
+    INSERT INTO users(id,name,verified,avatar_url) VALUES('google:photo-custom','Custom',1,'https://photos.example/custom.jpg'),('google:photo-cleared','Cleared',1,'');
     WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<65)
     INSERT INTO threads(id,project,repo,branch,page,anchor,created_at,updated_at)
     SELECT printf('import:%03d',i),'test','owner/site','pagination','/','${JSON.stringify(anchor)}',100,100 FROM n;
@@ -697,6 +706,78 @@ describe("shared comments against real workerd and SQLite", () => {
         })
       ).status
     ).toBe(400);
+  });
+
+  it("stores the Google picture as the avatar and returns it on /me and comment authors", async () => {
+    // Its own project keeps these sign-ins out of other tests' rate limits and listings.
+    const call = (path: string, method = "GET", data?: unknown, token?: string) =>
+      request(path, method, data, token, "feature/a", "owner/site", "photos");
+    const signIn = async (profile: Record<string, unknown>) => {
+      const { url } = await (await call("/auth/google/start", "POST", {})).json();
+      const authorize = await fetch(url, { redirect: "manual" });
+      const state = new URL(authorize.headers.get("Location")!).searchParams.get(
+        "state"
+      )!;
+      const code = `fixture-profile:${JSON.stringify(profile)}`;
+      const page = await fetch(
+        `http://localhost:${port}/auth/google/callback?state=${encodeURIComponent(state)}&code=${encodeURIComponent(code)}`,
+        { headers: { Cookie: `__Host-comments-oauth=${state}` } }
+      );
+      expect(page.status).toBe(200);
+      return JSON.parse(
+        (await page.text()).match(
+          /postMessage\((.+),"http:\/\/localhost:4321"\)/
+        )![1]
+      ) as { token: string; user: { id: string; avatarUrl?: string } };
+    };
+    const picture = "https://lh3.googleusercontent.com/a/fixture=s96-c";
+    const fresh = await signIn({ sub: "photo-new", name: "Photo Person", picture });
+    expect(fresh.user).toMatchObject({ id: "google:photo-new", avatarUrl: picture });
+    expect(
+      (await (await call("me", "GET", undefined, fresh.token)).json()).user
+        .avatarUrl
+    ).toBe(picture);
+    const created = await (
+      await call("threads", "POST", { page: "/photo", anchor, body: "With a photo" }, fresh.token)
+    ).json();
+    const list = await (
+      await call("threads", "GET", undefined, fresh.token)
+    ).json();
+    expect(
+      list.threads.find((thread: Thread) => thread.id === created.id)
+        .comments[0].author.avatarUrl
+    ).toBe(picture);
+
+    // Only HTTPS pictures are kept; a missing one keeps the initial.
+    for (const [sub, bad] of [
+      ["photo-http", "http://lh3.googleusercontent.com/a/x"],
+      ["photo-js", "javascript:alert(1)"],
+      ["photo-creds", "https://user:pw@photos.example/x.jpg"],
+      ["photo-none", undefined],
+    ])
+      expect(
+        (await signIn({ sub, name: "No Photo", picture: bad })).user.avatarUrl
+      ).toBeUndefined();
+
+    // Existing users without a photo get it on their next sign-in; a photo
+    // they chose, or cleared, is kept.
+    expect(
+      (await signIn({ sub: "photo-legacy", name: "Legacy", picture })).user
+        .avatarUrl
+    ).toBe(picture);
+    expect(
+      (await signIn({ sub: "photo-custom", name: "Custom", picture })).user
+        .avatarUrl
+    ).toBe("https://photos.example/custom.jpg");
+    expect(
+      (await signIn({ sub: "photo-cleared", name: "Cleared", picture })).user
+        .avatarUrl
+    ).toBeUndefined();
+
+    const guest = await (
+      await call("auth/guest", "POST", { name: "Photo guest" })
+    ).json();
+    expect(guest.user.avatarUrl).toBeUndefined();
   });
   it("supports two independent users, replies, reactions, resolution, and author-only editing", async () => {
     expect(

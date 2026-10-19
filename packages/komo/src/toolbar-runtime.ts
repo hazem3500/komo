@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createElement } from "react";
 import { MorphingMenu } from "./MorphingMenu.js";
 import type { ToolbarProps, ToolbarIcon } from "./lazy-toolbar.js";
-import { icons, initials } from "./dom.js";
+import { avatarSrc, icons, initials } from "./dom.js";
 
 function glyph(value: ToolbarIcon): ReturnType<typeof createElement> {
   if ("glyph" in value)
@@ -11,18 +11,24 @@ function glyph(value: ToolbarIcon): ReturnType<typeof createElement> {
       style: { display: "contents" },
       dangerouslySetInnerHTML: { __html: icons[value.glyph] },
     });
+  const { user } = value;
+  const src = user && avatarSrc(user);
+  // The photo covers the initial; a failed load hides it so the initial shows.
   return createElement(
     "span",
     { className: "review-avatar" },
-    value.user?.avatarUrl
-      ? createElement("img", {
-          src: value.user.avatarUrl,
-          alt: "",
-          referrerPolicy: "no-referrer",
-        })
-      : value.user
-        ? initials(value.user.name)
-        : glyph({ glyph: "person" }),
+    user ? initials(user.name) : glyph({ glyph: "person" }),
+    src &&
+      createElement("img", {
+        key: src,
+        src,
+        alt: "",
+        referrerPolicy: "no-referrer",
+        decoding: "async",
+        onError: (event: { currentTarget: HTMLImageElement }) => {
+          event.currentTarget.hidden = true;
+        },
+      }),
   );
 }
 const view = (props: ToolbarProps) =>

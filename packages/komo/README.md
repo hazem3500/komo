@@ -448,6 +448,9 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `pollInterval` | `number` | `4000` | Refresh interval in milliseconds, minimum 2000. |
 | `sessionDomain` | `string` | Host-only | Explicit trusted parent domain; all sibling hosts can receive the session. Empty string disables sharing. |
 | `sessionEndpoint` | `string` | `endpoint` | Canonical API identity for trusted gateways to the same service; never share across independent APIs. |
+| `avatar` | `(user: { id, name }) => string \| undefined` | None | Photo URL for signed-in reviewers the server has none for, such as IAP sign-in. HTTPS only; guests keep their initial. |
+
+Google sign-in uses the account photo (`picture`) automatically, loaded from `lh3.googleusercontent.com`. Under a restrictive CSP, allow that host (or your `avatar` host) in `img-src`; blocked or failed photos fall back to the initial.
 
 For a restricted CSP or offline deployment, host `emoji-picker-element-data@1.8.0/en/emojibase/data.json` on your site and pass `emojiDataSource: "/emoji/data.json"`. Allow that URL in `connect-src`; cache it with your service worker for first-use offline access. Quick reactions need no emoji data download. The full picker caches its data in IndexedDB after the first successful load.
 

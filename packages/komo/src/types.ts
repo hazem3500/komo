@@ -169,6 +169,12 @@ export interface CommentsOptions {
   sessionDomain?: string;
   /** Canonical API identity for trusted gateways to the same service. Defaults to endpoint. */
   sessionEndpoint?: string;
+  /**
+   * Photo URL for a signed-in reviewer the server has none for, e.g. IAP
+   * sign-in, which carries only an email (id "google:<sub>", name = the email's
+   * local part). HTTPS only; return undefined for the initial. Not used for guests.
+   */
+  avatar?: (user: Pick<Identity, "id" | "name">) => string | undefined;
 }
 
 export interface CommentsController {
