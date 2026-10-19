@@ -1,24 +1,11 @@
-interface Env {
-  GOOGLE_CLIENT_SECRET: string;
-  KOMO_WEBHOOK_KEYS?: string;
-  KOMO_WEBHOOK_SEND?: (
-    url: string,
-    body: string,
-    headers: Record<string, string>
-  ) => Promise<void>;
-  /** Optional server secret mixed into access token hashes. Changing it revokes every token. */
-  KOMO_TOKEN_PEPPER?: string;
-  KOMO_HOSTED?: string;
-  KOMO_PAUSED?: string;
-  /** Enables Google Cloud IAP sign-in: the IAP backend service audience. */
-  KOMO_IAP_AUDIENCE?: string;
-  /** Path prefix for IAP sign-in handlers, e.g. "/backoffice". */
-  KOMO_AUTH_PREFIX?: string;
-  /** Path the app is served under behind a proxy that strips it, e.g. "/komo". */
-  KOMO_PUBLIC_PATH?: string;
-  EDGE_LIMIT?: RateLimit;
-  KOMO_VERSION?: { id: string };
-}
+type ServerBindings = import("./public-env.js").ServerEnv;
+
+// Wrangler supplies these deployment-specific bindings.
+interface Env
+  extends Omit<
+    ServerBindings,
+    "DB" | "PROJECTS" | "GOOGLE_CLIENT_ID" | "GITHUB_CLIENT_ID" | "GITHUB_CLIENT_SECRET"
+  > {}
 
 declare module "*.txt" {
   const content: string;

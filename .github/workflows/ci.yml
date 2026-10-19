@@ -38,3 +38,4 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm size
+      - run: pnpm --filter @hazem3500/komo test:package

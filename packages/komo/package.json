@@ -30,7 +30,8 @@
     "server/project-sites.ts",
     "server/iap.ts",
     "server/tokens.ts",
-    "server/account-page.ts"
+    "server/account-page.ts",
+    "server/public-env.ts"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -43,7 +44,11 @@
       "types": "./dist/setup.d.ts",
       "import": "./dist/setup.js"
     },
-    "./server": "./server/index.ts",
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "workerd": "./server/index.ts",
+      "import": "./dist/server.js"
+    },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js"
@@ -66,14 +71,15 @@
     },
     "./node": {
       "import": "./dist/node.mjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "sideEffects": [
     "./dist/chunk-*.js",
     "./dist/picker-*.js"
   ],
   "scripts": {
-    "build": "node scripts/build.mjs && pnpm run build:setup && pnpm run build:node",
+    "build": "node scripts/build.mjs && pnpm run build:setup && pnpm run build:node && pnpm run build:server",
     "prepack": "pnpm run build",
     "typecheck": "wrangler types --config server/wrangler.jsonc server/worker-configuration.d.ts && tsc -p tsconfig.json --noEmit && tsc -p server/tsconfig.json",
     "test": "pnpm run build:setup && vitest run --config vitest.config.ts",
@@ -86,7 +92,8 @@
     "bench": "node scripts/bench.mjs",
     "demo:react-props": "node examples/react-props/build.mjs",
     "test:package": "pnpm run build && node scripts/check-package.mjs",
-    "build:node": "esbuild server/node.ts --bundle --platform=node --format=esm --packages=external --loader:.txt=text --outfile=dist/node.mjs && mkdir -p dist/postgres && cp server/postgres/*.sql dist/postgres/"
+    "build:node": "esbuild server/node.ts --bundle --platform=node --format=esm --packages=external --loader:.txt=text --outfile=dist/node.mjs && mkdir -p dist/postgres && cp server/postgres/*.sql dist/postgres/",
+    "build:server": "node scripts/build-server.mjs"
   },
   "repository": {
     "type": "git",
@@ -117,7 +124,8 @@
   },
   "dependencies": {
     "emoji-regex": "^10.6.0",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "@cloudflare/workers-types": "^5.20261019.1"
   },
   "bin": {
     "komo": "cli/index.mjs"
