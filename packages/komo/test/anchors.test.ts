@@ -23,6 +23,55 @@ beforeEach(() => {
 });
 
 describe("precise anchors", () => {
+  it("captures deep repeated wrappers relative to the nearest stable card through Frame wrapping", () => {
+    document.body.innerHTML = '<main id="app"></main>';
+    const app = document.querySelector("main")!;
+    const cards = ["first", "second"].map((id) => {
+      const card = document.createElement("article");
+      card.setAttribute("data-comment-anchor", id);
+      card.innerHTML = "<div>".repeat(24) + '<div class="target"><div>Repeated card text</div></div>' + "</div>".repeat(24);
+      app.append(card);
+      return card;
+    });
+    const targets = cards.flatMap((card) => [...card.querySelectorAll("div")]);
+    const anchors = targets.map(capture);
+    const check = () => {
+      const pass = anchorPass();
+      for (const [i, target] of targets.entries()) {
+        const anchor = anchors[i];
+        expect(anchor.selector).toMatch(/^\[data-comment-anchor=/);
+        expect([...document.querySelectorAll(anchor.selector)]).toEqual([target]);
+        expect(resolveAnchor(anchor)).toBe(target);
+        expect(pass.resolve(anchor)).toBe(target);
+        expect(capture(target).selector).toBe(anchor.selector);
+      }
+    };
+    check();
+    const frame = document.createElement("div");
+    app.before(frame);
+    frame.append(app);
+    app.style.transform = "scale(.65)";
+    check();
+    frame.replaceWith(app);
+    app.style.transform = "";
+    check();
+  });
+
+  it("roots positional paths at body so every newly captured selector is unique", () => {
+    document.body.innerHTML = '<div><div>Repeated</div></div><div><div>Repeated</div></div>';
+    for (const target of [document.body, ...document.querySelectorAll("div")])
+      expect([...document.querySelectorAll(capture(target).selector)]).toEqual([target]);
+  });
+
+  it("keeps repeated sibling branches ambiguous even when their ancestor text also matches", () => {
+    document.body.innerHTML = '<article data-comment-anchor="card"><div><div>Repeated</div><div>Repeated</div></div></article>';
+    const target = document.querySelector("article > div > div")!;
+    const anchor = capture(target);
+    expect([...document.querySelectorAll(anchor.selector)]).toEqual([target]);
+    expect(resolveAnchor(anchor)).toBeNull();
+    expect(anchorPass().resolve(anchor)).toBeNull();
+  });
+
   it("resolves controls inside a body-level portal outside the app root", () => {
     document.body.innerHTML =
       '<div id="root"><button>Open</button></div><div data-komo></div><div role="dialog"><h2>Edit</h2><button>Save</button></div>';
