@@ -800,6 +800,25 @@ it("closes komo menus on pointerdown elsewhere in komo despite isolation", async
   expect(close).toHaveBeenCalledTimes(2);
 });
 
+it("does not duplicate Escape guards on repeated initialization and cleans up on destroy", () => {
+  const config = { ...options, onboarding: undefined };
+  controller = initComments(config);
+  expect(initComments(config)).toBe(controller);
+  const host = [...document.body.children].find(node => node.shadowRoot)!;
+  const input = document.createElement("textarea"); host.shadowRoot!.append(input);
+  const press = () => {
+    const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true, cancelable: true });
+    const prevent = vi.spyOn(event, "preventDefault"); input.dispatchEvent(event); return prevent;
+  };
+  expect(press()).toHaveBeenCalledOnce();
+  controller.destroy(); document.body.append(host);
+  expect(press()).not.toHaveBeenCalled();
+  controller = initComments(config);
+  const nextHost = [...document.body.children].find(node => node !== host && node.shadowRoot)!;
+  nextHost.shadowRoot!.append(input);
+  expect(press()).toHaveBeenCalledOnce();
+});
+
 /** jsdom has no layout: give the commented element a box so pins render. */
 function layoutBody() {
   const target = document.createElement("main");

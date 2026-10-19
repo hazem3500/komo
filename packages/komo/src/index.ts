@@ -57,6 +57,7 @@ import { ApiError, CommentsApi } from "./api.js";
 import { connectionIssue, type ConnectionIssue } from "./connection-issue.js";
 import {
   captureAnchor,
+  commentAnchorTarget,
   anchorPass,
   resolveAnchor,
   locateAnchor as measureAnchor,
@@ -73,6 +74,7 @@ import {
   initials,
   isolated,
   isolatedEvents,
+  isolateEscape,
   onPage,
   reducedMotion,
   setAvatarResolver,
@@ -5264,7 +5266,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         return;
       }
       const anchor = captureAnchor(
-        target,
+        commentAnchorTarget(target, surface, options.anchorTarget),
         { x, y },
         { x: x + rect.width, y: y + rect.height },
         options.source,
@@ -5346,6 +5348,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (draft) hoverTarget = anchorElement(draft);
     if (mode && hoverPoint)
       hoverTarget = componentAt(hoverPoint.x, hoverPoint.y);
+    if (mode && hoverTarget)
+      hoverTarget = commentAnchorTarget(hoverTarget, surface, options.anchorTarget);
     if (!hoverTarget?.isConnected) {
       hoverOutline.style.opacity = "0";
       return;
@@ -5464,6 +5468,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   ) {
     draftBeside = beside;
     hidePreview();
+    element = commentAnchorTarget(element, surface, options.anchorTarget);
     draft = captureAnchor(element, start, end, options.source);
     if (framed) {
       // Store document coordinates, not the scaled frame's.
@@ -5864,6 +5869,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   // as outside interaction; komo's own page handlers use onPage().
   if (options.isolateEvents !== false) {
     host.setAttribute("data-isolate", "");
+    isolateEscape(host, abort.signal);
     for (const type of isolatedEvents)
       host.addEventListener(
         type,

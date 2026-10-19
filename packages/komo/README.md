@@ -435,6 +435,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `frame.include(element)` | `(element: HTMLElement) => boolean` | Fixed portals, including fixed descendants of static wrappers | Frame scales dialogs, overlays and toasts with the page. Script-positioned popovers keep their viewport placement while their content scales. Host transforms, animations and focus are preserved without moving portal DOM. Return `true` to map a whole body child through Frame or `false` to exclude its subtree; komo's own host is never framed. |
 | `isolateEvents` | `boolean` | `true` | Keep komo's events out of the host page. See [Host events](#host-events). |
 | `source(element)` | `(element: Element) => string \| undefined` | Anchor metadata | Return a repository-relative source path. |
+| `anchorTarget(element)` | `(element: Element) => Element \| undefined` | Declared owners and stable semantic cards | Optional persistent ancestor for comment capture. Offsets stay relative to this owner when hover-only children disappear. Owners cannot cross a dialog/popover boundary. Design inspection continues to target the exact element. |
 | `sourceUrl(source, branch)` | `(source: string, branch: string) => string` | GitHub viewer | Custom source or editor link. |
 | `page()` | `() => string` | `location.pathname` | Canonical page identifier. |
 | `navigate(url)` | `(url: URL) => void \| Promise<void>` | `location.assign` | Route to a comment on another page without reloading, e.g. `(url) => router.navigate({ href: url.pathname + url.search })`. komo opens the thread once its anchor renders; a rejection falls back to a page load. |
@@ -482,8 +483,9 @@ komo renders in a shadow root, so page listeners see its events as coming from k
 - **Typing.** `keydown`, `keyup` and `keypress` from komo's inputs don't reach `document` or `window`, so app shortcuts (such as `react-hotkeys-hook` or a custom `keydown` listener) don't fire while someone writes a comment. Keys pressed on komo's buttons still reach the page.
 - **Modals.** `pointerdown`, `mousedown`, `touchstart`, `touchmove`, `touchend`, `click`, `wheel`, `focusin` and `focusout` from komo's UI don't reach page listeners. An open Radix or similar dialog doesn't treat komo as an outside interaction, so it doesn't close, take focus back from the composer, or block the sidebar's scroll.
 - **Focus traps.** When focus moves from the page into komo, komo stops that `focusout` for `document` listeners added after komo mounted, such as Radix's FocusScope.
+- **Escape.** Escape from feedback fields and controls is marked handled in the host's own window before document capture listeners run. Feedback still receives it to close its composer or menu; Radix's document handler leaves the host dialog open. This also works when feedback runs inside an iframe.
 
-Limits: capture-phase listeners on `document` or `window` run before komo can stop anything. For example, Radix's Escape handler (`onEscapeKeyDown`) still closes a dialog when Escape is pressed in komo's composer; prevent that with `event.target.closest("[data-branch-comments]")`. Libraries that detect outside clicks in the capture phase, such as Headless UI, need their own check. Modal libraries that hide other content with `aria-hidden` also hide komo from assistive technology. Set `isolateEvents: false` if your app needs to observe these events.
+Other capture-phase listeners still run. Set `isolateEvents: false` if your app needs to observe feedback events or handle Escape itself.
 
 ### CLI
 
