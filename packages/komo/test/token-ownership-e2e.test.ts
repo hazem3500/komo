@@ -20,9 +20,9 @@ beforeAll(async () => {
       import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       import { classTheme } from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
-      const query=new URLSearchParams(location.search),radius=query.get('case')==='radius',theme=query.get('case')==='theme',semantic=query.get('case')==='semantic',baseline=query.get('baseline');
+      const query=new URLSearchParams(location.search),radius=query.get('case')==='radius',theme=query.get('case')==='theme',semantic=query.get('case')==='semantic',baseline=query.get('baseline'),named=baseline?.startsWith('named');
       const listeners=new Set();
-      const axis=semantic?{id:'mode',options:[{id:'light'},{id:'dark'}],current:()=>document.documentElement.getAttribute('data-review-mode'),apply(id){document.documentElement.setAttribute('data-review-mode',id);if(baseline==='concrete')document.querySelector('#target').style.setProperty('color',id==='light'?'#555555':'#cccccc','important');listeners.forEach(listener=>listener())},subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener)}}:classTheme({id:'mode',options:[{id:'light',attribute:{'data-review-mode':'light'}},{id:'dark',attribute:{'data-review-mode':'dark'}}]});
+      const axis=semantic?{id:'mode',options:[{id:'light'},{id:'dark'}],current:()=>document.documentElement.getAttribute('data-review-mode'),apply(id){document.documentElement.setAttribute('data-review-mode',id);if(baseline==='concrete'||baseline==='named')document.querySelector('#target').style.setProperty('color',id==='light'?'#555555':named?'red':'#cccccc','important');listeners.forEach(listener=>listener())},subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener)}}:classTheme({id:'mode',options:[{id:'light',attribute:{'data-review-mode':'light'}},{id:'dark',attribute:{'data-review-mode':'dark'}}]});
       if(theme||semantic)document.documentElement.setAttribute('data-review-mode','dark');
       const tokens=tailwindTokens({tokens:[
         {path:'color.base',type:'color',class:'text-base',properties:['color'],value:'#575456',...(theme?{values:{light:'#575456',dark:'#bbbbbb'}}:{}),label:'Base'},
@@ -35,7 +35,7 @@ beforeAll(async () => {
           {path:'radius.ellipse',type:'dimension',class:'radius-ellipse',properties:['border-radius'],value:'25% 30% 4px 40px / 10px 50% 4px 12px',label:'Elliptical'}
         ]:[])
       ]},{themes:theme?[axis]:undefined});
-      const adapter=semantic?{id:'semantic-baseline',list:state=>[{path:'tone.base',type:'color',properties:['color'],value:state?.mode==='light'?'#555555':'#cccccc',label:'Base'},{path:'tone.accent',type:'color',properties:['color'],value:state?.mode==='light'?'#222222':'#eeeeee',label:'Accent'}],resolve:()=>({color:baseline==='custom'?{offToken:'#cccccc'}:{path:'tone.base'}})}:query.get('adapter')==='inline'?{id:'inline-values',list:state=>tokens.list(state),resolve:element=>tokens.resolve(element)}:tokens;
+      const adapter=semantic?{id:'semantic-baseline',list:state=>[{path:'tone.base',type:'color',properties:['color'],value:state?.mode==='light'?'#555555':named?'red':'#cccccc',label:'Base'},{path:'tone.accent',type:'color',properties:['color'],value:state?.mode==='light'?'#222222':'#eeeeee',label:'Accent'}],resolve:()=>({color:baseline?.endsWith('custom')?{offToken:named?'red':'#cccccc'}:{path:'tone.base'}})}:query.get('adapter')==='inline'?{id:'inline-values',list:state=>tokens.list(state),resolve:element=>tokens.resolve(element)}:tokens;
       const qa=window.radiusQA={actions:0,writes:[]};
       if(semantic)qa.theme=id=>axis.apply(id);
       document.querySelector('#target').onclick=()=>qa.actions++;
@@ -56,8 +56,8 @@ beforeAll(async () => {
       response.setHeader("content-type", "text/html");
       if (url.searchParams.get("case") === "semantic") {
         const baseline = url.searchParams.get("baseline");
-        const color = baseline === "classes" ? "" : `color:${baseline === "variable" ? "var(--semantic-base)" : "#cccccc"} !important;`;
-        response.end(`<style>body{margin:0}main{min-height:100vh;padding:70px;box-sizing:border-box}[data-review-mode=dark]{--semantic-base:#cccccc}[data-review-mode=light]{--semantic-base:#555555}.semantic-base{color:var(--semantic-base)}</style><main><p id="target" class="${baseline === "classes" ? "semantic-base" : ""}" style="${color}padding:12px !important">Example text</p></main><script type="module" src="/entry.js"></script>`);
+        const color = baseline === "classes" ? "" : `color:${baseline === "variable" ? "var(--semantic-base)" : baseline === "currentcolor" ? "currentcolor" : baseline?.startsWith("named") ? "red" : "#cccccc"} !important;`;
+        response.end(`<style>body{margin:0;color:var(--semantic-base)}main{min-height:100vh;padding:70px;box-sizing:border-box}[data-review-mode=dark]{--semantic-base:#cccccc}[data-review-mode=light]{--semantic-base:#555555}.semantic-base{color:var(--semantic-base)}</style><main><p id="target" class="${baseline === "classes" ? "semantic-base" : ""}" style="${color}padding:12px !important">Example text</p></main><script type="module" src="/entry.js"></script>`);
         return;
       }
       response.end('<style>body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:70px}.text-base{color:#575456}.text-primary{color:#6941c6}.bg-base{background-color:#575456}.bg-primary{background-color:#6941c6}[data-review-mode=dark] .text-base{color:#bbbbbb}[data-review-mode=dark] .text-primary{color:#c1a8ff}[data-review-mode=dark] .bg-base{background-color:#bbbbbb}[data-review-mode=dark] .bg-primary{background-color:#c1a8ff}button.surface{display:block;width:240px;height:72px;box-sizing:border-box;margin-bottom:32px;border:2px solid #aaa;background:#fff}.radius-small{border-radius:8px}.radius-full{border-radius:calc(infinity * 1px)}.radius-ellipse{border-radius:25% 30% 4px 40px / 10px 50% 4px 12px}</style><main>'+(url.searchParams.get('case')==='radius'?'<button id="target" class="surface radius-small">Primary surface</button><button id="other" class="surface radius-small">Second surface</button>':'<p id="target" class="text-base bg-base" style="padding: 12px !important;">Example text</p>')+'</main><script type="module" src="/entry.js"></script>');
@@ -87,7 +87,7 @@ afterAll(async () => {
 
 describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership in %s", mode => {
 
-  it.each(["concrete", "variable", "classes", "custom"])("restores the current %s baseline in actual Before, Undo and Reset", async baseline => {
+  it.each(["concrete", "named", "variable", "classes", "currentcolor", "custom", "named-custom"])("restores the current %s baseline in actual Before, Undo and Reset", async baseline => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(4000);
     await page.goto(`${origin}/?mode=${mode}&case=semantic&baseline=${baseline}`);
@@ -102,7 +102,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
       await trigger.click();
       await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Accent" }).click();
     };
-    const expected = baseline === "custom" ? "rgb(204, 204, 204)" : "rgb(85, 85, 85)";
+    const dark = baseline.startsWith("named") ? "rgb(255, 0, 0)" : "rgb(204, 204, 204)";
+    const expected = baseline.endsWith("custom") ? dark : "rgb(85, 85, 85)";
+    const inline = baseline === "concrete" || baseline === "named";
     await choose();
     expect(await value()).toBe("rgb(238, 238, 238)");
     await theme("light");
@@ -112,7 +114,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     expect(await target.evaluate(node => [node.style.padding, node.style.getPropertyPriority("padding")])).toEqual(["12px", "important"]);
     await theme("dark");
     await expect.poll(() => trigger.getAttribute("title")).toContain("#eeeeee");
-    expect(await value()).toBe("rgb(204, 204, 204)");
+    expect(await value()).toBe(dark);
     await theme("light");
     await expect.poll(() => trigger.getAttribute("title")).toContain("#222222");
     expect(await value()).toBe(expected);
@@ -130,8 +132,8 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     expect(await value()).toBe(expected);
     expect(await page.locator(".design-inspector__count").textContent()).toBe("");
     expect(await page.locator('.design-inspector__actions [aria-label="Undo"]').isDisabled()).toBe(true);
-    await expect.poll(() => trigger.inputValue()).toBe(baseline === "custom" ? "" : "tone.base");
-    if (baseline !== "concrete") expect(await target.evaluate(node => node.style.cssText)).toBe(original);
+    await expect.poll(() => trigger.inputValue()).toBe(baseline.endsWith("custom") ? "" : "tone.base");
+    if (!inline) expect(await target.evaluate(node => node.style.cssText)).toBe(original);
     else expect(await target.evaluate(node => [node.style.color, node.style.getPropertyPriority("color")])).toEqual(["rgb(85, 85, 85)", "important"]);
     await choose();
     await page.keyboard.press("Tab");
@@ -139,13 +141,13 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     expect(await value()).toBe(expected);
     await theme("dark");
     await expect.poll(() => trigger.getAttribute("title")).toContain("#eeeeee");
-    expect(await value()).toBe("rgb(204, 204, 204)");
+    expect(await value()).toBe(dark);
     await page.keyboard.press("d");
     await expect.poll(value).toBe("rgb(238, 238, 238)");
     await page.getByRole("button", { name: "Reset", exact: true }).click();
-    expect(await value()).toBe("rgb(204, 204, 204)");
-    if (baseline !== "concrete") expect(await target.evaluate(node => node.style.cssText)).toBe(original);
-    else expect(await target.evaluate(node => [node.style.color, node.style.getPropertyPriority("color"), node.style.padding, node.style.getPropertyPriority("padding")])).toEqual(["rgb(204, 204, 204)", "important", "12px", "important"]);
+    expect(await value()).toBe(dark);
+    if (!inline) expect(await target.evaluate(node => node.style.cssText)).toBe(original);
+    else expect(await target.evaluate(node => [node.style.color, node.style.getPropertyPriority("color"), node.style.padding, node.style.getPropertyPriority("padding")])).toEqual([baseline === "named" ? "red" : dark, "important", "12px", "important"]);
     await choose();
     await page.locator('.design-inspector__bar').getByRole("button", { name: "Comment", exact: true }).click();
     const draft = page.locator(".draft-proposal");
@@ -156,11 +158,11 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     expect(await value()).toBe(expected);
     await theme("dark");
     await expect.poll(() => draft.textContent()).toContain("#eeeeee");
-    expect(await value()).toBe("rgb(204, 204, 204)");
+    expect(await value()).toBe(dark);
     await draft.getByRole("button", { name: "After", exact: true }).click();
     expect(await value()).toBe("rgb(238, 238, 238)");
     await page.keyboard.press("Escape");
-    expect(await value()).toBe("rgb(204, 204, 204)");
+    expect(await value()).toBe(dark);
     expect(await page.evaluate(() => ({ actions: (window as any).radiusQA.actions, writes: (window as any).radiusQA.writes }))).toEqual({ actions: 0, writes: [] });
     await page.evaluate(() => (window as any).komo.destroy());
     await page.close();
