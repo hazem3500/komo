@@ -98,11 +98,22 @@ function nearbyFor(element: Element): string {
     ? textFor(parent)
     : "";
 }
+const overlayBoundary = (element: Element) =>
+  element.matches("dialog,[role=dialog],[role=alertdialog],[popover]") ||
+  getComputedStyle(element).position === "fixed";
 function contextFor(element: Element): NonNullable<Anchor["context"]> {
-  let parent = element.parentElement,
+  let parent = overlayBoundary(element) ? null : element.parentElement,
     scope: string | undefined;
-  while (parent && parent !== document.body && !(scope = stableFor(parent)))
+  while (parent && parent !== document.body) {
+    scope = stableFor(parent);
+    if (scope) break;
+    if (overlayBoundary(parent)) {
+      const selector = selectorFor(parent);
+      if (selector.length <= 2000) scope = selector;
+      break;
+    }
     parent = parent.parentElement;
+  }
   const selection = window.getSelection();
   const selected = selection?.rangeCount ? selection.getRangeAt(0) : null;
   const style = getComputedStyle(element);
@@ -171,6 +182,26 @@ function similar(element: Element, anchor: Anchor): boolean {
     related(trim(anchor.text), textFor(element)) &&
     (!context.nearby || related(context.nearby, nearbyFor(element)))
   );
+}
+
+/** Prefer a persistent comment owner without changing precise DOM anchor capture. */
+export function commentAnchorTarget(
+  element: Element,
+  root: Element,
+  resolve?: (element: Element) => Element | undefined,
+): Element {
+  const ancestors: Element[] = [];
+  for (let node: Element | null = element; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+    if (node !== root || node === element) ancestors.push(node);
+    if (node === root || overlayBoundary(node)) break;
+  }
+  const custom = resolve?.(element);
+  if (custom?.isConnected && ancestors.includes(custom)) return custom;
+  const declared = ancestors.find(node => node.hasAttribute("data-comment-anchor") && stableFor(node));
+  if (declared) return declared;
+  return ancestors.slice(1).find(node =>
+    node.matches("article,li,tr,[role=listitem],[role=row],[role=button],[role=link]") && stableFor(node),
+  ) ?? element;
 }
 export function captureAnchor(
   element: Element,

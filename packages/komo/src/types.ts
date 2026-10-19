@@ -159,6 +159,13 @@ export interface CommentsOptions {
    * identity. All optional; see DesignSystem.
    */
   design?: DesignSystem;
+  /**
+   * Optional persistent owner for a picked comment target, e.g. a domain card.
+   * Return a connected ancestor in the same dialog/popover boundary. By default
+   * data-comment-anchor owners and uniquely identified semantic cards are used.
+   * Click/area offsets remain relative to that owner; Design inspection stays precise.
+   */
+  anchorTarget?: (element: Element) => Element | undefined;
   /** Resolve an anchor to a repository-relative source path. */
   source?: (element: Element) => string | undefined;
   /** Defaults to GitHub's source viewer. */

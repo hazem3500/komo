@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { anchorPass, captureAnchor, resolveAnchor } from "../src/anchors.js";
+import { anchorPass, captureAnchor, commentAnchorTarget, locateAnchor, resolveAnchor } from "../src/anchors.js";
 
 const point = { x: 20, y: 20 };
 const capture = (element: Element) => captureAnchor(element, point, point);
@@ -19,6 +19,64 @@ beforeEach(() => {
     right: 100,
     bottom: 100,
     toJSON() {},
+  });
+});
+
+describe("persistent comment owners", () => {
+  it("keeps a hover-only control attached to its stable card across removal, rerenders and Frame cycles", () => {
+    document.body.innerHTML = '<main id="app"><article id="card-a">Card A<button>Hover action</button></article><article id="card-b">Card B<button>Hover action</button></article></main>';
+    const app = document.querySelector("main")!, card = document.querySelector("article")!, leaf = card.querySelector("button")!;
+    const target = commentAnchorTarget(leaf, app);
+    expect(target).toBe(card);
+    const anchor = captureAnchor(target, { x: 25, y: 40 }, { x: 25, y: 40 });
+    expect(anchor).toMatchObject({ selector: "#card-a", x: .25, y: .4 });
+    leaf.remove();
+    card.innerHTML = "Card A";
+    for (const style of ["transform:scale(.665625)", "", "transform:scale(.8)"]) {
+      app.setAttribute("style", style);
+      const saved = JSON.parse(JSON.stringify(anchor));
+      expect(resolveAnchor(saved)).toBe(card);
+      expect(locateAnchor(saved)).toMatchObject({ attached: true, x: 25, y: 40 });
+    }
+    card.outerHTML = '<article id="card-a">Card A</article>';
+    expect(resolveAnchor(anchor)).toBe(document.querySelector("#card-a"));
+  });
+
+  it("uses an explicit owner on a plain div but keeps low-level capture exact", () => {
+    document.body.innerHTML = '<main><div data-comment-anchor="card"><span><button id="temporary">Hover</button></span></div></main>';
+    const app = document.querySelector("main")!, leaf = app.querySelector("button")!, owner = app.querySelector("div")!;
+    expect(commentAnchorTarget(leaf, app)).toBe(owner);
+    expect(capture(leaf).selector).toBe("#temporary");
+    expect(capture(commentAnchorTarget(leaf, app)).selector).toBe('[data-comment-anchor="card"]');
+    leaf.style.display = "none";
+    expect(resolveAnchor(capture(owner))).toBe(owner);
+  });
+
+  it("never promotes a detached dialog or fixed popover to an outside card", () => {
+    for (const boundary of ['role="dialog"', 'popover', 'style="position:fixed"']) {
+      document.body.innerHTML = `<main><article data-comment-anchor="card">Card<div ${boundary}><button>Save</button></div></article></main>`;
+      const app = document.querySelector("main")!, leaf = app.querySelector("button")!;
+      const target = commentAnchorTarget(leaf, app, () => app.querySelector("article")!);
+      expect(target).toBe(leaf);
+      const anchor = capture(target);
+      leaf.parentElement!.remove();
+      app.querySelector("article")!.insertAdjacentHTML("beforeend", "<button>Save</button>");
+      expect(resolveAnchor(anchor)).toBeNull();
+    }
+  });
+
+  it("accepts an explicit connected ancestor and rejects siblings or another page", () => {
+    document.body.innerHTML = '<main><div id="owner"><button>Action</button></div><div id="other">Other</div></main>';
+    const app = document.querySelector("main")!, leaf = app.querySelector("button")!, owner = app.querySelector("#owner")!;
+    expect(commentAnchorTarget(leaf, app, () => owner)).toBe(owner);
+    expect(commentAnchorTarget(leaf, app, () => app.querySelector("#other")!)).toBe(leaf);
+    expect(commentAnchorTarget(leaf, app, () => document.createElement("div"))).toBe(leaf);
+  });
+
+  it("does not promote a page root or an ambiguously identified sibling card", () => {
+    document.body.innerHTML = '<main id="app"><article data-testid="card"><button>Action</button></article><article data-testid="card"><button>Action</button></article></main>';
+    const app = document.querySelector("main")!, leaf = app.querySelector("button")!;
+    expect(commentAnchorTarget(leaf, app)).toBe(leaf);
   });
 });
 
