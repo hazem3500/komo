@@ -76,7 +76,7 @@ describe("design proposal targets", () => {
 
 async function mount(threads: unknown[] = [], sidebarMode: "background" | "edge" = "edge") {
   const { CommentsApi } = await import("../src/api");
-  const config = { ...options, sidebar: sidebarMode };
+  const config = { ...options, sidebar: sidebarMode, frame: { scale: true } };
   const api = new CommentsApi(config);
   api.save({ token: "design-session", user: { id: "designer", name: "Designer", verified: true } });
   localStorage.setItem(

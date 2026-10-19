@@ -1022,9 +1022,9 @@ it("keeps the floating dialog while the sidebar is closed", async () => {
   localStorage.clear();
 });
 
-async function mountForComments(sidebar: "background" | "edge", name: string) {
+async function mountForComments(sidebar: "background" | "edge", name: string, scale = false) {
   const { CommentsApi } = await import("../src/api");
-  const config = { ...options, onboarding: undefined, sidebar };
+  const config = { ...options, onboarding: undefined, sidebar, frame: { scale } };
   const api = new CommentsApi(config);
   api.save({ token: `${name}-session`, user: { id: name, name, verified: true } });
   localStorage.setItem(
@@ -1070,7 +1070,7 @@ it("frames body-level portals with the page and restores them exactly", async ()
     unobserve(node: Element) { this.targets.delete(node); watched.delete(node); }
     disconnect() { for (const node of this.targets) watched.delete(node); this.targets.clear(); }
   });
-  const { host } = await mountForComments("background", "portals");
+  const { host } = await mountForComments("background", "portals", true);
   const portal = (css: string) => {
     const node = document.createElement("div");
     node.style.cssText = css;
@@ -1086,7 +1086,7 @@ it("frames body-level portals with the page and restores them exactly", async ()
   const chosen = portal("position: absolute;");
   const reopen = (include?: (node: HTMLElement) => boolean) => {
     controller!.destroy();
-    controller = initComments({ ...options, onboarding: undefined, sidebar: "background", pageRoot: document.getElementById("target")!, frame: { include } });
+    controller = initComments({ ...options, onboarding: undefined, sidebar: "background", pageRoot: document.getElementById("target")!, frame: { scale: true, include } });
     controller.open();
   };
   controller!.open();
@@ -1138,7 +1138,7 @@ it("frames body-level portals with the page and restores them exactly", async ()
 });
 
 it("keeps Frame view open while commenting, posting, resolving and in Design mode", async () => {
-  const { host, shadow, press, open, capturing, pane, post } = await mountForComments("background", "framer");
+  const { host, shadow, press, open, capturing, pane, post } = await mountForComments("background", "framer", true);
   expect(host.dataset.sidebar).toBe("background");
   controller!.open();
   expect(open()).toBe(true);

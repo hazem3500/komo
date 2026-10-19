@@ -14,15 +14,16 @@ export function reviewLayout(
   account = false,
   /** Fit the page's full width beside the sidebar instead of letting it run under the left edge. */
   fit = false,
+  scaled = true,
 ) {
   const desktop = expanded && !isCompactReview(width, height);
   const mobile = expanded && !desktop;
   const right = desktop ? SIDEBAR_WIDTH + PAGE_GAP : 0;
-  const scale = desktop ? (fit ? Math.min(PAGE_SCALE, (width - right - PAGE_GAP) / width) : PAGE_SCALE) : 1;
+  const scale = desktop && scaled ? (fit ? Math.min(PAGE_SCALE, (width - right - PAGE_GAP) / width) : PAGE_SCALE) : 1;
   const sheetTop = mobile ? (account ? 0 : height * 0.18) : height;
   // A fitted frame is the viewport scaled down, so pages sized with 100vh fill it exactly.
-  const frameHeight = mobile ? pageHeight : desktop ? height * (fit ? scale : PAGE_SCALE) : height;
-  const left = desktop ? (fit ? PAGE_GAP : width - right - width * scale) : 0;
+  const frameHeight = mobile ? pageHeight : desktop ? (scaled ? height * (fit ? scale : PAGE_SCALE) : Math.max(1, height - PAGE_GAP * 2)) : height;
+  const left = desktop ? (fit || !scaled ? PAGE_GAP : width - right - width * scale) : 0;
   const top = desktop ? (height - frameHeight) / 2 : 0;
   return {
     desktop,

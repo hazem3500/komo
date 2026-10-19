@@ -33,10 +33,20 @@ const saved = (node: HTMLElement, name: string): SavedProperty => ({
   priority: node.style.getPropertyPriority(name),
 });
 const restore = (node: HTMLElement, name: string, property: SavedProperty) => {
-  if (property.value)
-    node.style.setProperty(name, property.value, property.priority);
-  else node.style.removeProperty(name);
+  node.style.setProperty(name, property.value, property.priority);
 };
+export function preserveFrameStyles(node: HTMLElement, names: string[]) {
+  const attribute = node.getAttribute("style");
+  const original = node.style.cssText;
+  const properties = names.map((name) => [name, saved(node, name)] as const);
+  return () => {
+    for (const [name, property] of properties) restore(node, name, property);
+    if (node.style.cssText === original) {
+      if (attribute === null) node.removeAttribute("style");
+      else node.setAttribute("style", attribute);
+    }
+  };
+}
 const tokens = (value: string) =>
   value && value !== "none" ? (value.match(/calc\(.*?\)|[^\s(]+/g) ?? []) : [];
 const scaleFrames = (scale: number, translate = "0px 0px") => [

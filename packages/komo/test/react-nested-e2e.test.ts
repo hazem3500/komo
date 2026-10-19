@@ -40,7 +40,7 @@ beforeAll(async () => {
         window.fetch=async()=>Response.json({threads:[],guests:true});
         const frame=new URLSearchParams(location.search).has('frame');
         if(!frame)document.body.append(document.createElement('aside'));
-        window.komo=initKomo({endpoint:location.origin,project:'nested-props',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',restoreOpen:false,design:{components:adapter}});
+        window.komo=initKomo({endpoint:location.origin,project:'nested-props',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:true},restoreOpen:false,design:{components:adapter}});
       `, resolveDir: process.cwd(), loader: "ts" },
       alias: { react: dirname(require.resolve("react/package.json")), "react-dom": dirname(require.resolve("react-dom/package.json")) },
       outdir: join(directory, String(version)), entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",

@@ -115,7 +115,7 @@ export interface CommentsOptions {
   /**
    * Sidebar presentation when the review opens. "edge" (default) is a floating,
    * draggable sidebar that parks off and peeks from the viewport edge while
-   * closed. "background" frames the site and shows the sidebar in the scaled
+   * closed. "background" reflows the site beside the sidebar in an unscaled
    * review sheet. Users can switch Floating and Frame from the Account panel;
    * that choice is remembered per project. Compact viewports always use a bottom
    * Drawer, retaining the desktop preference when the viewport grows.
@@ -141,13 +141,16 @@ export interface CommentsOptions {
    */
   pickRoots?: () => Element[];
   /**
-   * Frame view scales body-level portals (dialogs, overlays, toasts) with the
-   * page, including fixed descendants of portal wrappers. Script-positioned
-   * popovers keep their viewport placement while their contents scale.
+   * Frame reflows the page at its available width without adding a scale,
+   * preserving native CSS-pixel interactions. Fixed body-level portals are
+   * kept inside the frame without moving their DOM.
+   * `scale: true` opts into shrinking the original viewport instead. Hosts
+   * deriving local values from client coordinates must handle that scale;
+   * arbitrary canvas, drag, and grid handlers cannot be corrected generically.
    * `include` overrides the default per body child; true maps the whole child
    * through the frame, and false leaves its subtree alone.
    */
-  frame?: { include?(element: HTMLElement): boolean };
+  frame?: { scale?: boolean; include?(element: HTMLElement): boolean };
   /**
    * Stop komo's own pointer, focus, wheel and typing events at its host
    * element, so page shortcuts and open modals don't react to komo's UI.
