@@ -643,9 +643,13 @@ export function initComments(options: CommentsOptions): CommentsController {
   const savedHtmlBackground = html.style.background;
   const portalFrame = createFramePortals(surface, host, options.frame?.include, geometry);
   function framePortals() {
+    const left = parseFloat(surface.style.left) || 0;
+    const top = parseFloat(surface.style.top) || 0;
+    const width = (parseFloat(surface.style.width) || surface.offsetWidth) * appliedScale;
+    const height = (parseFloat(surface.style.height) || surface.offsetHeight) * appliedScale;
     portalFrame.update(framed && !destroyed ? {
-      scale: appliedScale, left: parseFloat(surface.style.left) || 0,
-      top: parseFloat(surface.style.top) || 0,
+      scale: appliedScale, left, top, zoom: htmlZoom(),
+      bounds: { left, top, right: left + width, bottom: top + height, width, height },
     } : null);
   }
   // The frame paints the page's own background; re-read it when a theme changes.
@@ -936,6 +940,8 @@ export function initComments(options: CommentsOptions): CommentsController {
         layoutMotions = [];
         pageTransitioning = false;
         pins.style.opacity = "";
+        framePortals();
+        portalFrame.reposition();
         geometry();
       })
       .catch(() => {});
@@ -1814,6 +1820,8 @@ export function initComments(options: CommentsOptions): CommentsController {
           html.style.background = savedHtmlBackground;
         }
         pins.style.opacity = "";
+        framePortals();
+        portalFrame.reposition();
         geometry();
       });
     }

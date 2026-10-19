@@ -1,4 +1,13 @@
-export type FrameMapping = { scale: number; left: number; top: number };
+export type FrameMapping = {
+  scale: number;
+  left: number;
+  top: number;
+  zoom?: number;
+  bounds?: Pick<
+    DOMRect,
+    "left" | "top" | "right" | "bottom" | "width" | "height"
+  >;
+};
 type SavedProperty = { value: string; priority: string };
 type Entry = {
   translate: SavedProperty;
@@ -7,6 +16,12 @@ type Entry = {
   appliedScale: string;
   style: string | null;
   animation?: Animation;
+  transform: string;
+  positioningFrame: FrameMapping | null;
+  constraints?: Map<
+    string,
+    { original: SavedProperty; applied: string; maximum?: string }
+  >;
 };
 
 const saved = (node: HTMLElement, name: string): SavedProperty => ({
@@ -20,10 +35,18 @@ const restore = (node: HTMLElement, name: string, property: SavedProperty) => {
 };
 const tokens = (value: string) =>
   value && value !== "none" ? (value.match(/calc\(.*?\)|[^\s(]+/g) ?? []) : [];
-const scaleFrames = (scale: number) => [
-  { scale: String(scale) },
-  { scale: String(scale) },
+const scaleFrames = (scale: number, translate = "0px 0px") => [
+  { scale: String(scale), translate },
+  { scale: String(scale), translate },
 ];
+function cancelTransitions(node: HTMLElement, properties: string[]) {
+  for (const animation of node.getAnimations?.() ?? [])
+    if (
+      "transitionProperty" in animation &&
+      properties.includes(String(animation.transitionProperty))
+    )
+      animation.cancel();
+}
 
 /** Compose Frame with host portals without moving live DOM or capturing entrance scales. */
 export function createFramePortals(
@@ -36,6 +59,16 @@ export function createFramePortals(
   let mapping: FrameMapping | null = null;
   let scheduled = 0;
   let listening: AbortController | undefined;
+  let entering = false;
+  let positionFrame = 0;
+  const reposition = () => {
+    if (positionFrame) return;
+    positionFrame = requestAnimationFrame(() => {
+      positionFrame = 0;
+      surface.ownerDocument.defaultView?.dispatchEvent(new Event("resize"));
+      schedule();
+    });
+  };
   const resize = new ResizeObserver(schedule);
   const mutations = new MutationObserver((records) => {
     if (!mapping) return;
@@ -68,18 +101,27 @@ export function createFramePortals(
     });
   }
   function release(node: HTMLElement, entry: Entry) {
-    if (node.style.translate !== entry.appliedTranslate)
+    if (!entry.animation && node.style.translate !== entry.appliedTranslate)
       entry.translate = saved(node, "translate");
     if (!entry.animation && node.style.scale !== entry.appliedScale)
       entry.scale = saved(node, "scale");
     entry.animation?.cancel();
-    restore(node, "translate", entry.translate);
-    if (!entry.animation) restore(node, "scale", entry.scale);
+    if (!entry.animation) {
+      restore(node, "translate", entry.translate);
+      restore(node, "scale", entry.scale);
+      cancelTransitions(node, ["translate", "scale"]);
+    }
+    for (const [name, property] of entry.constraints ?? []) {
+      if (node.style.getPropertyValue(name) !== property.applied)
+        property.original = saved(node, name);
+      restore(node, name, property.original);
+    }
     resize.unobserve(node);
   }
   function apply() {
     if (!mapping) return;
     const keep = new Set<HTMLElement>();
+    let animating = false;
     const visit = (node: HTMLElement, forced?: boolean) => {
       if (node === host || node.contains(surface)) return;
       const position = getComputedStyle(node).position;
@@ -98,10 +140,15 @@ export function createFramePortals(
           appliedTranslate: node.style.translate,
           appliedScale: node.style.scale,
           style: node.getAttribute("style"),
+          transform: node.style.transform,
+          positioningFrame: entering ? null : { ...mapping! },
         };
-        // An additive scale follows the host's own animation and future scale changes.
-        // Sampling an entrance value into an inline override would freeze that value.
-        if (typeof node.animate === "function" && !entry.scale.priority) {
+        // Keep host transitions out of our positioning feedback loop.
+        if (
+          typeof node.animate === "function" &&
+          !entry.scale.priority &&
+          !entry.translate.priority
+        ) {
           try {
             const animation = node.animate(scaleFrames(1), {
               duration: 1,
@@ -122,19 +169,38 @@ export function createFramePortals(
         entries.set(node, entry);
         resize.observe(node);
       } else {
-        if (node.style.translate !== entry.appliedTranslate)
+        if (
+          entry.animation &&
+          (node.style.getPropertyPriority("translate") ||
+            node.style.getPropertyPriority("scale"))
+        ) {
+          entry.animation.cancel();
+          entry.animation = undefined;
+          entry.translate = saved(node, "translate");
+          entry.scale = saved(node, "scale");
+          entry.appliedTranslate = node.style.translate;
+          entry.appliedScale = node.style.scale;
+        }
+        if (!entry.animation && node.style.translate !== entry.appliedTranslate)
           entry.translate = saved(node, "translate");
         if (!entry.animation && node.style.scale !== entry.appliedScale)
           entry.scale = saved(node, "scale");
+        if (node.style.transform !== entry.transform) {
+          entry.transform = node.style.transform;
+          entry.positioningFrame = { ...mapping! };
+        }
       }
-      restore(node, "translate", entry.translate);
       if (entry.animation)
         (entry.animation.effect as KeyframeEffect).setKeyframes(scaleFrames(1));
-      else restore(node, "scale", entry.scale);
+      else {
+        restore(node, "translate", entry.translate);
+        restore(node, "scale", entry.scale);
+        cancelTransitions(node, ["translate", "scale"]);
+      }
       const css = getComputedStyle(node);
-      const origin = css.transformOrigin.split(" ").map(parseFloat);
       const translate = tokens(css.translate);
       const scale = mapping!.scale;
+      const zoom = mapping!.zoom ?? 1;
       // Pixel translations from positioning engines already use the framed
       // anchor's viewport coordinates. Keep that placement while scaling content.
       const positioned =
@@ -142,25 +208,93 @@ export function createFramePortals(
         !!node.style.transform &&
         !node.style.transform.includes("%") &&
         /^(?:translate(?:3d|X|Y)?\([^%]+\)\s*)+$/i.test(node.style.transform);
-      const rect = positioned ? node.getBoundingClientRect() : null;
-      const offsets = [node.offsetLeft, node.offsetTop];
+      const rect = node.getBoundingClientRect();
       const frame = [mapping!.left, mapping!.top];
-      const point = rect ? [rect.left, rect.top] : null;
+      const bounds = mapping!.bounds ?? surface.getBoundingClientRect();
+      const gap = positioned ? 8 / zoom : 0;
+      const limits = [bounds.width - 2 * gap, bounds.height - 2 * gap];
+      if (
+        bounds.width &&
+        bounds.height &&
+        (entry.constraints ||
+          (rect.width / zoom) * scale > limits[0] ||
+          (rect.height / zoom) * scale > limits[1])
+      ) {
+        entry.constraints ??= new Map();
+        const properties: Record<string, string> = {
+          "min-width": "0px",
+          "min-height": "0px",
+          "max-width": `${Math.max(1, limits[0] / scale - (css.boxSizing === "border-box" ? 0 : (parseFloat(css.paddingLeft) || 0) + (parseFloat(css.paddingRight) || 0) + (parseFloat(css.borderLeftWidth) || 0) + (parseFloat(css.borderRightWidth) || 0)))}px`,
+          "max-height": `${Math.max(1, limits[1] / scale - (css.boxSizing === "border-box" ? 0 : (parseFloat(css.paddingTop) || 0) + (parseFloat(css.paddingBottom) || 0) + (parseFloat(css.borderTopWidth) || 0) + (parseFloat(css.borderBottomWidth) || 0)))}px`,
+          overflow: "auto",
+        };
+        for (const [name, value] of Object.entries(properties)) {
+          let property = entry.constraints.get(name);
+          if (!property)
+            entry.constraints.set(
+              name,
+              (property = {
+                original: saved(node, name),
+                applied: "",
+                maximum: name.startsWith("max-")
+                  ? css.getPropertyValue(name)
+                  : undefined,
+              }),
+            );
+          else if (node.style.getPropertyValue(name) !== property.applied) {
+            property.original = saved(node, name);
+            if (name.startsWith("max-"))
+              property.maximum = getComputedStyle(node).getPropertyValue(name);
+          }
+          const maximum = property.maximum;
+          node.style.setProperty(
+            name,
+            maximum && maximum !== "none" ? `min(${maximum}, ${value})` : value,
+            "important",
+          );
+          property.applied = node.style.getPropertyValue(name);
+        }
+        cancelTransitions(node, Object.keys(properties));
+      }
+      const measured = node.getBoundingClientRect();
+      const point = positioned
+        ? [measured.left / zoom, measured.top / zoom]
+        : null;
+      const origin = getComputedStyle(node)
+        .transformOrigin.split(" ")
+        .map(parseFloat);
+      const offsets = [node.offsetLeft, node.offsetTop];
       const value = frame
         .map((offset, axis) => {
           const center = offsets[axis] + (origin[axis] || 0);
-          const delta = point
-            ? (1 - scale) * (point[axis] - center)
-            : offset - (1 - scale) * center;
-          return `calc(${delta}px + ${scale} * ${translate[axis] ?? "0px"})`;
+          let delta = offset - (1 - scale) * center;
+          if (point && measured) {
+            const reference = entry.positioningFrame;
+            let desired =
+              offset +
+              (scale *
+                (point[axis] -
+                  (reference ? [reference.left, reference.top][axis] : 0))) /
+                (reference?.scale ?? 1);
+            if (bounds.width && bounds.height) {
+              const minimum = [bounds.left, bounds.top][axis] + gap;
+              const maximum =
+                [bounds.right, bounds.bottom][axis] -
+                gap -
+                ([measured.width, measured.height][axis] / zoom) * scale;
+              desired = Math.max(minimum, Math.min(maximum, desired));
+            }
+            delta = desired - scale * point[axis] - (1 - scale) * center;
+          }
+          return `calc(${delta}px + ${entry.animation ? scale - 1 : scale} * ${translate[axis] ?? "0px"})`;
         })
         .join(" ");
-      node.style.setProperty("translate", value, entry.translate.priority);
       if (entry.animation)
         (entry.animation.effect as KeyframeEffect).setKeyframes(
-          scaleFrames(scale),
+          scaleFrames(scale, value),
         );
-      else
+      else {
+        node.style.setProperty("translate", value, entry.translate.priority);
         node.style.setProperty(
           "scale",
           tokens(css.scale).length
@@ -170,9 +304,23 @@ export function createFramePortals(
             : String(scale),
           entry.scale.priority,
         );
+        cancelTransitions(node, ["translate", "scale"]);
+      }
       entry.appliedTranslate = node.style.translate;
       entry.appliedScale = node.style.scale;
       entry.style = node.getAttribute("style");
+      animating ||= (node.getAnimations?.() ?? []).some(
+        (animation) =>
+          animation !== entry.animation &&
+          animation.playState === "running" &&
+          (animation.effect as KeyframeEffect | null)
+            ?.getKeyframes()
+            .some((keyframe) =>
+              Object.keys(keyframe).some((key) =>
+                /^(transform|translate|scale|left|top|width|height)$/.test(key),
+              ),
+            ),
+      );
     };
     for (const child of document.body.children)
       if (child instanceof HTMLElement) visit(child, include?.(child));
@@ -181,6 +329,7 @@ export function createFramePortals(
         release(node, entry);
         entries.delete(node);
       }
+    if (animating) schedule();
   }
   function stop() {
     cancelAnimationFrame(scheduled);
@@ -194,8 +343,14 @@ export function createFramePortals(
   }
   return {
     update(next: FrameMapping | null) {
+      const previous = mapping;
+      entering = !previous && !!next;
       mapping = next;
-      if (!next) return stop();
+      if (!next) {
+        stop();
+        if (previous) reposition();
+        return;
+      }
       if (!listening) {
         listening = new AbortController();
         mutations.observe(document.body, {
@@ -214,12 +369,26 @@ export function createFramePortals(
             capture: true,
             signal: listening.signal,
           });
+        surface.addEventListener("scroll", reposition, {
+          passive: true,
+          signal: listening.signal,
+        });
       }
       apply();
+      entering = false;
+      if (
+        !previous ||
+        previous.scale !== next.scale ||
+        previous.left !== next.left ||
+        previous.top !== next.top
+      )
+        reposition();
     },
+    reposition,
     destroy() {
       mapping = null;
       stop();
+      cancelAnimationFrame(positionFrame);
     },
   };
 }
