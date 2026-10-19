@@ -395,6 +395,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   let parkedDraft: { anchor: Anchor; text: string } | null = null;
   const recoveredDrafts: { anchor: Anchor; text: string }[] = [];
   let dialogKey: string | null = null;
+  // The open card whose anchor was last seen on the page.
+  let attachedKey: string | null = null;
   const cardPlacements = new Map<string, Placement>();
   const cardFollow = cardMotion(() => positionNotice());
   let draggedPin: { id: string; x: number; y: number } | null = null;
@@ -607,6 +609,16 @@ export function initComments(options: CommentsOptions): CommentsController {
     live,
   );
   document.body.append(host);
+  // Modal libraries hide every body sibling from assistive tech; komo stays
+  // reachable. A capped rate yields to a library that keeps re-applying.
+  let unhidden = 0,
+    unhiddenAt = 0;
+  const hostGuard = new MutationObserver((records) => {
+    if (Date.now() - unhiddenAt > 1e3) [unhidden, unhiddenAt] = [0, Date.now()];
+    if (++unhidden < 20)
+      for (const record of records) host.removeAttribute(record.attributeName!);
+  });
+  hostGuard.observe(host, { attributeFilter: ["aria-hidden", "inert"] });
   const savedStyle = {
     width: surface.style.width,
     boxSizing: surface.style.boxSizing,
@@ -4201,6 +4213,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     const accountScroll =
       dialogs.querySelector(".account-dialog")?.scrollTop ?? 0;
     const nextKey = account ? "account" : draft ? "draft" : selected;
+    if (nextKey !== dialogKey) attachedKey = null;
     const previousDialog = dialogs.firstElementChild as HTMLElement | null;
     const panel = threadPanel();
     const wasDocked = dialogs.classList.contains("thread-pane");
@@ -4985,8 +4998,10 @@ export function initComments(options: CommentsOptions): CommentsController {
         : anchor
           ? (() => {
               const rect = locateAnchor(anchor);
-              // A detached comment opens centred rather than at stale coordinates.
-              if (!rect.attached) return null;
+              // A detached comment opens centred rather than at stale coordinates,
+              // but one whose anchor leaves (a modal closing) closes with it.
+              if (!rect.attached) return attachedKey === dialogKey ? false : null;
+              attachedKey = dialogKey;
               around =
                 rect.width > 16 && rect.height > 16
                   ? { left: rect.x, top: rect.y, right: rect.x + rect.width, bottom: rect.y + rect.height }
@@ -5001,6 +5016,11 @@ export function initComments(options: CommentsOptions): CommentsController {
               return indicator ? indicatorPoint(indicator, rect) : rect;
             })()
           : null;
+    if (pin === false) {
+      // Unsent text survives: replies stay keyed by thread, drafts park.
+      if (draft && draftText.trim()) parkedDraft = { anchor: draft, text: draftText };
+      return dismiss();
+    }
     const follow = draggedPin?.id === selected;
     const updateOrigin = () => {
       dialog.style.transformOrigin =
@@ -5943,6 +5963,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       observer.disconnect();
       mutations.disconnect();
       themeWatch.disconnect();
+      hostGuard.disconnect();
       cancelAnimationFrame(themeFrame);
       const scroll = framed
         ? surface.scrollTop * htmlZoom()
