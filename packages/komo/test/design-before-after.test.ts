@@ -165,15 +165,19 @@ describe("Design mode preview cleanup", () => {
     restored(link("Reports"));
   });
 
-  it("does not bring old edits back when Design mode reopens", async () => {
+  it("keeps pending edits recoverable while explicit exit clears the visible selection", async () => {
     const { press, edit, shadow } = await mount();
     await edit(link("Timer"));
     press("Escape");
+    restored(link("Timer"));
     press("d");
     await vi.waitFor(() => expect(shadow.querySelector(".design-inspector")?.getAttribute("aria-hidden")).toBe("false"));
-    restored(link("Timer"));
+    expect(link("Timer").style.width).toBe("166px");
+    expect(shadow.querySelector(".design-inspector__empty")).not.toBeNull();
     const undo = shadow.querySelector<HTMLButtonElement>('.design-inspector [aria-label="Undo"]')!;
-    expect(undo.disabled).toBe(true);
+    expect(undo.disabled).toBe(false);
+    shadow.querySelector<HTMLButtonElement>('.design-inspector__pending button:last-child')!.click();
+    restored(link("Timer"));
   });
 
   it("previews the draft with its own switch and resets it when the draft is cancelled", async () => {
@@ -191,6 +195,10 @@ describe("Design mode preview cleanup", () => {
     press("Escape", shadow.querySelector<HTMLTextAreaElement>('[data-focus-key="body"]')!);
     await vi.waitFor(() => expect(shadow.querySelector(".draft-proposal")).toBeNull());
     await vi.waitFor(() => restored(timer));
+    press("d");
+    await vi.waitFor(() => expect(shadow.querySelector(".design-inspector")?.getAttribute("aria-hidden")).toBe("false"));
+    restored(timer);
+    expect(shadow.querySelector<HTMLButtonElement>('.design-inspector [aria-label="Undo"]')!.disabled).toBe(true);
   });
 
   it("restores the page on post, then the posted thread previews only through Before/After", async () => {

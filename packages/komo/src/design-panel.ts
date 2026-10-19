@@ -1,3 +1,4 @@
+import type { DesignTarget } from "./design-target.js";
 import { designPanelStyles } from "./design-panel-styles.js";
 
 /** The property controls load as their own chunk, so the Design mode entry stays small. */
@@ -19,7 +20,7 @@ export type Field = {
 };
 
 export interface PanelContext {
-  element: HTMLElement;
+  element: DesignTarget;
   changed?: ReadonlyMap<string, string>;
   collapsed: Set<string>;
   editText: HTMLButtonElement;
@@ -47,6 +48,9 @@ export const fields: Field[] = [
   { property: "border-width", label: "Border width", kind: "length", glyph: "M1 2.5h10M1 6h10M1 9.5h10", max: 24 },
   { property: "border-style", label: "Border style", kind: "select", values: ["none", "solid", "dashed", "dotted"] },
   { property: "border-color", label: "Border color", kind: "color" },
+  { property: "fill", label: "Fill", kind: "color", wide: true },
+  { property: "stroke", label: "Stroke", kind: "color", wide: true },
+  { property: "stroke-width", label: "Stroke width", kind: "length", min: 0, max: 24 },
 ];
 
 /** Fetched with the panel, so its first render already has styled selects. */
@@ -69,7 +73,7 @@ function shortColor(value: string): string {
   return Number(alpha) ? value : "transparent";
 }
 
-export function valueFor(field: Field, element: HTMLElement): string {
+export function valueFor(field: Field, element: DesignTarget): string {
   const value = getComputedStyle(element).getPropertyValue(field.property).trim();
   if (field.kind === "color") return shortColor(value);
   if (field.kind === "length" || field.kind === "size") {
@@ -83,8 +87,8 @@ function inputValue(field: Field, control: Control): string | null {
   const value = control.value.trim();
   if (field.kind === "color") {
     const style = document.createElement("span").style;
-    style.color = value;
-    return style.color ? value : null;
+    style.setProperty(field.property, value);
+    return style.getPropertyValue(field.property) ? value : null;
   }
   if (field.kind === "length") {
     if (!value) return null;
@@ -239,8 +243,10 @@ function section(context: PanelContext, name: string, properties: string[] | nul
   summary.textContent = name;
   const grid = document.createElement("div");
   grid.className = "design-grid";
-  for (const property of properties)
-    grid.append(fieldControl(fields.find((field) => field.property === property)!, context));
+  for (const property of properties) {
+    const field = fields.find((field) => field.property === property)!;
+    grid.append(fieldControl(context.element instanceof SVGElement && property === "color" ? { ...field, label: "Color" } : field, context));
+  }
   group.append(summary, grid);
   group.addEventListener("toggle", () => {
     if (!group.isConnected) return;
@@ -257,6 +263,13 @@ export function renderPanel(container: HTMLElement, context: PanelContext) {
   // Selects open komo's own listbox once that module (fetched with the panel) is in.
   void selectMenu.then((menu) => menu?.attach(container));
   const style = getComputedStyle(element);
+  if (element instanceof SVGElement) {
+    container.append(
+      section(context, "Layout", element instanceof SVGSVGElement ? ["width", "height", "display"] : ["display"]),
+      section(context, "Appearance", ["color", "fill", "stroke", "stroke-width"]),
+    );
+    return;
+  }
   const touched = (properties: string[]) => properties.some((property) => changed?.has(property));
   // Direct text, or text styles the element sets inline for its children.
   const text = [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) ||

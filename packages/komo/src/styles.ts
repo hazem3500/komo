@@ -783,8 +783,8 @@ ${morphingMenuStyles}
   pointer-events: none;
   z-index: 1;
   opacity: 0;
-  background: #4388ff0b;
-  outline: 1.5px solid #4388ff;
+  background: none;
+  outline: 2px dashed var(--accent, #bda6ef);
   outline-offset: 2px;
   transition: opacity 100ms ease;
 }

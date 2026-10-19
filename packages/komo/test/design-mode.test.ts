@@ -7,14 +7,14 @@ describe("design mode preview inspector", () => {
   let host: HTMLElement;
   let page: HTMLElement;
   let button: HTMLButtonElement;
-  let pointed: HTMLElement;
+  let pointed: Element | null;
   let controller: ReturnType<typeof createDesignMode>;
   let exited: number;
   let comments: Element[];
   let commentProposals: Array<string | undefined>;
 
   function pointer(type: string, target: Element) {
-    if (target instanceof HTMLElement) pointed = target;
+    pointed = target;
     const event = new Event(type, { bubbles: true, cancelable: true, composed: true });
     Object.defineProperties(event, { clientX: { value: 30 }, clientY: { value: 20 }, button: { value: 0 } });
     target.dispatchEvent(event);
@@ -58,10 +58,12 @@ describe("design mode preview inspector", () => {
     expect(empty.querySelector("strong")?.textContent).toBe("Select an element");
     expect([...empty.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
       "Click to inspect",
+      "Ctrl-click for an inner target",
+      "Alt+↑ parent · Alt+↓ child",
       "Double-click text to edit",
       "Esc to exit",
     ]);
-    expect([...empty.querySelectorAll("kbd")].map((key) => key.textContent)).toEqual(["Click", "Double-click", "Esc"]);
+    expect([...empty.querySelectorAll("kbd")].map((key) => key.textContent)).toEqual(["Click", "Ctrl-click", "Alt+↑", "Alt+↓", "Double-click", "Esc"]);
     expect(empty.querySelector("svg")).not.toBeNull();
     expect(comment.hidden).toBe(true);
     pointer("pointerdown", button);
@@ -80,10 +82,218 @@ describe("design mode preview inspector", () => {
     color.dispatchEvent(new Event("input", { bubbles: true }));
     expect(button.style.color).toBe("rgb(255, 0, 0)");
     expect(shadow.querySelector<HTMLElement>(".design-inspector__count")?.textContent).toBe("1 change");
-    expect(shadow.querySelector<HTMLElement>(".design-inspector__count")?.title).toContain("resets on exit");
-    // Leaving Design mode restores the page; posted comments preview with Before/After.
+    expect(shadow.querySelector<HTMLElement>(".design-inspector__count")?.title).toContain("Undo");
     controller.setActive(false);
     expect(button.style.color).toBe("");
+    controller.setActive(true);
+    expect(button.style.color).toBe("rgb(255, 0, 0)");
+    expect(shadow.querySelector(".design-inspector__target")?.textContent).toBe("button#hero");
+    controller.destroy();
+    expect(button.style.color).toBe("");
+  });
+
+  it("keeps a selected target solid while prospective hover leaves its controls and edits intact", () => {
+    const label = document.querySelector<HTMLElement>("#label")!;
+    vi.spyOn(button, "getBoundingClientRect").mockReturnValue(new DOMRect(20, 30, 200, 40));
+    vi.spyOn(label, "getBoundingClientRect").mockReturnValue(new DOMRect(240, 50, 100, 20));
+    pointer("pointerdown", button);
+    const color = shadow.querySelector<HTMLInputElement>('[data-property="color"]')!;
+    color.dispatchEvent(new Event("focus"));
+    color.value = "#ff0000";
+    color.dispatchEvent(new Event("input", { bubbles: true }));
+    const selected = shadow.querySelector<HTMLElement>('.design-outline:not(.design-outline--prospective)')!;
+    const prospective = shadow.querySelector<HTMLElement>('.design-outline--prospective')!;
+    pointer("pointermove", label);
+    expect(selected.hidden).toBe(false);
+    expect(selected.dataset.kind).toBe("selected");
+    expect(selected.style.left).toBe("20px");
+    expect(prospective.hidden).toBe(false);
+    expect(prospective.style.left).toBe("240px");
+    expect(shadow.querySelector('[data-property="color"]')).toBe(color);
+    expect(button.style.color).toBe("rgb(255, 0, 0)");
+    expect(shadow.querySelector('.design-inspector__target')?.textContent).toBe("button#hero");
+    pointer("pointermove", button);
+    expect(prospective.hidden).toBe(true);
+    pointer("pointermove", label);
+    pointer("pointermove", shadow.querySelector('.design-inspector__close')!);
+    expect(prospective.hidden).toBe(true);
+    expect(selected.hidden).toBe(false);
+    pointed = null;
+    document.dispatchEvent(new MouseEvent("pointermove", { bubbles: true }));
+    expect(prospective.hidden).toBe(true);
+    expect(button.style.color).toBe("rgb(255, 0, 0)");
+  });
+
+  it("selects an SVG icon, drills into a shape explicitly, and supports keyboard parent/child navigation", () => {
+    const link = document.createElement("a");
+    link.href = "/example";
+    link.innerHTML = '<svg id="report-icon" width="24" height="24"><path id="report-shape" d="M0 0h24v24H0z"/></svg><span>Example</span>';
+    page.append(link);
+    const svg = link.querySelector("svg")!, path = link.querySelector("path")!;
+    const title = () => shadow.querySelector('.design-inspector__target')?.textContent;
+    pointer("pointerdown", path);
+    expect(title()).toBe("svg#report-icon");
+    const color = shadow.querySelector<HTMLInputElement>('[data-property="color"]')!;
+    color.dispatchEvent(new Event("focus"));
+    color.value = "#ff0000";
+    color.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(svg.style.color).toBe("rgb(255, 0, 0)");
+    expect(link.style.color).toBe("");
+    expect(path.style.color).toBe("");
+    expect(shadow.querySelector('.design-text-edit')).toBeNull();
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    path.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    pointed = path;
+    path.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, ctrlKey: true, button: 0 }));
+    expect(title()).toBe("path#report-shape");
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true }));
+    expect(title()).toBe("svg#report-icon");
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true }));
+    expect(title()).toBe("path#report-shape");
+    shadow.querySelector<HTMLInputElement>('[data-property="color"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true, composed: true }));
+    expect(title()).toBe("path#report-shape");
+  });
+
+  it("clears visible selection on explicit exit while preserving a recoverable pending proposal", () => {
+    pointer("pointerdown", button);
+    const color = shadow.querySelector<HTMLInputElement>('[data-property="color"]')!;
+    color.dispatchEvent(new Event("focus"));
+    color.value = "#ff0000";
+    color.dispatchEvent(new Event("input", { bubbles: true }));
+    shadow.querySelector<HTMLButtonElement>('[aria-label="Exit design mode"]')!.click();
+    expect(controller.active).toBe(false);
+    expect(exited).toBe(1);
+    controller.setActive(true);
+    expect(shadow.querySelector('.design-inspector__empty')).not.toBeNull();
+    expect(button.style.color).toBe("rgb(255, 0, 0)");
+    expect(shadow.querySelector<HTMLElement>('.design-inspector__pending')!.hidden).toBe(false);
+    shadow.querySelector<HTMLButtonElement>('.design-inspector__pending button')!.click();
+    expect(shadow.querySelector('.design-inspector__target')?.textContent).toBe("button#hero");
+    expect(shadow.querySelector('.design-inspector__count')?.textContent).toBe("1 change");
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    controller.setActive(true);
+    expect(shadow.querySelector('.design-inspector__empty')).not.toBeNull();
+  });
+
+  it("lets a host picker consume Escape before Design exits and still handles feedback-owned Escape", () => {
+    pointer("pointerdown", button);
+    const popup = document.createElement("div");
+    const input = document.createElement("input");
+    input.role = "combobox";
+    popup.append(input);
+    page.append(popup);
+    input.focus();
+    const consume = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.target !== input) return;
+      event.preventDefault();
+      popup.remove();
+      button.focus();
+    };
+    document.addEventListener("keydown", consume, true);
+    try {
+      const event = new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      });
+      input.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(controller.active).toBe(true);
+      expect(exited).toBe(0);
+      expect(document.activeElement).toBe(button);
+      expect(
+        shadow.querySelector(".design-inspector__target")?.textContent,
+      ).toBe("button#hero");
+    } finally {
+      document.removeEventListener("keydown", consume, true);
+    }
+    const reserved = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    });
+    reserved.preventDefault();
+    shadow
+      .querySelector('[aria-label="Exit design mode"]')!
+      .dispatchEvent(reserved);
+    expect(controller.active).toBe(false);
+    expect(exited).toBe(1);
+    controller.setActive(true);
+    const unclaimed = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(unclaimed);
+    expect(controller.active).toBe(false);
+    expect(unclaimed.defaultPrevented).toBe(true);
+    expect(exited).toBe(2);
+  });
+
+  it("does not resume a replacement element with the same id after detach or a route change", async () => {
+    pointer("pointerdown", button);
+    button.remove();
+    const replacement = document.createElement("button");
+    replacement.id = "hero";
+    page.append(replacement);
+    await vi.waitFor(() => expect(shadow.querySelector('.design-inspector__empty')).not.toBeNull());
+    controller.setActive(false);
+    controller.setActive(true);
+    expect(shadow.querySelector('.design-inspector__empty')).not.toBeNull();
+    expect(replacement.style.color).toBe("");
+    controller.destroy();
+    let route = "/one";
+    controller = createDesignMode({ root: shadow, host, targetAt: () => replacement, page: () => route, onComment() {}, onExit() {} });
+    controller.setActive(true);
+    await controller.ready;
+    controller.select(replacement);
+    controller.setActive(false);
+    route = "/two";
+    controller.setActive(true);
+    expect(shadow.querySelector('.design-inspector__empty')).not.toBeNull();
+  });
+
+  it("hands only the selected preview to a comment and retains other pending edits", async () => {
+    pointer("pointerdown", button);
+    const color = shadow.querySelector<HTMLInputElement>('[data-property="color"]')!;
+    color.dispatchEvent(new Event("focus"));
+    color.value = "#ff0000";
+    color.dispatchEvent(new Event("input", { bubbles: true }));
+    const label = document.querySelector<HTMLElement>("#label")!;
+    pointer("pointerdown", label);
+    const width = shadow.querySelector<HTMLInputElement>('[data-property="width"]')!;
+    width.dispatchEvent(new Event("focus"));
+    width.value = "200";
+    width.dispatchEvent(new Event("input", { bubbles: true }));
+    shadow.querySelector<HTMLButtonElement>('.design-inspector__actions button:last-child')!.click();
+    await vi.waitFor(() => expect(comments).toEqual([label]));
+    expect(commentProposals[0]).toContain("200px");
+    expect(label.style.width).toBe("");
+    expect(button.style.color).toBe("rgb(255, 0, 0)");
+    controller.setActive(false);
+    expect(button.style.color).toBe("");
+    controller.setActive(true);
+    expect(button.style.color).toBe("rgb(255, 0, 0)");
+    expect(label.style.width).toBe("");
+    controller.select(button);
+    expect(shadow.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.disabled).toBe(false);
+  });
+
+  it("lets an exit cancel a pending comment handoff without losing its preview history", async () => {
+    pointer("pointerdown", button);
+    const color = shadow.querySelector<HTMLInputElement>('[data-property="color"]')!;
+    color.dispatchEvent(new Event("focus"));
+    color.value = "#ff0000";
+    color.dispatchEvent(new Event("input", { bubbles: true }));
+    shadow.querySelector<HTMLButtonElement>('.design-inspector__actions button:last-child')!.click();
+    controller.setActive(false);
+    await Promise.resolve();
+    expect(comments).toEqual([]);
+    expect(button.style.color).toBe("");
+    controller.setActive(true);
+    expect(button.style.color).toBe("rgb(255, 0, 0)");
   });
 
   it("compares Before and After from the footer and with ←, → and B", () => {
@@ -166,7 +376,7 @@ describe("design mode preview inspector", () => {
     expect(commentProposals.at(-1)).toContain('"Selected text" → "Comment proposal"');
   });
 
-  it("restores edited text and styles when Design mode closes, and keeps no history", async () => {
+  it("retains edited text, styles and history through a brief Design exit, with explicit Reset", async () => {
     const label = document.querySelector<HTMLElement>("#label")!;
     pointer("pointerdown", label);
     shadow.querySelector<HTMLButtonElement>("[aria-label='Edit selected text inline']")!.click();
@@ -184,11 +394,16 @@ describe("design mode preview inspector", () => {
     expect(label.textContent).toBe("Selected text");
     expect(label.style.color).toBe("");
     controller.setActive(true);
+    expect(label.textContent).toBe("Edited");
+    expect(label.style.color).toBe("rgb(255, 0, 0)");
     const undo = shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:first-child")!;
-    expect(undo.disabled).toBe(true);
-    // Before/After has nothing left to bring back.
+    expect(undo.disabled).toBe(false);
     pointer("pointerdown", label);
-    expect(shadow.querySelector<HTMLElement>(".design-inspector__compare")!.hidden).toBe(true);
+    expect(shadow.querySelector<HTMLElement>(".design-inspector__compare")!.hidden).toBe(false);
+    shadow.querySelector<HTMLButtonElement>('[aria-label="Reset"]')!.click();
+    expect(label.textContent).toBe("Selected text");
+    expect(label.style.color).toBe("");
+    expect(undo.disabled).toBe(true);
   });
 
   it("double-clicking text selects it and starts inline editing", async () => {

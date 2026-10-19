@@ -7,6 +7,7 @@ export const designModeStyles = `
   transition:opacity 80ms ease;
 }
 .design-outline[data-kind="hover"] { outline-style:dashed; opacity:.8; }
+.design-outline--prospective[data-kind="hover"] { opacity:.55; }
 /* The inspector replaces the Comments view inside Komo's shared sidebar surface. */
 .design-inspector {
   position:absolute; inset:0; z-index:9;
@@ -33,10 +34,12 @@ export const designModeStyles = `
 .design-inspector__parent::after { content:'/'; margin-left:6px; color:#555; }
 .design-inspector__target { flex:none; max-width:60%; overflow:hidden; text-overflow:ellipsis; color:#fff; font-weight:600; font-size:15px; }
 .design-inspector__heading small { min-width:0; overflow:hidden; text-overflow:ellipsis; color:#909090; font-size:13px; }
-.design-inspector__close,.design-inspector__fold,.design-inspector__actions button { display:grid; place-items:center; min-width:28px; height:28px; border-radius:7px; color:#909090; }
-.design-inspector__close,.design-inspector__fold { flex:none; }
-.design-inspector__close svg,.design-inspector__fold svg,.design-inspector__actions svg { width:16px; height:16px; }
-.design-inspector__parent:hover,.design-inspector__close:hover,.design-inspector__fold:hover,.design-inspector__actions button:hover:not(:disabled) { background:#161616; color:#eee; }
+.design-inspector__back,.design-inspector__close,.design-inspector__fold,.design-inspector__actions button { display:grid; place-items:center; min-width:28px; height:28px; border-radius:7px; color:#909090; }
+.design-inspector__back,.design-inspector__close,.design-inspector__fold { flex:none; }
+.design-inspector__back svg,.design-inspector__close svg,.design-inspector__fold svg,.design-inspector__actions svg { width:16px; height:16px; }
+.design-inspector__back svg { rotate:90deg; }
+.design-inspector__back[hidden] { display:none; }
+.design-inspector__back:hover,.design-inspector__parent:hover,.design-inspector__close:hover,.design-inspector__fold:hover,.design-inspector__actions button:hover:not(:disabled) { background:#161616; color:#eee; }
 .design-inspector__fold { display:none; }
 .design-inspector__fold svg { transition:rotate .25s var(--ease-smooth-out); }
 .design-inspector[data-folded] .design-inspector__fold svg { rotate:180deg; }
@@ -50,23 +53,8 @@ export const designModeStyles = `
 .design-inspector[data-empty] .design-inspector__identity { visibility:hidden; }
 .design-inspector[data-empty] .design-inspector__controls { display:grid; place-items:center; }
 .design-inspector[data-empty] .design-inspector__bar:not([data-changes],[data-message]) { display:none; }
-.design-inspector__empty { display:flex; flex-direction:column; align-items:center; gap:4px; padding:0 24px 28px; color:#898680; font-size:11px; text-align:center; }
-.design-inspector__empty > svg { box-sizing:content-box; width:20px; height:20px; margin-bottom:8px; padding:8px; border-radius:10px; background:#ffffff0a; color:#77736f; }
-.design-inspector__empty strong { color:#e9e6e1; font-size:12px; font-weight:600; }
-.design-inspector__empty ul { display:grid; gap:6px; margin:8px 0 0; padding:0; list-style:none; }
-.design-inspector__empty kbd { display:inline-block; min-width:8px; padding:0 5px; border-radius:4px; background:#ffffff0f; box-shadow:inset 0 0 0 1px #ffffff12,inset 0 -1px 0 #ffffff12; color:#c9c5bf; font:inherit; font-size:10px; font-weight:500; line-height:17px; }
 /* One slim bar: a quiet Comment action, plus a change count and tools once something changed. */
 .design-inspector__bar { flex:none; display:flex; align-items:center; gap:8px; min-height:56px; padding:0 12px; border-top:1px solid #ffffff0d; color:#909090; font-size:12px; }
-.design-inspector__count { white-space:nowrap; font-variant-numeric:tabular-nums; }
-/* Before/After: the same segmented control as design comment cards. */
-.design-inspector__compare { display:inline-flex; flex:none; padding:2px; border-radius:7px; background:#ffffff0a; }
-.design-inspector__compare[hidden],.design-inspector__bar[data-message] .design-inspector__compare { display:none; }
-.design-inspector__compare button { height:22px; padding:0 8px; border-radius:5px; color:#9a9a9a; font:inherit; font-size:11px; }
-.design-inspector__compare button:hover { color:#fff; }
-.design-inspector__compare button[aria-pressed="true"] { color:#fff; background:#ffffff1a; }
-.design-inspector__status { display:none; min-width:0; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; animation:design-status .2s var(--ease-smooth-out); }
-.design-inspector__bar[data-message] .design-inspector__status { display:block; }
-.design-inspector__bar[data-message] .design-inspector__count,.design-inspector__bar:not([data-changes]) .design-inspector__tool { display:none; }
 .design-inspector__actions { display:flex; align-items:center; gap:2px; margin-left:auto; }
 .design-inspector__actions button:disabled { cursor:default; opacity:.35; }
 /* Comment is komo's primary action, as on the Comments panel. */
