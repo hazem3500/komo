@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -72,8 +74,18 @@ jobs:
           # Only the version file: build output must never be committed.
           git add packages/komo/package.json
           git commit -m "Release @hazem3500/komo ${{ steps.version.outputs.version }}"
-          git push origin HEAD:main
+          # Package publication may overlap a new merge to main. Rebase only the
+          # version commit and retry a normal push; never overwrite newer work.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+          done
+          exit 1
       - name: Tag the release
         run: |
-          git tag "v${{ steps.version.outputs.version }}"
+          # Tag the exact source published to npm, even if main advanced.
+          git tag "v${{ steps.version.outputs.version }}" "$GITHUB_SHA"
           git push origin "v${{ steps.version.outputs.version }}"
