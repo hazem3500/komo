@@ -10,6 +10,7 @@ import { adaptivePolling } from "./polling.js";
 import { pinDirection } from "./pin-direction.js";
 import { pinStacks } from "./pin-stacks.js";
 import { drawHighlight } from "./highlight.js";
+import { createFramePortals } from "./frame-portals.js";
 import { OptimisticQueue } from "./optimistic.js";
 import { agentPrompt } from "./agent-prompt.js";
 import { accentPicker } from "./lazy-accent-picker.js";
@@ -638,37 +639,12 @@ export function initComments(options: CommentsOptions): CommentsController {
     { position: string; marginBottom: string }
   >();
   const savedHtmlBackground = html.style.background;
-  // Frame view maps body-level portals (dialogs, overlays, toasts) like the page:
-  // viewport point p lands at frame offset + p * scale. Individual translate and
-  // scale compose with the portal's own transform, about its own origin.
-  const portals = new Map<HTMLElement, Pick<CSSStyleDeclaration, "translate" | "scale">>();
+  const portalFrame = createFramePortals(surface, host, options.frame?.include, geometry);
   function framePortals() {
-    for (const [node, styles] of portals) Object.assign(node.style, styles);
-    const keep = new Set<HTMLElement>();
-    if (framed && !destroyed) {
-      const s = appliedScale;
-      for (const node of document.body.children) {
-        if (!(node instanceof HTMLElement) || node === host || node.contains(surface)) continue;
-        const css = getComputedStyle(node);
-        if (!(options.frame?.include?.(node) ?? (!node.style.transform && css.position === "fixed"))) continue;
-        keep.add(node);
-        if (!portals.has(node)) {
-          portals.set(node, rememberStyles(node, ["translate", "scale"]));
-          observer.observe(node);
-        }
-        const origin = css.transformOrigin.split(" ").map(parseFloat);
-        const translate = css.translate === "none" ? [] : css.translate.match(/calc\(.*?\)|[^\s(]+/g) ?? [];
-        node.style.translate = [surface.style.left, surface.style.top].map((offset, axis) =>
-          `calc(${parseFloat(offset) - (1 - s) * ([node.offsetLeft, node.offsetTop][axis] + origin[axis])}px + ${s} * ${translate[axis] ?? "0px"})`
-        ).join(" ");
-        node.style.scale = css.scale.replace(/\S+/g, (value) => String(value === "none" ? s : +value * s));
-      }
-    }
-    for (const node of portals.keys())
-      if (!keep.has(node)) {
-        portals.delete(node);
-        observer.unobserve(node);
-      }
+    portalFrame.update(framed && !destroyed ? {
+      scale: appliedScale, left: parseFloat(surface.style.left) || 0,
+      top: parseFloat(surface.style.top) || 0,
+    } : null);
   }
   // The frame paints the page's own background; re-read it when a theme changes.
   // Frame's dark backdrop sits inline on body and html, so lift it while reading.
