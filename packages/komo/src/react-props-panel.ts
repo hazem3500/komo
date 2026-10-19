@@ -167,7 +167,7 @@ export function proposedReactChanges(element: HTMLElement): string | undefined {
     `Component: ${component.definition.name}`,
     `Source: ${component.definition.source}:${component.definition.line}`,
     ...rows,
-    "Preview values use the app's React state callback; Komo does not write source files.",
+    "Preview values use the app's React state callback; inline feedback does not write source files.",
   ].join("\n");
 }
 
@@ -898,7 +898,7 @@ export function createReactPropsPanel(
       control.disabled = true;
       control.value = `Read only · ${prop.typeLabel}`;
       control.setAttribute("aria-label", `${component.definition.name} ${prop.name}, read only`);
-      row.title = `Komo does not edit ${prop.typeLabel} props.`;
+      row.title = `Inline feedback does not edit ${prop.typeLabel} props.`;
     } else {
       const apply = () => {
         const raw = control instanceof HTMLInputElement && control.type === "checkbox"

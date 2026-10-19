@@ -976,7 +976,7 @@ describe("shared comments against real workerd and SQLite", () => {
       "https://evil.com"
     );
     expect(await refused.json()).toEqual({
-      error: "This site is not approved for this komo project.",
+      error: "This site is not approved for this project.",
       code: "site_not_approved",
     });
     const preflight = await fetch(

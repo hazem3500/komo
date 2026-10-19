@@ -501,7 +501,7 @@ async function oauthCallback(
   check(
     !setupCode || provider === "google",
     403,
-    "Use Google to connect komo."
+    "Use Google to set up inline feedback."
   );
   const created = setupCode
     ? await completeSetup(
@@ -593,7 +593,7 @@ async function route(
       headers: { "Content-Type": "text/javascript; charset=utf-8" },
     });
   if (env.KOMO_PAUSED === "true")
-    throw new HttpError(503, "komo is temporarily paused.");
+    throw new HttpError(503, "Inline feedback is temporarily paused.");
   if (env.EDGE_LIMIT) {
     const allowed = await env.EDGE_LIMIT.limit({
       key: request.headers.get("CF-Connecting-IP") ?? "local",
@@ -811,7 +811,7 @@ async function route(
   )
     throw new HttpError(
       403,
-      "This site is not approved for this komo project.",
+      "This site is not approved for this project.",
       "site_not_approved"
     );
   if (request.method === "OPTIONS") return new Response(null, { status: 204 });

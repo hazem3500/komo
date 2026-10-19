@@ -245,7 +245,7 @@ async function init() {
       await sync();
       await installAgentWorkflow(cwd);
       console.log(
-        `\nMount komo in your app:\n\nimport { initKomo } from './komo.config.js';\ninitKomo();\n\nOpen ${origin} and choose Connect komo in the sidebar.\nKeep this terminal open while you start your app in another terminal.\nHosted recovery: ${setup.url}\n`
+        `\nMount komo in your app:\n\nimport { initKomo } from './komo.config.js';\ninitKomo();\n\nOpen ${origin} and choose Connect in the sidebar.\nKeep this terminal open while you start your app in another terminal.\nHosted recovery: ${setup.url}\n`
       );
       console.log("Waiting for your project to connect…");
       const end = setup.expiresAt;
