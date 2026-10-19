@@ -83,6 +83,8 @@ export interface KomoShortcuts {
   design?: string | false;
   /** Restore a dismissed toolbar. Defaults to "Shift+K". */
   restore?: string | false;
+  /** Open or close the comment list. Defaults to "L". */
+  comments?: string | false;
 }
 
 /** Optional review features. Each defaults to true; false removes it from the UI. */
