@@ -151,14 +151,12 @@ describe.each(versions)("discoverReactComponents with $label", (version) => {
     const design: DesignSystem = { components: discoverReactComponents() };
     const panel = createReactPropsPanel(heading, () => {}, undefined, undefined, design)!;
     expect(panel.querySelector("summary")?.textContent).toBe("Discovered props");
-    expect(panel.textContent).toContain("discovered from React, read-only");
+    expect(panel.textContent).toContain("read-only");
     expect(panel.textContent).toContain("rendered at");
     const fields = Object.fromEntries([...panel.querySelectorAll<HTMLElement>("label")].map((label) => [label.querySelector("span")!.textContent, label.querySelector("input")!]));
-    expect(Object.keys(fields)).toEqual(["title", "tags", "onSelect"]);
-    expect(fields.tags.value).toBe('["a", "b"]');
-    expect(fields.onSelect.value).toBe("ƒ onSelect()");
-    for (const input of Object.values(fields)) expect(input.disabled).toBe(true);
-    expect(panel.querySelector("select, input:not(:disabled)")).toBeNull();
+    expect(Object.keys(fields)).toEqual(["title"]);
+    for (const input of Object.values(fields)) expect(input.readOnly).toBe(true);
+    expect(panel.querySelector("select, input:not([readonly])")).toBeNull();
   });
 
   describe("precedence", () => {
@@ -232,13 +230,15 @@ describe("serialization", () => {
     };
   };
 
-  it("describes functions, symbols, elements and cycles without running anything", () => {
+  it("hides functions, refs, opaque children and internal plumbing without invoking getters", () => {
     let calls = 0;
     const cycle: Record<string, unknown> = { name: "loop" };
     cycle.self = cycle;
     const getter = Object.defineProperty({}, "danger", { enumerable: true, get() { calls++; return "run"; } });
     const element = { $$typeof: Symbol.for("react.transitional.element"), type: "button", props: { onClick() { calls++; } } };
     const { shown } = props({
+      label: "Continue", disabled: false, variant: "primary",
+      ref: { current: null }, children: element, __scopeDialog: "internal", _owner: "internal", missing: undefined,
       fn: function save() { calls++; },
       arrow: () => { calls++; },
       sym: Symbol("tag"),
@@ -251,21 +251,11 @@ describe("serialization", () => {
       map: new Map([[1, 2]]),
       instance: new (class Widget {})(),
     });
-    expect(shown.fn).toBe("ƒ save()");
-    expect(shown.arrow).toBe("ƒ arrow()");
-    expect(shown.sym).toBe("Symbol(tag)");
-    expect(shown.element).toBe("<button />");
-    expect(shown.cycle).toBe('{ name: "loop", self: [Circular] }');
-    expect(shown.getter).toBe("{ danger: [getter] }");
-    expect(shown.big).toBe("10n");
-    expect(shown.node).toBe("<canvas>");
-    expect(shown.date).toBe("1970-01-01T00:00:00.000Z");
-    expect(shown.map).toBe("Map(1)");
-    expect(shown.instance).toBe("Widget {…}");
+    expect(shown).toEqual({ label: '"Continue"', disabled: "false", variant: '"primary"' });
     expect(calls).toBe(0);
   });
 
-  it("applies depth, item, string and size limits", () => {
+  it("bounds long primitive values and omits opaque collections", () => {
     const { shown } = props(
       {
         long: "x".repeat(500),
@@ -277,10 +267,7 @@ describe("serialization", () => {
       { maxString: 20, maxItems: 3, maxDepth: 2, maxValue: 60 },
     );
     expect(shown.long).toBe(`"${"x".repeat(20)}…"`);
-    expect(shown.list).toBe("[1, 2, 3, … +5]");
-    expect(shown.deep).toBe("{ a: { b: {…} } }");
-    expect(shown.wide).toBe("{ k0: 0, k1: 1, k2: 2, … +9 }");
-    expect(shown.huge.length).toBeLessThanOrEqual(61);
+    expect(Object.keys(shown)).toEqual(["long"]);
   });
 
   it("limits the number of props and reports how many were left out", () => {
@@ -292,7 +279,7 @@ describe("serialization", () => {
 
   it("never exposes secret-looking props to the panel or the proposal context", () => {
     const { shown, identity } = props({ apiKey: "sk-live-123", accessToken: "t0k", label: "ok", custom: "private-ish" }, { redact: (name: string) => name === "custom" });
-    expect(shown).toEqual({ apiKey: "[redacted]", accessToken: "[redacted]", label: '"ok"', custom: "[redacted]" });
+    expect(shown).toEqual({ label: '"ok"' });
     expect(JSON.stringify({ ...identity, element: undefined })).not.toContain("sk-live-123");
     expect(identity.props).toEqual({ label: "ok" });
   });
@@ -300,7 +287,7 @@ describe("serialization", () => {
   it("tolerates props that throw when read", () => {
     const hostile = new Proxy({}, { ownKeys() { throw new Error("no"); }, getPrototypeOf() { throw new Error("no"); } });
     const { shown } = props({ hostile, fine: 1 });
-    expect(shown.hostile).toBe("[unreadable]");
+    expect(shown.hostile).toBeUndefined();
     expect(shown.fine).toBe("1");
   });
 });

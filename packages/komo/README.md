@@ -95,7 +95,7 @@ Design mode also takes interaction cues from established design tools: select a 
 
 ### Opt-in React prop inspection
 
-React teams can register selected component roots for typed prop previews through the `./react` entry. A build-time TypeScript Compiler API pass generates the prop manifest from an explicitly marked function component and props type; the inspector edits only strings, numbers, booleans, and literal unions. Functions, `ReactNode`, objects, generics, nullable unions, and any unsupported type remain read-only. This metadata is a safe allowlist, not runtime discovery of every React component; `defaultProps` and every React component form are not inferred.
+React teams can register selected component roots for typed prop previews through the `./react` entry. A build-time TypeScript Compiler API pass generates the prop manifest from an explicitly marked function component and props type; the inspector edits only strings, numbers, booleans, and literal unions. Functions, refs, `ReactNode`, objects, generics and unsupported types are omitted from editable controls. This metadata is a safe allowlist, not runtime discovery of every React component; `defaultProps` and every React component form are not inferred.
 
 The app provides an `onChange` callback that updates its own state. Komo previews those values through React's normal render cycle, offers undo/reset, and can prefill an explicit comment with the proposed before/after values and source path. Posting still requires the user to submit the comment. Komo's core never accesses React Fiber internals and never writes source files; the one exception is the separate, opt-in [React fiber adapter](#discovering-react-components), which reads React internals only for apps that install it. Preview prop changes reset on refresh. A component may opt one leaf render into direct text editing by setting `textProp` to the name of an allowed string prop; Komo does not infer which child text belongs to a prop. See [`examples/react-props`](./examples/react-props/README.md) for the generated fixture and limitations.
 
@@ -214,9 +214,21 @@ initKomo({ project, design: { components: discoverReactComponents() } });
 ```
 
 - **What it reads.** The `__reactFiber$*` key React puts on DOM nodes (or, when present, the renderers of `window.__REACT_DEVTOOLS_GLOBAL_HOOK__`), then `return`/`child` links, `memoizedProps`, `_debugSource` (React 18) and `_debugStack` (React 19 dev). It climbs from the picked element, through shadow hosts, to the nearest function, class, `forwardRef` or `memo` component, and picks that fiber's current copy so props are not stale after updates. Several React roots and renderers on a page are fine.
-- **What it shows.** The panel adds a **Discovered props** group labelled "discovered from React, read-only", with the props and "rendered at `file:line`". The location is where the component was written into JSX (the call site), not where it is defined. React 19 records an Error stack of the generated file; a dev server that serves modules unbundled gives real paths, and otherwise pass `resolveSource(file, line, column)` to map positions (for example through a source map). Proposals also name the component with its primitive props, like any component adapter.
-- **Props are summarized, never run.** Strings, numbers and booleans are shown; arrays and plain objects are cut off by `maxDepth` (3), `maxItems` (6), `maxString` (80) and `maxValue` (240), and `maxProps` caps the list (24). Functions, React elements, symbols, DOM nodes and class instances are described (`ƒ onSave()`, `<button />`), cycles read `[Circular]`, and getters are never invoked. Props named like secrets (`token`, `password`, `apiKey`, `secret`, `auth`…) and anything `redact(name)` matches show as `[redacted]` and are kept out of proposals.
-- **Read-only, and registered components win.** Discovered props are never editable, because komo has no state callback or typed schema for them. A component registered with `useKomoInspectable`, or answered by your own `adapter`, always takes precedence and keeps its editable typed props; around an element inside a registered component the panel keeps showing "Inside *Component*". A component nested inside a registered one that is not registered itself is discovered.
+- **Useful props first.** Strings, finite numbers and booleans appear in **Discovered props**. Callbacks, refs, undefined values, React children, opaque objects and framework internals are omitted without invoking getters. Technical primitive attributes are in collapsed **Advanced attributes**; `aria-label` stays with useful props. Secret-looking names and `redact(name)` matches are excluded from both the panel and proposals. `maxProps` (24) and `maxString` (80) bound the display.
+- **Location and precedence.** “Rendered at `file:line`” identifies the JSX call site. Use `resolveSource(file, line, column)` to map bundled locations. Explicit `useKomoInspectable` registrations and your own `adapter` win. A descendant points to its component root; props edit that instance only.
+- **Runtime editing is optional.** Import `@hazem3500/komo/adapters/react-preview` before the first `react-dom/client` import, then use `discoverReactComponents({ edit: true })`. The separate bootstrap captures React 18/19 development renderer capabilities, preserves an existing DevTools hook, and calls the renderer's own prop override method. It never assigns Fiber fields. Production and unsupported renderers, or renderers whose capabilities were not captured, stay read-only. Discovered class components need an explicit editor/registration. Import order matters: calling the installer after React has loaded cannot recover missing renderer capabilities.
+
+```ts
+// First import in the app's development entry, before its React/router graph.
+import "@hazem3500/komo/adapters/react-preview";
+// In the lazily enabled feedback configuration:
+const components = discoverReactComponents({ edit: true });
+```
+
+Primitive controls use current prop types. Declare optional or enum controls through `schema(identity)` when you have component metadata; runtime discovery cannot infer a union from one string. Edits stay applied through parent re-renders, suspend outside Design, and support Before/After, Undo, per-field Reset and Reset all. Reset restores the pre-edit value and releases the override; unmounting never transfers it to another instance. These are runtime previews, with proposed changes available for comments, not source edits.
+
+For a framework-independent integration, a `ComponentAdapter` may supply `editor(identity)` returning a stable `ComponentEditor` with `schema`, `read()` and `apply(next)`. Apply through the app's state or supported renderer API, preserve other props, and keep the preview stable through re-renders. Optional `available()` rejects detached instances; `release(properties)` stops retaining overrides after baseline restoration, and `subscribe(listener)` refreshes computed controls after a render commits. Existing `useKomoInspectable` registrations remain supported and take precedence.
+
 - **Graceful no-op.** Every access is guarded. Non-React pages, unknown React versions or fiber shapes, production builds and hostile props yield nothing rather than an error. Production React keeps no debug fields, so there is no location; names that look minified (one or two characters) or are missing are not shown. `include(name)` hides components you don't want listed.
 - **Fragile by design.** These fields are private React implementation details, and React can rename or remove them in any release. React 18.3 and 19.2 are tested here (unit tests and a Chrome run of the demo for each); another version may quietly show nothing until the adapter is updated. If that matters more than convenience, register the components you care about with `useKomoInspectable` instead.
 
@@ -235,13 +247,13 @@ const mode = classTheme({
 });
 const product = classTheme({
   id: "product",
-  options: [{ id: "focus", attribute: { "data-product": "focus" } }, { id: "track", attribute: { "data-product": "track" } }],
+  options: [{ id: "studio", attribute: { "data-product": "studio" } }, { id: "docs", attribute: { "data-product": "docs" } }],
 });
 
 // Generate this from your design-system foundations.
 const tokens: TailwindToken[] = [
   { path: "color.text.primary", type: "color", class: "text-primary", properties: ["color"], group: "Text",
-    values: { light: "#1f1f1f", dark: "#f5f5f5", "track+dark": "#fce5d8" } },
+    values: { light: "#1f1f1f", dark: "#f5f5f5", "docs+dark": "#fce5d8" } },
   { path: "color.bg.primary-interactive", type: "color", class: "bg-primary-interactive",
     properties: ["background-color"], value: "#e57cd8", states: ["hover", "active", "disabled"] },
   { path: "radius.md", type: "dimension", class: "rounded-md", properties: ["border-radius"], value: "6px" },

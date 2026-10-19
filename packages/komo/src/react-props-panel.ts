@@ -1,6 +1,7 @@
-import { previewStyle } from "./design-popup.js";
-import type { DesignTarget } from "./design-target.js";
+import { previewStyle, watchPopup } from "./design-popup.js";
+import { isDesignTarget, type DesignTarget } from "./design-target.js";
 import {
+  adaptComponentEditor,
   inspectableAncestor,
   inspectableFor,
   isEditablePropValue,
@@ -59,7 +60,7 @@ const edits = new Map<DesignTarget, Array<{ propName: string; before: Inspectabl
 const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
 // React props, inline token chips and shared theme values, in the inspector's compact field style.
-const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-inside{padding:10px 12px}.design-react-inside button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-react-inside button:hover{text-decoration:underline}.design-react-field.design-field{display:grid;grid-template-columns:76px minmax(0,1fr);gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 8px;border:0;border-radius:6px;background-color:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field.design-field>select{padding-right:20px}.design-react-field input[type=checkbox]{justify-self:end;width:14px;height:14px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 6px center/8px no-repeat;color:#e9e6e1;padding:0 18px 0 6px;font:inherit;font-size:10px;cursor:pointer}.design-react-field .design-token-binding[data-mode=token] select{background-color:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-token-off{position:absolute;top:8px;right:24px;display:grid;place-items:center;width:12px;height:12px}.design-token-off::before{content:'';width:4px;height:4px;border-radius:50%;background:#e7c27d;opacity:.7}.design-token-off[hidden]{display:none}.design-field:has(>.design-token-binding>.design-token-off:not([hidden]))>input[data-property]{padding-right:38px}.design-theme-switch{padding:6px 12px 8px}.design-theme-switch .design-react-field>span{text-transform:capitalize}.design-theme-options{display:flex;min-width:0;padding:2px;border-radius:6px;background:#ffffff0a}.design-theme-options button{flex:1;min-width:0;height:24px;padding:0 6px;border:0;border-radius:4px;background:none;color:#898680;font:inherit;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.design-theme-options button:hover{color:#f1efeb}.design-theme-options button[aria-pressed=true]{background:#ffffff1a;color:#f1efeb}.design-theme-options button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}@media (max-width:520px){.design-theme-options button{height:30px}.design-react-field.design-field>:is(input,select){height:34px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{top:7px}.design-token-off{top:11px}}`;
+const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-inside{padding:10px 12px}.design-react-inside button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-react-inside button:hover{text-decoration:underline}.design-react-field.design-field{display:grid;grid-template-columns:76px minmax(0,1fr);gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 8px;border:0;border-radius:6px;background-color:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field.design-field>select{padding-right:20px}.design-react-field input[type=checkbox]{justify-self:end;width:14px;height:14px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 6px center/8px no-repeat;color:#e9e6e1;padding:0 18px 0 6px;font:inherit;font-size:10px;cursor:pointer}.design-react-field .design-token-binding[data-mode=token] select{background-color:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-token-off{position:absolute;top:8px;right:24px;display:grid;place-items:center;width:12px;height:12px}.design-token-off::before{content:'';width:4px;height:4px;border-radius:50%;background:#e7c27d;opacity:.7}.design-token-off[hidden]{display:none}.design-field:has(>.design-token-binding>.design-token-off:not([hidden]))>input[data-property]{padding-right:38px}.design-theme-switch{padding:6px 12px 8px}.design-theme-switch .design-react-field>span{text-transform:capitalize}.design-theme-options{display:flex;min-width:0;padding:2px;border-radius:6px;background:#ffffff0a}.design-theme-options button{flex:1;min-width:0;height:24px;padding:0 6px;border:0;border-radius:4px;background:none;color:#898680;font:inherit;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.design-theme-options button:hover{color:#f1efeb}.design-theme-options button[aria-pressed=true]{background:#ffffff1a;color:#f1efeb}.design-theme-options button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}@media (max-width:520px){.design-theme-options button{height:30px}.design-react-field.design-field>:is(input,select){height:34px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{top:7px}.design-token-off{top:11px}}.design-react-row{display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:4px}.design-react-row>.design-react-field{flex:1;min-width:0;grid-template-columns:minmax(88px,.8fr) minmax(0,1fr);min-height:32px;gap:0 10px;margin-top:6px}.design-react-row .design-react-field>:is(input,select){height:32px}.design-react-row .design-react-field>span{white-space:normal;overflow-wrap:anywhere;line-height:1.4}.design-react-row>.design-theme-reset{flex:none;width:28px;height:28px;margin-top:6px}.design-react-row>.design-theme-reset[hidden]{display:none}.design-react-preview{font-size:10px;color:#8e8799}.design-react-group>.design-react-source:first-of-type{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}.design-react-advanced{margin-top:10px}.design-react-advanced>summary{color:#898680;font-size:11px;cursor:pointer}.design-react-field input[readonly]{color:#aaa;background:#ffffff06;cursor:text}.design-react-row .design-react-field>input[type=checkbox]{width:16px;height:16px;margin:8px 0}.design-react-row .design-react-field:has(input[type=checkbox]){cursor:pointer}@media(max-width:520px){.design-react-row .design-react-field>:is(input,select){height:36px}.design-react-row>.design-theme-reset{width:32px;height:32px}}.design-theme-switch{position:relative;flex:none;padding:0}.design-theme-switch>summary{display:flex;align-items:center;gap:5px;max-width:90px;min-height:28px;padding:0 8px;border-radius:7px;background:#ffffff08;color:#b7b1c2;font-size:11px;list-style:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.design-theme-switch>summary::-webkit-details-marker{display:none}.design-theme-switch>summary::after{content:"⌄";color:#77736f}.design-theme-switch[open]>summary,.design-theme-switch>summary:hover{background:#ffffff14;color:#f1efeb}.design-theme-popup{position:absolute;z-index:12;top:calc(100% + 6px);right:0;box-sizing:border-box;width:min(280px,calc(100vw - 48px));max-height:50dvh;overflow:auto;padding:10px 12px;border:1px solid #ffffff1a;border-radius:10px;background:#191819;box-shadow:0 12px 40px #0008}.design-theme-popup .design-react-field{grid-template-columns:68px minmax(0,1fr)}.design-theme-popup .design-react-field+ .design-react-field{margin-top:8px}`;
 // The token picker's "Matches … · Use token" suggestion under an off-token field.
 const matchStyles = `.design-token-match{grid-column:1/-1;display:flex;align-items:center;gap:6px;min-width:0;margin-top:-2px;padding:0 4px;color:#77736f;font-size:10px}.design-token-match[hidden]{display:none}.design-token-match>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-token-match button{flex:none;padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-token-match button:hover{text-decoration:underline}.design-token-match button:focus-visible{outline:1px solid #bda6ef;outline-offset:2px;border-radius:2px}@media (pointer:coarse){.design-token-match button{min-height:32px}}`;
 
@@ -68,6 +69,8 @@ function scalarLabel(value: InspectableScalar): string {
 }
 
 const afterProps = new Map<DesignTarget, Record<string, InspectableScalar>>();
+const componentSource = (component: RegisteredInspectableComponent) => component.definition.source
+  ? `${component.definition.source}${component.definition.line ? `:${component.definition.line}` : ""}` : "";
 /** Before/After for React prop previews and shared theme values. */
 export function showDesignBefore(on: boolean): void {
   if (on)
@@ -171,9 +174,9 @@ export function proposedReactChanges(element: DesignTarget): string | undefined 
   return [
     "Proposed React prop changes (preview only)",
     `Component: ${component.definition.name}`,
-    `Source: ${component.definition.source}:${component.definition.line}`,
+    ...(componentSource(component) ? [`Source: ${componentSource(component)}`] : []),
     ...rows,
-    "Preview values use the app's React state callback; inline feedback does not write source files.",
+    "Runtime preview only; inline feedback does not write source files.",
   ].join("\n");
 }
 
@@ -206,7 +209,7 @@ export function designContext(element: DesignTarget, design?: DesignSystem): str
   if (registered) {
     const { definition, props } = registered.component;
     // Props as the page had them, before this session's previews.
-    identity = { name: definition.name, source: `${definition.source}:${definition.line}`, props: { ...props, ...Object.fromEntries(originals.get(registered.root) ?? []) } };
+    identity = { name: definition.name, source: componentSource(registered.component), props: { ...props, ...Object.fromEntries(originals.get(registered.root) ?? []) } };
   }
   const props = Object.entries(identity?.props ?? {})
     .filter(([, value]) => value === null || ["boolean", "number"].includes(typeof value) || (typeof value === "string" && value.length <= 80))
@@ -764,16 +767,21 @@ export function syncDesignTokenBinding(element: DesignTarget, property: string):
 }
 
 export function undoReactProp(element: DesignTarget): void {
-  const edit = edits.get(element)?.pop();
+  const history = edits.get(element);
+  const edit = history?.at(-1);
   const component = inspectableFor(element);
   if (!edit || !component) return;
+  const initial = history!.find(item => item.propName === edit.propName)!.before;
+  history!.pop();
   component.setProps({ ...component.props, [edit.propName]: edit.before });
-  const baseline = originals.get(element);
-  if (baseline) {
-    const initial = baseline.get(edit.propName);
-    if (Object.is(initial, edit.before)) baseline.delete(edit.propName);
-    if (!baseline.size) originals.delete(element);
+  let baseline = originals.get(element);
+  if (!baseline) originals.set(element, baseline = new Map());
+  if (Object.is(initial, edit.before)) {
+    baseline.delete(edit.propName);
+    component.releaseProps?.([edit.propName]);
   }
+  else baseline.set(edit.propName, initial);
+  if (!baseline.size) originals.delete(element);
 }
 
 /** Undo every prop, token and theme preview, and put switched themes back, e.g. when Design mode closes. */
@@ -790,22 +798,25 @@ export function resetPreviews(): void {
 const themeOriginals = new Map<ThemeAxis, string>();
 /** The axis whose control had focus, so a re-render can hand focus back to it. */
 let themeFocus: ThemeAxis | undefined;
+const themeClosers = new WeakMap<HTMLDetailsElement, () => void>();
 
 function currentTheme(axis: ThemeAxis): string | undefined {
   try { return String(axis.current()); } catch { return undefined; }
 }
 
 /** Put every axis Design mode switched back to its original option. */
-export function restoreThemes(): void {
+export function restoreThemes(container?: HTMLElement): void {
   for (const [axis, id] of themeOriginals)
     try { if (currentTheme(axis) !== id) axis.apply(id); } catch { /* An adapter that throws keeps its state. */ }
   themeOriginals.clear();
+  const menu = container?.querySelector<HTMLDetailsElement>(".design-theme-switch");
+  if (menu) { themeClosers.get(menu)?.(); menu.remove(); }
 }
 
 const titled = (label: string | undefined, id: string) => label || id.charAt(0).toUpperCase() + id.slice(1);
 
 /**
- * One row per theme axis at the top of the panel: a segmented control for two or
+ * A compact header menu with one row per theme axis: a segmented control for two or
  * three options, a select for more. Theme is context, not an edit, so switching
  * isn't counted, undone, reset or flipped by Before/After; Design mode restores
  * each axis's original option when it closes. `onSwitch` re-renders the panel,
@@ -817,9 +828,21 @@ export function attachThemeSwitcher(
   onSwitch: () => void,
   styleRoot?: ShadowRoot,
 ): void {
-  if (container.querySelector(".design-theme-switch")) return;
-  const group = document.createElement("div");
-  group.className = "design-group design-theme-switch";
+  const heading = container.closest(".design-inspector")?.querySelector(".design-inspector__heading");
+  const previous = (heading ?? container).querySelector<HTMLDetailsElement>(".design-theme-switch");
+  const wasOpen = previous?.open ?? false;
+  if (previous) themeClosers.get(previous)?.();
+  previous?.remove();
+  const group = document.createElement("details");
+  group.className = "design-theme-switch";
+  const trigger = document.createElement("summary");
+  trigger.setAttribute("aria-label", "Preview theme");
+  const popup = document.createElement("div");
+  popup.className = "design-theme-popup";
+  popup.setAttribute("role", "group");
+  popup.setAttribute("aria-label", "Theme preview options");
+  group.append(trigger, popup);
+  const currentLabels: string[] = [];
   const themes = design?.themes;
   let focus: HTMLElement | undefined;
   for (const axis of Array.isArray(themes) ? themes : []) {
@@ -827,6 +850,7 @@ export function attachThemeSwitcher(
     const options = Array.isArray(axis?.options) ? axis.options.filter((option) => typeof option?.id === "string") : [];
     if (current === undefined || options.length < 2) continue;
     const label = titled(axis.label, String(axis.id));
+    currentLabels.push(`${label}: ${titled(options.find(option => option.id === current)?.label, current)}`);
     const choose = (id: string) => {
       const before = currentTheme(axis);
       if (id === before) return;
@@ -863,12 +887,39 @@ export function attachThemeSwitcher(
     }
     if (themeFocus === axis) focus = control.querySelector<HTMLElement>("[aria-pressed=true]") ?? control;
     row.append(caption, control);
-    group.append(row);
+    popup.append(row);
   }
   themeFocus = undefined;
-  if (!group.childElementCount) return;
+  if (!popup.childElementCount) return;
+  trigger.textContent = currentLabels[0].split(": ").slice(1).join(": ") + (currentLabels.length > 1 ? ` +${currentLabels.length - 1}` : "");
+  trigger.title = `Preview theme · ${currentLabels.join(" · ")}`;
+  group.open = wasOpen || !!focus;
+  const events = new AbortController();
+  const { signal } = events;
+  const close = () => { group.open = false; };
+  themeClosers.set(group, () => { close(); events.abort(); });
+  group.addEventListener("keydown", event => {
+    if (event.key === "ArrowDown" && event.target === trigger) {
+      event.preventDefault();
+      group.open = true;
+      popup.querySelector<HTMLElement>("button,select")?.focus();
+    }
+  });
+  group.addEventListener("focusout", event => {
+    if (event.relatedTarget instanceof Node && !group.contains(event.relatedTarget)) close();
+  });
   ensurePanelStyles(styleRoot);
-  container.prepend(group);
+  if (heading) heading.insertBefore(group, heading.querySelector(".design-inspector__close"));
+  else container.prepend(group);
+  group.getRootNode().addEventListener("pointerdown", event => { if (!event.composedPath().includes(group)) close(); }, { capture: true, signal });
+  group.ownerDocument.defaultView?.addEventListener("keydown", event => {
+    if (!group.open || event.key !== "Escape" || !event.composedPath().includes(group)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    close();
+    trigger.focus();
+  }, { capture: true, signal });
+  watchPopup(trigger, () => { close(); if (!trigger.isConnected) events.abort(); }, signal);
   focus?.focus({ preventScroll: true });
 }
 
@@ -877,6 +928,7 @@ export function resetReactProps(element: DesignTarget): void {
   const component = inspectableFor(element);
   if (!baseline?.size || !component) return;
   component.setProps({ ...component.props, ...Object.fromEntries(baseline) });
+  component.releaseProps?.([...baseline.keys()]);
   originals.delete(element);
   edits.delete(element);
 }
@@ -909,7 +961,7 @@ function recordChange(
   propName: string,
   value: InspectableScalar,
   control: HTMLInputElement | HTMLSelectElement,
-  onEdit: () => void,
+  onEdit: (undo?: () => void) => void,
 ) {
   const definition = component.definition.props.find((prop) => prop.name === propName);
   if (!definition || !isEditablePropValue(definition, value)) {
@@ -917,38 +969,72 @@ function recordChange(
     return false;
   }
   control.removeAttribute("aria-invalid");
-  const before = component.props[propName];
-  if (Object.is(before, value)) return true;
+  let before: InspectableScalar;
+  try {
+    const props = component.props;
+    before = props[propName];
+    if (Object.is(before, value)) return true;
+    component.setProps({ ...props, [propName]: value });
+  }
+  catch {
+    control.setAttribute("aria-invalid", "true");
+    control.title = "Runtime preview is unavailable. The component kept its current props.";
+    return false;
+  }
   let elementOriginals = originals.get(element);
   if (!elementOriginals) originals.set(element, (elementOriginals = new Map()));
   const initial = elementOriginals.has(propName)
     ? elementOriginals.get(propName)
-    : before;
-  if (Object.is(initial, value)) elementOriginals.delete(propName);
+    : (edits.get(element)?.find(edit => edit.propName === propName) ?? { before }).before;
+  if (Object.is(initial, value)) {
+    elementOriginals.delete(propName);
+    component.releaseProps?.([propName]);
+  }
   else elementOriginals.set(propName, initial);
   if (!elementOriginals.size) originals.delete(element);
   let elementEdits = edits.get(element);
   if (!elementEdits) edits.set(element, (elementEdits = []));
   elementEdits.push({ propName, before, after: value });
-  component.setProps({ ...component.props, [propName]: value });
-  onEdit();
+  onEdit(() => undoReactProp(element));
   return true;
 }
 
 export function createReactPropsPanel(
   element: DesignTarget,
-  onEdit: () => void,
+  onEdit: (undo?: () => void) => void,
   styleRoot?: ShadowRoot,
-  select?: (root: HTMLElement) => void,
+  select?: (root: DesignTarget) => void,
   design?: DesignSystem,
+  refresh?: () => void,
 ): HTMLElement | null {
-  const component = inspectableFor(element);
+  let component = inspectableFor(element);
   if (!component) {
     const found = adapterIdentity(element, design);
-    let discovered: HTMLElement | null = null;
-    try { discovered = (found && design?.components?.panel?.(found)) || null; } catch { /* A panel that throws shows nothing. */ }
-    if (discovered) ensurePanelStyles(styleRoot);
-    return discovered ?? insideComponent(element, select, styleRoot);
+    let editor;
+    try { editor = found && design?.components?.editor?.(found); } catch { /* Unsupported editors stay read-only. */ }
+    if (editor && found && isDesignTarget(found.element)) {
+      if (found.element !== element) {
+        ensurePanelStyles(styleRoot);
+        const line = document.createElement("small");
+        line.className = "design-react-source design-react-group design-react-inside";
+        line.append(`Inside ${found.name}`);
+        if (select) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = "Select component";
+          button.addEventListener("click", () => select(found.element as DesignTarget));
+          line.append(" · ", button);
+        }
+        return line;
+      }
+      component = adaptComponentEditor(found, editor);
+    }
+    if (!component) {
+      let discovered: HTMLElement | null = null;
+      try { discovered = (found && design?.components?.panel?.(found)) || null; } catch { /* A panel that throws shows nothing. */ }
+      if (discovered) ensurePanelStyles(styleRoot);
+      return discovered ?? insideComponent(element, select, styleRoot);
+    }
   }
   ensurePanelStyles(styleRoot);
   const group = document.createElement("details");
@@ -959,10 +1045,48 @@ export function createReactPropsPanel(
   group.append(summary);
   const source = document.createElement("small");
   source.className = "design-react-source";
-  source.textContent = `${component.definition.name} · ${component.definition.source}:${component.definition.line}`;
+  source.textContent = `${component.definition.name}${componentSource(component) ? ` · ${componentSource(component)}` : ""}`;
+  source.title = source.textContent;
   group.append(source);
+  const hint = document.createElement("small");
+  hint.className = "design-react-source design-react-preview";
+  hint.textContent = "Runtime preview · Undo or Reset to restore";
+  group.append(hint);
 
-  for (const prop of component.definition.props) {
+  const editable = component;
+  if (refresh && component.subscribe) {
+    let frame = 0;
+    const events = new AbortController();
+    const unsubscribe = component.subscribe(() => {
+      if (frame || !group.isConnected) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (!group.isConnected) return;
+        const root = group.getRootNode() as ShadowRoot | Document;
+        const focused = root.activeElement;
+        if (focused?.closest(".design-inspector__heading")) return;
+        const input = focused instanceof HTMLInputElement && group.contains(focused) ? focused : undefined;
+        const label = focused && group.contains(focused) ? focused.getAttribute("aria-label") : null;
+        const draft = input?.value;
+        const start = input?.selectionStart;
+        const end = input?.selectionEnd;
+        refresh();
+        queueMicrotask(() => {
+          if (!label) return;
+          const control = [...root.querySelectorAll<HTMLElement>("[aria-label]")].find(node => node.getAttribute("aria-label") === label);
+          if (!control) return;
+          control.focus({ preventScroll: true });
+          if (control instanceof HTMLInputElement && draft !== undefined) {
+            control.value = draft;
+            if (start != null) control.setSelectionRange(start, end ?? start);
+          }
+        });
+      });
+    });
+    const stop = () => { unsubscribe(); cancelAnimationFrame(frame); events.abort(); };
+    queueMicrotask(() => { if (group.isConnected) watchPopup(group, stop, events.signal); else stop(); });
+  }
+  for (const prop of component.definition.props.filter(prop => prop.kind !== "unsupported")) {
     const styleProperty = (prop as InspectableProp & { styleProperty?: string }).styleProperty;
     const row = document.createElement("label");
     row.className = "design-field design-react-field";
@@ -991,6 +1115,7 @@ export function createReactPropsPanel(
       if (prop.kind === "boolean") {
         input.type = "checkbox";
         input.checked = value === true;
+        input.indeterminate = value === undefined;
       } else if (prop.kind === "number") {
         input.type = "number";
         input.step = "any";
@@ -1022,11 +1147,34 @@ export function createReactPropsPanel(
           const matched = (prop.values ?? []).find((item) => String(item) === raw);
           next = raw === "" && !prop.required ? undefined : matched;
         } else if (prop.kind === "boolean") next = raw === true;
-        recordChange(element, component, prop.name, next, control, onEdit);
+        recordChange(element, editable, prop.name, next, control, onEdit);
       };
       control.addEventListener("change", apply);
     }
+    caption.title = prop.name;
     row.append(caption, control);
+    const wrapper = document.createElement("div");
+    wrapper.className = "design-react-row";
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "design-theme-reset";
+    reset.setAttribute("aria-label", `Reset ${component.definition.name} ${prop.name}`);
+    reset.title = "Restore the value before editing";
+    reset.innerHTML = '<svg viewBox="0 0 16 16"><path d="M2.5 2.5v3h3M3 5.5a5.5 5.5 0 1 1-.5 2.5"/></svg>';
+    const syncReset = () => { reset.hidden = !originals.get(element)?.has(prop.name); };
+    control.addEventListener("change", syncReset);
+    reset.addEventListener("click", () => {
+      const baseline = originals.get(element);
+      if (!baseline?.has(prop.name)) return;
+      recordChange(element, editable, prop.name, baseline.get(prop.name), control, onEdit);
+      const value = editable.props[prop.name];
+      if (control instanceof HTMLInputElement && control.type === "checkbox") control.checked = value === true;
+      else control.value = value === undefined ? "" : String(value);
+      syncReset();
+      control.focus();
+    });
+    syncReset();
+    wrapper.append(row, reset);
     const type = document.createElement("small");
     type.className = "design-react-type";
     type.textContent = `${prop.typeLabel}${prop.required ? " · required" : " · optional"}`;
@@ -1069,7 +1217,7 @@ export function createReactPropsPanel(
         sync();
       }
     }
-    group.append(row);
+    group.append(wrapper);
   }
   return group;
 }

@@ -1,5 +1,5 @@
 // Theme axis for sites that switch themes with a class or attribute, e.g.
-// `<html class="dark">` or `<html data-theme="track">`.
+// `<html class="dark">` or `<html data-theme="docs">`.
 //
 //   import { classTheme } from "@hazem3500/komo/adapters/class-theme";
 //   initKomo({ design: { themes: [classTheme({ id: "mode", options: [...], colorScheme: true })] } });

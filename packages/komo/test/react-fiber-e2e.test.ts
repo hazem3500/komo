@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // against React 18: pick an unregistered component in Design mode and read what it shows.
 // KOMO_SCREENSHOTS=<dir> also writes the documentation screenshots.
 const root = process.cwd();
-const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium", "/usr/bin/chromium-browser"].find(
+const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium", "/usr/bin/chromium-browser", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find(
   (path): path is string => !!path && existsSync(path),
 );
 const types: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".map": "application/json" };
@@ -69,7 +69,7 @@ const panelFields = (page: Page) =>
       note: group.querySelector(".design-react-source")?.textContent,
       fields: Object.fromEntries([...group.querySelectorAll("label")].map((label) => [label.querySelector("span")!.textContent, label.querySelector("input, select") as HTMLInputElement])
         .map(([name, input]) => [name, { value: (input as HTMLInputElement).title || (input as HTMLInputElement).value, disabled: (input as HTMLInputElement).disabled }])),
-      editable: group.querySelectorAll("input:not(:disabled), select").length,
+      editable: group.querySelectorAll("input:not(:disabled):not([readonly]), select").length,
     };
   });
 
@@ -81,15 +81,12 @@ describe.skipIf(!chrome).each([18, 19] as const)("react-fiber adapter in the dem
     const panel = await panelFields(page);
     expect(panel.className).toContain("design-react-discovered");
     expect(panel.heading).toBe("Discovered props");
-    expect(panel.note).toContain("TeamBadge · discovered from React, read-only");
+    expect(panel.note).toContain("TeamBadge · read-only");
     expect(panel.note).toContain("rendered at examples/react-props/src/main.tsx:");
-    expect(panel.fields.team).toEqual({ value: '"Design systems"', disabled: true });
+    expect(panel.fields.team).toEqual({ value: '"Design systems"', disabled: false });
     expect(panel.fields.seats.value).toBe("12");
     expect(panel.fields.active.value).toBe("true");
-    expect(panel.fields.owner.value).toBe('{ name: "Rin", role: "lead" }');
-    expect(panel.fields.onOpen.value).toBe("ƒ onOpen()");
-    expect(panel.fields.authToken.value).toBe("[redacted]");
-    expect(panel.fields.tags.value).toMatch(/^\["tokens", .*… \+1\]$/);
+    for (const field of ["owner", "onOpen", "authToken", "tags"]) expect(panel.fields[field]).toBeUndefined();
     expect(panel.editable).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
@@ -107,6 +104,44 @@ describe.skipIf(!chrome).each([18, 19] as const)("react-fiber adapter in the dem
     await page.close();
   });
 
+  it.each([false, true])("edits discovered primitives with preview/reset in Frame=%s and keeps theme Escape local", async frame => {
+    const { page, errors } = await open(react, { width: 1280, height: 800 }, `&edit&theme&tokens=classes${frame ? "&shell&sidebar=frame" : ""}`);
+    await pick(page, ".team-badge", { x: 4, y: 4 });
+    const team = page.getByRole("textbox", { name: "TeamBadge team", exact: true });
+    await team.fill("Runtime preview");
+    await team.press("Tab");
+    await page.waitForFunction(() => document.querySelector(".team-badge strong")?.textContent === "Runtime preview");
+    await page.waitForFunction(() => {
+      const host = [...document.querySelectorAll("*")].find(node => node.shadowRoot?.querySelector(".design-react-group"))!;
+      const control = host.shadowRoot!.querySelector<HTMLInputElement>('[data-property="width"]')!;
+      return Math.abs(Number(control.value) - parseFloat(getComputedStyle(document.querySelector(".team-badge")!).width)) < .15;
+    });
+    expect(await page.locator(".design-react-group input[readonly]").count()).toBe(0);
+    const before = page.getByRole("button", { name: "Before", exact: true });
+    await before.click();
+    await page.waitForFunction(() => document.querySelector(".team-badge strong")?.textContent === "Design systems");
+    await page.getByRole("button", { name: "After", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector(".team-badge strong")?.textContent === "Runtime preview");
+    await page.getByRole("button", { name: "Reset TeamBadge team", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector(".team-badge strong")?.textContent === "Design systems");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector(".team-badge strong")?.textContent === "Runtime preview");
+    await page.locator('.design-theme-switch > summary').click();
+    await page.locator(".design-theme-options").getByRole("button", { name: "Dark", exact: true }).click();
+    await page.waitForFunction(() => document.documentElement.dataset.mode === "dark");
+    await page.keyboard.press("Escape");
+    expect(await page.locator(".design-inspector").getAttribute("aria-hidden")).toBe("false");
+    expect(await page.locator(".design-theme-switch").getAttribute("open")).toBeNull();
+    expect(await page.locator('.design-theme-switch > summary').evaluate(node => node.getRootNode() instanceof ShadowRoot && (node.getRootNode() as ShadowRoot).activeElement === node)).toBe(true);
+    if (frame) expect(await page.locator("#root").evaluate(node => node.getBoundingClientRect().width)).toBeCloseTo(852);
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    await page.getByRole("button", { name: "Exit design mode", exact: true }).click();
+    expect(await page.locator(".team-badge strong").textContent()).toBe("Design systems");
+    expect(await page.locator("html").getAttribute("data-mode")).toBe("light");
+    expect(errors).toEqual([]);
+    await page.close();
+  });
+
   it("discovers nothing unless the adapter is installed", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await page.route(/ts\.net/, (route) => route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: "[]" }));
@@ -117,6 +152,22 @@ describe.skipIf(!chrome).each([18, 19] as const)("react-fiber adapter in the dem
     await page.click(".team-badge", { position: { x: 4, y: 4 } });
     await page.waitForTimeout(800);
     expect(await page.evaluate(() => [...document.querySelectorAll("*")].some((node) => node.shadowRoot?.querySelector(".design-react-group")))).toBe(false);
+    await page.close();
+  });
+
+  it.skipIf(react !== 19)("keeps mobile Tab navigation inside Design and commits before advancing", async () => {
+    const { page, errors } = await open(react, { width: 390, height: 844 }, "&edit&theme");
+    await pick(page, ".team-badge", { x: 4, y: 4 });
+    const team = page.getByRole("textbox", { name: "TeamBadge team", exact: true });
+    await team.fill("A longer runtime preview on a narrow screen");
+    await team.press("Tab");
+    await page.waitForFunction(() => document.querySelector(".team-badge strong")?.textContent === "A longer runtime preview on a narrow screen");
+    await page.waitForFunction(() => [...document.querySelectorAll("*")].some(node => node.shadowRoot?.activeElement?.getAttribute("aria-label") === "TeamBadge seats"));
+    for (let i = 0; i < 8; i++) {
+      await page.keyboard.press("Tab");
+      expect(await page.evaluate(() => [...document.querySelectorAll("*")].some(node => node.shadowRoot?.activeElement?.closest(".design-inspector")))).toBe(true);
+    }
+    expect(errors).toEqual([]);
     await page.close();
   });
 
