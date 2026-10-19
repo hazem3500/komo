@@ -127,21 +127,23 @@ function hostFiber(element: Element): Fiber | null {
 /**
  * React keeps two copies of each fiber, and a DOM node's key can point at the stale one.
  * Match the fiber, level by level from the root, against the root's current tree.
+ * A reused child may retain return links through the other copy, so keep its owner here.
  */
-function current(fiber: Fiber): Fiber {
+function current(fiber: Fiber): { fiber: Fiber; root: object } | null {
   const chain: Fiber[] = [];
   for (let up: Fiber | null | undefined = fiber; up && chain.length < 5000; up = up.return) chain.push(up);
   const top = chain[chain.length - 1];
-  const root = top?.tag === HOST_ROOT && isFiber(top.stateNode) ? (top.stateNode as { current?: unknown }).current : undefined;
-  if (!isFiber(root)) return fiber;
+  const owner = top?.tag === HOST_ROOT && isFiber(top.stateNode) ? top.stateNode as { current?: unknown } : undefined;
+  const root = owner?.current;
+  if (!isFiber(root)) return null;
   let at: Fiber = root;
   for (let index = chain.length - 2; index >= 0; index--) {
     let match: Fiber | null | undefined = at.child;
     while (match && match !== chain[index] && match !== chain[index].alternate) match = match.sibling;
-    if (!match) return fiber;
+    if (!match) return null;
     at = match;
   }
-  return at;
+  return { fiber: at, root: owner! };
 }
 
 function nameOf(type: unknown, depth = 0): string | undefined {
@@ -239,7 +241,7 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
     let fiber: Fiber | null | undefined = start;
     for (let steps = 0; fiber && steps < 5000 && !(fiber.tag !== undefined && COMPONENT_TAGS.has(fiber.tag)); steps++) fiber = fiber.return;
     if (!fiber || !COMPONENT_TAGS.has(fiber.tag as number)) return null;
-    fiber = current(fiber);
+    fiber = current(fiber)?.fiber ?? fiber;
     const name = nameOf(fiber.type);
     if (!name || minified.test(name) || (options.include && !options.include(name))) return null;
     const props = isFiber(fiber.memoizedProps) ? fiber.memoizedProps : {};
@@ -293,12 +295,9 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
       }))).filter(prop => !hidden(prop.name) && !ignored(prop.name) && prop.kind !== "unsupported");
       const read: ReactPreviewRequest["current"] = () => attempt(() => {
         if (!identity.element.isConnected) return null;
-        const fiber = current(found.fiber);
-        let top = fiber;
-        for (let steps = 0; top.return && steps < 5000; steps++) top = top.return;
-        const root = top.stateNode as { current?: Fiber } | undefined;
-        if (top.tag !== HOST_ROOT || root?.current !== top || rootElement(fiber) !== identity.element) return null;
-        return { fiber, root, props: (fiber.memoizedProps ?? {}) as Record<string, unknown> };
+        const snapshot = current(found.fiber);
+        if (!snapshot || rootElement(snapshot.fiber) !== identity.element) return null;
+        return { ...snapshot, props: (snapshot.fiber.memoizedProps ?? {}) as Record<string, unknown> };
       }) ?? null;
       const hook = (globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: Record<symbol, ReactPreviewBridge> }).__REACT_DEVTOOLS_GLOBAL_HOOK__;
       const editor = attempt(() => hook?.[Symbol.for("inline-feedback.react-preview")]?.editor({ schema, current: read }));

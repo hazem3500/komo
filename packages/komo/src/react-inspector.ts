@@ -57,7 +57,7 @@ export function adaptComponentEditor(identity: ComponentIdentity, editor: Compon
     get props() { return safeProps(definition, editor.read()); },
     onChange: next => editor.apply(next),
     setProps(next) {
-      if (editor.available?.() === false) return;
+      if (editor.available?.() === false) throw new Error("This component instance is no longer available.");
       const validated = safeProps(definition, next);
       if (Object.keys(validated).length !== Object.keys(next).length || definition.props.some(prop => prop.kind !== "unsupported" && prop.required && !(prop.name in validated)))
         throw new Error("Component props no longer match the editor schema.");

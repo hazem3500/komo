@@ -134,4 +134,54 @@ describe.each([
     undoReactProp(button);
     await vi.waitFor(() => expect(button.disabled).toBe(false));
   });
+
+  it("keeps a nested forwardRef editor mounted through an unrelated parent/slot commit", async () => {
+    let update!: () => void;
+    const Slot = React.forwardRef(function Slot(props: any, ref: any) {
+      return React.cloneElement(React.Children.only(props.children), { ref });
+    });
+    const ActionButton = React.forwardRef(function ActionButton(props: any, ref: any) {
+      return React.createElement("button", { ref, className: `button-${props.variant}`, "aria-label": props["aria-label"] }, "Action");
+    });
+    const StableBranch = React.memo(function StableBranch() {
+      return React.createElement(Slot, null, React.createElement(ActionButton, { variant: "tertiary", "aria-label": "Original action" }));
+    });
+    function UpdatingSibling() {
+      const [tick, setTick] = React.useState(0);
+      update = () => flushSync(() => setTick((value: number) => value + 1));
+      return React.createElement("span", null, tick);
+    }
+    const container = document.body.appendChild(document.createElement("main"));
+    const root = createRoot(container);
+    flushSync(() => root.render(React.createElement("section", null, React.createElement(StableBranch), React.createElement(UpdatingSibling))));
+    mounted.push(() => flushSync(() => root.unmount()));
+    const button = container.querySelector("button")!;
+    const adapter = discoverReactComponents({ edit: true });
+    const identity = adapter.identify(button)!;
+    expect(identity.name).toBe("ActionButton");
+    const editor = adapter.editor!(identity)!;
+    expect(editor.available!()).toBe(true);
+    update();
+    expect(editor.available!()).toBe(true);
+    const panel = document.body.appendChild(createReactPropsPanel(button, () => {}, undefined, undefined, { components: adapter })!);
+    const change = (name: string, value: string) => {
+      const input = panel.querySelector<HTMLInputElement>(`[aria-label="ActionButton ${name}"]`)!;
+      input.value = value;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    change("variant", "primary");
+    await vi.waitFor(() => expect(button.className).toBe("button-primary"));
+    expect(adapter.identify(button)!.props!.variant).toBe("primary");
+    update();
+    await vi.waitFor(() => expect(button.className).toBe("button-primary"));
+    expect(editor.available!()).toBe(true);
+    change("aria-label", "Preview action");
+    await vi.waitFor(() => expect(button.getAttribute("aria-label")).toBe("Preview action"));
+    undoReactProp(button);
+    await vi.waitFor(() => expect(button.getAttribute("aria-label")).toBe("Original action"));
+    undoReactProp(button);
+    await vi.waitFor(() => expect(button.className).toBe("button-tertiary"));
+    expect(editor.available!()).toBe(true);
+    expect(adapter.editor!(adapter.identify(button)!)).toBe(editor);
+  });
 });
