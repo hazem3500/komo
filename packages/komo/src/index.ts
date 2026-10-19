@@ -694,7 +694,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   for (const node of [html, document.body])
     themeWatch.observe(node, { attributes: true });
   let accountOpenTimer = 0;
-  let pageMotion: ReturnType<typeof animate> | undefined;
+  let pageMotion: Animation | undefined;
   let keyboardAction = false;
   // True while reopening a remembered sidebar on load: skip the open motion.
   let restoring = false;
@@ -892,7 +892,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     ];
     const before = nodes().map((node) => node?.getBoundingClientRect());
     stopLayoutMotion();
-    pageMotion?.stop();
+    pageMotion?.cancel();
     pageMotion = undefined;
     dockMotion?.stop();
     dockMotion = undefined;
@@ -1690,7 +1690,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     pins.style.opacity = "";
     if (edgeSidebar || compactSidebar) {
       // The edge sidebar floats over the live page: never frame or zoom it.
-      pageMotion?.stop();
+      pageMotion?.cancel();
       pageTransitioning = false;
       const scroll = framed ? surface.scrollTop * zoom : null;
       if (framed) {
@@ -1727,7 +1727,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     const before = framed
       ? surface.getBoundingClientRect()
       : { left: 0, top: 0, width: window.innerWidth };
-    pageMotion?.stop();
+    pageMotion?.cancel();
     pageTransitioning = false;
     const layout = reviewLayout(
       window.innerWidth,
@@ -1816,30 +1816,22 @@ export function initComments(options: CommentsOptions): CommentsController {
       }
       pins.style.opacity = "0";
       pageTransitioning = true;
-      pageMotion = animate(
-        surface,
-        {
-          transform: [start, `translate(0px, 0px) scale(${appliedScale})`],
-        },
-        { duration: 0.25, ease: [0.32, 0.72, 0, 1] },
+      pageMotion = surface.animate(
+        [{ transform: start }, { transform: `translate(0px, 0px) scale(${appliedScale})` }],
+        { duration: 250, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
       );
       const currentMotion = pageMotion;
       void currentMotion.finished.then(() => {
         if (destroyed || pageMotion !== currentMotion) return;
+        currentMotion.cancel();
+        pageMotion = undefined;
         pageTransitioning = false;
-        if (!framed) {
-          surface.style.transformOrigin = savedStyle.transformOrigin;
-          surface.style.transform = savedStyle.transform;
-          surface.style.background = savedStyle.background;
-          surface.style.minHeight = savedStyle.minHeight;
-          document.body.style.background = savedBody.background;
-          html.style.background = savedHtmlBackground;
-        }
+        if (!framed) restorePage();
         pins.style.opacity = "";
         framePortals();
         portalFrame.reposition();
         geometry();
-      });
+      }).catch(() => {});
     }
     pins.style.clipPath = useFrame
       ? `inset(${layout.visibleTop}px ${layout.right}px ${layout.bottom}px ${layout.visibleLeft}px)`
@@ -6063,7 +6055,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         dialog.remove();
       }
       exitingDialogs.clear();
-      pageMotion?.stop();
+      pageMotion?.cancel();
       dockMotion?.stop();
       stopEdgeMotion(true);
       abort.abort();
@@ -6105,7 +6097,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (expanded && !inFrame()) {
         toggleExpanded(false);
         if (pageMotion && pageTransitioning)
-          void pageMotion.finished.then(compose);
+          void pageMotion.finished.then(compose).catch(() => {});
         else compose();
       } else compose();
     },
