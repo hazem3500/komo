@@ -273,3 +273,107 @@ it("constrains oversized portals reversibly without replacing host sizing update
   expect(popup.style.overflow).toBe("clip");
   expect(popup.style.getPropertyPriority("overflow")).toBe("important");
 });
+
+it("keeps overflow inside a wrapped dialog's scroll-lock boundary and restores both surfaces", () => {
+  const popup = positioner();
+  const dialog = document.createElement("div");
+  dialog.role = "dialog";
+  dialog.style.cssText =
+    "height:394px;box-sizing:border-box;overflow:clip !important;max-height:600px;";
+  const input = document.createElement("input");
+  dialog.append(input);
+  popup.append(dialog);
+  input.focus();
+  vi.mocked(popup.getBoundingClientRect).mockReturnValue(
+    rectangle(0, 0, 480, 394),
+  );
+  vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue(
+    rectangle(0, 0, 480, 394),
+  );
+  Object.defineProperties(popup, {
+    clientWidth: { value: 480 },
+    clientHeight: { value: 320, configurable: true },
+  });
+  const shortBounds = { ...bounds, height: 213, bottom: bounds.top + 213 };
+  // Centered modals use the entire height; translated positioners reserve an 8px gap.
+  popup.style.transform = "translate(-50%, -50%)";
+  layer.update({ ...boundedFrame, bounds: shortBounds });
+  expect(dialog.style.overflow).toBe("auto");
+  expect(dialog.style.maxHeight).toContain("320px");
+  expect(dialog.parentElement).toBe(popup);
+  expect(document.activeElement).toBe(input);
+  expect(dialog.style.scale).toBe("");
+
+  dialog.style.setProperty("overflow", "hidden", "important");
+  dialog.style.setProperty("max-height", "700px", "important");
+  Object.defineProperty(popup, "clientHeight", { value: 640 });
+  layer.update(boundedFrame);
+  expect(dialog.style.maxHeight).toContain("640px");
+  expect(dialog.style.overflow).toBe("auto");
+  layer.update(null);
+  expect(dialog.style.maxHeight).toBe("700px");
+  expect(dialog.style.getPropertyPriority("max-height")).toBe("important");
+  expect(dialog.style.overflow).toBe("hidden");
+  expect(dialog.style.getPropertyPriority("overflow")).toBe("important");
+  expect(popup.style.maxHeight).toBe("");
+});
+
+it("restores a replaced dialog and constrains its replacement without touching nested portals", () => {
+  const popup = positioner();
+  vi.mocked(popup.getBoundingClientRect).mockReturnValue(
+    rectangle(0, 0, 1800, 1200),
+  );
+  Object.defineProperties(popup, {
+    clientWidth: { value: 1000 },
+    clientHeight: { value: 600 },
+  });
+  const first = document.createElement("div");
+  first.role = "dialog";
+  popup.append(first);
+  layer.update(boundedFrame);
+  expect(first.style.overflow).toBe("auto");
+  const replacement = document.createElement("div");
+  replacement.role = "alertdialog";
+  const nested = document.createElement("div");
+  nested.role = "dialog";
+  nested.style.position = "fixed";
+  replacement.append(nested);
+  first.replaceWith(replacement);
+  layer.update(boundedFrame);
+  expect(first.style.overflow).toBe("");
+  expect(first.style.maxHeight).toBe("");
+  expect(replacement.style.overflow).toBe("auto");
+  expect(nested.style.overflow).toBe("");
+  expect(nested.style.scale).toBe("");
+  layer.destroy();
+  expect(replacement.style.overflow).toBe("");
+});
+
+it("reserves wrapper padding, borders and dialog margins inside the available scroll area", () => {
+  const popup = positioner();
+  popup.style.cssText += "padding:10px;transform:translate(-50%, -50%);";
+  vi.mocked(popup.getBoundingClientRect).mockReturnValue(
+    rectangle(0, 0, 480, 394),
+  );
+  Object.defineProperties(popup, {
+    clientWidth: { value: 480 },
+    clientHeight: { value: 320 },
+  });
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = "padding:8px;border:2px solid;";
+  const dialog = document.createElement("div");
+  dialog.role = "dialog";
+  dialog.style.cssText = "box-sizing:border-box;margin:4px;";
+  wrapper.append(dialog);
+  popup.append(wrapper);
+  layer.update({
+    ...boundedFrame,
+    bounds: { ...bounds, height: 213, bottom: bounds.top + 213 },
+  });
+  // 320px minus 20px outer padding, 20px inner padding/borders and 8px margins.
+  expect(dialog.style.maxHeight).toBe("272px");
+  layer.destroy();
+  expect(wrapper.style.cssText).toBe("padding: 8px; border: 2px solid;");
+  expect(dialog.style.maxHeight).toBe("");
+  expect(dialog.style.margin).toBe("4px");
+});

@@ -9,6 +9,13 @@ export type FrameMapping = {
   >;
 };
 type SavedProperty = { value: string; priority: string };
+type Constraints = {
+  properties: Map<
+    string,
+    { original: SavedProperty; applied: string; maximum?: string }
+  >;
+  style: string | null;
+};
 type Entry = {
   translate: SavedProperty;
   scale: SavedProperty;
@@ -18,10 +25,7 @@ type Entry = {
   animation?: Animation;
   transform: string;
   positioningFrame: FrameMapping | null;
-  constraints?: Map<
-    string,
-    { original: SavedProperty; applied: string; maximum?: string }
-  >;
+  constraints?: Map<HTMLElement, Constraints>;
 };
 
 const saved = (node: HTMLElement, name: string): SavedProperty => ({
@@ -86,7 +90,12 @@ export function createFramePortals(
         return (
           record.type !== "attributes" ||
           record.attributeName !== "style" ||
-          entries.get(node)?.style !== node.getAttribute("style")
+          (entries.get(node)?.style !== node.getAttribute("style") &&
+            ![...entries.values()].some(
+              (entry) =>
+                entry.constraints?.get(node)?.style ===
+                node.getAttribute("style"),
+            ))
         );
       })
     )
@@ -111,12 +120,83 @@ export function createFramePortals(
       restore(node, "scale", entry.scale);
       cancelTransitions(node, ["translate", "scale"]);
     }
-    for (const [name, property] of entry.constraints ?? []) {
+    for (const [target, constraints] of entry.constraints ?? [])
+      releaseConstraints(target, constraints);
+    resize.unobserve(node);
+  }
+  function releaseConstraints(
+    node: HTMLElement,
+    constraints: Constraints,
+    keepObserved = false,
+  ) {
+    for (const [name, property] of constraints.properties) {
       if (node.style.getPropertyValue(name) !== property.applied)
         property.original = saved(node, name);
       restore(node, name, property.original);
     }
-    resize.unobserve(node);
+    if (!keepObserved) resize.unobserve(node);
+  }
+  function constrain(
+    node: HTMLElement,
+    entry: Entry,
+    width: number,
+    height: number,
+  ) {
+    entry.constraints ??= new Map();
+    let constraints = entry.constraints.get(node);
+    if (!constraints) {
+      constraints = { properties: new Map(), style: null };
+      entry.constraints.set(node, constraints);
+      resize.observe(node);
+    }
+    const css = getComputedStyle(node);
+    const inset = (axis: "Width" | "Height") =>
+      css.boxSizing === "border-box"
+        ? 0
+        : axis === "Width"
+          ? (parseFloat(css.paddingLeft) || 0) +
+            (parseFloat(css.paddingRight) || 0) +
+            (parseFloat(css.borderLeftWidth) || 0) +
+            (parseFloat(css.borderRightWidth) || 0)
+          : (parseFloat(css.paddingTop) || 0) +
+            (parseFloat(css.paddingBottom) || 0) +
+            (parseFloat(css.borderTopWidth) || 0) +
+            (parseFloat(css.borderBottomWidth) || 0);
+    const properties: Record<string, string> = {
+      "min-width": "0px",
+      "min-height": "0px",
+      "max-width": `${Math.max(1, width - inset("Width"))}px`,
+      "max-height": `${Math.max(1, height - inset("Height"))}px`,
+      overflow: "auto",
+    };
+    for (const [name, value] of Object.entries(properties)) {
+      let property = constraints.properties.get(name);
+      if (!property)
+        constraints.properties.set(
+          name,
+          (property = {
+            original: saved(node, name),
+            applied: "",
+            maximum: name.startsWith("max-")
+              ? css.getPropertyValue(name)
+              : undefined,
+          }),
+        );
+      else if (node.style.getPropertyValue(name) !== property.applied) {
+        property.original = saved(node, name);
+        if (name.startsWith("max-"))
+          property.maximum = css.getPropertyValue(name);
+      }
+      const maximum = property.maximum;
+      node.style.setProperty(
+        name,
+        maximum && maximum !== "none" ? `min(${maximum}, ${value})` : value,
+        "important",
+      );
+      property.applied = node.style.getPropertyValue(name);
+    }
+    cancelTransitions(node, Object.keys(properties));
+    constraints.style = node.getAttribute("style");
   }
   function apply() {
     if (!mapping) return;
@@ -197,6 +277,16 @@ export function createFramePortals(
         restore(node, "scale", entry.scale);
         cancelTransitions(node, ["translate", "scale"]);
       }
+      const dialogSelector = '[role="dialog"], [role="alertdialog"]';
+      const content = node.matches(dialogSelector)
+        ? null
+        : node.querySelector<HTMLElement>(dialogSelector);
+      // Measure the host content at its own size so a larger Frame can expand it again.
+      for (const [target, constraints] of entry.constraints ?? [])
+        if (target !== node) {
+          releaseConstraints(target, constraints, target === content);
+          entry.constraints!.delete(target);
+        }
       const css = getComputedStyle(node);
       const translate = tokens(css.translate);
       const scale = mapping!.scale;
@@ -216,45 +306,53 @@ export function createFramePortals(
       if (
         bounds.width &&
         bounds.height &&
-        (entry.constraints ||
+        (entry.constraints?.has(node) ||
           (rect.width / zoom) * scale > limits[0] ||
           (rect.height / zoom) * scale > limits[1])
       ) {
-        entry.constraints ??= new Map();
-        const properties: Record<string, string> = {
-          "min-width": "0px",
-          "min-height": "0px",
-          "max-width": `${Math.max(1, limits[0] / scale - (css.boxSizing === "border-box" ? 0 : (parseFloat(css.paddingLeft) || 0) + (parseFloat(css.paddingRight) || 0) + (parseFloat(css.borderLeftWidth) || 0) + (parseFloat(css.borderRightWidth) || 0)))}px`,
-          "max-height": `${Math.max(1, limits[1] / scale - (css.boxSizing === "border-box" ? 0 : (parseFloat(css.paddingTop) || 0) + (parseFloat(css.paddingBottom) || 0) + (parseFloat(css.borderTopWidth) || 0) + (parseFloat(css.borderBottomWidth) || 0)))}px`,
-          overflow: "auto",
-        };
-        for (const [name, value] of Object.entries(properties)) {
-          let property = entry.constraints.get(name);
-          if (!property)
-            entry.constraints.set(
-              name,
-              (property = {
-                original: saved(node, name),
-                applied: "",
-                maximum: name.startsWith("max-")
-                  ? css.getPropertyValue(name)
-                  : undefined,
-              }),
+        constrain(node, entry, limits[0] / scale, limits[1] / scale);
+      }
+      if (content instanceof HTMLElement && bounds.width && bounds.height) {
+        const contentRect = content.getBoundingClientRect();
+        if (
+          entry.constraints?.has(node) ||
+          (contentRect.width / zoom) * scale > limits[0] ||
+          (contentRect.height / zoom) * scale > limits[1]
+        ) {
+          // Keep the scrollable surface inside the host modal's scroll-lock boundary.
+          const room = (axis: "Width" | "Height") => {
+            const sides =
+              axis === "Width" ? ["left", "right"] : ["top", "bottom"];
+            let inset = 0;
+            for (
+              let child = content;
+              child !== node && child.parentElement;
+              child = child.parentElement
+            ) {
+              const childCSS = getComputedStyle(child);
+              const parentCSS = getComputedStyle(child.parentElement);
+              for (const side of sides)
+                inset +=
+                  (parseFloat(childCSS.getPropertyValue(`margin-${side}`)) ||
+                    0) +
+                  (parseFloat(parentCSS.getPropertyValue(`padding-${side}`)) ||
+                    0) +
+                  (child.parentElement === node
+                    ? 0
+                    : parseFloat(
+                        parentCSS.getPropertyValue(`border-${side}-width`),
+                      ) || 0);
+            }
+            return (
+              Math.min(
+                limits[axis === "Width" ? 0 : 1] / scale,
+                node[`client${axis}`],
+              ) - inset
             );
-          else if (node.style.getPropertyValue(name) !== property.applied) {
-            property.original = saved(node, name);
-            if (name.startsWith("max-"))
-              property.maximum = getComputedStyle(node).getPropertyValue(name);
-          }
-          const maximum = property.maximum;
-          node.style.setProperty(
-            name,
-            maximum && maximum !== "none" ? `min(${maximum}, ${value})` : value,
-            "important",
-          );
-          property.applied = node.style.getPropertyValue(name);
+          };
+          constrain(content, entry, room("Width"), room("Height"));
         }
-        cancelTransitions(node, Object.keys(properties));
+        if (!entry.constraints?.has(content)) resize.unobserve(content);
       }
       const measured = node.getBoundingClientRect();
       const point = positioned
