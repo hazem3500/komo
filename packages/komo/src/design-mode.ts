@@ -150,12 +150,13 @@ export function createDesignMode(options: DesignModeOptions) {
   const styleEdits = createStyleEdits(history);
 
   function remember(element: DesignTarget, property: string, value = element.style.getPropertyValue(property), priority = element.style.getPropertyPriority(property)) {
+    const token = reactPanelModule?.originalDesignTokenStyle(element, property);
     let values = originals.get(element);
     if (!values) {
       originals.set(element, (values = new Map()));
-      if (!element.hasAttribute("style")) styleless.add(element);
+      if (token?.absent || !element.hasAttribute("style")) styleless.add(element);
     }
-    if (!values.has(property)) values.set(property, reactPanelModule?.originalDesignTokenStyle(element, property) ?? { ...inlineStyleSnapshot(element, property), value, priority });
+    if (!values.has(property)) values.set(property, token ?? { ...inlineStyleSnapshot(element, property), value, priority });
   }
   function track(element: DesignTarget, property: string) {
     let values = changed.get(element);
@@ -288,7 +289,7 @@ export function createDesignMode(options: DesignModeOptions) {
         if (!active || selected !== element || controls.querySelector(".design-react-group, .design-theme-group")) return;
         const styleRoot = options.root;
         // Switching a theme re-renders the selection, so tokens, values and the outline follow it.
-        module.attachThemeSwitcher(controls, options.design, () => select(element), styleRoot);
+        module.attachThemeSwitcher(controls, options.design, () => select(element), styleRoot, listeners.signal);
         const recordUndo = (undo?: () => void) => {
           const sync = () => { for (const property of originals.get(element)?.keys() ?? []) track(element, property); };
           if (undo) history.push({ element, undo: () => { undo(); sync(); } });

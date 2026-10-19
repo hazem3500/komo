@@ -102,6 +102,8 @@ export interface ThemeAxis {
   current(): string;
   /** Switch the page to `optionId`. komo restores the original option when Design mode closes. */
   apply(optionId: string): void;
+  /** Notify when the host changes this axis outside the inspector, including state held outside the DOM. */
+  subscribe?(listener: () => void): () => void;
 }
 
 export type ComponentPropValue = string | number | boolean | null;

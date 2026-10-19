@@ -184,6 +184,22 @@ describe("tailwindSpacing", () => {
 });
 
 describe("classTheme", () => {
+  it("notifies external changes on its target and unsubscribes without unrelated updates", async () => {
+    const root = document.createElement("div");
+    const axis = classTheme({ id: "mode", target: () => root, options: [{ id: "light" }, { id: "dark", attribute: { "data-mode": "dark" } }] });
+    let updates = 0;
+    const stop = axis.subscribe!(() => updates++);
+    root.setAttribute("data-unrelated", "value");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(updates).toBe(0);
+    root.setAttribute("data-mode", "dark");
+    await expect.poll(() => updates).toBe(1);
+    stop();
+    root.removeAttribute("data-mode");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(updates).toBe(1);
+  });
+
   it("reads and switches classes on <html>, with color-scheme", () => {
     document.documentElement.className = "font-sans light";
     const mode = classTheme({ id: "mode", label: "Mode", options: [{ id: "light", label: "Light", class: "light" }, { id: "dark", label: "Dark", class: "dark" }], colorScheme: true });

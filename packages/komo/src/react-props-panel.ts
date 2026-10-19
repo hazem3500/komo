@@ -45,6 +45,7 @@ import {
   offTokenMarker,
   previewToken,
   proposedTokenSwaps,
+  refreshTokenSwaps,
   rememberTokenUsage,
   resetAllTokenSwaps,
   resetTokenSwaps,
@@ -57,6 +58,7 @@ import {
   tokenName,
   tokensFor,
   tokenTitle,
+  watchThemes,
 } from "./token-adapter.js";
 export { originalTokenStyle as originalDesignTokenStyle } from "./token-adapter.js";
 
@@ -282,13 +284,15 @@ function ensurePanelStyles(styleRoot?: ShadowRoot): void {
  * demand, instead of a plain list. A mouse opens on press; a touch or pen on a
  * release that did not move, since a drag that starts there scrolls the panel.
  */
-function pickerTrigger(select: HTMLSelectElement, options: () => Omit<TokenPickerOptions, "trigger">): void {
+function pickerTrigger(select: HTMLSelectElement, options: () => Omit<TokenPickerOptions, "trigger">) {
   select.dataset.picker = "token";
   select.setAttribute("aria-haspopup", "listbox");
   select.setAttribute("aria-expanded", "false");
+  let loaded: typeof import("./token-picker.js") | undefined;
   const show = (toggle: boolean) => import("./token-picker.js").then((picker) => {
-    if (!select.isConnected || select.disabled || (!toggle && picker.isTokenPickerOpen(select))) return;
-    picker.toggleTokenPicker({ trigger: select, ...options() });
+    loaded = picker;
+    if (!select.isConnected || select.disabled || (!toggle && select.getAttribute("aria-expanded") === "true")) return;
+    picker.openTokenPicker({ trigger: select, ...options() }, toggle);
   }, () => {});
   let press: PointerEvent | undefined;
   select.addEventListener("pointerdown", (event) => {
@@ -309,6 +313,10 @@ function pickerTrigger(select: HTMLSelectElement, options: () => Omit<TokenPicke
     event.preventDefault();
     void show(false);
   });
+  return {
+    prepare: () => loaded?.refreshTokenPicker(select),
+    refresh: () => loaded?.refreshTokenPicker(select, { trigger: select, ...options() }),
+  };
 }
 
 /**
@@ -345,8 +353,7 @@ function matchSuggestion(field: HTMLElement | null | undefined, row: HTMLElement
 function themeValues(adapter: TokenAdapter, design?: DesignSystem): (() => Promise<ThemeValues[]>) | undefined {
   const axis = (Array.isArray(design?.themes) ? design.themes : []).find((item) => Array.isArray(item?.options) && item.options.length > 1 && item.options.length < 4);
   if (!axis) return undefined;
-  let values: Promise<ThemeValues[]> | undefined;
-  return () => values ??= Promise.all(axis.options.map((option) =>
+  return () => Promise.all(axis.options.map((option) =>
     listTokens(adapter, { ...themeState(design), [axis.id]: option.id }).then((list) => ({
       label: titled(option.label, option.id),
       values: new Map(list.map((token) => [token.path, token.value])),
@@ -540,7 +547,7 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
     each((field, label, input, refresh) => createAdapterTokenControl(adapter, element, field.property, tokens, usage[field.property], (undo) => {
       onSwap?.(undo);
       refresh();
-    }, label, input, themes, refresh));
+    }, label, input, themes, refresh, () => listTokens(adapter, themeState(design))));
   }, () => {});
 }
 
@@ -556,10 +563,11 @@ export function createAdapterTokenControl(
   input?: HTMLElement,
   themes?: () => Promise<ThemeValues[]>,
   refresh?: () => void,
+  reload?: () => Promise<DesignToken[]>,
 ): HTMLElement | null {
-  const available = tokensFor(tokens, property);
+  let available = tokensFor(tokens, property);
   if (!available.length && !usage) return null;
-  const initialUsage = rememberTokenUsage(element, property, usage);
+  const initialUsage = rememberTokenUsage(element, property, usage, adapter, tokens);
   const off = usage && "offToken" in usage ? usage.offToken : undefined;
   const match = off === undefined ? undefined : closestToken(available, off);
   const row = document.createElement("span");
@@ -584,22 +592,27 @@ export function createAdapterTokenControl(
   none.textContent = "Choose a token";
   select.append(none);
   // Grouped by the adapter's group, in list order; ungrouped tokens come first.
-  const groups = new Map<string, HTMLElement>([["", select]]);
-  for (const token of available) {
-    const key = token.group ?? "";
-    let group = groups.get(key);
-    if (!group) {
-      group = document.createElement("optgroup");
-      (group as HTMLOptGroupElement).label = key;
-      groups.set(key, group);
+  const populate = () => {
+    select.replaceChildren(none);
+    select.disabled = !available.length;
+    const groups = new Map<string, HTMLElement>([["", select]]);
+    for (const token of available) {
+      const key = token.group ?? "";
+      let group = groups.get(key);
+      if (!group) {
+        group = document.createElement("optgroup");
+        (group as HTMLOptGroupElement).label = key;
+        groups.set(key, group);
+      }
+      const option = document.createElement("option");
+      option.value = token.path;
+      option.textContent = `${tokenName(token)}${token.ref ? ` · ${token.ref}` : ""}${token === match ? " · same value" : ""}`;
+      option.title = tokenTitle(token);
+      group.append(option);
     }
-    const option = document.createElement("option");
-    option.value = token.path;
-    option.textContent = `${tokenName(token)}${token.ref ? ` · ${token.ref}` : ""}${token === match ? " · same value" : ""}`;
-    option.title = tokenTitle(token);
-    group.append(option);
-  }
-  for (const [key, group] of groups) if (key) select.append(group);
+    for (const [key, group] of groups) if (key) select.append(group);
+  };
+  populate();
   const dot = offTokenMarker();
   if (off !== undefined) markOffToken(dot, off, match);
   const state = document.createElement("small");
@@ -611,7 +624,7 @@ export function createAdapterTokenControl(
     const effective = effectiveTokenUsage(element, property, usage);
     return detached ? undefined : effective && "path" in effective ? effective.path : undefined;
   };
-  pickerTrigger(select, () => ({ tokens, property, current: current(), themes,
+  const picker = pickerTrigger(select, () => ({ tokens, property, current: current(), themes,
     onPreview: token => {
       const undo = previewToken(adapter, element, property, token);
       refresh?.();
@@ -655,14 +668,44 @@ export function createAdapterTokenControl(
   row.append(chip, select, icon, detach, dot, state);
   const observer = new MutationObserver(update);
   observer.observe(element, { attributes: true, attributeFilter: ["style", "class"] });
+  const events = new AbortController();
   const cleanup = new MutationObserver(() => {
-    if (!row.isConnected) { observer.disconnect(); cleanup.disconnect(); }
+    if (!row.isConnected) { observer.disconnect(); cleanup.disconnect(); events.abort(); }
   });
   cleanup.observe(document, { childList: true, subtree: true });
   const root = label?.getRootNode();
   if (root instanceof ShadowRoot) cleanup.observe(root, { childList: true, subtree: true });
+  root?.addEventListener("komo-theme-changing", picker.prepare, { signal: events.signal });
+  let request = 0;
+  root?.addEventListener("komo-theme-change", () => {
+    const at = ++request;
+    void (reload?.() ?? Promise.resolve([...tokens])).then(next => {
+      if (events.signal.aborted || at !== request) return;
+      tokens = next;
+      rememberTokenUsage(element, property, usage, adapter, tokens);
+      available = tokensFor(tokens, property);
+      populate();
+      update();
+      if (!(root instanceof ShadowRoot ? root.activeElement : document.activeElement)?.isSameNode(input ?? null)) refresh?.();
+      picker.refresh();
+    }, () => {});
+  }, { signal: events.signal });
   update();
   return row;
+}
+
+function watchDesignTheme(design: DesignSystem | undefined, root: ShadowRoot, signal: AbortSignal): void {
+  let request = 0;
+  watchThemes(design, root.ownerDocument, () => {
+    const at = ++request, adapter = design?.tokens;
+    root.dispatchEvent(new Event("komo-theme-changing"));
+    void (adapter ? listTokens(adapter, themeState(design)) : Promise.resolve([])).then(tokens => {
+      if (signal.aborted || at !== request) return;
+      root.dispatchEvent(new Event("komo-theme-changing"));
+      if (adapter) refreshTokenSwaps(adapter, tokens);
+      root.dispatchEvent(new Event("komo-theme-change"));
+    }, () => {});
+  }, signal);
 }
 
 type ThemeFields = Pick<typeof import("./design-panel.js"), "fieldControl" | "fields" | "toHex">;
@@ -826,6 +869,7 @@ const themeOriginals = new Map<ThemeAxis, string>();
 /** The axis whose control had focus, so a re-render can hand focus back to it. */
 let themeFocus: ThemeAxis | undefined;
 const themeClosers = new WeakMap<HTMLDetailsElement, () => void>();
+const themeWatched = new WeakSet<AbortSignal>();
 
 function currentTheme(axis: ThemeAxis): string | undefined {
   try { return String(axis.current()); } catch { return undefined; }
@@ -854,7 +898,12 @@ export function attachThemeSwitcher(
   design: DesignSystem | undefined,
   onSwitch: () => void,
   styleRoot?: ShadowRoot,
+  signal?: AbortSignal,
 ): void {
+  if (styleRoot && signal && !themeWatched.has(signal)) {
+    themeWatched.add(signal);
+    watchDesignTheme(design, styleRoot, signal);
+  }
   const heading = container.closest(".design-inspector")?.querySelector(".design-inspector__heading");
   const previous = (heading ?? container).querySelector<HTMLDetailsElement>(".design-theme-switch");
   const wasOpen = previous?.open ?? false;
@@ -870,6 +919,7 @@ export function attachThemeSwitcher(
   popup.setAttribute("aria-label", "Theme preview options");
   group.append(trigger, popup);
   const currentLabels: string[] = [];
+  const refreshers: Array<() => string> = [];
   const themes = design?.themes;
   let focus: HTMLElement | undefined;
   for (const axis of Array.isArray(themes) ? themes : []) {
@@ -877,7 +927,6 @@ export function attachThemeSwitcher(
     const options = Array.isArray(axis?.options) ? axis.options.filter((option) => typeof option?.id === "string") : [];
     if (current === undefined || options.length < 2) continue;
     const label = titled(axis.label, String(axis.id));
-    currentLabels.push(`${label}: ${titled(options.find(option => option.id === current)?.label, current)}`);
     const choose = (id: string) => {
       const before = currentTheme(axis);
       if (id === before) return;
@@ -913,16 +962,26 @@ export function attachThemeSwitcher(
       }
     }
     if (themeFocus === axis) focus = control.querySelector<HTMLElement>("[aria-pressed=true]") ?? control;
+    refreshers.push(() => {
+      const value = currentTheme(axis) ?? current;
+      if (control instanceof HTMLSelectElement) control.value = value;
+      else control.querySelectorAll("button").forEach((button, index) => button.setAttribute("aria-pressed", String(options[index].id === value)));
+      return `${label}: ${titled(options.find(option => option.id === value)?.label, value)}`;
+    });
     row.append(caption, control);
     popup.append(row);
   }
   themeFocus = undefined;
   if (!popup.childElementCount) return;
-  trigger.textContent = currentLabels[0].split(": ").slice(1).join(": ") + (currentLabels.length > 1 ? ` +${currentLabels.length - 1}` : "");
-  trigger.title = `Preview theme · ${currentLabels.join(" · ")}`;
+  const sync = () => {
+    currentLabels.splice(0, currentLabels.length, ...refreshers.map(refresh => refresh()));
+    trigger.textContent = currentLabels[0].split(": ").slice(1).join(": ") + (currentLabels.length > 1 ? ` +${currentLabels.length - 1}` : "");
+    trigger.title = `Preview theme · ${currentLabels.join(" · ")}`;
+  };
+  sync();
   group.open = wasOpen || !!focus;
   const events = new AbortController();
-  const { signal } = events;
+  const popupSignal = events.signal;
   const close = () => { group.open = false; };
   themeClosers.set(group, () => { close(); events.abort(); });
   group.addEventListener("keydown", event => {
@@ -938,15 +997,16 @@ export function attachThemeSwitcher(
   ensurePanelStyles(styleRoot);
   if (heading) heading.insertBefore(group, heading.querySelector(".design-inspector__close"));
   else container.prepend(group);
-  group.getRootNode().addEventListener("pointerdown", event => { if (!event.composedPath().includes(group)) close(); }, { capture: true, signal });
+  group.getRootNode().addEventListener("komo-theme-change", sync, { signal: popupSignal });
+  group.getRootNode().addEventListener("pointerdown", event => { if (!event.composedPath().includes(group)) close(); }, { capture: true, signal: popupSignal });
   group.ownerDocument.defaultView?.addEventListener("keydown", event => {
     if (!group.open || event.key !== "Escape" || !event.composedPath().includes(group)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     close();
     trigger.focus();
-  }, { capture: true, signal });
-  watchPopup(trigger, () => { close(); if (!trigger.isConnected) events.abort(); }, signal);
+  }, { capture: true, signal: popupSignal });
+  watchPopup(trigger, () => { close(); if (!trigger.isConnected) events.abort(); }, popupSignal);
   focus?.focus({ preventScroll: true });
 }
 

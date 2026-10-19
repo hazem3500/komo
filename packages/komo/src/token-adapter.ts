@@ -28,6 +28,7 @@ interface Swap {
 const swaps = new Map<Element, Swap[]>();
 const customs = new Map<Element, Set<string>>();
 const usages = new WeakMap<Element, Map<string, TokenUsage | undefined>>();
+const baselines = new WeakMap<Element, Map<string, { adapter: TokenAdapter; style: ReturnType<typeof inlineStyleSnapshot>; token?: DesignToken }>>();
 let suspendedCustoms = new Map<Element, Map<string, ReturnType<typeof inlineStyleSnapshot>>>();
 const lists = new WeakMap<TokenAdapter, Map<string, Promise<DesignToken[]>>>();
 let showingBefore = false;
@@ -38,11 +39,34 @@ function removeCustom(element: Element, property: string) {
   if (!properties?.size) customs.delete(element);
 }
 
-export function rememberTokenUsage(element: Element, property: string, usage: TokenUsage | undefined): TokenUsage | undefined {
+export function rememberTokenUsage(element: Element, property: string, usage: TokenUsage | undefined, adapter: TokenAdapter, tokens: readonly DesignToken[]): TokenUsage | undefined {
   let known = usages.get(element);
   if (!known) usages.set(element, known = new Map());
-  if (!known.has(property) || (!swaps.has(element) && !customs.has(element))) known.set(property, usage);
+  if (!known.has(property) || (!swaps.has(element) && !customs.has(element))) {
+    known.set(property, usage);
+    if (isDesignTarget(element)) {
+      let properties = baselines.get(element);
+      if (!properties) baselines.set(element, properties = new Map());
+      const original = inlineStyleSnapshot(element, property);
+      const baseline = { adapter, style: original, token: undefined as DesignToken | undefined };
+      baseline.style = { ...original, get computed() { return baseline.token?.value ?? original.computed; } };
+      properties.set(property, baseline);
+    }
+  }
+  refreshBaseline(element, adapter, tokens);
   return known.get(property);
+}
+
+export function originalTokenUsage(element: Element | null, property: string): TokenUsage | undefined {
+  return element ? usages.get(element)?.get(property) : undefined;
+}
+
+function refreshBaseline(element: Element, adapter: TokenAdapter, tokens: readonly DesignToken[]) {
+  for (const [property, baseline] of baselines.get(element) ?? []) {
+    if (baseline.adapter !== adapter) continue;
+    const usage = originalTokenUsage(element, property);
+    baseline.token = usage && "path" in usage ? tokens.find(token => token.path === usage.path) : undefined;
+  }
 }
 
 export function effectiveTokenUsage(element: Element, property: string, fallback?: TokenUsage): TokenUsage | undefined {
@@ -59,11 +83,14 @@ export function customTokenOverride(element: Element, property: string): { prior
   const wasToken = !!swappedToken(element, property) || !!usage && "path" in usage;
   if (!properties) customs.set(element, properties = new Set());
   properties.add(property);
-  return { priority: "important", ...(!previous && wasToken ? { undo: () => removeCustom(element, property) } : {}) };
+  return { priority: "important", ...(!previous && wasToken ? { undo: () => {
+    removeCustom(element, property);
+    if (!showingBefore) { showTokenSwapsBefore(true); showTokenSwapsBefore(false); }
+  } } : {}) };
 }
 
 export function originalTokenStyle(element: Element, property: string) {
-  return swaps.get(element)?.find(swap => swap.property === property)?.inline;
+  return baselines.get(element)?.get(property)?.style ?? swaps.get(element)?.find(swap => swap.property === property)?.inline;
 }
 
 /** The theme state Design mode lists tokens for: each axis's current option. */
@@ -73,6 +100,32 @@ export function themeState(design?: DesignSystem): ThemeState {
     try { state[axis.id] = axis.current(); } catch { /* An axis that throws is left out. */ }
   }
   return state;
+}
+
+export function watchThemes(design: DesignSystem | undefined, document: Document, update: () => void, signal: AbortSignal): void {
+  if (signal.aborted || !design?.themes?.length) return;
+  let key = JSON.stringify(themeState(design));
+  const changed = () => {
+    const next = JSON.stringify(themeState(design));
+    if (next === key || signal.aborted) return;
+    key = next;
+    update();
+  };
+  const cleanups: Array<() => void> = [];
+  let fallback = false;
+  for (const axis of design.themes) {
+    try {
+      if (axis.subscribe) cleanups.push(axis.subscribe(changed));
+      else fallback = true;
+    } catch { fallback = true; }
+  }
+  const observer = fallback ? new MutationObserver(changed) : undefined;
+  observer?.observe(document.documentElement, { attributes: true });
+  if (document.body) observer?.observe(document.body, { attributes: true });
+  signal.addEventListener("abort", () => {
+    observer?.disconnect();
+    for (const cleanup of cleanups) cleanup();
+  }, { once: true });
 }
 
 /** `list()` runs once per adapter and theme state; a failed call is retried next time. */
@@ -133,8 +186,8 @@ export function tokenName(token: DesignToken): string {
 }
 
 /** Tooltip text: path, ref, value and states; states are shown, never previewed. */
-export function tokenTitle(token: DesignToken): string {
-  return [token.path, token.ref, token.value, token.states?.length ? `States: ${token.states.join(", ")}` : "", token.description]
+export function tokenTitle(token: DesignToken, value = token.value, detail?: string): string {
+  return [token.path, token.ref, value, detail, token.states?.length ? `States: ${token.states.join(", ")}` : "", token.description]
     .filter(Boolean).join(" · ");
 }
 
@@ -255,7 +308,8 @@ export function showTokenSwapsBefore(on: boolean): void {
   for (const [element, stack] of swaps) {
     if (on) for (const swap of [...stack].reverse()) swap.undo();
     else for (const swap of stack) {
-      swap.inline?.restore();
+      if (swap.customBefore) swap.inline?.restore();
+      if (isDesignTarget(element)) swap.inline = inlineStyleSnapshot(element, swap.property);
       swap.undo = previewToken(swap.adapter, element, swap.property, swap.token);
     }
   }
@@ -263,6 +317,19 @@ export function showTokenSwapsBefore(on: boolean): void {
     for (const properties of suspendedCustoms.values()) for (const snapshot of properties.values()) snapshot.restore();
     suspendedCustoms.clear();
   }
+}
+
+/** Resolve existing semantic proposals again without recording an edit or changing Before/After. */
+export function refreshTokenSwaps(adapter: TokenAdapter, tokens: readonly DesignToken[]): void {
+  const before = showingBefore;
+  if (!before) showTokenSwapsBefore(true);
+  for (const element of new Set([...swaps.keys(), ...customs.keys()])) refreshBaseline(element, adapter, tokens);
+  for (const stack of swaps.values()) for (const swap of stack) {
+    if (swap.adapter !== adapter) continue;
+    swap.token = tokens.find(token => token.path === swap.token.path) ?? swap.token;
+    if ("path" in swap.from) swap.fromToken = tokens.find(token => token.path === (swap.from as { path: string }).path);
+  }
+  if (!before) showTokenSwapsBefore(false);
 }
 
 /** Net change per property: the first swap's origin and the latest token. */

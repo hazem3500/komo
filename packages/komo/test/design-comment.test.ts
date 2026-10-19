@@ -39,6 +39,83 @@ afterEach(() => {
 });
 
 describe("design comments", () => {
+  it("refreshes an unsaved semantic draft's actual preview and values without changing a custom literal", async () => {
+    const root = document.documentElement;
+    root.setAttribute("data-review-mode", "dark");
+    document.body.innerHTML = '<p id="target">Example</p><div id="draft"></div>';
+    const target = document.querySelector<HTMLElement>("#target")!;
+    const container = document.querySelector<HTMLElement>("#draft")!;
+    target.scrollIntoView = vi.fn();
+    const body = "Proposed design-token changes (preview only)\nElement color: #cccccc [text.secondary] → #eeeeee [text.primary]\n\nProposed style changes (preview only)\n- background-color: transparent → #ef3340";
+    const saved = document.body.appendChild(document.createElement("div"));
+    renderDesignComment(saved, body, { key: "saved", resolve: () => target, compact: true, note: (element, text) => element.append(text) });
+    const updates: string[] = [];
+    const design = { tokens: {
+      id: "draft-theme",
+      list: (theme?: Record<string, string>) => [
+        { path: "text.primary", type: "color" as const, value: theme?.mode === "light" ? "#222222" : "#eeeeee", properties: ["color"] },
+        { path: "text.secondary", type: "color" as const, value: theme?.mode === "light" ? "#555555" : "#cccccc", properties: ["color"] },
+      ],
+      resolve: () => ({ color: { path: "text.secondary" } }),
+    }, themes: [{ id: "mode", options: [{ id: "light" }, { id: "dark" }], current: () => root.getAttribute("data-review-mode")!, apply: (id: string) => root.setAttribute("data-review-mode", id) }] };
+    try {
+      await renderDraftProposal(container, body, () => target, { design, onUpdate: value => updates.push(value) });
+      expect(getComputedStyle(target).color).toBe("rgb(238, 238, 238)");
+      root.setAttribute("data-review-mode", "light");
+      await vi.waitFor(() => expect(getComputedStyle(target).color).toBe("rgb(34, 34, 34)"));
+      expect(getComputedStyle(target).backgroundColor).toBe("rgb(239, 51, 64)");
+      expect(container.textContent).toContain("#555555");
+      expect(container.textContent).toContain("#222222");
+      expect(container.textContent).not.toContain("#eeeeee");
+      expect(saved.textContent).toContain("#eeeeee");
+      expect(updates.at(-1)).toContain("#555555 [text.secondary] → #222222 [text.primary]");
+      container.querySelector<HTMLButtonElement>(".design-toggle button")!.click();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      expect(target.getAttribute("style")).toBeNull();
+      root.setAttribute("data-review-mode", "dark");
+      await vi.waitFor(() => expect(container.textContent).toContain("#eeeeee"));
+      expect(target.getAttribute("style")).toBeNull();
+      container.querySelectorAll<HTMLButtonElement>(".design-toggle button")[1].click();
+      expect(getComputedStyle(target).color).toBe("rgb(238, 238, 238)");
+      resetDesignPreviews();
+      expect(target.getAttribute("style")).toBeNull();
+    } finally { root.removeAttribute("data-review-mode"); }
+  });
+
+  it("ignores a late theme-token response after an unsaved draft is cancelled", async () => {
+    const target = document.body.appendChild(document.createElement("p"));
+    const container = document.body.appendChild(document.createElement("div"));
+    let finish!: (tokens: import("../src/design-system").DesignToken[]) => void;
+    const pending = new Promise<import("../src/design-system").DesignToken[]>(resolve => { finish = resolve; });
+    const onUpdate = vi.fn();
+    const rendering = renderDraftProposal(container, "Proposed design-token changes (preview only)\nElement color: #111111 → #eeeeee [text.primary]", () => target, { design: { tokens: { id: "late-theme", list: () => pending, resolve: () => ({}) } }, onUpdate });
+    resetDesignPreviews();
+    finish([{ path: "text.primary", type: "color", value: "#222222", properties: ["color"] }]);
+    await rendering;
+    expect(target.getAttribute("style")).toBeNull();
+    expect(container.childElementCount).toBe(0);
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it("does not adopt a replacement style target when an unsaved theme preview refreshes", async () => {
+    const root = document.documentElement;
+    root.setAttribute("data-review-mode", "dark");
+    document.body.innerHTML = '<main><p id="target">Original</p></main><div id="draft"></div>';
+    const original = document.querySelector<HTMLElement>("#target")!;
+    const container = document.querySelector<HTMLElement>("#draft")!;
+    const design = { tokens: { id: "retained-theme", list: (theme?: Record<string, string>) => [{ path: "text.primary", type: "color" as const, value: theme?.mode === "light" ? "#222222" : "#eeeeee", properties: ["color"] }], resolve: () => ({}) }, themes: [{ id: "mode", options: [{ id: "light" }, { id: "dark" }], current: () => root.getAttribute("data-review-mode")!, apply: (id: string) => root.setAttribute("data-review-mode", id) }] };
+    try {
+      await renderDraftProposal(container, "Proposed design-token changes (preview only)\nTarget: #target\nElement color: #111111 → #eeeeee [text.primary]", () => document.querySelector("#target"), { design });
+      const replacement = document.createElement("p"); replacement.id = "target";
+      original.replaceWith(replacement);
+      root.setAttribute("data-review-mode", "light");
+      await vi.waitFor(() => expect(container.textContent).toContain("#222222"));
+      expect(replacement.getAttribute("style")).toBeNull();
+      expect(original.getAttribute("style")).toBeNull();
+      expect(container.querySelector('.design-toggle button[aria-pressed="true"]')!.textContent).toBe("Before");
+    } finally { root.removeAttribute("data-review-mode"); }
+  });
+
   it.each(["replace", "remove"])("invalidates After when a parent %ss the entire owner", async action => {
     document.body.innerHTML = '<main><a id="link"><strong>Old title</strong></a></main>';
     const target = document.querySelector<HTMLElement>("#link")!;

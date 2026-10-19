@@ -122,7 +122,7 @@ export function footerTips(bar: HTMLElement, root: ShadowRoot, signal: AbortSign
     delete tip.dataset.open;
   };
   const show = (event: Event) => {
-    const button = (event.target as Element).closest?.<HTMLElement>("[data-tip]");
+    const button = (event.target as Element | null)?.closest?.<HTMLElement>("[data-tip]");
     if (!button || (event.type === "focusin" && !button.matches(":focus-visible"))) return hide();
     clearTimeout(timer);
     timer = window.setTimeout(() => {

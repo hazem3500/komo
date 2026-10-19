@@ -19,18 +19,22 @@ beforeAll(async () => {
     stdin: { contents: `
       import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
-      const radius=new URLSearchParams(location.search).get('case')==='radius';
+      import { classTheme } from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
+      const query=new URLSearchParams(location.search),radius=query.get('case')==='radius',theme=query.get('case')==='theme';
+      const axis=classTheme({id:'mode',options:[{id:'light',attribute:{'data-review-mode':'light'}},{id:'dark',attribute:{'data-review-mode':'dark'}}]});
+      if(theme)document.documentElement.setAttribute('data-review-mode','dark');
       const tokens=tailwindTokens({tokens:[
-        {path:'color.base',type:'color',class:'text-base',properties:['color'],value:'#575456',label:'Base'},
-        {path:'color.primary',type:'color',class:'text-primary',properties:['color'],value:'#6941c6',label:'Primary'},
-        {path:'background.base',type:'color',class:'bg-base',properties:['background-color'],value:'#575456',label:'Base'},
-        {path:'background.primary',type:'color',class:'bg-primary',properties:['background-color'],value:'#6941c6',label:'Primary'},
+        {path:'color.base',type:'color',class:'text-base',properties:['color'],value:'#575456',...(theme?{values:{light:'#575456',dark:'#bbbbbb'}}:{}),label:'Base'},
+        {path:'color.primary',type:'color',class:'text-primary',properties:['color'],value:'#6941c6',...(theme?{values:{light:'#6941c6',dark:'#c1a8ff'}}:{}),label:'Primary'},
+        {path:'background.base',type:'color',class:'bg-base',properties:['background-color'],value:'#575456',...(theme?{values:{light:'#575456',dark:'#bbbbbb'}}:{}),label:'Base'},
+        {path:'background.primary',type:'color',class:'bg-primary',properties:['background-color'],value:'#6941c6',...(theme?{values:{light:'#6941c6',dark:'#c1a8ff'}}:{}),label:'Primary'},
         ...(radius?[
           {path:'radius.small',type:'dimension',class:'radius-small',properties:['border-radius'],value:'8px',label:'Small'},
           {path:'radius.full',type:'dimension',class:'radius-full',properties:['border-radius'],value:'calc(infinity * 1px)',label:'Full'},
           {path:'radius.ellipse',type:'dimension',class:'radius-ellipse',properties:['border-radius'],value:'25% 30% 4px 40px / 10px 50% 4px 12px',label:'Elliptical'}
         ]:[])
-      ]});
+      ]},{themes:theme?[axis]:undefined});
+      const adapter=query.get('adapter')==='inline'?{id:'inline-values',list:state=>tokens.list(state),resolve:element=>tokens.resolve(element)}:tokens;
       const qa=window.radiusQA={actions:0,writes:[]};
       document.querySelector('#target').onclick=()=>qa.actions++;
       const anchor={selector:'#target',text:'',x:.5,y:.5,width:0,height:0,pageX:0,pageY:0,viewportWidth:1280};
@@ -40,7 +44,7 @@ beforeAll(async () => {
       window.fetch=async(input,init)=>{const method=init?.method??(input instanceof Request?input.method:'GET');if(method!=='GET'){qa.writes.push(method);throw Error('Unexpected fixture write')}return Response.json({...(radius?{user}:{}),threads:radius?[thread]:[],guests:true})};
       const mode=new URLSearchParams(location.search).get('mode');
       if(mode==='floating')document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'ownership',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens}});
+      window.komo=initKomo({endpoint:location.origin,project:'ownership',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens:adapter,...(theme?{themes:[axis]}:{})}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -48,7 +52,7 @@ beforeAll(async () => {
     const url = new URL(request.url ?? "/", "http://localhost"), path = url.pathname;
     if (path === "/") {
       response.setHeader("content-type", "text/html");
-      response.end('<style>body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:70px}.text-base{color:#575456}.text-primary{color:#6941c6}.bg-base{background-color:#575456}.bg-primary{background-color:#6941c6}button.surface{display:block;width:240px;height:72px;box-sizing:border-box;margin-bottom:32px;border:2px solid #aaa;background:#fff}.radius-small{border-radius:8px}.radius-full{border-radius:calc(infinity * 1px)}.radius-ellipse{border-radius:25% 30% 4px 40px / 10px 50% 4px 12px}</style><main>'+(url.searchParams.get('case')==='radius'?'<button id="target" class="surface radius-small">Primary surface</button><button id="other" class="surface radius-small">Second surface</button>':'<p id="target" class="text-base bg-base" style="padding: 12px !important;">Example text</p>')+'</main><script type="module" src="/entry.js"></script>');
+      response.end('<style>body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:70px}.text-base{color:#575456}.text-primary{color:#6941c6}.bg-base{background-color:#575456}.bg-primary{background-color:#6941c6}[data-review-mode=dark] .text-base{color:#bbbbbb}[data-review-mode=dark] .text-primary{color:#c1a8ff}[data-review-mode=dark] .bg-base{background-color:#bbbbbb}[data-review-mode=dark] .bg-primary{background-color:#c1a8ff}button.surface{display:block;width:240px;height:72px;box-sizing:border-box;margin-bottom:32px;border:2px solid #aaa;background:#fff}.radius-small{border-radius:8px}.radius-full{border-radius:calc(infinity * 1px)}.radius-ellipse{border-radius:25% 30% 4px 40px / 10px 50% 4px 12px}</style><main>'+(url.searchParams.get('case')==='radius'?'<button id="target" class="surface radius-small">Primary surface</button><button id="other" class="surface radius-small">Second surface</button>':'<p id="target" class="text-base bg-base" style="padding: 12px !important;">Example text</p>')+'</main><script type="module" src="/entry.js"></script>');
       return;
     }
     if (path === "/radius.css") {
@@ -74,6 +78,95 @@ afterAll(async () => {
 });
 
 describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership in %s", mode => {
+
+  it.each(["classes", "inline"])("keeps %s semantic DOM, picker and unsaved draft current across theme changes", async adapter => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    page.setDefaultTimeout(4000);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(`${origin}/?mode=${mode}&case=theme&adapter=${adapter}`);
+    await page.waitForFunction(() => !!(window as any).komo);
+    const target = page.locator("#target"), original = await target.getAttribute("style");
+    const value = () => target.evaluate(node => getComputedStyle(node).color);
+    const theme = (id: string) => page.evaluate(id => document.documentElement.setAttribute("data-review-mode", id), id);
+    await page.keyboard.press("d");
+    await target.click();
+    const field = page.locator('[data-field-property="color"]');
+    const trigger = field.locator("select[data-picker]");
+    await trigger.waitFor();
+    await trigger.click();
+    await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Primary" }).click();
+    expect(await value()).toBe("rgb(193, 168, 255)");
+    await trigger.click();
+    const popup = await page.locator(".komo-tokens").elementHandle();
+    const search = page.getByRole("combobox", { name: "Search tokens for color" });
+    const searchNode = await search.elementHandle();
+    await search.fill("base");
+    expect(await value()).toBe("rgb(187, 187, 187)");
+    await theme("light");
+    await expect.poll(value).toBe("rgb(87, 84, 86)");
+    expect(await popup!.evaluate(node => node.isConnected)).toBe(true);
+    expect(await searchNode!.evaluate(node => node === node.getRootNode().querySelector('.komo-tokens input'))).toBe(true);
+    expect(await search.inputValue()).toBe("base");
+    expect(await search.evaluate(node => (node as HTMLInputElement).selectionStart)).toBe(4);
+    await expect.poll(() => page.locator('.komo-tokens [data-active]').getAttribute("aria-label")).toContain("#575456");
+    await page.keyboard.press("Escape");
+    expect(await value()).toBe("rgb(105, 65, 198)");
+    expect(await field.locator('input[type="color"]').inputValue()).toBe("#6941c6");
+    expect(await trigger.getAttribute("title")).not.toContain("#c1a8ff");
+    await field.getByRole("button", { name: "Edit color value", exact: true }).click();
+    const raw = field.locator('input[data-property="color"]');
+    await raw.fill("#ef3340");
+    await raw.press("Enter");
+    await theme("dark");
+    await expect.poll(() => trigger.getAttribute("title")).toContain("rgb(239, 51, 64)");
+    expect(await value()).toBe("rgb(239, 51, 64)");
+    expect(await field.getAttribute("data-token-mode")).toBe("custom");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect.poll(value).toBe("rgb(193, 168, 255)");
+    await page.getByRole("button", { name: "Before", exact: true }).click();
+    await theme("light");
+    await expect.poll(value).toBe("rgb(87, 84, 86)");
+    await page.getByRole("button", { name: "After", exact: true }).click();
+    expect(await value()).toBe("rgb(105, 65, 198)");
+    await page.keyboard.press("v");
+    await theme("dark");
+    await expect.poll(value).toBe("rgb(187, 187, 187)");
+    await page.keyboard.press("d");
+    await expect.poll(value).toBe("rgb(193, 168, 255)");
+    const fill = page.locator('[data-field-property="background-color"]');
+    await fill.getByRole("button", { name: "Edit background-color value", exact: true }).click();
+    await fill.locator('input[data-property="background-color"]').fill("#ef3340");
+    await fill.locator('input[data-property="background-color"]').press("Enter");
+    await page.locator('.design-inspector__bar').getByRole("button", { name: "Comment", exact: true }).click();
+    const draft = page.locator(".draft-proposal");
+    await draft.waitFor();
+    await expect.poll(value).toBe("rgb(193, 168, 255)");
+    await draft.getByRole("button", { name: "Before", exact: true }).click();
+    expect(await value()).toBe("rgb(187, 187, 187)");
+    await theme("light");
+    await expect.poll(() => draft.textContent()).toContain("#6941c6");
+    expect(await draft.textContent()).not.toContain("#c1a8ff");
+    expect(await draft.textContent()).toContain("rgb(239, 51, 64)");
+    expect(await draft.textContent()).not.toContain("#bbbbbb");
+    expect(await value()).toBe("rgb(87, 84, 86)");
+    expect(await draft.getByRole("button", { name: "Before", exact: true }).evaluate(node => node === (node.getRootNode() as ShadowRoot).activeElement)).toBe(true);
+    await draft.getByRole("button", { name: "After", exact: true }).click();
+    expect(await value()).toBe("rgb(105, 65, 198)");
+    expect(await target.evaluate(node => getComputedStyle(node).backgroundColor)).toBe("rgb(239, 51, 64)");
+    await theme("dark");
+    await expect.poll(value).toBe("rgb(193, 168, 255)");
+    await page.keyboard.press("Escape");
+    await expect.poll(value).toBe("rgb(187, 187, 187)");
+    expect(await target.getAttribute("style")).toBe(original);
+    expect(await target.getAttribute("class")).toBe("text-base bg-base");
+    expect(await page.evaluate(() => (window as any).radiusQA)).toEqual({ actions: 0, writes: [] });
+    expect(errors).toEqual([]);
+    await page.evaluate(() => (window as any).komo.destroy());
+    expect(await page.locator("main").getAttribute("style")).toBeNull();
+    await page.close();
+  });
+
   it("follows live modern pill and elliptical radius previews without a bounding-box change", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(4000);

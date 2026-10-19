@@ -3,6 +3,8 @@
 import { isDesignTarget } from "./design-target.js";
 import { removeEmptyStyle } from "./design-preview.js";
 import { previewText } from "./text-preview.js";
+import { listTokens, originalTokenUsage, previewToken, themeState, watchThemes } from "./token-adapter.js";
+import type { DesignSystem, DesignToken, TokenAdapter } from "./design-system.js";
 
 export interface DesignChange {
   label: string;
@@ -152,12 +154,15 @@ function settle(key: string) {
   pending.finish();
 }
 
-function apply(key: string, sections: DesignSection[], resolve: (selector?: string) => Element | null, smooth = false) {
+type DraftTokens = { adapter: TokenAdapter; tokens: readonly DesignToken[] };
+
+function apply(key: string, sections: DesignSection[], resolve: (selector?: string) => Element | null, smooth = false, context?: DraftTokens) {
   if (lostPreviews.has(key)) return false;
   settle(key);
   const restore: Array<() => void> = [];
   const restoreStyles: Array<() => void> = [];
   const pinBefore: Array<() => void> = [];
+  const styleless = new Set<Element>();
   let unavailable = false;
   for (const section of sections) {
     const element = resolve(section.target);
@@ -169,6 +174,13 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
         root.style.setProperty(item.apply.property, item.after);
         restore.push(() => previous ? root.style.setProperty(item.apply!.property, previous) : root.style.removeProperty(item.apply!.property));
       } else if (isDesignTarget(element) && item.apply.kind === "style") {
+        if (!element.hasAttribute("style")) styleless.add(element);
+        const token = item.token && context?.tokens.find(token => token.path === item.token);
+        if (token && context) {
+          try { restore.push(previewToken(context.adapter, element, item.apply.property, token)); }
+          catch { unavailable = true; }
+          continue;
+        }
         const previous = element.style.getPropertyValue(item.apply.property);
         const priority = element.style.getPropertyPriority(item.apply.property);
         const absent = !element.hasAttribute("style");
@@ -191,9 +203,12 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
         const undo = element instanceof HTMLElement ? previewText(element, item.before, item.after, () => loseTextPreview(key)) : undefined;
         if (undo) restore.push(undo);
         else unavailable = true;
-      }
+      } else if (item.apply.kind === "style") unavailable = true;
     }
   }
+  if (styleless.size) restoreStyles.unshift(() => {
+    for (const element of styleless) if (isDesignTarget(element)) removeEmptyStyle(element);
+  });
   if (unavailable) {
     for (const undo of [...restore, ...restoreStyles].reverse()) undo();
     return false;
@@ -257,7 +272,11 @@ export function isPreviewing(key: string): boolean {
 
 /** Undo every live preview except those whose cards are still on screen. */
 export function resetDesignPreviews(keep: ReadonlySet<string> = new Set()) {
-  if (!keep.has("draft")) draftBody = undefined;
+  if (!keep.has("draft")) {
+    draftBody = undefined;
+    draftRuntime?.events.abort();
+    draftRuntime = undefined;
+  }
   for (const key of [...settling.keys()]) if (!keep.has(key)) settle(key);
   for (const key of [...applied.keys()]) if (!keep.has(key)) revert(key);
   for (const key of lostPreviews) if (!keep.has(key)) lostPreviews.delete(key);
@@ -359,6 +378,8 @@ export interface DesignCommentOptions {
   compact?: boolean;
   /** Called once a Before/After switch has settled, e.g. to move a dialog off a resized element. */
   onSwitch?(): void;
+  /** Current semantic values for an unsaved draft; saved comments keep their recorded values. */
+  tokens?: DraftTokens;
 }
 
 /** Replace `container`'s content with a change card for each proposal. */
@@ -430,7 +451,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
           const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
           if (!reduced) morph(sections, options.resolve);
           if (showAfter) {
-            unavailable.hidden = apply(options.key, sections, options.resolve, !reduced);
+            unavailable.hidden = apply(options.key, sections, options.resolve, !reduced, options.tokens);
             unavailable.textContent = UNAVAILABLE;
           }
           else revert(options.key, !reduced);
@@ -513,12 +534,96 @@ function listenForShortcut() {
 
 // The proposal last shown in the composer, so redraws keep its Before/After choice.
 let draftBody: string | undefined;
+let draftRuntime: {
+  source: string;
+  body: string;
+  container: HTMLElement;
+  resolve: DesignCommentOptions["resolve"];
+  options: DraftOptions;
+  context?: DraftTokens;
+  events: AbortController;
+  refresh(): Promise<void>;
+} | undefined;
+
+interface DraftOptions {
+  design?: DesignSystem;
+  onUpdate?(body: string): void;
+}
+
+function currentDraftBody(body: string, tokens: readonly DesignToken[], design: DesignSystem, resolve: DesignCommentOptions["resolve"]): string {
+  const state = Object.entries(themeState(design)).map(([axis, option]) => `${axis}=${option}`.replace(/\s+/g, " ").replace(/→/g, "->")).join(", ");
+  return body.split(/(\n{2,})/).map(chunk => {
+    const lines = chunk.split("\n");
+    if (!HEADER.test(lines[0])) return chunk;
+    const target = resolve(lines.find(line => line.startsWith("Target: "))?.slice(8));
+    return lines.map(line => {
+      if (line.startsWith("Theme: ") && state) return `Theme: ${state}`;
+      if (lines[0].startsWith("Proposed style ")) {
+        const match = /^- ([\w-]+): (.*?) → (.*)$/.exec(line);
+        const usage = match && originalTokenUsage(target, match[1]);
+        const token = usage && "path" in usage && tokens.find(token => token.path === usage.path);
+        return match && token ? `- ${match[1]}: ${token.value} → ${match[3]}` : line;
+      }
+      if (!lines[0].startsWith("Proposed design-token ")) return line;
+      const match = /^Element ([\w-]+): (.*?) → (.*?) \[([^\]]+)\]$/.exec(line);
+      if (!match) return line;
+      const [, property, before, , path] = match;
+      const next = tokens.find(token => token.path === path);
+      if (!next) return line;
+      const fromPath = /\[([^\]]+)\]$/.exec(before)?.[1];
+      const from = fromPath && tokens.find(token => token.path === fromPath);
+      return `Element ${property}: ${from ? `${from.value} [${from.path}]` : before} → ${next.value} [${path}]`;
+    }).join("\n");
+  }).join("");
+}
 
 /**
  * A proposal being written. Design mode has already restored the page, so the
  * card starts on After; posting or closing the composer resets it.
  */
-export function renderDraftProposal(container: HTMLElement, body: string, resolve: DesignCommentOptions["resolve"]) {
+export function renderDraftProposal(container: HTMLElement, body: string, resolve: DesignCommentOptions["resolve"], options: DraftOptions = {}): void | Promise<void> {
+  const design = options.design, adapter = design?.tokens;
+  if (design && adapter) {
+    if (draftRuntime && draftRuntime.options.design === design && (body === draftRuntime.source || body === draftRuntime.body)) {
+      draftRuntime.container = container;
+      draftRuntime.options = options;
+      renderDesignComment(container, draftRuntime.body, { key: "draft", resolve: draftRuntime.resolve, tokens: draftRuntime.context, note: (element, text) => element.append(text) });
+      return;
+    }
+    draftRuntime?.events.abort();
+    revert("draft");
+    lostPreviews.delete("draft");
+    draftBody = body;
+    const events = new AbortController();
+    const targets = new Map(parseDesignComment(body).filter((block): block is DesignSection => "changes" in block).map(section => [section.target, resolve(section.target)]));
+    const retained = (selector?: string) => { const target = targets.get(selector); return target?.isConnected ? target : null; };
+    let request = 0, initial = true;
+    const runtime = draftRuntime = {
+      source: body, body, container, resolve: retained, options, events,
+      context: undefined as DraftTokens | undefined,
+      async refresh() {
+        const at = ++request;
+        const tokens = await listTokens(adapter!, themeState(design));
+        if (events.signal.aborted || at !== request) return;
+        const after = initial || applied.has("draft");
+        initial = false;
+        revert("draft");
+        runtime.context = { adapter: adapter!, tokens };
+        runtime.body = currentDraftBody(runtime.source, tokens, design!, runtime.resolve);
+        draftBody = runtime.body;
+        runtime.options.onUpdate?.(runtime.body);
+        const sections = parseDesignComment(runtime.body).filter((block): block is DesignSection => "changes" in block);
+        if (after) apply("draft", sections, runtime.resolve, false, runtime.context);
+        const focused = runtime.container.querySelector<HTMLButtonElement>(".design-toggle button:focus")?.textContent;
+        renderDesignComment(runtime.container, runtime.body, { key: "draft", resolve: runtime.resolve, tokens: runtime.context, note: (element, text) => element.append(text) });
+        if (focused) [...runtime.container.querySelectorAll<HTMLButtonElement>(".design-toggle button")].find(button => button.textContent === focused)?.focus({ preventScroll: true });
+      },
+    };
+    watchThemes(design, container.ownerDocument, () => { void runtime.refresh().catch(() => {}); }, events.signal);
+    return runtime.refresh();
+  }
+  draftRuntime?.events.abort();
+  draftRuntime = undefined;
   if (draftBody !== body) {
     revert("draft");
     lostPreviews.delete("draft");

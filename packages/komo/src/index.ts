@@ -4068,8 +4068,12 @@ export function initComments(options: CommentsOptions): CommentsController {
       card.textContent = proposal;
       const target = draft ? designTarget(draft) : () => null;
       void loadDesignComments().then(({ renderDraftProposal }) => {
-        renderDraftProposal(card, proposal, target);
-        positionDialog();
+        if (!card.isConnected || draftProposal !== proposal) return;
+        const anchor = draft;
+        return Promise.resolve(renderDraftProposal(card, proposal, target, {
+          design: options.design,
+          onUpdate(body) { if (draft === anchor && draftProposal) draftProposal = body; },
+        })).then(positionDialog);
       });
       form.prepend(card);
     }
