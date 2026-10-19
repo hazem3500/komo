@@ -364,4 +364,45 @@ describe("explicit design-token preview bridge", () => {
     controller.destroy();
     cleanup();
   });
+
+  it("hides a select field's own value under the token chip until the token is detached", async () => {
+    document.body.innerHTML = '<main><article class="card">Card copy</article></main><div id="komo"></div>';
+    const root = document.documentElement;
+    root.style.setProperty("--weight-title", "600");
+    const cleanup = registerDesignTokenSource(root, [
+      { path: "typography.p1", cssVariable: "--weight-title", type: "fontWeight", properties: ["font-weight"], impactSelector: ".card" },
+    ]);
+    const host = document.querySelector<HTMLElement>("#komo")!;
+    const card = document.querySelector<HTMLElement>(".card")!;
+    const shadow = host.attachShadow({ mode: "open" });
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    const controller = createDesignMode({ root: shadow, host, targetAt: () => card, onComment: vi.fn(), onExit: vi.fn() });
+    controller.setActive(true);
+    const event = new Event("pointerdown", { bubbles: true, cancelable: true, composed: true });
+    Object.defineProperties(event, { clientX: { value: 20 }, clientY: { value: 20 }, button: { value: 0 } });
+    card.dispatchEvent(event);
+    const chooser = await vi.waitFor(() => {
+      const found = shadow.querySelector<HTMLSelectElement>('[aria-label="Style token for font-weight"]');
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    const field = chooser.closest<HTMLElement>(".design-field--select")!;
+    const weight = field.querySelector<HTMLSelectElement>('select[data-property="font-weight"]')!;
+    expect(getComputedStyle(weight).visibility).not.toBe("hidden");
+
+    chooser.value = "typography.p1";
+    chooser.dispatchEvent(new Event("change"));
+    expect(field.dataset.tokenMode).toBe("token");
+    expect(field.querySelector(".design-token-chip")?.textContent).toBe("typography.p1");
+    // The chip stands in for the value: the native select (and the styled menu's trigger) is hidden.
+    expect(getComputedStyle(weight).visibility).toBe("hidden");
+
+    field.querySelector<HTMLButtonElement>('[aria-label="Detach token from font-weight"]')!.click();
+    await vi.waitFor(() => expect(field.dataset.tokenMode).not.toBe("token"));
+    expect(getComputedStyle(weight).visibility).not.toBe("hidden");
+    controller.destroy();
+    cleanup();
+    root.style.removeProperty("--weight-title");
+  });
 });
