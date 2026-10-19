@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDesignMode } from "../src/design-mode.js";
 import { cssVariableTokens, registerDesignTokenSource, type KomoDesignToken } from "../src/design-tokens.js";
 import { createAdapterTokenControl, proposedDesignChanges } from "../src/react-props-panel.js";
-import { closestToken, listTokens, resetTokenSwaps, tokenSwapChanges } from "../src/token-adapter.js";
+import { closestToken, listTokens, originalTokenStyle, refreshTokenSwaps, rememberTokenUsage, resetTokenSwaps, showTokenSwapsBefore, swapToken, tokenSwapChanges } from "../src/token-adapter.js";
 import { parseDesignComment } from "../src/design-comment.js";
 import type { DesignSystem, DesignToken, TokenAdapter, TokenUsage } from "../src/design-system.js";
 // @ts-expect-error CLI modules are plain JavaScript.
@@ -17,6 +17,53 @@ const classTokens: DesignToken[] = [
   { path: "space.md", type: "dimension", value: "16px", properties: ["padding", "gap"], group: "Spacing", ref: "p-md" },
 ];
 const prefix: Record<string, string> = { color: "text-", "background-color": "bg-", padding: "p-" };
+
+describe("semantic inline baseline declarations", () => {
+  it.each([
+    ["color", "var(--base)", "#cccccc", "#555555"],
+    ["color", "currentcolor", "#cccccc", "#555555"],
+    ["padding", "1em", "16px", "20px"],
+    ["border-radius", "25%", "16px", "20px"],
+    ["width", "calc(50% - 4px)", "12px", "20px"],
+  ])("retains the %s reference/expression %s through theme refresh and Undo", (property, value, before, after) => {
+    const parent = document.createElement("main"), target = document.createElement("p");
+    parent.style.cssText = "color:#cccccc;font-size:16px;width:32px";
+    parent.style.setProperty("--base", "#cccccc");
+    target.style.setProperty(property, value, "important");
+    target.style.setProperty("margin", "3px", "important");
+    parent.append(target);
+    document.body.append(parent);
+    const original = target.style.getPropertyValue(property);
+    const priority = target.style.getPropertyPriority(property);
+    const tokens: DesignToken[] = [{ path: "base", type: "other", properties: [property], value: before }, { path: "accent", type: "other", properties: [property], value: property === "color" ? "#eeeeee" : "8px" }];
+    const adapter: TokenAdapter = { id: "relative-baseline", list: () => tokens, resolve: () => ({ [property]: { path: "base" } }) };
+    try {
+      rememberTokenUsage(target, property, { path: "base" }, adapter, tokens);
+      const snapshot = originalTokenStyle(target, property);
+      const undo = swapToken(adapter, target, property, tokens[1], { path: "base" }, tokens[0]);
+      parent.style.color = "#555555";
+      parent.style.fontSize = "20px";
+      parent.style.width = "48px";
+      parent.style.setProperty("--base", "#555555");
+      refreshTokenSwaps(adapter, [{ ...tokens[0], value: after }, tokens[1]]);
+      showTokenSwapsBefore(true);
+      expect(originalTokenStyle(target, property)).toBe(snapshot);
+      expect(snapshot?.value).toBe(original);
+      expect(target.style.getPropertyValue(property)).toBe(original);
+      expect(target.style.getPropertyPriority(property)).toBe(priority);
+      showTokenSwapsBefore(false);
+      undo();
+      expect(target.style.getPropertyValue(property)).toBe(original);
+      expect(target.style.getPropertyPriority(property)).toBe(priority);
+      expect(target.style.margin).toBe("3px");
+      expect(target.style.getPropertyPriority("margin")).toBe("important");
+    } finally {
+      showTokenSwapsBefore(false);
+      resetTokenSwaps(target);
+      parent.remove();
+    }
+  });
+});
 
 function classAdapter(options: { async?: boolean } = {}): TokenAdapter & { list: ReturnType<typeof vi.fn> } {
   const wrap = <T,>(value: T) => (options.async ? new Promise<T>((done) => setTimeout(() => done(value), 5)) : value);

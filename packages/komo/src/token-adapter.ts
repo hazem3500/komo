@@ -25,6 +25,9 @@ interface Swap {
   customBefore: boolean;
 }
 
+// Fixed named colors from https://www.w3.org/TR/css-color-4/#named-colors; context-dependent keywords stay references.
+const namedColors = new Set("aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen transparent".split(" "));
+
 const swaps = new Map<Element, Swap[]>();
 const customs = new Map<Element, Set<string>>();
 const usages = new WeakMap<Element, Map<string, TokenUsage | undefined>>();
@@ -55,7 +58,9 @@ export function rememberTokenUsage(element: Element, property: string, usage: To
       if (!properties) baselines.set(element, properties = new Map());
       const original = inlineStyleSnapshot(element, property);
       // Keep references and relative expressions; rebase concrete semantic declarations only.
-      const concrete = !!original.value && comparable(original.value) === comparable(original.computed);
+      const value = original.value.trim().toLowerCase();
+      const relative = /^(?:inherit|initial|unset|revert(?:-layer)?|currentcolor|context-fill|context-stroke)$|%|\b(?:var|env|attr|calc|min|max|clamp|color-mix|light-dark|anchor|anchor-size)\(|\(\s*from\b|\d(?:r?(?:em|ex|ch|cap|ic|lh)|[sld]?v(?:w|h|i|b|min|max)|cq(?:w|h|i|b|min|max))\b/.test(value);
+      const concrete = !!value && !relative && (namedColors.has(value) || comparable(value) === comparable(original.computed));
       const existing = properties.get(property);
       if (existing?.adapter === adapter) {
         existing.original = original;
