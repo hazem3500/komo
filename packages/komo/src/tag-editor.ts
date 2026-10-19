@@ -56,6 +56,19 @@ const css = `
 .tag-option[aria-selected="true"] { background: #ffffff14; color: #fff; }
 .tag-option-hint, .tag-option-empty { color: #858585; }
 .tag-option-empty { padding: 6px 8px; }
+.tag-popover { position: fixed; z-index: 40; pointer-events: auto; width: 252px; box-sizing: border-box; padding: 8px; border-radius: 12px; background: #292929; color: #ddd; box-shadow: 0 0 0 1px #ffffff18, 0 12px 32px #0007; font-family: inherit; font-size: 12px; line-height: 1.4; overflow: auto; }
+.tag-popover .tag-input { box-sizing: border-box; width: 100%; height: 32px; padding: 0 9px; border: 1px solid #ffffff18; border-radius: 7px; outline: none; background: #ffffff07; color: #eee; font: inherit; }
+.tag-popover .tag-input:focus { border-color: #ffffff50; }
+.tag-popover .tag-input:focus-visible { outline: 2px solid var(--accent, #bda6ef); outline-offset: 1px; }
+.tag-popover .tag-input[aria-invalid=true] { border-color: #f28b82; }
+.tag-popover-choices { display: grid; gap: 2px; max-height: 200px; overflow: auto; margin-top: 6px; }
+.tag-popover-choice { display: flex; align-items: center; justify-content: flex-start; gap: 8px; min-height: 32px; width: 100%; box-sizing: border-box; border: 0; padding: 6px 8px; border-radius: 7px; background: none; color: #ddd; font: inherit; text-align: left; cursor: pointer; }
+.tag-popover-choice:hover,.tag-popover-choice:focus-visible { background: #ffffff0d; outline: 1px solid #ffffff40; outline-offset: -1px; }
+.tag-popover-choice[aria-pressed=true] { color: var(--accent, #bda6ef); }
+.tag-popover-choice:disabled { opacity: .4; cursor: default; }
+.tag-popover-check { width: 14px; flex: none; }
+.tag-popover-label { min-width: 0; overflow-wrap: anywhere; }
+.tag-popover-note { color: #aaa; padding: 8px; font-size: 11px; }
 .new-comment-composer .draft-body:has(.tag-slot) { grid-template-rows: minmax(28px, auto) minmax(28px, auto); }
 .new-comment-composer .draft-body .tag-slot { grid-row: 2; grid-column: 2; align-self: start; min-width: 0; padding-top: 2px; }
 .new-comment-composer .draft-body:has(.tag-slot) .send { align-self: start; }
@@ -70,6 +83,7 @@ export function normalizeTag(value: string): string | null {
 
 /** Render removable tag chips and an inline "Tag" input into `slot`. */
 export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
+  if (options.trigger) return headerTagEditor(slot, options, options.trigger);
   let tags = [...options.tags];
   let typing = false;
   // Replacing the row can blur the old input; that isn't the person leaving the field.
@@ -287,11 +301,155 @@ export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
     }
     swap(style, row);
   }
-  if (options.trigger)
-    options.trigger.onclick = () => {
-      typing = tags.length < MAX_TAGS;
-      render(typing);
-      if (!typing) slot.querySelector<HTMLButtonElement>(".tag-chip button")?.focus();
-    };
   render();
+}
+
+let closeActiveTags: (() => void) | undefined;
+
+function headerTagEditor(slot: HTMLElement, options: TagEditorOptions, trigger: HTMLButtonElement) {
+  let tags = [...options.tags];
+  let popover: HTMLElement | undefined;
+  let follow = 0;
+  let listeners: AbortController | undefined;
+  const id = `komo-tag-popover-${Math.random().toString(36).slice(2)}`;
+  const close = (focus = false) => {
+    cancelAnimationFrame(follow);
+    listeners?.abort();
+    popover?.remove();
+    popover = undefined;
+    trigger.setAttribute("aria-expanded", "false");
+    if (closeActiveTags === dismiss) closeActiveTags = undefined;
+    if (focus && trigger.isConnected) trigger.focus({ preventScroll: true });
+  };
+  const dismiss = () => close();
+  const renderChips = () => {
+    const style = document.createElement("style");
+    style.textContent = css;
+    const row = document.createElement("div");
+    row.className = "tag-row";
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-label", "Tags");
+    for (const tag of tags) {
+      const chip = document.createElement("span");
+      chip.className = "tag-chip";
+      chip.title = tag;
+      chip.append(Object.assign(document.createElement("span"), { textContent: `#${tag}` }));
+      row.append(chip);
+    }
+    slot.replaceChildren(style, row);
+    slot.hidden = !tags.length;
+    const label = tags.length ? "Manage tags" : "Add tag";
+    trigger.title = label;
+    trigger.setAttribute("aria-label", label);
+  };
+  trigger.setAttribute("aria-haspopup", "dialog");
+  trigger.setAttribute("aria-controls", id);
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.onclick = () => {
+    if (popover) return close(true);
+    const root = slot.getRootNode();
+    const owner = root instanceof ShadowRoot ? root : document.body;
+    closeActiveTags?.();
+    closeActiveTags = dismiss;
+    listeners = new AbortController();
+    const signal = listeners.signal;
+    popover = document.createElement("div");
+    popover.className = "tag-popover";
+    popover.id = id;
+    popover.setAttribute("role", "dialog");
+    popover.setAttribute("aria-label", "Manage tags");
+    const input = document.createElement("input");
+    input.className = "tag-input";
+    input.type = "search";
+    input.placeholder = "Search or create tag…";
+    input.maxLength = 33;
+    input.autocomplete = "off";
+    input.setAttribute("aria-label", "Search or create tag");
+    const choices = document.createElement("div");
+    choices.className = "tag-popover-choices";
+    choices.setAttribute("role", "group");
+    choices.setAttribute("aria-label", "Tag choices");
+    const note = document.createElement("div");
+    note.className = "tag-popover-note";
+    note.setAttribute("role", "status");
+    popover.append(input, choices, note);
+    owner.append(popover);
+    trigger.setAttribute("aria-expanded", "true");
+    const choose = (tag: string, create = false) => {
+      if (tags.includes(tag)) { tags = tags.filter(t => t !== tag); options.onRemove(tag); }
+      else if (tags.length < MAX_TAGS) { tags = [...tags, tag].sort(); options.onAdd(tag); }
+      else return;
+      if (create) input.value = "";
+      renderChips(); update(tag);
+      if (create) input.focus({ preventScroll: true });
+    };
+    const update = (focusedTag?: string) => {
+      const query = input.value.trim().replace(/^#/, "").toLocaleLowerCase("en-US");
+      const typed = normalizeTag(input.value);
+      const all = [...new Set([...tags, ...options.suggestions])];
+      const matches = all.filter(tag => tag.includes(query)).sort((a, b) => Number(tags.includes(b)) - Number(tags.includes(a)) || Number(b.startsWith(query)) - Number(a.startsWith(query)) || a.localeCompare(b));
+      choices.replaceChildren();
+      const addChoice = (tag: string, create: boolean) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "tag-popover-choice";
+        button.dataset.tag = tag;
+        button.setAttribute("aria-pressed", String(tags.includes(tag)));
+        button.disabled = !tags.includes(tag) && tags.length >= MAX_TAGS;
+        button.append(Object.assign(document.createElement("span"), { className: "tag-popover-check", textContent: tags.includes(tag) ? "✓" : create ? "+" : "" }), Object.assign(document.createElement("span"), { className: "tag-popover-label", textContent: `${create ? "Create " : ""}#${tag}` }));
+        button.addEventListener("click", () => choose(tag, create));
+        choices.append(button);
+        if (focusedTag === tag) button.focus({ preventScroll: true });
+      };
+      matches.forEach(tag => addChoice(tag, false));
+      if (typed && !all.includes(typed)) addChoice(typed, true);
+      note.textContent = tags.length >= MAX_TAGS ? `Maximum ${MAX_TAGS} tags. Remove one to add another.` : !choices.children.length ? query ? "Use letters, numbers, spaces, . _ or -" : "Type to create a tag" : `${tags.length} of ${MAX_TAGS} tags selected`;
+    };
+    input.addEventListener("input", () => { input.removeAttribute("aria-invalid"); update(); });
+    popover.addEventListener("keydown", event => {
+      event.stopPropagation();
+      if (event.isComposing) return;
+      const buttons = [...choices.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+      const active = root instanceof ShadowRoot ? root.activeElement : document.activeElement;
+      if (event.key === "Escape") { event.preventDefault(); close(true); }
+      else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const index = buttons.indexOf(active as HTMLButtonElement);
+        (event.key === "ArrowDown" ? buttons[index + 1] ?? input : index > 0 ? buttons[index - 1] : input)?.focus({ preventScroll: true });
+      } else if (event.key === "Enter" && event.target === input) {
+        event.preventDefault();
+        const tag = normalizeTag(input.value);
+        if (tag && !tags.includes(tag)) choose(tag, true);
+        else if (input.value.trim() && !tag) input.setAttribute("aria-invalid", "true");
+      }
+    });
+    const outside = (event: Event) => {
+      const path = event.composedPath();
+      if (!path.includes(popover!) && !path.includes(trigger)) close();
+    };
+    document.addEventListener("pointerdown", outside, { capture: true, signal });
+    document.addEventListener("focusin", outside, { signal });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(true); }
+    }, { capture: true, signal });
+    const place = () => {
+      if (!trigger.isConnected || !slot.isConnected) return close();
+      const anchor = trigger.getBoundingClientRect();
+      if (anchor.bottom < 0 || anchor.top > innerHeight) return close();
+      const bounds = trigger.closest(".dialog")?.getBoundingClientRect();
+      const leftEdge = Math.max(8, (bounds?.left ?? 0) + 8);
+      const rightEdge = Math.min(innerWidth - 8, (bounds?.right ?? innerWidth) - 8);
+      const width = Math.max(0, Math.min(252, rightEdge - leftEdge));
+      popover!.style.width = `${width}px`;
+      popover!.style.maxHeight = `${Math.max(80, innerHeight - 16)}px`;
+      const height = popover!.offsetHeight;
+      const below = innerHeight - anchor.bottom - 8;
+      const top = height + 6 <= below || anchor.top < below ? anchor.bottom + 6 : anchor.top - height - 6;
+      popover!.style.left = `${Math.max(leftEdge, Math.min(anchor.right - width, rightEdge - width))}px`;
+      popover!.style.top = `${Math.max(8, Math.min(top, innerHeight - height - 8))}px`;
+      follow = requestAnimationFrame(place);
+    };
+    update(); place(); input.focus({ preventScroll: true });
+  };
+  renderChips();
 }

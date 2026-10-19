@@ -97,4 +97,70 @@ describe("tag editor", () => {
     const editor = mount(Array.from({ length: MAX_TAGS }, (_, index) => `t${index}`));
     expect(editor.add()).toBeNull();
   });
+
+  it("opens one header-anchored popover after the slot is attached to a shadow root", () => {
+    const host = document.createElement("div");
+    const root = host.attachShadow({ mode: "open" });
+    document.body.replaceChildren(host);
+    const trigger = document.createElement("button");
+    const slot = document.createElement("div");
+    const added: string[] = [], removed: string[] = [];
+    tagEditor(slot, { tags: ["ui"], suggestions: ["ui", "bug"], trigger, onAdd: tag => added.push(tag), onRemove: tag => removed.push(tag) });
+    root.append(trigger, slot);
+    trigger.click();
+    const popover = root.querySelector<HTMLElement>(".tag-popover")!;
+    const input = popover.querySelector<HTMLInputElement>("input")!;
+    expect(root.querySelectorAll(".tag-popover")).toHaveLength(1);
+    expect(slot.querySelector("input")).toBeNull();
+    expect(root.activeElement).toBe(input);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(popover.querySelector('[aria-pressed="true"]')?.textContent).toContain("#ui");
+    input.value = "new label";
+    input.dispatchEvent(new Event("input"));
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    expect(added).toEqual(["new label"]);
+    expect(slot.textContent).toContain("#new label");
+    expect(root.activeElement).toBe(input);
+    popover.querySelector<HTMLButtonElement>('[data-tag="ui"]')!.click();
+    expect(removed).toEqual(["ui"]);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(root.querySelector(".tag-popover")).toBeNull();
+    expect(root.activeElement).toBe(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("keeps an empty metadata row hidden and dismisses on outside pointer or focus", () => {
+    const trigger = document.createElement("button"), slot = document.createElement("div"), outside = document.createElement("button");
+    document.body.replaceChildren(trigger, slot, outside);
+    tagEditor(slot, { tags: [], suggestions: ["long tag name for narrow widths"], trigger, onAdd: () => {}, onRemove: () => {} });
+    expect(slot.hidden).toBe(true);
+    trigger.click();
+    expect(slot.hidden).toBe(true);
+    expect(document.querySelectorAll(".tag-popover input")).toHaveLength(1);
+    outside.dispatchEvent(new Event("pointerdown", { bubbles: true, composed: true }));
+    expect(document.querySelector(".tag-popover")).toBeNull();
+    trigger.click();
+    outside.focus();
+    expect(document.querySelector(".tag-popover")).toBeNull();
+    expect(document.activeElement).toBe(outside);
+  });
+
+  it("allows managing tags at the limit and confines the popup horizontally to the thread", () => {
+    const dialog = document.createElement("div"); dialog.className = "dialog";
+    const trigger = document.createElement("button"), slot = document.createElement("div");
+    dialog.append(trigger, slot); document.body.replaceChildren(dialog);
+    trigger.getBoundingClientRect = () => ({ left: 260, right: 284, top: 80, bottom: 104, width: 24, height: 24 }) as DOMRect;
+    dialog.getBoundingClientRect = () => ({ left: 16, right: 300, width: 284, top: 60, bottom: 300, height: 240 }) as DOMRect;
+    const removed: string[] = [];
+    tagEditor(slot, { tags: Array.from({ length: MAX_TAGS }, (_, i) => `tag${i}`), suggestions: ["another"], trigger, onAdd: () => {}, onRemove: tag => removed.push(tag) });
+    trigger.click();
+    const popover = document.querySelector<HTMLElement>(".tag-popover")!;
+    expect(parseFloat(popover.style.left)).toBeGreaterThanOrEqual(24);
+    expect(parseFloat(popover.style.left) + parseFloat(popover.style.width)).toBeLessThanOrEqual(292);
+    expect(popover.querySelector<HTMLButtonElement>('[data-tag="another"]')!.disabled).toBe(true);
+    popover.querySelector<HTMLButtonElement>('[data-tag="tag0"]')!.click();
+    expect(removed).toEqual(["tag0"]);
+    expect(popover.querySelector<HTMLButtonElement>('[data-tag="another"]')!.disabled).toBe(false);
+    trigger.click();
+  });
 });
