@@ -2297,7 +2297,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (thread.page !== page()) {
       const url = new URL(thread.page, location.origin);
       url.searchParams.set("comment", thread.id);
-      location.assign(url);
+      void go(url);
       return;
     }
     openingPreview =
@@ -5765,13 +5765,49 @@ export function initComments(options: CommentsOptions): CommentsController {
   // Client-side routers change the URL without reloading; repaint pins right
   // away from the threads already in memory. The poll below still catches
   // routers that update the URL after these events fire.
-  const onNavigate = () => setTimeout(checkPage);
+  const onNavigate = () => setTimeout(() => (checkPage(), openDeepLink()));
   window.addEventListener("popstate", onNavigate, { signal: abort.signal });
   (
     window as Window & { navigation?: EventTarget }
   ).navigation?.addEventListener("navigatesuccess", onNavigate, {
     signal: abort.signal,
   });
+  /** Same-origin navigation through the host router when given, else a page load. */
+  async function go(url: URL) {
+    if (!options.navigate || url.origin !== location.origin)
+      return location.assign(url);
+    try {
+      await options.navigate(url);
+    } catch {
+      return location.assign(url);
+    }
+    checkPage();
+    void openDeepLink();
+  }
+  let linking: string | null = null;
+  /** Open ?comment=<id> once its page and anchor render, then drop the param. */
+  async function openDeepLink() {
+    const id = new URL(location.href).searchParams.get("comment");
+    const thread = threads.find((t) => t.id === id);
+    if (!thread || linking === id) return;
+    linking = id;
+    // Routers may commit the URL or render the anchor after navigating.
+    for (
+      let wait = 0;
+      wait < 5e3 && (page() !== thread.page || !resolveAnchor(thread.anchor));
+      wait += 100
+    )
+      await new Promise((done) => setTimeout(done, 100));
+    linking = null;
+    const url = new URL(location.href);
+    if (destroyed || url.searchParams.get("comment") !== id) return;
+    url.searchParams.delete("comment");
+    history.replaceState(history.state, "", url);
+    checkPage();
+    if (thread.page !== page()) return;
+    if (!expanded) toggleExpanded(true);
+    selectThread(thread);
+  }
   function syncSession() {
     const next = new CommentsApi(options);
     if (next.token === api.token || (api.transient && !next.token))
@@ -6042,6 +6078,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           easing: "cubic-bezier(0.22, 1, 0.36, 1)",
         });
   }
+  void openDeepLink();
   async function loadProject() {
     const client = api;
     const token = client.token;
@@ -6094,12 +6131,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     render();
     const changed = await listed;
     if (destroyed || client !== api) return;
-    const deepLink = new URL(location.href).searchParams.get("comment");
-    const thread = threads.find((t) => t.id === deepLink);
-    if (thread) {
-      if (!expanded) toggleExpanded(true);
-      selectThread(thread);
-    }
+    void openDeepLink();
     render();
     return changed;
   }

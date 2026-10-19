@@ -155,6 +155,13 @@ export interface CommentsOptions {
   sourceUrl?: (source: string, branch: string) => string;
   /** Defaults to location.pathname; query strings are not stored. */
   page?: () => string;
+  /**
+   * Client-side router navigation for opening a comment on another page, e.g.
+   * (url) => router.navigate({ href: url.pathname + url.search }). komo opens
+   * the thread once its anchor renders. Defaults to a full page load; a
+   * rejection falls back to one.
+   */
+  navigate?: (url: URL) => void | Promise<void>;
   pollInterval?: number;
   /** Full emoji JSON URL; fetched only when choosing another emoji. */
   emojiDataSource?: string;

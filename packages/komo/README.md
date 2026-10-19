@@ -436,6 +436,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `source(element)` | `(element: Element) => string \| undefined` | Anchor metadata | Return a repository-relative source path. |
 | `sourceUrl(source, branch)` | `(source: string, branch: string) => string` | GitHub viewer | Custom source or editor link. |
 | `page()` | `() => string` | `location.pathname` | Canonical page identifier. |
+| `navigate(url)` | `(url: URL) => void \| Promise<void>` | `location.assign` | Route to a comment on another page without reloading, e.g. `(url) => router.navigate({ href: url.pathname + url.search })`. komo opens the thread once its anchor renders; a rejection falls back to a page load. |
 | `drawerContainer` | `HTMLElement` | Viewport | Element used to center the drawer before it is dragged. |
 | `autoHideDrawer` | `boolean` | `true` | Set `false` to keep the drawer visible away from the pointer. |
 | `showToolbar` | `boolean` | `true` | Set `false` to keep the toolbar, drawer, and comment pins hidden until `controller.open()` or the restore shortcut. |
