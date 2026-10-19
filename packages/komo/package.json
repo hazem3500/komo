@@ -1,6 +1,6 @@
 {
   "name": "@hazem3500/komo",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "Point, area, and threaded comments for website branches.",
   "type": "module",
   "license": "MIT",
@@ -120,7 +120,7 @@
     "pg": "^8.23.0"
   },
   "bin": {
-    "komo": "./cli/index.mjs"
+    "komo": "cli/index.mjs"
   },
   "engines": {
     "node": ">=22.12"
