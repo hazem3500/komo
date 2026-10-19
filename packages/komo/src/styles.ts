@@ -774,7 +774,8 @@ ${morphingMenuStyles}
   z-index: 1;
   opacity: 0;
   background: #4388ff0b;
-  box-shadow: inset 0 0 0 1.5px #4388ff;
+  outline: 1.5px solid #4388ff;
+  outline-offset: 2px;
   transition: opacity 100ms ease;
 }
 
@@ -2517,7 +2518,7 @@ textarea {
 .thread-pane .dialog > .thread-tags { margin: -6px 0 4px; padding: 0 16px 8px 36px; }
 .thread-pane .message:first-child > .row { padding-right: 0; }
 /* Design mode's selection outline marks the open thread's target. */
-.component-hover[data-thread] { border: 2px solid var(--accent, #bda6ef); border-radius: 8px; background: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #bda6ef) 22%, transparent), 0 2px 12px #0003; transition: opacity 150ms ease; }
+.component-hover[data-thread] { outline: 2px solid var(--accent, #bda6ef); background: none; transition: opacity 150ms ease; }
 /* The open thread's pin stays as a quiet marker, and steps away while the outline shows. */
 .pins[data-quiet] .pin.active { scale: .7; opacity: .6; box-shadow: 0 0 0 2px #fff; transition: opacity 150ms ease; }
 .pins[data-outlined] .pin.active { opacity: 0; pointer-events: none; }

@@ -9,6 +9,7 @@ export type { KomoConfig } from "./config.js";
 import { adaptivePolling } from "./polling.js";
 import { pinDirection } from "./pin-direction.js";
 import { pinStacks } from "./pin-stacks.js";
+import { drawHighlight } from "./highlight.js";
 import { OptimisticQueue } from "./optimistic.js";
 import { agentPrompt } from "./agent-prompt.js";
 import { accentPicker } from "./lazy-accent-picker.js";
@@ -5333,7 +5334,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     pins.toggleAttribute("data-outlined", !!target && docked && outlineShown);
     if (target) {
       const element = anchorElement(thread.anchor);
-      outline(target, element, framed && !!element && surface.contains(element));
+      outline(target, spot.width && spot.height ? null : element, framed && !!element && surface.contains(element));
       if (docked && !outlineShown) hoverOutline.style.opacity = "0";
       return;
     }
@@ -5363,30 +5364,12 @@ export function initComments(options: CommentsOptions): CommentsController {
     element: Element | null,
     inFrame: boolean,
   ) {
-    const bounds = inFrame
-      ? surface.getBoundingClientRect()
-      : {
-          left: 0,
-          top: 0,
-          right: window.innerWidth,
-          bottom: window.innerHeight,
-        };
-    const left = Math.max(0, bounds.left, rect.left),
-      top = Math.max(bounds.top, rect.top);
-    const right = Math.min(bounds.right, rect.right),
-      bottom = Math.min(bounds.bottom, rect.bottom);
-    if (right <= left || bottom <= top) {
-      hoverOutline.style.opacity = "0";
-      return;
-    }
-    Object.assign(hoverOutline.style, {
-      opacity: "1",
-      left: `${left}px`,
-      top: `${top}px`,
-      width: `${right - left}px`,
-      height: `${bottom - top}px`,
-      borderRadius: element ? getComputedStyle(element).borderRadius : "",
-    });
+    hoverOutline.style.opacity = drawHighlight(
+      hoverOutline,
+      rect,
+      element,
+      inFrame ? surface.getBoundingClientRect() : undefined,
+    ) ? "1" : "0";
   }
   function scheduleHover() {
     if (hoverFrame) return;

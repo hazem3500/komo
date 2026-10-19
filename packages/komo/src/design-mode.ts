@@ -1,5 +1,6 @@
 import { designModeStyles } from "./design-mode-styles.js";
 import { el, icon } from "./dom.js";
+import { drawHighlight } from "./highlight.js";
 import type { Control, PanelContext } from "./design-panel.js";
 import type { InlineTextTools } from "./inline-text-editor.js";
 import type { DesignSystem } from "./design-system.js";
@@ -354,12 +355,7 @@ export function createDesignMode(options: DesignModeOptions) {
       if (options.flip && box.width && covers(box.left) && !covers(document.documentElement.clientWidth - box.right))
         flipTimer = window.setTimeout(options.flip, kind === "hover" ? 350 : 0);
     }
-    Object.assign(outline.style, {
-      left: `${rect.left}px`,
-      top: `${rect.top}px`,
-      width: `${rect.width}px`,
-      height: `${rect.height}px`,
-    });
+    outline.hidden = !drawHighlight(outline, rect, element);
   }
   function scheduleOutline() {
     if (frame) return;
