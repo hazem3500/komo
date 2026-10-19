@@ -995,6 +995,14 @@ async function mountForComments(sidebar: "background" | "edge", name: string) {
 }
 
 it("frames body-level portals with the page and restores them exactly", async () => {
+  const watched = new Map<Element, () => void>();
+  vi.stubGlobal("ResizeObserver", class {
+    private targets = new Set<Element>();
+    constructor(private callback: () => void) {}
+    observe(node: Element) { this.targets.add(node); watched.set(node, this.callback); }
+    unobserve(node: Element) { this.targets.delete(node); watched.delete(node); }
+    disconnect() { for (const node of this.targets) watched.delete(node); this.targets.clear(); }
+  });
   const { host } = await mountForComments("background", "portals");
   const portal = (css: string) => {
     const node = document.createElement("div");
@@ -1002,7 +1010,9 @@ it("frames body-level portals with the page and restores them exactly", async ()
     document.body.append(node);
     return node;
   };
-  const dialog = portal("position: fixed; inset: 0px; translate: 1px 2px;");
+  const dialog = portal("position: fixed; inset: 0px; translate: 1px 2px; transform-origin: 50px 25px;");
+  let portalLeft = 0;
+  Object.defineProperty(dialog, "offsetLeft", { get: () => portalLeft });
   const original = dialog.style.cssText;
   const flow = portal("height: 10px;");
   const anchored = portal("position: fixed; transform: translate(5px, 5px);");
@@ -1021,12 +1031,29 @@ it("frames body-level portals with the page and restores them exactly", async ()
   expect(dialog.style.translate).toMatch(/1px/);
   // komo's host, in-flow content and script-anchored popovers stay as they are.
   for (const node of [host, flow, anchored, chosen]) expect(node.style.scale).toBe("");
+  // A size change re-maps the portal through the existing page observer.
+  const remap = watched.get(dialog)!;
+  expect(remap).toBeTypeOf("function");
+  const firstTranslate = dialog.style.translate;
+  portalLeft = 100;
+  remap();
+  expect(dialog.style.scale).toBe(scale);
+  expect(dialog.style.translate).not.toBe(firstTranslate);
+  expect(dialog.style.translate).toContain("1px");
+  // Unrelated inline changes survive leaving Frame view.
+  dialog.style.color = "red";
   // Mounted while framed.
   const toast = portal("position: fixed; right: 0px; bottom: 0px;");
+  const enlarged = portal("position: fixed; scale: 1.1 0.9;");
   await Promise.resolve();
   expect(toast.style.scale).toBe(scale);
+  expect(enlarged.style.scale).toBe(`${1.1 * +scale} ${0.9 * +scale}`);
   controller!.close();
+  expect(dialog.style.color).toBe("red");
+  dialog.style.color = "";
   expect(dialog.style.cssText).toBe(original);
+  expect(watched.has(dialog)).toBe(false);
+  expect(enlarged.style.scale).toBe("1.1 0.9");
   expect(toast.style.cssText).toBe("position: fixed; right: 0px; bottom: 0px;");
   // include() overrides the default; destroy() restores too.
   reopen((node) => node === chosen);
@@ -1038,6 +1065,7 @@ it("frames body-level portals with the page and restores them exactly", async ()
   expect(dialog.style.scale).toBe(scale);
   controller!.destroy();
   expect(dialog.style.cssText).toBe(original);
+  expect(watched.size).toBe(0);
 });
 
 it("keeps Frame view open while commenting, posting, resolving and in Design mode", async () => {

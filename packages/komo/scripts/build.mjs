@@ -118,13 +118,22 @@ const adapters = await build({
 });
 // Compress the emitted modules without changing their split boundaries or exports.
 // Preserve framework directives ("use client") and linked license notices.
+// Spend the extra compression passes on the modules loaded at mount.
+const initial = new Set();
+function visit(path) {
+  if (initial.has(path)) return;
+  initial.add(path);
+  for (const item of result.metafile.outputs[path].imports)
+    if (!item.external && item.kind !== "dynamic-import") visit(item.path);
+}
+visit(Object.keys(result.metafile.outputs).find((path) => result.metafile.outputs[path].entryPoint === "src/index.ts"));
 await Promise.all(
   [...Object.keys(result.metafile.outputs), ...Object.keys(adapters.metafile.outputs)]
     .filter((path) => path.endsWith(".js"))
     .map(async (path) => {
       const { code } = await minify(await readFile(path, "utf8"), {
         module: true,
-        compress: { passes: 1, directives: false },
+        compress: { passes: initial.has(path) ? 3 : 1, inline: initial.has(path) ? false : 3, directives: false },
         mangle: true,
         format: { comments: "some" },
       });
