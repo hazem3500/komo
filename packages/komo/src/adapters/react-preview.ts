@@ -120,7 +120,7 @@ function installBridge(): boolean {
         },
         apply(next) {
           const current = read();
-          if (!current) return;
+          if (!current) throw new Error("This component instance is no longer available.");
           const baseline = pending ?? current.props;
           const props = copyProps(current.props);
           for (const prop of request.schema) {

@@ -8,6 +8,7 @@ afterEach(() => { resetPreviews(); document.body.replaceChildren(); });
 function fixture(fail = false) {
   const element = document.body.appendChild(document.createElement("button"));
   let props = { label: "Original", disabled: false };
+  let available = true;
   const release = vi.fn();
   const editor: ComponentEditor = {
     schema: [
@@ -22,7 +23,7 @@ function fixture(fail = false) {
       element.disabled = props.disabled;
     },
     release,
-    available: () => element.isConnected,
+    available: () => available && element.isConnected,
   };
   element.textContent = props.label;
   const adapter: ComponentAdapter = {
@@ -32,7 +33,7 @@ function fixture(fail = false) {
   const onEdit = vi.fn();
   const panel = document.body.appendChild(createReactPropsPanel(element, onEdit, undefined, undefined, { components: adapter })!);
   const label = panel.querySelector<HTMLInputElement>('[aria-label="ExampleButton label"]')!;
-  return { element, panel, label, release, onEdit };
+  return { element, panel, label, release, onEdit, disconnect: () => { available = false; } };
 }
 
 it("uses a framework-independent editor callback, supports an empty string, and releases exactly the reset field", () => {
@@ -55,6 +56,17 @@ it("uses a framework-independent editor callback, supports an empty string, and 
 
 it("keeps the host value and history when an editor rejects a preview", () => {
   const { element, label, onEdit } = fixture(true);
+  label.value = "Unavailable";
+  label.dispatchEvent(new Event("change"));
+  expect(element.textContent).toBe("Original");
+  expect(hasReactPropChanges(element)).toBe(false);
+  expect(onEdit).not.toHaveBeenCalled();
+  expect(label.getAttribute("aria-invalid")).toBe("true");
+});
+
+it("does not record a UI-only edit when the captured component becomes unavailable", () => {
+  const { element, label, onEdit, disconnect } = fixture();
+  disconnect();
   label.value = "Unavailable";
   label.dispatchEvent(new Event("change"));
   expect(element.textContent).toBe("Original");
