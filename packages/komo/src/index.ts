@@ -50,6 +50,7 @@ import {
 } from "./review-layout.js";
 import { createToolbar, type ToolbarItem } from "./lazy-toolbar.js";
 import { canonicalPage } from "./page.js";
+import { openState } from "./open-state.js";
 import { ApiError, CommentsApi } from "./api.js";
 import { connectionIssue, type ConnectionIssue } from "./connection-issue.js";
 import {
@@ -671,7 +672,10 @@ export function initComments(options: CommentsOptions): CommentsController {
   let keyboardAction = false;
   // True while reopening a remembered sidebar on load: skip the open motion.
   let restoring = false;
-  const openKey = `branch-comments:open:${options.project}:${options.repo}`;
+  const openStore = openState(
+    `branch-comments:open:${options.project}:${options.repo}`,
+    options.restoreOpen,
+  );
   const toolbarDismissKey = `branch-comments:toolbar-dismissed:${options.project}:${options.repo}`;
   try {
     if (sessionStorage.getItem(toolbarDismissKey) === "1") {
@@ -2153,13 +2157,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (!restoring) polling?.wake(opening);
     delete sidebar.dataset.tipsReady;
     sidebar.toggleAttribute("data-tips-restored", restoring);
-    if (!options.onboarding)
-      try {
-        if (value) localStorage.setItem(openKey, "1");
-        else localStorage.removeItem(openKey);
-      } catch {
-        /* The sidebar starts closed next time. */
-      }
+    if (!options.onboarding) openStore.set(value);
     if (value) mode = false;
     if (!value) {
       clearTimeout(accountOpenTimer);
@@ -5995,11 +5993,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     },
   };
   instances.set(document, { scope, controller });
-  try {
-    restoring = !options.onboarding && localStorage.getItem(openKey) === "1";
-  } catch {
-    /* Start closed when storage is blocked. */
-  }
+  restoring = !options.onboarding && openStore.get();
   scalePage();
   const cached = options.onboarding ? null : api.cached();
   knownThreads ||= cached !== null;

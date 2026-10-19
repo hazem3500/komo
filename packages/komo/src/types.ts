@@ -119,6 +119,12 @@ export interface CommentsOptions {
    * Drawer, retaining the desktop preference when the viewport grows.
    */
   sidebar?: "background" | "edge";
+  /**
+   * Where the sidebar's open state is remembered. "session" (default) reopens
+   * it after a reload in the same tab, "always" across tabs and visits, and
+   * false never.
+   */
+  restoreOpen?: "session" | "always" | false;
   /** Hide the drawer away from the pointer. Defaults to true. */
   autoHideDrawer?: boolean;
   /** Center the default drawer position within this element. */
