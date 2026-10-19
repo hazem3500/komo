@@ -24,7 +24,9 @@ beforeAll(async () => {
         import {createRoot} from 'react-dom/client';
         import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
         import {renderDraftProposal,resetDesignPreviews} from ${JSON.stringify(resolve("src/design-comment.ts"))};
+        import {startInlineTextEditor} from ${JSON.stringify(resolve("src/inline-text-editor.ts"))};
         const qa=window.textQA={actions:0};
+        qa.startText=async()=>{const editor=await startInlineTextEditor(document.querySelector('#target'),{loadReactBridge:async()=>null,onFinish(){}});qa.finishText=cancel=>editor.finish(cancel)};
         function App(){
           const[label,setLabel]=React.useState('Original title');
           const[tick,setTick]=React.useState(0);
@@ -82,6 +84,37 @@ afterAll(async () => {
 });
 
 describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version => {
+  it("restores absent, empty and prioritized focus styles without a DOM observer flushing attributes", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    await page.goto(`${origin}/?react=${version}&mode=floating`);
+    await page.locator("#target").waitFor();
+    for (const original of [null, "", "outline: 3px dotted blue !important; outline-offset: -3px; box-shadow: inset 0 0 1px red; white-space: nowrap; color: green !important;"]) {
+      await page.evaluate(value => {
+        const element = document.querySelector("#target")!;
+        if (value === null) element.removeAttribute("style");
+        else element.setAttribute("style", value);
+      }, original);
+      for (const cancel of [false, true]) {
+        await page.evaluate(() => (window as any).textQA.startText());
+        await page.keyboard.press("Space");
+        await page.keyboard.press("q");
+        await page.keyboard.press("a");
+        await page.evaluate(value => (window as any).textQA.finishText(value), cancel);
+        expect(await page.locator("#target").getAttribute("style")).toBe(original);
+      }
+    }
+    await page.evaluate(async () => {
+      const element = document.querySelector<HTMLElement>("#target")!;
+      element.removeAttribute("style");
+      await (window as any).textQA.startText();
+      element.style.setProperty("color", "rgb(1, 2, 3)", "important");
+      (window as any).textQA.finishText(true);
+    });
+    expect(await page.locator("#target").getAttribute("style")).toBe("color: rgb(1, 2, 3) !important;");
+    await page.evaluate(() => (window as any).komo.destroy());
+    await page.close();
+  });
+
   it.each(["floating", "reflow", "scaled"])("invalidates keyed owner replacement and removal in %s", async mode => {
     for (const action of ["Replace owner", "Remove owner"]) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
@@ -167,14 +200,17 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await start();
     expect(await target.evaluate(node => getComputedStyle(node).outlineColor)).toBe("rgb(189, 166, 239)");
     expect(await target.evaluate(node => getComputedStyle(node).boxShadow)).toBe("none");
-    await page.keyboard.type(" preview");
+    await page.keyboard.press("Space");
+    await page.keyboard.press("q");
+    await page.keyboard.press("a");
     await page.keyboard.press("Enter");
-    expect(await text()).toBe("Original title preview");
+    expect(await text()).toBe("Original title qa");
+    await page.waitForTimeout(400);
     expect(await target.getAttribute("style")).toBeNull();
     await page.keyboard.press("ArrowLeft");
     expect(await text()).toBe("Original title");
     await page.keyboard.press("ArrowRight");
-    expect(await text()).toBe("Original title preview");
+    expect(await text()).toBe("Original title qa");
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     expect(await text()).toBe("Original title");
     await start();
@@ -214,6 +250,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     expect(await same()).toBe(true);
     await page.keyboard.press("Escape");
     expect(await text()).toBe("Original title");
+    await page.waitForTimeout(400);
     expect(await target.evaluate(node => ({ html: node.innerHTML, attributes: [...node.attributes].map(attr => [attr.name, attr.value]) }))).toEqual(original);
     expect(await same()).toBe(true);
     await page.evaluate(() => (window as any).komo.destroy());

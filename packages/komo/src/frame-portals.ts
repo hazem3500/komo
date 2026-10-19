@@ -42,7 +42,11 @@ export function preserveFrameStyles(node: HTMLElement, names: string[]) {
   return () => {
     for (const [name, property] of properties) restore(node, name, property);
     if (node.style.cssText === original) {
-      if (attribute === null) node.removeAttribute("style");
+      if (attribute === null) {
+        // Flush pending CSSOM serialization before removing the attribute.
+        node.getAttribute("style");
+        node.removeAttribute("style");
+      }
       else node.setAttribute("style", attribute);
     }
   };

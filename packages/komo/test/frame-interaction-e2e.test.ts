@@ -22,6 +22,8 @@ beforeAll(async () => {
       const tile=document.querySelector('#tile'),popover=document.querySelector('#popover');
       for(let index=0;index<24;index++){const row=document.createElement('div');row.textContent='Row '+index;row.style.cssText='height:60px;box-sizing:border-box;padding:16px;color:#475569';grid.append(row);}
       const qa=window.gridQA={slot:null,events:[],grid,scroller,tile,popover};
+      qa.styles=()=>[document.querySelector('main'),document.body,document.documentElement].map(node=>node.getAttribute('style'));
+      qa.baseline=qa.styles();
       function position(){
         if(qa.slot===null)return;
         const box=tile.getBoundingClientRect();
@@ -36,7 +38,7 @@ beforeAll(async () => {
       scroller.scrollTop=500;
       scroller.addEventListener('scroll',position);window.addEventListener('resize',position);
       window.fetch=async()=>Response.json({threads:[],guests:true});
-      window.mountGridQA=()=>initKomo({endpoint:location.origin,project:'grid-review',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000});
+      window.mountGridQA=()=>initKomo({endpoint:location.origin,project:'grid-review',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',frame:{scale:new URLSearchParams(location.search).get('mode')==='scaled'},restoreOpen:false,pollInterval:60000});
       window.komo=window.mountGridQA();
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -63,6 +65,39 @@ afterAll(async () => {
   await browser?.close();
   server?.close();
   if (directory) await rm(directory, { recursive: true, force: true });
+});
+
+describe.skipIf(!chrome).each(["reflow", "scaled"])("Frame style attributes in %s", mode => {
+  it.each(["no-preference", "reduce"] as const)("preserves absent attributes through close, dismiss and interrupted motion with reduced motion=%s", async reducedMotion => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion });
+    await page.goto(`${origin}/?mode=${mode}`);
+    await page.waitForFunction(() => !!(window as any).komo);
+    const styles = () => page.evaluate(() => (window as any).gridQA.styles());
+    const original = await page.evaluate(() => (window as any).gridQA.baseline);
+    expect(original).toEqual([null, null, null]);
+    expect(await styles()).toEqual(original);
+    await page.keyboard.press("l");
+    await page.waitForFunction(() => document.querySelector("main")!.getBoundingClientRect().width < 900);
+    await page.getByRole("button", { name: "Close sidebar", exact: true }).click();
+    await page.waitForTimeout(550);
+    expect(await styles()).toEqual(original);
+    for (let index = 0; index < 4; index++) {
+      await page.keyboard.press("l");
+      await page.waitForTimeout(30);
+    }
+    await page.waitForTimeout(550);
+    expect(await styles()).toEqual(original);
+    await page.keyboard.press("l");
+    await page.waitForFunction(() => document.querySelector("main")!.getBoundingClientRect().width < 900);
+    await page.getByRole("button", { name: /^Dismiss inline feedback/ }).click();
+    await page.waitForTimeout(550);
+    expect(await styles()).toEqual(original);
+    expect(await page.locator("main").evaluate(node => node.getAnimations().length)).toBe(0);
+    expect(await page.locator("main").evaluate(node => getComputedStyle(node).transform)).toBe("none");
+    await page.evaluate(() => (window as any).komo.destroy());
+    expect(await styles()).toEqual(original);
+    await page.close();
+  });
 });
 
 describe.skipIf(!chrome).each([false, true])("native grid coordinates with touch=%s", touch => {

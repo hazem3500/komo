@@ -86,7 +86,11 @@ export function inlineStyleSnapshot(element: DesignTarget, property: string) {
   const others = without(css);
   return { value, priority, computed, restore() {
     if (without(element.style.cssText) === others) {
-      if (attribute === null) element.removeAttribute("style");
+      if (attribute === null) {
+        // Flush pending CSSOM serialization before removing the attribute.
+        element.getAttribute("style");
+        element.removeAttribute("style");
+      }
       else element.setAttribute("style", attribute);
     } else {
       element.style.setProperty(property, value, priority);
@@ -97,7 +101,7 @@ export function inlineStyleSnapshot(element: DesignTarget, property: string) {
 
 export function removeEmptyStyle(element: DesignTarget) {
   if (element.style.length) return;
-  // Flush SVG's pending style serialization before removing the attribute.
+  // Flush pending CSSOM serialization before removing the attribute.
   element.getAttribute("style");
   element.removeAttribute("style");
 }
