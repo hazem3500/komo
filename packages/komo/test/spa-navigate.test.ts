@@ -13,6 +13,7 @@ const options: CommentsOptions = {
 const assign = vi.fn();
 
 beforeEach(async () => {
+  sessionStorage.clear();
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -103,6 +104,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   localStorage.clear();
+  sessionStorage.clear();
   history.replaceState(null, "", "/");
   document.body.replaceChildren();
 });
@@ -176,7 +178,8 @@ it("falls back to a page load when navigate rejects", async () => {
   );
 });
 
-it("opens a deep link on load and clears the comment param", async () => {
+it.each([false, true])("opens a deep link on load with restored sidebar %s and clears the comment param", async (restored) => {
+  if (restored) sessionStorage.setItem("branch-comments:open:fixture:fixture", "1");
   history.replaceState({ keep: 1 }, "", "/other?comment=away&tab=2");
   const target = document.createElement("section");
   target.id = "target";

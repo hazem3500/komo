@@ -6078,6 +6078,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           easing: "cubic-bezier(0.22, 1, 0.36, 1)",
         });
   }
+  void openDeepLink();
   async function loadProject() {
     const client = api;
     const token = client.token;
