@@ -23,20 +23,32 @@ beforeAll(async () => {
         import React from 'react';
         import {createRoot} from 'react-dom/client';
         import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+        import {renderDraftProposal,resetDesignPreviews} from ${JSON.stringify(resolve("src/design-comment.ts"))};
         const qa=window.textQA={actions:0};
         function App(){
           const[label,setLabel]=React.useState('Original title');
           const[tick,setTick]=React.useState(0);
+          const[revision,setRevision]=React.useState(0);
+          const[visible,setVisible]=React.useState(true);
           qa.rewrite=()=>setLabel(value=>value==='Host rerender'?'Host update':'Host rerender');
           React.useEffect(()=>{const id=setInterval(()=>setTick(v=>v+1),100);return()=>clearInterval(id)},[]);
-          return React.createElement('section',{'data-commit':tick},React.createElement('a',{id:'target',href:'#destination',onClick:()=>qa.actions++},React.createElement('svg',{viewBox:'0 0 16 16'},React.createElement('path',{d:'M2 2h12v12H2z'})),React.createElement('span',null,React.createElement('strong',null,label))));
+          return React.createElement('section',{'data-commit':tick},React.createElement('nav',null,
+            React.createElement('button',{onClick:()=>setRevision(v=>v+1)},'Replace owner'),
+            React.createElement('button',{onClick:()=>setVisible(false)},'Remove owner'),
+            React.createElement('button',{onClick:()=>setVisible(true)},'Restore owner')),
+            visible&&React.createElement('a',{key:revision,id:'target',href:'#destination',onClick:()=>qa.actions++},React.createElement('svg',{viewBox:'0 0 16 16'},React.createElement('path',{d:'M2 2h12v12H2z'})),React.createElement('span',null,React.createElement('strong',null,label))));
         }
+        const review=document.body.appendChild(document.createElement('section'));
+        review.id='retention-review';review.style.cssText='position:fixed;left:80px;top:300px;width:360px;z-index:20;background:#222';
+        const proposal='Proposed inline text change (preview only)\\nTarget: #target\\n- Text: "Original title" → "Edited title"';
+        qa.review=()=>renderDraftProposal(review,proposal,()=>document.querySelector('#target'));
+        qa.clear=()=>{resetDesignPreviews();review.replaceChildren()};
         createRoot(document.querySelector('main')).render(React.createElement(App));
         const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
         const key='branch-comments:'+location.origin+':text-preview';
         localStorage.setItem(key,'synthetic-session');
         localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
-        window.fetch=async input=>{const path=new URL(typeof input==='string'?input:input.url).pathname;return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:[]}:{});};
+        window.fetch=async input=>{const path=new URL(input instanceof Request?input.url:String(input)).pathname;return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:[]}:{});};
         const mode=new URLSearchParams(location.search).get('mode');
         if(mode==='floating')document.body.append(document.createElement('aside'));
         window.komo=initKomo({endpoint:location.origin,project:'text-preview',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false});
@@ -70,6 +82,60 @@ afterAll(async () => {
 });
 
 describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version => {
+  it.each(["floating", "reflow", "scaled"])("invalidates keyed owner replacement and removal in %s", async mode => {
+    for (const action of ["Replace owner", "Remove owner"]) {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+      page.setDefaultTimeout(5000);
+      const errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await page.goto(`${origin}/?react=${version}&mode=${mode}`);
+      await page.locator("#target").waitFor();
+      await page.waitForFunction(() => !!(window as any).komo);
+      if (mode !== "floating") {
+        await page.keyboard.press("l");
+        await page.waitForFunction(() => Math.abs(document.querySelector("main")!.getBoundingClientRect().width - 852) < 1);
+      }
+      await page.evaluate(() => {
+        const qa = (window as any).textQA;
+        qa.owner = document.querySelector("#target");
+        qa.text = qa.owner.querySelector("strong").firstChild;
+        qa.review();
+      });
+      const review = page.locator("#retention-review");
+      expect(await page.locator("#target strong").textContent()).toBe("Edited title");
+      await page.getByRole("button", { name: action, exact: true }).click();
+      await page.waitForFunction(() => document.querySelector<HTMLButtonElement>('#retention-review .design-toggle button:last-child')?.disabled);
+      expect(await review.getByRole("button", { name: "Before", exact: true }).getAttribute("aria-pressed")).toBe("true");
+      expect(await review.getByRole("status").isVisible()).toBe(true);
+      if (action === "Remove owner") await page.getByRole("button", { name: "Restore owner", exact: true }).click();
+      await page.locator("#target").waitFor();
+      expect(await page.locator("#target strong").textContent()).toBe("Original title");
+      expect(await page.locator("#target").evaluate(node => node === (window as any).textQA.owner)).toBe(false);
+      await page.keyboard.press("ArrowRight");
+      await page.evaluate(() => (window as any).textQA.review());
+      expect(await review.getByRole("button", { name: "After", exact: true }).isDisabled()).toBe(true);
+      expect(await page.locator("#target strong").textContent()).toBe("Original title");
+      await page.evaluate(() => {
+        const qa = (window as any).textQA;
+        qa.clear();
+        qa.text.data = "Detached host update";
+        qa.review();
+      });
+      expect(await page.locator("#target strong").textContent()).toBe("Edited title");
+      await page.evaluate(() => {
+        const qa = (window as any).textQA;
+        qa.clear();
+        qa.rewrite();
+      });
+      await page.waitForFunction(() => document.querySelector("#target strong")?.textContent === "Host rerender");
+      expect(await page.evaluate(() => ({ text: (window as any).textQA.text.data, actions: (window as any).textQA.actions }))).toEqual({ text: "Detached host update", actions: 0 });
+      expect(new URL(page.url()).hash).toBe("");
+      await page.evaluate(() => (window as any).komo.destroy());
+      expect(errors).toEqual([]);
+      await page.close();
+    }
+  });
+
   it.each(["floating", "reflow", "scaled"])("preserves real nested text, icons and exact restoration in %s", async mode => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(5000);

@@ -23,9 +23,16 @@ export function holdText(element: HTMLElement, nodes: TextSnapshot, onLost?: () 
   restoreText(nodes, element);
   const observer = new MutationObserver(() => {
     if (!element.isConnected || nodes.some(([node]) => !element.contains(node))) { observer.disconnect(); onLost?.(); }
-    else restoreText(nodes, element);
+    else { restoreText(nodes, element); watch(); }
   });
-  observer.observe(element, { childList: true, characterData: true, subtree: true });
+  const watch = () => {
+    observer.disconnect();
+    observer.observe(element, { childList: true, characterData: true, subtree: true });
+    // An owner can disappear without changing its subtree; follow attachment through shadow hosts too.
+    for (let parent: Node | null = element.parentNode; parent; parent = parent.parentNode ?? (parent instanceof ShadowRoot ? parent.host : null))
+      observer.observe(parent, { childList: true });
+  };
+  watch();
   return () => observer.disconnect();
 }
 

@@ -123,15 +123,20 @@ interface Applied {
   pinBefore: Array<() => void>;
 }
 const applied = new Map<string, Applied>();
+const lostPreviews = new Set<string>();
 // Before/After switches that may still be on screen, newest last.
 const visibleToggles = new Set<HTMLElement>();
 const UNAVAILABLE = "Preview unavailable: the target or its text has changed.";
 
 function loseTextPreview(key: string) {
+  lostPreviews.add(key);
   revert(key);
   for (const toggle of visibleToggles) {
     if (toggle.dataset.previewKey !== key || !toggle.isConnected) continue;
-    toggle.querySelectorAll("button").forEach((button, index) => button.setAttribute("aria-pressed", String(index === 0)));
+    toggle.querySelectorAll("button").forEach((button, index) => {
+      button.setAttribute("aria-pressed", String(index === 0));
+      if (index === 1) button.disabled = true;
+    });
     const status = toggle.closest(".design-comment")?.querySelector<HTMLElement>('[role="status"]');
     if (status) { status.textContent = UNAVAILABLE; status.hidden = false; }
   }
@@ -148,6 +153,7 @@ function settle(key: string) {
 }
 
 function apply(key: string, sections: DesignSection[], resolve: (selector?: string) => Element | null, smooth = false) {
+  if (lostPreviews.has(key)) return false;
   settle(key);
   const restore: Array<() => void> = [];
   const restoreStyles: Array<() => void> = [];
@@ -254,6 +260,7 @@ export function resetDesignPreviews(keep: ReadonlySet<string> = new Set()) {
   if (!keep.has("draft")) draftBody = undefined;
   for (const key of [...settling.keys()]) if (!keep.has(key)) settle(key);
   for (const key of [...applied.keys()]) if (!keep.has(key)) revert(key);
+  for (const key of lostPreviews) if (!keep.has(key)) lostPreviews.delete(key);
 }
 
 const css = `
@@ -267,6 +274,7 @@ const css = `
 .design-toggle { margin-left: auto; display: inline-flex; padding: 2px; border-radius: 7px; background: #ffffff0a; flex: none; }
 .design-toggle button { border: 0; padding: 0 8px; height: 22px; border-radius: 5px; font: inherit; font-size: 11px; color: #9a9a9a; background: none; cursor: pointer; }
 .design-toggle button[aria-pressed="true"] { color: #fff; background: #ffffff1a; }
+.design-toggle button:disabled { opacity: .45; cursor: not-allowed; }
 .design-rows { display: grid; border-top: 1px solid #ffffff0a; }
 .design-row { display: grid; grid-template-columns: minmax(64px, 30%) minmax(0, 1fr); gap: 10px; align-items: center; padding: 6px 12px; }
 .design-row + .design-row { border-top: 1px solid #ffffff06; }
@@ -363,7 +371,8 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   const unavailable = document.createElement("p");
   unavailable.className = "design-source";
   unavailable.setAttribute("role", "status");
-  unavailable.hidden = true;
+  unavailable.hidden = !lostPreviews.has(options.key);
+  unavailable.textContent = UNAVAILABLE;
   const compact = !!options.compact;
   if (compact) root.dataset.compact = "";
   // Compact cards show the first three rows across all sections and count the rest.
@@ -412,6 +421,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
       toggle.setAttribute("aria-label", "Preview on page");
       for (const [index, label] of ["Before", "After"].entries()) {
         const button = Object.assign(document.createElement("button"), { type: "button", textContent: label, title: `${label} · ${index ? "→" : "←"} or B` });
+        if (index === 1) button.disabled = lostPreviews.has(options.key);
         button.addEventListener("click", () => {
           const showAfter = index === 1;
           if (showAfter === applied.has(options.key)) return;
@@ -511,6 +521,7 @@ let draftBody: string | undefined;
 export function renderDraftProposal(container: HTMLElement, body: string, resolve: DesignCommentOptions["resolve"]) {
   if (draftBody !== body) {
     revert("draft");
+    lostPreviews.delete("draft");
     draftBody = body;
     apply("draft", parseDesignComment(body).filter((block): block is DesignSection => "changes" in block), resolve);
   }
