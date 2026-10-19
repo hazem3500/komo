@@ -142,9 +142,10 @@ export interface CommentsOptions {
   pickRoots?: () => Element[];
   /**
    * Frame view scales body-level portals (dialogs, overlays, toasts) with the
-   * page. By default it frames each position: fixed child of body without an
-   * inline transform; script-positioned popovers already follow their framed
-   * anchors. `include` overrides that choice per body child.
+   * page, including fixed descendants of portal wrappers. Script-positioned
+   * popovers keep their viewport placement while their contents scale.
+   * `include` overrides the default per body child; true maps the whole child
+   * through the frame, and false leaves its subtree alone.
    */
   frame?: { include?(element: HTMLElement): boolean };
   /**

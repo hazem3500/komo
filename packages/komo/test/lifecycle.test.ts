@@ -1029,14 +1029,17 @@ it("frames body-level portals with the page and restores them exactly", async ()
   // Present on entry: scaled like the page, keeping its own translate inside.
   expect(dialog.style.scale).toBe(scale);
   expect(dialog.style.translate).toMatch(/1px/);
-  // komo's host, in-flow content and script-anchored popovers stay as they are.
-  for (const node of [host, flow, anchored, chosen]) expect(node.style.scale).toBe("");
+  // Script-positioned popovers scale without replacing their host transform.
+  expect(anchored.style.scale).toBe(scale);
+  expect(anchored.style.transform).toBe("translate(5px, 5px)");
+  for (const node of [host, flow, chosen]) expect(node.style.scale).toBe("");
   // A size change re-maps the portal through the existing page observer.
   const remap = watched.get(dialog)!;
   expect(remap).toBeTypeOf("function");
   const firstTranslate = dialog.style.translate;
   portalLeft = 100;
   remap();
+  await vi.waitFor(() => expect(dialog.style.translate).not.toBe(firstTranslate));
   expect(dialog.style.scale).toBe(scale);
   expect(dialog.style.translate).not.toBe(firstTranslate);
   expect(dialog.style.translate).toContain("1px");
@@ -1045,8 +1048,7 @@ it("frames body-level portals with the page and restores them exactly", async ()
   // Mounted while framed.
   const toast = portal("position: fixed; right: 0px; bottom: 0px;");
   const enlarged = portal("position: fixed; scale: 1.1 0.9;");
-  await Promise.resolve();
-  expect(toast.style.scale).toBe(scale);
+  await vi.waitFor(() => expect(toast.style.scale).toBe(scale));
   expect(enlarged.style.scale).toBe(`${1.1 * +scale} ${0.9 * +scale}`);
   controller!.close();
   expect(dialog.style.color).toBe("red");
