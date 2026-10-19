@@ -30,6 +30,11 @@ try {
       { cwd: source },
     ),
   );
+  // npm 11 publish drops bin paths written as "./file" without failing.
+  const { bin } = JSON.parse(await readFile(join(source, "package.json"), "utf8"));
+  for (const [name, path] of Object.entries(bin)) {
+    assert.doesNotMatch(path, /^\.\//, `bin.${name} must not start with ./`);
+  }
   await writeFile(
     join(root, "package.json"),
     JSON.stringify({ private: true, type: "module" }),
