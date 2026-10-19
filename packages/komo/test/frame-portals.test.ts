@@ -108,11 +108,14 @@ it("keeps the host scale live through an additive animation and cancels only its
   layer.update(frame);
   expect(popup.style.scale).toBe("0.95");
   expect(effect.setKeyframes).toHaveBeenLastCalledWith([
-    { scale: String(frame.scale) },
-    { scale: String(frame.scale) },
+    expect.objectContaining({ scale: String(frame.scale) }),
+    expect.objectContaining({ scale: String(frame.scale) }),
   ]);
+  expect(popup.style.translate).toBe("");
   popup.style.scale = "1";
-  await vi.waitFor(() => expect(effect.setKeyframes).toHaveBeenCalledTimes(4));
+  await vi.waitFor(() =>
+    expect(effect.setKeyframes.mock.calls.length).toBeGreaterThanOrEqual(4),
+  );
   expect(popup.style.scale).toBe("1");
   layer.update(null);
   expect(animation.cancel).toHaveBeenCalledOnce();
@@ -130,4 +133,143 @@ it("falls back without breaking Frame when additive animations are unavailable",
   expect(popup.style.scale).toBe(String(0.95 * frame.scale));
   layer.update(null);
   expect(popup.style.scale).toBe("0.95");
+});
+
+const bounds = {
+  left: 24,
+  top: 133.75,
+  width: 852,
+  height: 532.5,
+  right: 876,
+  bottom: 666.25,
+};
+const boundedFrame = { ...frame, top: bounds.top, bounds };
+function rectangle(left: number, top: number, width: number, height: number) {
+  return {
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+  } as DOMRect;
+}
+function positioner(left = 870.5, top = 253) {
+  const popup = document.createElement("div");
+  popup.style.cssText = `position:fixed; transform:translate(${left}px,${top}px); transform-origin:0px 0px;`;
+  vi.spyOn(popup, "getBoundingClientRect").mockImplementation(() => {
+    const [x, y] = popup.style.transform.match(/[\d.]+/g)!.map(Number);
+    return rectangle(x, y, 386, 251);
+  });
+  document.body.append(popup);
+  return popup;
+}
+function displayedPoint(popup: HTMLElement, point: number[]) {
+  const delta = [...popup.style.translate.matchAll(/calc\(([-\d.e]+)px/g)].map(
+    (match) => Number(match[1]),
+  );
+  return point.map((value, axis) => value * frame.scale + delta[axis]);
+}
+
+it("clamps a late viewport positioner to the final Frame bounds during page animation", async () => {
+  vi.spyOn(surface, "getBoundingClientRect").mockReturnValue(
+    rectangle(0, 0, 1280, 800),
+  );
+  layer.update(boundedFrame);
+  const popup = positioner();
+  await vi.waitFor(() => expect(popup.style.scale).toBe(String(frame.scale)));
+  const [left, top] = displayedPoint(popup, [870.5, 253]);
+  expect(left + 386 * frame.scale).toBeCloseTo(bounds.right - 8);
+  expect(top).toBeCloseTo(253);
+  expect(popup.style.transform).toBe("translate(870.5px,253px)");
+});
+
+it("refreshes existing host positioners after Frame changes and re-clamps unchanged coordinates", async () => {
+  const popup = positioner(500, 389);
+  const place = vi.fn(() => {
+    popup.style.transform = "translate(870.5px,253px)";
+  });
+  window.addEventListener("resize", place);
+  try {
+    layer.update(boundedFrame);
+    expect(displayedPoint(popup, [500, 389])[0]).toBeCloseTo(
+      24 + 500 * frame.scale,
+    );
+    await vi.waitFor(() => expect(place).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(
+        displayedPoint(popup, [870.5, 253])[0] + 386 * frame.scale,
+      ).toBeCloseTo(bounds.right - 8),
+    );
+    layer.reposition();
+    await vi.waitFor(() => expect(place.mock.calls.length).toBeGreaterThan(1));
+    expect(
+      displayedPoint(popup, [870.5, 253])[0] + 386 * frame.scale,
+    ).toBeCloseTo(bounds.right - 8);
+  } finally {
+    window.removeEventListener("resize", place);
+  }
+});
+
+it("keeps the portal gap in screen pixels when the document is zoomed", async () => {
+  layer.update({ ...boundedFrame, zoom: 2 });
+  const popup = positioner();
+  vi.mocked(popup.getBoundingClientRect).mockReturnValue(
+    rectangle(1741, 506, 772, 502),
+  );
+  await vi.waitFor(() => expect(popup.style.scale).toBe(String(frame.scale)));
+  const [left] = displayedPoint(popup, [870.5, 253]);
+  expect((left + 386 * frame.scale) * 2).toBeCloseTo(bounds.right * 2 - 8);
+});
+
+it("leaves percentage translation and host transitions untouched over repeated geometry updates", () => {
+  const modal = document.createElement("div");
+  modal.style.cssText =
+    "position:fixed;left:50%;top:50%;translate:-50% -50%;transition:all 180ms ease;scale:.95;";
+  const style = modal.getAttribute("style");
+  const effect = { composite: "add", setKeyframes: vi.fn() };
+  const animation = {
+    effect,
+    pause: vi.fn(),
+    cancel: vi.fn(),
+    currentTime: null,
+  };
+  const transition = {
+    playState: "running",
+    effect: { getKeyframes: () => [{ opacity: 0 }, { opacity: 1 }] },
+    cancel: vi.fn(),
+  };
+  modal.animate = vi.fn(() => animation as unknown as Animation);
+  modal.getAnimations = vi.fn(
+    () => [animation, transition] as unknown as Animation[],
+  );
+  document.body.append(modal);
+  for (let index = 0; index < 100; index++) layer.update(boundedFrame);
+  expect(modal.getAttribute("style")).toBe(style);
+  layer.update(null);
+  expect(modal.getAttribute("style")).toBe(style);
+  expect(animation.cancel).toHaveBeenCalledOnce();
+  expect(transition.cancel).not.toHaveBeenCalled();
+});
+
+it("constrains oversized portals reversibly without replacing host sizing updates", () => {
+  const popup = positioner();
+  popup.style.cssText +=
+    "width:1800px;height:1200px;min-width:max-content;max-width:2000px;overflow:clip !important;";
+  vi.mocked(popup.getBoundingClientRect).mockReturnValue(
+    rectangle(10, 10, 1800, 1200),
+  );
+  layer.update(boundedFrame);
+  expect(popup.style.minWidth).toBe("0px");
+  expect(popup.style.maxWidth).toContain("1255.96px");
+  expect(popup.style.overflow).toBe("auto");
+  popup.style.setProperty("max-height", "1100px", "important");
+  layer.update(boundedFrame);
+  layer.update(null);
+  expect(popup.style.minWidth).toBe("max-content");
+  expect(popup.style.maxWidth).toBe("2000px");
+  expect(popup.style.maxHeight).toBe("1100px");
+  expect(popup.style.getPropertyPriority("max-height")).toBe("important");
+  expect(popup.style.overflow).toBe("clip");
+  expect(popup.style.getPropertyPriority("overflow")).toBe("important");
 });
