@@ -393,6 +393,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       .join("\n") ?? "";
   let google = false;
   let movingThread: string | null = null;
+  let pinMove: ReturnType<typeof import("./pin-move.js").startPinMove> | null = null;
+  let pinMoveRevision = 0;
   let github = false,
     guests = false,
     guestResolve = false;
@@ -1537,6 +1539,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   // sidebar (or one Design mode framed for a moment) still steps aside.
   const inFrame = () => expanded && !edgeSidebar && !compactSidebar && !designFrame;
   function setMode(value: boolean) {
+    cancelPinMove();
     if (options.onboarding) return;
     if (designActive) {
       designActive = false;
@@ -2135,6 +2138,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     });
   }
   function toggleExpanded(value: boolean) {
+    if (value !== expanded) cancelPinMove();
     stopLayoutMotion();
     const opening = value && !expanded;
     expanded = value;
@@ -2211,6 +2215,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     presence.update();
   }
   function dismiss() {
+    cancelPinMove();
     commentMode = false;
     clearTimeout(accountOpenTimer);
     accountOpenTimer = 0;
@@ -2259,6 +2264,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     render();
   }
   function selectThread(thread: Thread) {
+    cancelPinMove();
     // Opening from the list keeps keyboard focus in the sidebar.
     focusBack = !!shadow.activeElement?.matches(":focus-visible") && sidebar.contains(shadow.activeElement);
     commentMode = false;
@@ -2555,6 +2561,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   let pinsScrolling = false;
   let pinScrollTimer = 0;
   function renderPins(force = false) {
+    if (hidden) cancelPinMove();
     if (movingThread || (pinsScrolling && !force)) return;
     if (hidden) {
       pinSnapshot = "";
@@ -2660,7 +2667,6 @@ export function initComments(options: CommentsOptions): CommentsController {
         const photo = pin.querySelector("img");
         if (photo) photo.draggable = false;
       }
-      enablePinDrag(pin, thread, rect);
       if (thread.resolved) {
         const resolved = el("span", "pin-check");
         resolved.append(icon("check"));
@@ -4359,6 +4365,11 @@ export function initComments(options: CommentsOptions): CommentsController {
         : "";
       const more = actionMenu("Comment actions", [
         ...messageActions(thread.comments[0], thread),
+        ...(canMovePin(thread) ? [{
+          label: "Move pin",
+          icon: "pointer" as const,
+          onSelect: () => { void beginPinMove(thread); },
+        }] : []),
         ...(designEnabled ? [{
           label: "Open in Design",
           icon: "design" as const,
@@ -5112,6 +5123,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     positionNotice();
   }
   function openAccount() {
+    cancelPinMove();
     clearTimeout(accountOpenTimer);
     profileDraft = null;
     mode = false;
@@ -5263,122 +5275,69 @@ export function initComments(options: CommentsOptions): CommentsController {
       y: bounds.top + 28,
     };
   }
-  function enablePinDrag(
-    pin: HTMLButtonElement,
-    thread: Thread,
-    rect: ReturnType<typeof locateAnchor>,
-  ) {
-    let start: { x: number; y: number } | null = null;
-    let moved = false;
-    let origin = rect;
-    if (
-      api.user &&
-      (api.user.verified || thread.comments[0]?.author.id === api.user.id)
-    )
-      pin.style.cursor = "grab";
-    pin.addEventListener("pointerdown", (event) => {
-      if (
-        event.button !== 0 ||
-        pending ||
-        !api.user ||
-        !(api.user.verified || thread.comments[0]?.author.id === api.user.id)
-      )
-        return;
-      origin = { ...rect, ...indicatorPoint(pin, rect) };
-      start = { x: event.clientX, y: event.clientY };
-      moved = false;
-      pin.setPointerCapture(event.pointerId);
-    });
-    pin.addEventListener("pointermove", (event) => {
-      if (!start) return;
-      const dx = event.clientX - start.x,
-        dy = event.clientY - start.y;
-      if (!moved && Math.hypot(dx, dy) < 5) return;
-      if (!moved) {
-        pin.dataset.dragging = "true";
-        pin.style.position = "fixed";
-        pin.style.margin = "0";
-        movingThread = thread.id;
-        previewSuppressed = true;
-        hidePreview();
-        if (selected === thread.id) {
-          cardFollow.stop();
-          selected = null;
-          editing = null;
-          renderDialog();
-        }
-      }
-      moved = true;
-      pin.dataset.pointer = pinDirection(
-        { ...origin, x: origin.x + dx, y: origin.y + dy },
-        window.innerWidth,
-      );
-      pin.style.left = `${origin.x + dx}px`;
-      pin.style.top = `${origin.y + dy}px`;
-      draggedPin = { id: thread.id, x: origin.x + dx, y: origin.y + dy };
-      cardPlacements.delete(thread.id);
-      positionDialog();
-    });
-    pin.addEventListener(
-      "click",
-      (event) => {
-        if (moved) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-        }
-      },
-      true,
-    );
-    pin.addEventListener("pointerup", (event) => {
-      if (!start) return;
-      const x = origin.x + event.clientX - start.x,
-        y = origin.y + event.clientY - start.y;
-      start = null;
-      movingThread = null;
-      if (!moved) return;
-      draggedPin = { id: thread.id, x, y };
-      positionDialog();
-      const target = componentAt(x, y);
-      if (!target) {
-        draggedPin = null;
+  function canMovePin(thread: Thread) {
+    return !!api.user && (api.user.verified || thread.comments[0]?.author.id === api.user.id);
+  }
+  function cancelPinMove() {
+    pinMoveRevision++;
+    pinMove?.cancel();
+  }
+  async function beginPinMove(thread: Thread) {
+    cancelPinMove();
+    const revision = pinMoveRevision;
+    const session = sessionRevision;
+    if (pending || !canMovePin(thread)) return;
+    const module = await import("./pin-move.js").catch(() => null);
+    if (!module) { notify("Moving is unavailable. Try again."); return; }
+    if (destroyed || revision !== pinMoveRevision || session !== sessionRevision || !canMovePin(thread)) return;
+    const pin = pins.querySelector<HTMLButtonElement>(`.pin[data-thread="${CSS.escape(thread.id)}"]`);
+    const rect = locateAnchor(thread.anchor);
+    if (thread.page !== page() || !rect.attached || !pin) {
+      notify("This pin isn’t visible on this page. Open its page before moving it.");
+      return;
+    }
+    const point = indicatorPoint(pin, rect);
+    movingThread = thread.id;
+    previewSuppressed = true;
+    hidePreview();
+    cardFollow.stop();
+    pins.append(pin);
+    Object.assign(pin.style, { position: "fixed", margin: "0", left: `${point.x}px`, top: `${point.y}px` });
+    pinMove = module.startPinMove({
+      root: shadow, pin, point,
+      bounds: () => framed ? surface.getBoundingClientRect() : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight },
+      preview(point) {
+        pin.dataset.pointer = pinDirection(point, window.innerWidth);
+        pin.style.left = `${point.x}px`;
+        pin.style.top = `${point.y}px`;
+        draggedPin = { id: thread.id, ...point };
         positionDialog();
+      },
+      finish(point) {
+        pinMove = null;
+        movingThread = null;
+        draggedPin = null;
         pinSnapshot = "";
         renderPins();
-        return;
-      }
-      const anchor = captureAnchor(
-        commentAnchorTarget(target, surface, options.anchorTarget),
-        { x, y },
-        { x: x + rect.width, y: y + rect.height },
-        options.source,
-      );
-      anchor.unstacked = true;
-      run(async () => {
-        try {
-          draggedPin = null;
+        positionDialog();
+        dialogs.querySelector<HTMLElement>('summary[aria-label="Comment actions"]')?.focus({ preventScroll: true });
+        if (!point || destroyed || thread.page !== page() || !canMovePin(thread)) return;
+        const target = componentAt(point.x, point.y);
+        if (!target) { notify("Pin unchanged. Choose an element on this page."); return; }
+        const anchor = captureAnchor(
+          commentAnchorTarget(target, surface, options.anchorTarget), point,
+          { x: point.x + rect.width, y: point.y + rect.height }, options.source,
+        );
+        anchor.unstacked = true;
+        cardPlacements.delete(thread.id);
+        run(async () => {
           await saveOptimistic(
-            changeThread(thread.id, (current) => ({ ...current, anchor })),
-            async (id) => {
-              await api.request(`threads/${id(thread.id)}`, "PATCH", {
-                anchor,
-              });
-            },
+            changeThread(thread.id, current => ({ ...current, anchor })),
+            async id => { await api.request(`threads/${id(thread.id)}`, "PATCH", { anchor }); },
           );
-        } finally {
-          draggedPin = null;
-          positionDialog();
-          pinSnapshot = "";
-          renderPins();
-        }
-      });
-    });
-    pin.addEventListener("pointercancel", () => {
-      draggedPin = null;
-      positionDialog();
-      start = null;
-      movingThread = null;
-      pinSnapshot = "";
-      renderPins();
+          notify("Pin moved");
+        });
+      },
     });
   }
   function componentAt(x: number, y: number): Element | null {
@@ -5594,6 +5553,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     hoverOutline.style.opacity = "0";
   });
   function geometry() {
+    if (movingThread && threads.find(thread => thread.id === movingThread)?.page !== page()) cancelPinMove();
     if (frame || destroyed || document.hidden) return;
     const currentPage = page();
     if (
@@ -6002,6 +5962,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      cancelPinMove();
       polling?.stop();
       designController?.destroy();
       designModule?.resetDesignPreviews();
