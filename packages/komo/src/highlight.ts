@@ -57,6 +57,10 @@ export function drawHighlight(
 export function watchHighlight(host: HTMLElement, targets: () => Array<Element | null>, update: () => void, signal: AbortSignal, lost?: () => void) {
   if (signal.aborted) return;
   const document = host.ownerDocument, view = document.defaultView!;
+  const sheets = "style,link[rel~=stylesheet]";
+  const sheetTarget = (node: Node) => node instanceof Element
+    ? node.matches(sheets) || !!node.closest("style")
+    : !!node.parentElement?.closest("style");
   let frame = 0;
   function schedule() {
     if (frame || signal.aborted || !targets().some(Boolean)) return;
@@ -72,15 +76,22 @@ export function watchHighlight(host: HTMLElement, targets: () => Array<Element |
     });
   }
   const relevant = (node: Node) => node !== host && !host.contains(node) && targets().some(target =>
-    target && (!target.isConnected || node.contains(target) || target.contains(node) || (node instanceof Element && node.closest("style"))),
+    target && (!target.isConnected || node.contains(target) || target.contains(node) || sheetTarget(node)),
   );
   const observer = new MutationObserver(records => {
+    if (!targets().some(Boolean)) return;
     const primary = targets()[0];
     if (primary && !primary.isConnected) lost?.();
-    if (records.some(record => relevant(record.target))) schedule();
+    if (records.some(record => relevant(record.target) ||
+      (record.type === "attributes" && record.attributeName === "rel" && record.target.nodeName === "LINK") ||
+      // Head insertions/removals report the parent, not the stylesheet, as target.
+      (record.type === "childList" && [...record.addedNodes, ...record.removedNodes].some(node =>
+        node instanceof Element && (node.matches(sheets) || node.querySelector(sheets)),
+      )))) schedule();
   });
   observer.observe(document.documentElement, { attributes: true, childList: true, characterData: true, subtree: true });
   for (const type of ["transitionrun", "animationstart"])
     document.addEventListener(type, event => { if (event.target instanceof Node && relevant(event.target)) schedule(); }, { capture: true, signal });
+  document.addEventListener("load", event => { if (event.target instanceof Node && sheetTarget(event.target)) schedule(); }, { capture: true, signal });
   signal.addEventListener("abort", () => { observer.disconnect(); view.cancelAnimationFrame(frame); }, { once: true });
 }
