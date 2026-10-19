@@ -130,6 +130,8 @@ export interface ComponentEditor {
   subscribe?(listener: () => void): () => void;
   /** False when the original component unmounts; never retarget another instance. */
   available?(): boolean;
+  /** Current root of this same mounted instance, proven by its renderer; never a selector lookup. */
+  currentElement?(): Element | null;
 }
 
 /** What the app knows about the component that renders an element. */

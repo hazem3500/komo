@@ -1,9 +1,40 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
 import { installReactPreview, reactPreviewKey, type ReactPreviewBridge } from "../src/adapters/react-preview.js";
+import { createReactPropsPanel } from "../src/react-props-panel.js";
 
 const target = globalThis as any;
 afterEach(() => { delete target.__REACT_DEVTOOLS_GLOBAL_HOOK__; vi.unstubAllGlobals(); });
+
+it("keeps a retained panel subscribed on preview cancellation and disposes it on removal", async () => {
+  const host = document.createElement("aside");
+  const root = host.attachShadow({ mode: "open" });
+  const element = document.createElement("button");
+  document.body.append(host, element);
+  const unsubscribe = vi.fn();
+  const subscribe = vi.fn(() => unsubscribe);
+  const panel = createReactPropsPanel(element, () => {}, root, undefined, {
+    components: {
+      identify: () => ({ name: "Button", element }),
+      editor: () => ({ schema: [], read: () => ({}), apply: () => {}, subscribe }),
+    },
+  }, () => {})!;
+  try {
+    root.append(panel);
+    await Promise.resolve();
+    root.dispatchEvent(new Event("komo-preview-cancel"));
+    root.replaceChildren();
+    root.append(panel);
+    await Promise.resolve();
+    expect(subscribe).toHaveBeenCalledTimes(1);
+    expect(unsubscribe).not.toHaveBeenCalled();
+    panel.remove();
+    await Promise.resolve();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    root.dispatchEvent(new Event("komo-preview-cancel"));
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  } finally { host.remove(); element.remove(); }
+});
 
 it("preserves an existing DevTools hook and commit callback, and installs once", () => {
   const previous = vi.fn();
@@ -35,6 +66,10 @@ it.each([0, 1])("requires a supported development renderer capability, bundleTyp
   else {
     editor!.apply({ label: "Preview" });
     expect(overrideProps).toHaveBeenCalledWith(expect.any(Object), [], { label: "Preview" });
+    read.mockReturnValue({ fiber: {}, root: {}, props: { label: "Other root" } });
+    expect(editor!.available!()).toBe(false);
+    expect(editor!.apply.bind(editor, { label: "Wrong target" })).toThrow("no longer available");
+    expect(overrideProps).toHaveBeenCalledTimes(1);
   }
 });
 

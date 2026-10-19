@@ -229,7 +229,7 @@ function row(name: string, value: string): HTMLElement {
 /** A `ComponentAdapter` that finds the nearest React component for a picked element. */
 export function discoverReactComponents(options: DiscoverReactComponentsOptions = {}): ComponentAdapter {
   const maxString = Math.max(8, options.maxString ?? 80);
-  const editors = new WeakMap<Element, { fiber: Fiber; editor: ComponentEditor }>();
+  const editors = new WeakMap<Fiber, ComponentEditor>();
   const maxProps = Math.max(1, options.maxProps ?? 24);
   const hidden = (name: string) => secret.test(name) || !!attempt(() => options.redact?.(name));
 
@@ -287,21 +287,22 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
       const found = discoveries.get(identity);
       if (!found) return attempt(() => options.adapter?.editor?.(identity)) ?? null;
       if (!options.edit || found.fiber.tag === 1) return null;
-      const prior = editors.get(identity.element);
-      if (prior && (prior.fiber === found.fiber || prior.fiber.alternate === found.fiber) && prior.editor.available?.() !== false) return prior.editor;
+      const prior = editors.get(found.fiber) ?? (found.fiber.alternate && editors.get(found.fiber.alternate));
+      if (prior && prior.available?.() !== false) return prior;
       const declared = attempt(() => options.schema?.(identity));
       const schema: ComponentProperty[] = (declared ?? Object.entries(identity.props ?? {}).filter(([, value]) => value !== null).map(([name, value]) => ({
         name, kind: typeof value as "string" | "number" | "boolean", required: true, typeLabel: typeof value,
       }))).filter(prop => !hidden(prop.name) && !ignored(prop.name) && prop.kind !== "unsupported");
       const read: ReactPreviewRequest["current"] = () => attempt(() => {
-        if (!identity.element.isConnected) return null;
         const snapshot = current(found.fiber);
-        if (!snapshot || rootElement(snapshot.fiber) !== identity.element) return null;
-        return { ...snapshot, props: (snapshot.fiber.memoizedProps ?? {}) as Record<string, unknown> };
+        if (!snapshot) return null;
+        const element = rootElement(snapshot.fiber);
+        if (!element?.isConnected) return null;
+        return { ...snapshot, element, props: (snapshot.fiber.memoizedProps ?? {}) as Record<string, unknown> };
       }) ?? null;
       const hook = (globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: Record<symbol, ReactPreviewBridge> }).__REACT_DEVTOOLS_GLOBAL_HOOK__;
       const editor = attempt(() => hook?.[Symbol.for("inline-feedback.react-preview")]?.editor({ schema, current: read }));
-      if (editor) editors.set(identity.element, { fiber: found.fiber, editor });
+      if (editor) editors.set(found.fiber, editor);
       return editor ?? null;
     },
     panel(identity) {

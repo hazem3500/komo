@@ -27,13 +27,17 @@ beforeAll(async () => {
         import {discoverReactComponents} from ${JSON.stringify(resolve("src/adapters/react-fiber.ts"))};
         import {tailwindTokens} from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
         const Slot=React.forwardRef(function Slot(props,ref){return React.cloneElement(React.Children.only(props.children),{ref});});
-        const ActionButton=React.forwardRef(function ActionButton(props,ref){return React.createElement('button',{ref,className:'button-'+props.variant,'aria-label':props['aria-label'],type:'button'},'Example action');});
+        const ActionButton=React.forwardRef(function ActionButton(props,ref){return React.createElement('button',{ref:node=>{if(node&&new URLSearchParams(location.search).has('priority'))node.style.setProperty('outline-color','rgb(1, 2, 3)','important');if(typeof ref==='function')ref(node)},key:new URLSearchParams(location.search).has('replace')?props.variant:undefined,className:'button-'+props.variant,'aria-label':props['aria-label'],type:'button'},'Example action');});
         ActionButton.displayName='ActionButton';
-        const StableBranch=React.memo(function StableBranch(){return React.createElement(Slot,null,React.createElement(ActionButton,{variant:'tertiary','aria-label':'Original action'}));});
+        const StableBranch=React.memo(function StableBranch({label}){return React.createElement(Slot,null,React.createElement(ActionButton,{variant:'tertiary','aria-label':label}));});
         function App(){
           const[tick,setTick]=React.useState(0);
+          const[label,setLabel]=React.useState('Original action');
+          const[identity,setIdentity]=React.useState(0);
+          const[shown,setShown]=React.useState(true);
+          React.useEffect(()=>{Object.assign(window.nestedQA,{setLabel,remove:()=>setShown(false),remount:()=>setIdentity(v=>v+1),commit:()=>setTick(v=>v+1)});},[]);
           React.useEffect(()=>{const timer=setInterval(()=>setTick(v=>v+1),250);return()=>clearInterval(timer)},[]);
-          return React.createElement('section',null,React.createElement(StableBranch),React.createElement('output',{'data-parent-commit':tick},tick));
+          return React.createElement('section',null,shown?React.createElement(StableBranch,{key:identity,label}):null,React.createElement('output',{'data-parent-commit':tick},tick));
         }
         createRoot(document.querySelector('main')).render(React.createElement(App));
         const adapter=discoverReactComponents({edit:true});
@@ -126,6 +130,138 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     expect(await target.getAttribute("class")).toBe(baseline.className);
     expect(await target.getAttribute("style")).toBe(baseline.style);
     expect(await target.evaluate(node => getComputedStyle(node).color)).toBe(baseline.color);
+    await page.close();
+  });
+
+  it.each(["floating", "reflow", "scaled"].flatMap(mode => [false, true].map(priority => ({ mode, priority }))))("retains the logical selection after DOM replacement in $mode (priority=$priority)", async ({ mode, priority }) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    page.setDefaultTimeout(4000);
+    await page.goto(`${origin}/?react=${version}&replace${priority ? "&priority" : ""}${mode === "reflow" ? "&reflow" : mode === "scaled" ? "&frame" : ""}`);
+    const target = page.locator("main button");
+    await target.waitFor();
+    const baselineStyle = await target.getAttribute("style");
+    await target.evaluate(node => (window as any).originalLeaf = node);
+    await page.keyboard.press("d");
+    await target.click();
+    const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
+    await variant.evaluate(node => (window as any).originalControl = node);
+    await variant.fill("primary");
+    await variant.press("Enter");
+    await page.waitForFunction(() => document.querySelector("main button")?.className === "button-primary");
+    expect(await variant.evaluate(node => node === (window as any).originalControl)).toBe(true);
+    expect(await target.evaluate(node => node !== (window as any).originalLeaf && !(window as any).originalLeaf.isConnected)).toBe(true);
+    await expect.poll(() => variant.count()).toBe(1);
+    expect(await variant.evaluate(node => (node.getRootNode() as ShadowRoot).activeElement === node)).toBe(true);
+    const tick = await page.locator("output").textContent();
+    await page.evaluate(() => (window as any).nestedQA.commit());
+    await page.waitForFunction(previous => document.querySelector("output")?.textContent !== previous, tick);
+    expect(await target.getAttribute("class")).toBe("button-primary");
+    const label = page.getByRole("textbox", { name: "ActionButton aria-label", exact: true });
+    await label.fill("Second edit");
+    await label.press("Enter");
+    await page.waitForFunction(() => document.querySelector("main button")?.getAttribute("aria-label") === "Second edit");
+    await page.getByRole("button", { name: "Before", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector("main button")?.className === "button-tertiary");
+    await page.getByRole("button", { name: "After", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector("main button")?.getAttribute("aria-label") === "Second edit");
+    await page.keyboard.press("v");
+    await page.waitForFunction(() => document.querySelector("main button")?.className === "button-tertiary");
+    await page.keyboard.press("d");
+    await page.waitForFunction(() => document.querySelector("main button")?.className === "button-primary");
+    expect(await variant.inputValue()).toBe("primary");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector("main button")?.getAttribute("aria-label") === "Original action");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector("main button")?.className === "button-tertiary");
+    await variant.fill("primary");
+    await variant.press("Enter");
+    await page.waitForFunction(() => document.querySelector("main button")?.className === "button-primary");
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector("main button")?.className === "button-tertiary");
+    expect(await target.getAttribute("style")).toBe(baselineStyle);
+    expect(await target.evaluate(node => (node as HTMLElement).style.getPropertyPriority("outline-color"))).toBe(priority ? "important" : "");
+    expect(await variant.inputValue()).toBe("tertiary");
+    expect(await page.locator('.design-inspector[data-empty]').count()).toBe(0);
+    expect(await page.locator('.design-inspector__actions [aria-label="Undo"]').isDisabled()).toBe(true);
+    if (mode !== "floating") {
+      const canvas = await page.locator("main").evaluate(node => ({ width: node.getBoundingClientRect().width, transform: getComputedStyle(node).transform }));
+      expect(canvas.width).toBeCloseTo(852);
+      expect(canvas.transform === "none").toBe(mode === "reflow");
+    }
+    await page.close();
+  });
+
+  it.each([false, true])("keeps retained controls subscribed through repeated replacements and field Reset (priority=%s)", async priority => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    page.setDefaultTimeout(4000);
+    try {
+      await page.goto(`${origin}/?react=${version}&replace${priority ? "&priority" : ""}`);
+      const target = page.locator("main button");
+      await target.waitFor();
+      const style = await target.getAttribute("style");
+      await page.keyboard.press("d");
+      await target.click();
+      const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
+      const label = page.getByRole("textbox", { name: "ActionButton aria-label", exact: true });
+      await variant.evaluate(node => (window as any).continuity = { control: node, panel: node.closest(".design-react-group"), leaf: document.querySelector("main button") });
+      for (const value of ["primary", "secondary"]) {
+        await variant.fill(value);
+        await variant.press("Enter");
+        await expect.poll(() => target.getAttribute("class")).toBe(`button-${value}`);
+        await expect.poll(() => variant.evaluate(node => {
+          const qa = (window as any).continuity;
+          return node === qa.control && node.closest(".design-react-group") === qa.panel && (node.getRootNode() as ShadowRoot).activeElement === node && !qa.leaf.isConnected;
+        })).toBe(true);
+        await target.evaluate(node => (window as any).continuity.leaf = node);
+        await page.evaluate(value => (window as any).nestedQA.setLabel(`Parent ${value}`), value);
+        await expect.poll(() => target.getAttribute("aria-label")).toBe(`Parent ${value}`);
+        await expect.poll(() => label.inputValue()).toBe(`Parent ${value}`);
+        expect(await variant.inputValue()).toBe(value);
+      }
+      await page.getByRole("button", { name: "Reset ActionButton variant", exact: true }).click();
+      await expect.poll(() => target.getAttribute("class")).toBe("button-tertiary");
+      expect(await variant.inputValue()).toBe("tertiary");
+      await label.fill("Second edit");
+      await label.press("Enter");
+      await expect.poll(() => target.getAttribute("aria-label")).toBe("Second edit");
+      const undo = page.getByRole("button", { name: "Undo", exact: true });
+      await undo.click();
+      await expect.poll(() => target.getAttribute("aria-label")).toBe("Parent secondary");
+      for (const value of ["secondary", "primary", "tertiary"]) {
+        await undo.click();
+        await expect.poll(() => target.getAttribute("class")).toBe(`button-${value}`);
+        await expect.poll(() => variant.inputValue()).toBe(value);
+      }
+      expect(await page.locator('.design-inspector__actions [aria-label="Undo"]').isDisabled()).toBe(true);
+      expect(await target.getAttribute("style")).toBe(style);
+      expect(await target.evaluate(node => (node as HTMLElement).style.getPropertyPriority("outline-color"))).toBe(priority ? "important" : "");
+      expect(await page.locator('.design-inspector[data-empty]').count()).toBe(0);
+    } finally { await page.close(); }
+  });
+
+  it.each(["remove", "remount", "unrelated"])("does not retain a selection after %s", async action => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    page.setDefaultTimeout(4000);
+    await page.goto(`${origin}/?react=${version}&replace`);
+    const target = page.locator("main button");
+    await target.waitFor();
+    await page.keyboard.press("d");
+    await target.click();
+    const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
+    await variant.fill("primary");
+    await variant.press("Enter");
+    await page.waitForFunction(() => document.querySelector("main button")?.className === "button-primary");
+    await page.evaluate(action => {
+      const qa = (window as any).nestedQA;
+      const target = document.querySelector("main button")!;
+      qa.previousEditor = qa.adapter.editor(qa.adapter.identify(target));
+      if (action === "unrelated") target.replaceWith(target.cloneNode(true));
+      else qa[action]();
+    }, action);
+    await expect.poll(() => page.locator('.design-inspector[data-empty]').count()).toBe(1);
+    expect(await page.evaluate(() => (window as any).nestedQA.previousEditor.available())).toBe(false);
+    expect(await variant.count()).toBe(0);
+    if (action === "remount") expect(await target.getAttribute("class")).toBe("button-tertiary");
     await page.close();
   });
 
