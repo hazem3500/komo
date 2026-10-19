@@ -1107,6 +1107,35 @@ it("keeps Frame view open while commenting, posting, resolving and in Design mod
   localStorage.clear();
 });
 
+it("keeps Frame open while a page interaction mounts and focuses a non-modal editor", async () => {
+  const { open } = await mountForComments("background", "page-editor");
+  controller!.open();
+  const frame = document.getElementById("target")!;
+  const transform = frame.style.transform;
+  const slot = document.createElement("button");
+  frame.append(slot);
+  const editor = document.createElement("div");
+  const input = document.createElement("textarea");
+  editor.append(input);
+  slot.addEventListener("pointerdown", () => {
+    document.body.append(editor);
+    input.focus();
+  });
+  const activate = vi.fn();
+  slot.addEventListener("click", activate);
+  slot.dispatchEvent(new MouseEvent("pointerdown", { button: 0, bubbles: true }));
+  slot.dispatchEvent(new MouseEvent("pointerup", { button: 0, bubbles: true }));
+  slot.click();
+  expect(activate).toHaveBeenCalledTimes(1);
+  expect(open()).toBe(true);
+  expect(frame.style.transform).toBe(transform);
+  expect(editor.isConnected).toBe(true);
+  expect(document.activeElement).toBe(input);
+  controller!.close();
+  expect(open()).toBe(false);
+  localStorage.clear();
+});
+
 it("still closes the Floating sidebar when commenting", async () => {
   const { host, press, open, capturing, pane, post } = await mountForComments("edge", "floater");
   expect(host.dataset.sidebar).toBe("edge");

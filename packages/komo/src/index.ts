@@ -5859,36 +5859,6 @@ export function initComments(options: CommentsOptions): CommentsController {
     ["scroll", () => { hoverCard = focusCard = ""; setHot(); }],
   ] as const)
     sidebar.addEventListener(type, handle, { capture: true, signal: abort.signal });
-  // Frame mode: a click on the framed site closes the sidebar, like a scrim.
-  // Armed on pointerdown so a press that only dismisses a draft or selection
-  // keeps the sidebar open; click (not pointerdown) so scrolling never closes.
-  let frameCloseArmed = false;
-  surface.addEventListener(
-    "pointerdown",
-    (event) => {
-      frameCloseArmed =
-        event.button === 0 &&
-        expanded &&
-        framed &&
-        !edgeSidebar &&
-        !mode &&
-        !account &&
-        !selected &&
-        !draft;
-    },
-    { capture: true, signal: abort.signal },
-  );
-  surface.addEventListener(
-    "click",
-    (event) => {
-      if (!frameCloseArmed || !expanded || edgeSidebar) return;
-      frameCloseArmed = false;
-      event.preventDefault();
-      event.stopPropagation();
-      toggleExpanded(false);
-    },
-    { capture: true, signal: abort.signal },
-  );
   polling = adaptivePolling({
     interval: Math.max(2000, options.pollInterval ?? 4000),
     enabled: () =>
