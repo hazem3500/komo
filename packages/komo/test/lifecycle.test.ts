@@ -249,9 +249,12 @@ it("uses configured shortcut keys and labels", () => {
   const root = host.shadowRoot!;
   const label = (id: string) =>
     root.querySelector(`[data-menu-item="${id}"]`)!.getAttribute("aria-label");
-  expect(label("comment")).toBe("Add comment · M");
+  expect(label("comment")).toBe("Add comment");
+  expect(root.querySelector('[data-menu-item="comment"]')!.getAttribute("aria-keyshortcuts")).toBe("M");
   expect(label("browse")).toBe("Browse website");
-  expect(label("dismiss")).toBe("Dismiss inline feedback · Shift+J to restore");
+  expect(root.querySelector('[data-menu-item="browse"]')!.hasAttribute("aria-keyshortcuts")).toBe(false);
+  expect(label("dismiss")).toBe("Dismiss feedback");
+  expect(root.querySelector('[data-menu-item="dismiss"]')!.getAttribute("aria-keyshortcuts")).toBeNull();
   const key = (init: KeyboardEventInit) => {
     const event = new KeyboardEvent("keydown", {
       bubbles: true,
@@ -286,32 +289,41 @@ it("toggles the comment list with L and shows configured bindings in every hint"
     return event.defaultPrevented;
   };
 
+  const binding = (id: string) => ([...document.body.children].find(node => node.shadowRoot) as HTMLElement)
+    .shadowRoot!.querySelector(`[data-menu-item="${id}"]`)!.getAttribute("aria-keyshortcuts");
+
   let label = mount();
-  expect(label("comments")).toBe("View all comments · L · 0 open");
+  expect(label("comments")).toBe("All comments");
+  expect(binding("comments")).toBe("L");
   expect(key({ key: "l" })).toBe(true);
-  expect(label("comments")).toBe("Close comment sidebar · L");
+  expect(label("comments")).toBe("Close comments panel");
   // Caps Lock.
   expect(key({ key: "L" })).toBe(true);
-  expect(label("comments")).toBe("View all comments · L · 0 open");
+  expect(label("comments")).toBe("All comments");
 
   label = mount({ comment: "Shift+C", design: "Shift+D", comments: "Shift+L", restore: "Shift+R" });
-  expect(label("comment")).toBe("Add comment · Shift+C");
-  expect(label("design")).toBe("Design mode · Shift+D");
-  expect(label("comments")).toBe("View all comments · Shift+L · 0 open");
-  expect(label("dismiss")).toBe("Dismiss inline feedback · Shift+R to restore");
+  expect(label("comment")).toBe("Add comment");
+  expect(binding("comment")).toBe("Shift+C");
+  expect(label("design")).toBe("Design mode");
+  expect(binding("design")).toBe("Shift+D");
+  expect(label("comments")).toBe("All comments");
+  expect(binding("comments")).toBe("Shift+L");
+  expect(label("dismiss")).toBe("Dismiss feedback");
+  expect(binding("dismiss")).toBeNull();
   expect(key({ key: "l" })).toBe(false);
   expect(key({ key: "c" })).toBe(false);
   // Caps Lock and a layout whose shifted key isn't L both reach Shift+L.
   expect(key({ key: "l", code: "KeyL", shiftKey: true })).toBe(true);
-  expect(label("comments")).toBe("Close comment sidebar · Shift+L");
+  expect(label("comments")).toBe("Close comments panel");
   expect(key({ key: "Ł", code: "KeyL", shiftKey: true })).toBe(true);
-  expect(label("comments")).toBe("View all comments · Shift+L · 0 open");
+  expect(label("comments")).toBe("All comments");
 
   label = mount({ comment: false, design: false, comments: false, restore: false });
   expect(label("comment")).toBe("Add comment");
   expect(label("design")).toBe("Design mode");
-  expect(label("comments")).toBe("View all comments · 0 open");
-  expect(label("dismiss")).toBe("Dismiss inline feedback");
+  expect(label("comments")).toBe("All comments");
+  expect(label("dismiss")).toBe("Dismiss feedback");
+  for (const id of ["comment", "design", "comments", "dismiss"]) expect(binding(id)).toBeNull();
   expect(key({ key: "l" })).toBe(false);
 });
 
@@ -389,8 +401,9 @@ it("dismisses the active Design overlay without intercepting host clicks", async
     '[data-menu-item="dismiss"]',
   )!;
   expect(dismiss.getAttribute("aria-label")).toBe(
-    "Dismiss inline feedback · Shift+K to restore",
+    "Dismiss feedback",
   );
+  expect(dismiss.getAttribute("aria-keyshortcuts")).toBeNull();
   dismiss.click();
   expect(toolbar.style.display).toBe("none");
   expect(inspector.getAttribute("aria-hidden")).toBe("true");
@@ -647,7 +660,8 @@ it("toggles Design mode with D, a configured key, and never while typing or disa
   };
 
   let { host, root } = mount();
-  expect(root.querySelector('[data-menu-item="design"]')!.getAttribute("aria-label")).toBe("Design mode · D");
+  expect(root.querySelector('[data-menu-item="design"]')!.getAttribute("aria-label")).toBe("Design mode");
+  expect(root.querySelector('[data-menu-item="design"]')!.getAttribute("aria-keyshortcuts")).toBe("D");
   const input = document.createElement("input");
   document.body.append(input);
   expect(press({ key: "d" }, input)).toBe(false);
@@ -664,7 +678,8 @@ it("toggles Design mode with D, a configured key, and never while typing or disa
   expect(sidebar.hasAttribute("data-design-empty")).toBe(false);
 
   ({ host, root } = mount({ shortcuts: { design: "Shift+E" } }));
-  expect(root.querySelector('[data-menu-item="design"]')!.getAttribute("aria-label")).toBe("Design mode · Shift+E");
+  expect(root.querySelector('[data-menu-item="design"]')!.getAttribute("aria-label")).toBe("Design mode");
+  expect(root.querySelector('[data-menu-item="design"]')!.getAttribute("aria-keyshortcuts")).toBe("Shift+E");
   expect(press({ key: "d" })).toBe(false);
   expect(press({ key: "E", shiftKey: true })).toBe(true);
   expect(host.classList.contains("design-active")).toBe(true);

@@ -1,7 +1,7 @@
 import { isDesignTarget, pickDesignTarget, type DesignTarget } from "./design-target.js";
 import { changePreviewStyles, createStyleEdits, inlineStyleSnapshot, removeEmptyStyle, restoreStyle, type StyleEdit, type StyleOriginal } from "./design-preview.js";
 import { designModeStyles } from "./design-mode-styles.js";
-import { el, icon } from "./dom.js";
+import { editable, el, icon } from "./dom.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
 import type { Control, PanelContext } from "./design-panel.js";
 import type { InlineTextTools } from "./inline-text-editor.js";
@@ -119,6 +119,8 @@ export function createDesignMode(options: DesignModeOptions) {
   (options.panelRoot ?? options.root).append(panel);
 
   let active = false;
+  // Editing stays undecorated until the canvas is targeted again.
+  let decorating = true;
   let closeTimer = 0;
   let selected: DesignTarget | null = null;
   let hovered: DesignTarget | null = null;
@@ -194,6 +196,8 @@ export function createDesignMode(options: DesignModeOptions) {
   let showingBefore = false;
   let suspendedBefore: boolean | undefined;
   function showBefore(on: boolean, animate = true) {
+    decorating = false;
+    renderOutlines();
     if (on === showingBefore) return;
     if (on && textTools?.element) finishTextEdit();
     showingBefore = on;
@@ -312,7 +316,6 @@ export function createDesignMode(options: DesignModeOptions) {
   /** With nothing selected, the inspector drops its footer and the sidebar fits the empty state. */
   function syncEmpty() {
     panel.toggleAttribute("data-empty", (comment.hidden = !selected));
-    if (views) views.hint.hidden = !selected;
     panel.parentElement?.toggleAttribute("data-design-empty", active && !selected);
     const pending = [...previewTargets.keys()].filter(hasChanges);
     pendingSlot.hidden = !!selected || !pending.length;
@@ -333,7 +336,7 @@ export function createDesignMode(options: DesignModeOptions) {
   }
   /** Draw the outline; only a newly picked or hovered target (`retarget`) may move the panel. */
   function outlineFor(element: DesignTarget | null, kind: "hover" | "selected", retarget = false, marker = outline) {
-    if (!active || !element?.isConnected) {
+    if (!active || !decorating || !element?.isConnected) {
       marker.hidden = true;
       return;
     }
@@ -342,7 +345,6 @@ export function createDesignMode(options: DesignModeOptions) {
       marker.hidden = true;
       return;
     }
-    marker.hidden = false;
     marker.dataset.kind = kind;
     // Flip once per target, only when it sits under the panel and would be clear on the other side.
     // Resizes, edits and Before/After redraw the outline but never move the panel.
@@ -382,8 +384,7 @@ export function createDesignMode(options: DesignModeOptions) {
     selectionPage = page();
     previewTargets.set(element, selectionPage);
     renderControls();
-    outlineFor(element, "selected", true);
-    prospective.hidden = true;
+    renderOutlines(true);
     updateActions();
   }
   const compact = () => media("(max-width:520px)");
@@ -451,12 +452,14 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     const element = pickDesignTarget(options.targetAt(event.clientX, event.clientY), event.metaKey || event.ctrlKey);
     hovered = element && !options.host.contains(element) ? element : null;
+    if (hovered) decorating = true;
     renderOutlines(!selected);
   }
   function onDown(event: PointerEvent) {
     if (!active || event.button !== 0 || event.composedPath().includes(options.host)) return;
     const element = pickDesignTarget(options.targetAt(event.clientX, event.clientY), event.metaKey || event.ctrlKey);
     if (!element || options.host.contains(element)) return;
+    decorating = true;
     if (textTools?.element && (element === textTools.element || textTools.element.contains(element))) return;
     if (textTools?.element) finishTextEdit();
     event.preventDefault();
@@ -481,13 +484,14 @@ export function createDesignMode(options: DesignModeOptions) {
     // ← Before, → After, B flips, as on design comments; never while typing in a field.
     const key = event.key.toLowerCase();
     const origin = event.composedPath()[0];
-    const typing = origin instanceof HTMLElement && (origin.isContentEditable || origin.matches("input,textarea,select"));
+    const typing = editable(origin) || origin instanceof HTMLElement && origin.matches("[role=slider],[role=radio]");
     if (typing && event.key === "Escape" && (origin as HTMLElement).closest("[data-field-property]")) return;
     if (active && selected && event.altKey && !event.ctrlKey && !event.metaKey && !typing && (key === "arrowup" || key === "arrowdown")) {
       const next = (key === "arrowup" ? selected.parentElement : [...selected.children].find(element => isDesignTarget(element) && !element.matches("script,style,defs,title,desc,metadata"))) ?? null;
       if (isDesignTarget(next) && next !== document.body && next !== document.documentElement && !options.host.contains(next)) {
         event.preventDefault();
         event.stopImmediatePropagation();
+        decorating = true;
         select(next);
         reveal(next);
       }
@@ -508,6 +512,7 @@ export function createDesignMode(options: DesignModeOptions) {
       if (isDesignTarget(focused) && focused !== document.body && focused !== document.documentElement) {
         event.preventDefault();
         event.stopImmediatePropagation();
+        decorating = true;
         select(focused);
         reveal(focused);
         return;
@@ -550,7 +555,6 @@ export function createDesignMode(options: DesignModeOptions) {
       requestAnimationFrame(() => {
         if (active) panel.dataset.state = "active";
       });
-      outline.hidden = !selected;
       renderControls();
       setFolded(!selected);
       outlineFor(selected, "selected");
@@ -691,7 +695,7 @@ export function createDesignMode(options: DesignModeOptions) {
   // Editing anything, Undo, Reset or Comment first returns to After.
   const toAfter = () => showBefore(false);
   for (const node of [controls, actions, editText])
-    for (const type of ["pointerdown", "focusin", "click"]) node.addEventListener(type, toAfter, true);
+    for (const type of ["pointerdown", "focusin", "click", "input"]) node.addEventListener(type, toAfter, true);
   document.addEventListener("pointermove", onMove, { capture: true, signal: listeners.signal });
   document.addEventListener("pointerdown", onDown, { capture: true, signal: listeners.signal });
   document.addEventListener("click", onClick, { capture: true, signal: listeners.signal });
@@ -715,7 +719,6 @@ export function createDesignMode(options: DesignModeOptions) {
     style.textContent += views.styles;
     undo.innerHTML = views.icons.undo;
     reset.innerHTML = views.icons.reset;
-    panel.insertBefore(views.hint, pendingSlot);
     pendingSlot.append(views.pending);
     if (active) renderControls();
     else syncEmpty();

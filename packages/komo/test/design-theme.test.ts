@@ -110,7 +110,7 @@ describe("Design panel theme switcher", () => {
     expect(mode.apply).toHaveBeenCalledWith("dark");
     await vi.waitFor(() => expect(option("color.text.secondary")?.title).toContain("#a3a3a3"));
     expect(tokens.list).toHaveBeenLastCalledWith({ mode: "dark" });
-    expect(field().querySelector(".design-token-chip")!.textContent).toBe("color.text.secondary");
+    expect(field().querySelector(".design-token-chip")!.textContent).toBe("Uses color.text.secondary");
     expect(themeButton("Dark").getAttribute("aria-pressed")).toBe("true");
     // Focus follows the switch across the re-render.
     expect(shadow.activeElement).toBe(themeButton("Dark"));

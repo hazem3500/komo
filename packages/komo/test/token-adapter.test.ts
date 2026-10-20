@@ -174,7 +174,7 @@ describe("custom token adapter in Design mode", () => {
   it("shows the resolved token, suggests tokens for the property grouped by group, and keeps states in the tooltip", async () => {
     await open({ tokens: classAdapter() });
     expect(field("color").dataset.tokenMode).toBe("connected");
-    expect(field("color").querySelector(".design-token-chip")?.textContent).toBe("color.text.secondary");
+    expect(field("color").querySelector(".design-token-chip")?.textContent).toBe("Uses color.text.secondary");
     const options = [...picker("color").querySelectorAll("optgroup")].map((group) => [group.label, [...group.querySelectorAll("option")].map((option) => option.textContent)]);
     expect(options).toEqual([["Text", ["Text primary · text-primary", "color.text.secondary · text-secondary"]]]);
     const fill = classAdapter();
@@ -290,16 +290,18 @@ describe("custom token adapter in Design mode", () => {
     await vi.waitFor(() => expect(shadow.querySelector(".komo-tokens")).not.toBeNull());
     const search = shadow.querySelector<HTMLInputElement>(".komo-tokens input")!;
     const press = (key: string) => search.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true }));
-    const primary = shadow.querySelectorAll<HTMLElement>('.komo-tokens [role="option"]')[1];
+    const primary = shadow.querySelector<HTMLElement>('.komo-tokens [role="option"][title*="text-primary"]')!;
+    expect(shadow.querySelectorAll('.komo-tokens [role="option"]')).toHaveLength(2);
+    expect(shadow.querySelector('.komo-tokens [aria-selected="true"]')?.getAttribute("title")).toContain("text-secondary");
     for (let i = 0; i < 12; i++) {
       primary.dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
       expect(label.className).toBe("text-primary");
       expect(proposedDesignChanges(label)).toBeUndefined();
       expect(tool("Undo").disabled).toBe(true);
-      press("ArrowUp");
+      press("ArrowDown");
       expect(label.className).toBe("text-secondary");
     }
-    press("ArrowDown");
+    press("ArrowUp");
     press("Enter");
     expect(label.className).toBe("text-primary");
     expect(proposedDesignChanges(label)).toContain("color.text.primary");
@@ -364,7 +366,7 @@ describe("custom token adapter in Design mode", () => {
     const adapter = classAdapter({ async: true });
     let mode = "light";
     await open({ tokens: adapter, themes: [{ id: "mode", options: [{ id: "light" }, { id: "dark" }], current: () => mode, apply: (id) => { mode = id; } }] });
-    expect(field("color").querySelector(".design-token-chip")?.textContent).toBe("color.text.secondary");
+    expect(field("color").querySelector(".design-token-chip")?.textContent).toBe("Uses color.text.secondary");
     expect(adapter.list).toHaveBeenCalledTimes(1);
     expect(adapter.list).toHaveBeenCalledWith({ mode: "light" });
     await listTokens(adapter, { mode: "light" });

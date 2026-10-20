@@ -2,13 +2,13 @@ import { popupBounds, popupStyles, watchPopup } from "./design-popup.js";
 import { el } from "./dom.js";
 import { tokensFor, tokenTitle } from "./token-adapter.js";
 // Design mode's token picker: a searchable listbox of `DesignToken`s with a
-// preview per type, sticky group headings, the current token pinned first and
+// preview per type, sticky group headings, a single current-token indicator and
 // the field's relevant tokens by default. It is driven only by token data, so
 // any adapter gets the same picker. Loaded on demand, the first time a token
 // field opens. Comments stay out of the CSS string: they would ship.
 import type { DesignToken } from "./design-system.js";
 
-/** One theme option's resolved values, path → value, for split color swatches. */
+/** One theme option's resolved values, path → value, for optional details. */
 export interface ThemeValues {
   label: string;
   values: ReadonlyMap<string, string>;
@@ -21,17 +21,23 @@ export interface TokenPickerOptions {
   tokens: readonly DesignToken[];
   /** The field's CSS property: tokens whose `properties` include it are shown by default. */
   property: string;
-  /** Path of the token the field uses now, pinned at the top. */
+  /** Path of the token the field uses now; equal literals leave this unset. */
   current?: string;
-  /** Values per theme option, for split swatches; resolved lazily. */
+  /** Values per theme option for full details; swatches show the current theme. */
   themes?: () => Promise<ThemeValues[]> | ThemeValues[] | undefined;
   /** Transient preview; its undo runs before another preview, cancellation or a commit. */
   onPreview?(token: DesignToken): () => void;
   onSelect(token: DesignToken): void;
+  custom?: {
+    value: string;
+    onPreview(value: string): () => void;
+    onSelect(value: string): void;
+  };
 }
 
-const css = `.komo-tokens{display:flex;flex-direction:column;overflow:hidden}.komo-tokens__bar{flex:none;display:flex;gap:4px;padding:8px;background:#232323;border-bottom:1px solid #ffffff0d}.komo-tokens__bar input{flex:1;min-width:0;height:28px;box-sizing:border-box;margin:0;padding:0 8px;border:0;border-radius:6px;outline:0;box-shadow:none;background:#ffffff0a;color:#f1efeb;font:inherit}.komo-tokens__bar input::placeholder{color:#77736f}.komo-tokens__bar input:focus{outline:0;box-shadow:inset 0 0 0 1px #bda6ef}.komo-tokens__bar button{flex:none;height:28px;padding:0 8px;border:0;border-radius:6px;background:none;color:#898680;font:inherit;white-space:nowrap;cursor:pointer}.komo-tokens__bar button:hover{background:#ffffff0f;color:#f1efeb}.komo-tokens__bar button[aria-pressed=true]{background:#bda6ef24;color:#e6dcfb}.komo-tokens__bar button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.komo-tokens [role=listbox]{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:0 4px 4px}.komo-tokens small{position:sticky;top:0;z-index:1;display:block;padding:8px 8px 4px;background:#232323;color:#77736f;font-size:10px;font-weight:500}.komo-tokens [role=option]{display:grid;grid-template-columns:20px minmax(0,1fr) 14px;align-items:center;gap:4px 8px;box-sizing:border-box;min-height:48px;padding:8px;border-radius:7px;cursor:pointer}.komo-tokens [data-active]{background:#ffffff14;color:#f1efeb}.komo-tokens [aria-selected=true] .komo-tokens__name{color:#e6dcfb}.komo-tokens__name{grid-column:2;min-width:0;font-weight:500}.komo-tokens__name>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.komo-tokens__check{grid-column:3;justify-self:center}.komo-tokens [aria-selected=true] .komo-tokens__check{width:7px;height:3.5px;margin-top:-3px;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-tokens__meta,.komo-tokens__desc,.komo-tokens__states{grid-column:2/-1;min-width:0}.komo-tokens__meta{display:grid;gap:2px;color:#a5a19b;font-size:10px;font-variant-numeric:tabular-nums}.komo-tokens__meta span,.komo-tokens__desc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.komo-tokens__meta span+span,.komo-tokens__desc{color:#898680;font-size:10px}.komo-tokens__states{display:flex;flex-wrap:wrap;gap:4px}.komo-tokens__states i{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 5px;border-radius:4px;background:#ffffff0a;color:#aaa69f;font-size:9px;font-style:normal}.komo-tokens__pv{display:flex;align-items:center;height:16px;overflow:hidden}.komo-tokens__sw{display:flex;width:16px;height:16px;border-radius:4px;overflow:hidden;background:repeating-conic-gradient(#ffffff40 0 25%,#ffffff0d 0 50%) 0 0/8px 8px;outline:1px solid #ffffff1f;outline-offset:-1px}.komo-tokens__sw>span{flex:1}.komo-tokens__sw>[data-unresolved]{display:grid;place-items:center;background:#393939;color:#b6b1aa;font-size:10px}.komo-tokens__dim{height:4px;min-width:2px;border-radius:2px;background:#bda6ef}.komo-tokens__corner{width:12px;height:12px;box-sizing:border-box;border:solid #bda6ef;border-width:1.5px 0 0 1.5px}.komo-tokens__shadow{width:16px;height:12px;margin-left:2px;border-radius:3px;background:#f1efeb}.komo-tokens__ag{color:#f1efeb;font-size:13px;line-height:1;white-space:nowrap}.komo-tokens__hint{flex:none;padding:7px 10px;border-top:1px solid #ffffff0d;color:#aaa69f;font-size:10px}.komo-tokens__empty{padding:12px 8px;color:#77736f}@media (pointer:coarse){.komo-tokens{font-size:13px}.komo-tokens [role=option]{min-height:40px}.komo-tokens__bar input,.komo-tokens__bar button{height:36px}}`;
+const css = `.komo-tokens{display:flex;flex-direction:column;overflow:hidden}.komo-tokens__bar{flex:none;display:flex;gap:4px;padding:8px;background:#232323;border-bottom:1px solid #ffffff0d}.komo-tokens__bar input{flex:1;min-width:0;height:28px;box-sizing:border-box;margin:0;padding:0 8px;border:0;border-radius:6px;outline:0;box-shadow:none;background:#ffffff0a;color:#f1efeb;font:inherit}.komo-tokens__bar input:focus{outline:0;box-shadow:inset 0 0 0 1px #bda6ef}.komo-tokens__bar button{flex:none;height:28px;padding:0 8px;border:0;border-radius:6px;background:none;color:#898680;font:inherit;white-space:nowrap;cursor:pointer}.komo-tokens__bar button:hover{background:#ffffff0f;color:#f1efeb}.komo-tokens__bar button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.komo-tokens [role=listbox]{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:0 4px 4px}.komo-tokens small{position:sticky;top:0;z-index:1;display:block;padding:8px 8px 4px;background:#232323;color:#77736f;font-size:10px;font-weight:500}.komo-tokens [role=option]{display:grid;grid-template-columns:20px minmax(0,1fr) 14px;align-items:center;gap:4px 8px;box-sizing:border-box;min-height:32px;padding:6px 8px;border-radius:7px;cursor:pointer}.komo-tokens [data-active]{background:#ffffff14;color:#f1efeb}.komo-tokens [aria-selected=true] .komo-tokens__name{color:#e6dcfb}.komo-tokens__name{grid-column:2;min-width:0;font-weight:500}.komo-tokens__name>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.komo-tokens__check{grid-column:3;justify-self:center}.komo-tokens [aria-selected=true] .komo-tokens__check{width:7px;height:3.5px;margin-top:-3px;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-tokens__pv{display:flex;align-items:center;height:16px;overflow:hidden}.komo-tokens__sw{display:flex;width:16px;height:16px;border-radius:4px;overflow:hidden;background:repeating-conic-gradient(#ffffff40 0 25%,#ffffff0d 0 50%) 0 0/8px 8px;outline:1px solid #ffffff1f;outline-offset:-1px}.komo-tokens__sw>span{flex:1}.komo-tokens__sw>[data-unresolved]{display:grid;place-items:center;background:#393939;color:#b6b1aa;font-size:10px}.komo-tokens__dim{height:4px;min-width:2px;border-radius:2px;background:#bda6ef}.komo-tokens__corner{width:12px;height:12px;box-sizing:border-box;border:solid #bda6ef;border-width:1.5px 0 0 1.5px}.komo-tokens__shadow{width:16px;height:12px;margin-left:2px;border-radius:3px;background:#f1efeb}.komo-tokens__ag{color:#f1efeb;font-size:13px;line-height:1;white-space:nowrap}.komo-tokens__empty{padding:12px 8px;color:#77736f}@media (pointer:coarse){.komo-tokens{font-size:13px}.komo-tokens [role=option]{min-height:44px}.komo-tokens__bar input,.komo-tokens__bar button{height:36px}}`;
 
+const modeStyles = `.komo-tokens__tabs{display:flex;flex:none;gap:4px;padding:6px;border-bottom:1px solid #ffffff14}.komo-tokens__tabs button{flex:1;border:0;border-radius:5px;padding:7px;font:inherit;color:inherit;background:none;cursor:pointer}.komo-tokens__tabs button[aria-pressed=true]{background:#ffffff18}.komo-tokens [hidden]{display:none!important}.komo-tokens button:focus-visible,.komo-tokens [role=listbox]:focus-visible{outline:1px solid #bda6ef;outline-offset:-2px}`;
 const styled = new WeakSet<Node>();
 /** Rows built per batch; the rest are built as the list scrolls or the keyboard reaches them. */
 const BATCH = 60;
@@ -49,18 +55,10 @@ function pixels(value: string): number | undefined {
   return match ? parseFloat(match[1]) * (match[2] ? (match[2] === "px" ? 1 : 16) : 1) : undefined;
 }
 
-/** "600 · 16px/1.5" from a font shorthand, else the value as given. */
-function fontSummary(value: string): string {
-  const parts = value.trim().split(/\s+/);
-  const weight = parts.find((part) => /^(\d{3}|bold|bolder|lighter)$/.test(part));
-  const size = parts.find((part) => /^[\d.]+(px|r?em|pt|%)(\/\S+)?$/.test(part));
-  return [weight, size].filter(Boolean).join(" · ") || value;
-}
-
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 /** A small visual for the token's type: swatch, bar, corner, shadow card or "Ag". */
-function preview(token: DesignToken, themes: readonly ThemeValues[]): HTMLElement {
+function preview(token: DesignToken): HTMLElement {
   const box = el("span", "komo-tokens__pv");
   box.setAttribute("aria-hidden", "true");
   const part = (name: string) => {
@@ -72,13 +70,10 @@ function preview(token: DesignToken, themes: readonly ThemeValues[]): HTMLElemen
   const { type } = token;
   if (type === "color") {
     const swatch = part("sw");
-    const values = themes.map((theme) => theme.values.get(token.path)).filter((item): item is string => !!item);
-    for (const color of new Set(values).size > 1 ? values : [value]) {
-      const half = el("span");
-      if (resolvedColor(color)) half.style.background = color;
-      else { half.dataset.unresolved = ""; half.textContent = "?"; }
-      swatch.append(half);
-    }
+    const color = el("span");
+    if (resolvedColor(value)) color.style.background = value;
+    else { color.dataset.unresolved = ""; color.textContent = "?"; }
+    swatch.append(color);
   } else if (type === "dimension" || type === "letterSpacing") {
     const size = pixels(value);
     if (size === undefined) return box;
@@ -92,8 +87,7 @@ function preview(token: DesignToken, themes: readonly ThemeValues[]): HTMLElemen
     sample.textContent = "Ag";
     if (type === "typography") {
       sample.style.font = value;
-      const size = pixels(value.split(/\s+/).find((item) => /^[\d.]+(px|r?em)(\/|$)/.test(item))?.split("/")[0] ?? "");
-      sample.style.fontSize = `${clamp(size ?? 13, 10, 16)}px`;
+      sample.style.fontSize = "13px";
       sample.style.lineHeight = "1";
     } else if (type === "fontWeight") sample.style.fontWeight = value;
     else sample.style.fontFamily = value;
@@ -118,27 +112,8 @@ function row(token: DesignToken, id: string, selected: boolean, themes: readonly
   name.append(label);
   const check = el("span", "komo-tokens__check");
   check.setAttribute("aria-hidden", "true");
-  const meta = el("span", "komo-tokens__meta");
-  const shown = token.type === "typography" ? fontSummary(token.value ?? "") : token.value ?? "";
   const unresolved = token.type === "color" && !resolvedColor(token.value);
-  for (const text of [token.ref, unresolved ? `Unresolved value · ${shown || "not supplied"}` : shown]) {
-    if (!text) continue;
-    const item = el("span", "", text);
-    meta.append(item);
-  }
-  node.append(preview(token, themes), name, check, meta);
-  if (token.states?.length) {
-    const states = el("span", "komo-tokens__states");
-    for (const state of token.states) {
-      const chip = el("i", "", state);
-      states.append(chip);
-    }
-    node.append(states);
-  }
-  if (token.description) {
-    const description = el("span", "komo-tokens__desc", token.description);
-    node.append(description);
-  }
+  node.append(preview(token), name, check);
   const perTheme = themes.flatMap((theme) => {
     const value = theme.values.get(token.path);
     return value && token.type === "color" ? [`${theme.label} ${value}`] : [];
@@ -165,11 +140,14 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   if ((root instanceof ShadowRoot || root === document) && !styled.has(root)) {
     styled.add(root);
     const style = el("style");
-    style.textContent = popupStyles + css;
+    style.textContent = popupStyles + css + modeStyles;
     (root instanceof ShadowRoot ? root : document.head).append(style);
   }
   const id = `komo-tokens-${++count}`;
   const box = el("div", "komo-tokens");
+  box.id = `${id}-popup`;
+  box.setAttribute("role", "dialog");
+  box.setAttribute("aria-label", `Edit ${property}`);
   const bar = el("div", "komo-tokens__bar");
   const search = el("input");
   search.type = "text";
@@ -183,6 +161,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   search.setAttribute("aria-label", `Search tokens for ${property}`);
   const list = el("div");
   list.id = id;
+  list.tabIndex = 0;
   list.setAttribute("role", "listbox");
   list.setAttribute("aria-label", `Tokens for ${property}`);
   let relevant = tokensFor(tokens, property);
@@ -190,11 +169,10 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   const widen = el("button");
   widen.type = "button";
   widen.textContent = "Show all";
-  widen.title = `Show all ${tokens.length} tokens`;
   bar.append(search);
   if (relevant.length && relevant.length < tokens.length) bar.append(widen);
   box.append(bar, list);
-  if (options.onPreview) box.append(el("div", "komo-tokens__hint", "↑↓ preview · Enter apply · Esc cancel"));
+
   // Lowercase haystacks are built once, so each keystroke is a plain scan.
   const haystacks = () => new Map(tokens.map((token) => [token, `${tokenLabel(token)} ${token.path} ${token.ref ?? ""} ${token.value ?? ""}`.toLowerCase()]));
   let haystack = haystacks();
@@ -249,6 +227,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     const target = node(index)!;
     target.toggleAttribute("data-active", true);
     search.setAttribute("aria-activedescendant", target.id);
+    list.setAttribute("aria-activedescendant", target.id);
     if (!scroll) return;
     const top = target.offsetTop - (target.parentElement === list ? 0 : (target.parentElement!.firstElementChild as HTMLElement).offsetHeight);
     const bottom = target.offsetTop + target.offsetHeight;
@@ -262,16 +241,14 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     const terms = search.value.toLowerCase().split(/\s+/).filter(Boolean);
     const pool = all ? tokens : relevant;
     const matches = terms.length ? pool.filter((token) => terms.every((term) => haystack.get(token)!.includes(term))) : pool;
-    const pinned = !terms.length && options.current ? matches.find((token) => token.path === options.current) : undefined;
+
     // Groups keep their first appearance order; ungrouped tokens come first.
     const groups = new Map<string, DesignToken[]>([["", []]]);
     for (const token of matches) {
-      if (token === pinned) continue;
       const key = token.group ?? "";
       groups.set(key, [...groups.get(key) ?? [], token]);
     }
     items = [
-      ...pinned ? [{ token: pinned, group: "Current" }] : [],
       ...[...groups].flatMap(([group, members]) => members.map((token) => ({ token, group }))),
     ];
     list.replaceChildren();
@@ -280,7 +257,11 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     active = -1;
     groupName = undefined;
     search.removeAttribute("aria-activedescendant");
+    list.removeAttribute("aria-activedescendant");
+    search.hidden = pool.length <= 8 && !search.value;
+    bar.hidden = search.hidden && widen.parentElement !== bar;
     widen.setAttribute("aria-pressed", String(all));
+    widen.textContent = all ? "Relevant" : "Show all";
     if (!items.length) {
       const empty = el("div", "komo-tokens__empty", terms.length ? "No matching tokens" : "No tokens");
       list.append(empty);
@@ -299,6 +280,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     open = undefined;
     restorePreview();
     listeners.abort();
+    editor?.destroy();
     box.remove();
     trigger.setAttribute("aria-expanded", "false");
     trigger.removeAttribute("aria-controls");
@@ -317,13 +299,54 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
       relevant = tokensFor(tokens, property);
       haystack = haystacks();
       themes = [];
-      widen.title = `Show all ${tokens.length} tokens`;
       if (relevant.length && relevant.length < tokens.length) bar.append(widen);
       else widen.remove();
-      render(preview, true);
+      render(preview && !customMode, true);
+      if (options.current && options.custom) editor?.refresh(options.custom.value);
+      if (customMode && customValue !== undefined) customPreview(customValue);
+      list.hidden = customMode;
+      bar.hidden ||= customMode;
       loadThemes();
     },
   };
+  let customMode = !!options.custom && !tokens.some(token => token.path === options.current);
+  let customValue: string | undefined;
+  let editor: ReturnType<typeof import("./token-custom.js").customEditor> | undefined;
+  const tabs = el("div", "komo-tokens__tabs");
+  const tokenTab = el("button", "", "Tokens"), customTab = el("button", "", "Custom");
+  tokenTab.type = customTab.type = "button";
+  const customPreview = (value: string) => {
+    restorePreview();
+    customValue = value;
+    undoPreview = options.custom?.onPreview(value);
+  };
+  async function mode(custom: boolean, focus = true) {
+    restorePreview();
+    customMode = custom;
+    tokenTab.setAttribute("aria-pressed", String(!custom));
+    customTab.setAttribute("aria-pressed", String(custom));
+    list.hidden = custom;
+    bar.hidden = custom || (search.hidden && widen.parentElement !== bar);
+    if (editor) editor.hidden = !custom;
+    if (custom && options.custom) {
+      if (!editor) {
+        const { customEditor } = await import("./token-custom.js");
+        if (open?.close !== close || !customMode || editor) return;
+        editor = customEditor(property, options.custom.value, customPreview, value => {
+          close(true);
+          options.custom?.onSelect(value);
+        });
+        box.append(editor);
+      } else if (customValue !== undefined) customPreview(customValue);
+      if (focus && !coarse) editor.querySelector<HTMLInputElement>("input")?.focus();
+    } else if (focus && !coarse) (search.hidden ? list : search).focus();
+  }
+  if (options.custom) {
+    tabs.append(tokenTab, customTab);
+    box.prepend(tabs);
+    tokenTab.onclick = () => { void mode(false); };
+    customTab.onclick = () => { void mode(true); };
+  }
   const choose = (index: number) => {
     const token = items[index]?.token;
     if (!token) return;
@@ -334,7 +357,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   widen.addEventListener("click", () => {
     all = !all;
     render(true);
-    if (!coarse) search.focus({ preventScroll: true });
+    if (!coarse) (search.hidden ? list : search).focus({ preventScroll: true });
   }, { signal });
   addEventListener("keydown", (event) => {
     if (!trigger.isConnected) return close();
@@ -344,8 +367,8 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     const step = ({ ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 } as Record<string, number>)[key];
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (key === "Escape") close(true);
-    else if (key === "Tab") return close();
-    else if (path[0] !== search && path[0] !== trigger) return;
+    else if (key === "Tab") return;
+    else if (path[0] !== search && path[0] !== trigger && path[0] !== list) return;
     else if (step) activate(clamp(active + step, 0, items.length - 1));
     else if (key === "Enter") choose(active);
     else return;
@@ -353,6 +376,10 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     event.stopImmediatePropagation();
   }, { capture: true, signal });
   addEventListener("pointerdown", (event) => {
+    const path = event.composedPath();
+    if (!path.includes(box) && !path.includes(trigger)) close();
+  }, { capture: true, signal });
+  addEventListener("focusin", event => {
     const path = event.composedPath();
     if (!path.includes(box) && !path.includes(trigger)) close();
   }, { capture: true, signal });
@@ -376,7 +403,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   }, { signal });
   // The picker sits inside the field's <label>; a click there would refocus the field's input.
   box.addEventListener("click", (event) => {
-    if (event.target !== search) event.preventDefault();
+    if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLButtonElement)) event.preventDefault();
     const index = indexOf(event);
     if (index >= 0) choose(index);
   }, { signal });
@@ -385,7 +412,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   const host = trigger.closest<HTMLElement>(".design-field") ?? trigger.parentElement!;
   host.append(box);
   trigger.setAttribute("aria-expanded", "true");
-  trigger.setAttribute("aria-controls", id);
+  trigger.setAttribute("aria-controls", box.id);
   // As wide as the panel allows, up to 340px, anchored to the field; flips up when there is more room.
   const anchor = host.getBoundingClientRect();
   const area = popupBounds(host);
@@ -393,7 +420,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   const width = clamp(area.right - area.left - 8, 120, 340);
   const below = area.bottom - anchor.bottom - 8;
   const above = anchor.top - area.top - 8;
-  const up = below < 240 && above > below;
+  const up = below < 320 && above > below;
   const height = Math.min(320, Math.max(up ? above : below, 120));
   box.style.width = `${width}px`;
   box.style.maxHeight = `${height}px`;
@@ -406,7 +433,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     if (index >= 0) activate(index, true, false);
   }
   // Touch keeps the keyboard down until the search field is tapped.
-  if (!coarse) search.focus({ preventScroll: true });
+  if (!coarse) (search.hidden ? list : search).focus({ preventScroll: true });
   let themeRequest = 0;
   // Values per theme come from the adapter's list(theme), so the page never flips to read them.
   function loadThemes() {
@@ -414,9 +441,10 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     void Promise.resolve(options.themes?.()).then((values) => {
       if (!values || values.length < 2 || open?.close !== close || request !== themeRequest) return;
       themes = values;
-      render(previewed >= 0, true);
+      if (!customMode) render(previewed >= 0, true);
     }, () => {});
   }
   loadThemes();
+  if (options.custom) void mode(customMode);
   return () => close();
 }

@@ -353,7 +353,7 @@ describe("explicit design-token preview bridge", () => {
     chooser.dispatchEvent(new Event("change"));
     expect(card.style.backgroundColor).toBe("var(--brand)");
     expect(field.dataset.tokenMode).toBe("token");
-    expect(field.querySelector(".design-token-chip")?.textContent).toBe("color.brand");
+    expect(field.querySelector(".design-token-chip")?.textContent).toBe("Uses color.brand");
     expect(shadow.querySelector(".design-inspector__count")?.textContent).toBe("1 change");
 
     field.querySelector<HTMLButtonElement>('[aria-label="Detach token from background-color"]')!.click();
@@ -394,7 +394,7 @@ describe("explicit design-token preview bridge", () => {
     chooser.value = "typography.p1";
     chooser.dispatchEvent(new Event("change"));
     expect(field.dataset.tokenMode).toBe("token");
-    expect(field.querySelector(".design-token-chip")?.textContent).toBe("typography.p1");
+    expect(field.querySelector(".design-token-chip")?.textContent).toBe("Uses typography.p1");
     // The chip stands in for the value: the native select (and the styled menu's trigger) is hidden.
     expect(getComputedStyle(weight).visibility).toBe("hidden");
 

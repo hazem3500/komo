@@ -1,3 +1,4 @@
+import { fieldLabel } from "./field-label.js";
 import type { DesignTarget } from "./design-target.js";
 import { designPanelStyles } from "./design-panel-styles.js";
 import { toHex, validStyleValue } from "./design-preview.js";
@@ -119,9 +120,9 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
       control.setAttribute("inputmode", "decimal");
     }
   }
+  box.append(fieldLabel(control, field, box));
   control.dataset.property = field.property;
   control.setAttribute("aria-label", field.label);
-  control.title = field.label;
   control.value = valueFor(field, element);
   if (control instanceof HTMLSelectElement && !control.value) {
     const current = document.createElement("option");

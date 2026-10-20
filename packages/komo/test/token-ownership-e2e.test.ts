@@ -29,6 +29,7 @@ beforeAll(async () => {
         {path:'color.primary',type:'color',class:'text-primary',properties:['color'],value:'#6941c6',...(theme?{values:{light:'#6941c6',dark:'#c1a8ff'}}:{}),label:'Primary'},
         {path:'background.base',type:'color',class:'bg-base',properties:['background-color'],value:'#575456',...(theme?{values:{light:'#575456',dark:'#bbbbbb'}}:{}),label:'Base'},
         {path:'background.primary',type:'color',class:'bg-primary',properties:['background-color'],value:'#6941c6',...(theme?{values:{light:'#6941c6',dark:'#c1a8ff'}}:{}),label:'Primary'},
+        ...(theme?Array.from({length:8},(_,index)=>({path:'color.fixture'+index,label:'Supplemental '+index,type:'color',class:'text-fixture-'+index,properties:['color'],value:'#123456'})):[]),
         ...(radius?[
           {path:'radius.small',type:'dimension',class:'radius-small',properties:['border-radius'],value:'8px',label:'Small'},
           {path:'radius.full',type:'dimension',class:'radius-full',properties:['border-radius'],value:'calc(infinity * 1px)',label:'Full'},
@@ -60,7 +61,7 @@ beforeAll(async () => {
         response.end(`<style>body{margin:0;color:var(--semantic-base)}main{min-height:100vh;padding:70px;box-sizing:border-box}[data-review-mode=dark]{--semantic-base:#cccccc}[data-review-mode=light]{--semantic-base:#555555}.semantic-base{color:var(--semantic-base)}</style><main><p id="target" class="${baseline === "classes" ? "semantic-base" : ""}" style="${color}padding:12px !important">Example text</p></main><script type="module" src="/entry.js"></script>`);
         return;
       }
-      response.end('<style>body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:70px}.text-base{color:#575456}.text-primary{color:#6941c6}.bg-base{background-color:#575456}.bg-primary{background-color:#6941c6}[data-review-mode=dark] .text-base{color:#bbbbbb}[data-review-mode=dark] .text-primary{color:#c1a8ff}[data-review-mode=dark] .bg-base{background-color:#bbbbbb}[data-review-mode=dark] .bg-primary{background-color:#c1a8ff}button.surface{display:block;width:240px;height:72px;box-sizing:border-box;margin-bottom:32px;border:2px solid #aaa;background:#fff}.radius-small{border-radius:8px}.radius-full{border-radius:calc(infinity * 1px)}.radius-ellipse{border-radius:25% 30% 4px 40px / 10px 50% 4px 12px}</style><main>'+(url.searchParams.get('case')==='radius'?'<button id="target" class="surface radius-small">Primary surface</button><button id="other" class="surface radius-small">Second surface</button>':'<p id="target" class="text-base bg-base" style="padding: 12px !important;">Example text</p>')+'</main><script type="module" src="/entry.js"></script>');
+      response.end('<style>body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:70px}.text-base{color:#575456}.text-primary{color:#6941c6}[class*=text-fixture-]{color:#123456}.bg-base{background-color:#575456}.bg-primary{background-color:#6941c6}[data-review-mode=dark] .text-base{color:#bbbbbb}[data-review-mode=dark] .text-primary{color:#c1a8ff}[data-review-mode=dark] .bg-base{background-color:#bbbbbb}[data-review-mode=dark] .bg-primary{background-color:#c1a8ff}button.surface{display:block;width:240px;height:72px;box-sizing:border-box;margin-bottom:32px;border:2px solid #aaa;background:#fff}.radius-small{border-radius:8px}.radius-full{border-radius:calc(infinity * 1px)}.radius-ellipse{border-radius:25% 30% 4px 40px / 10px 50% 4px 12px}</style><main>'+(url.searchParams.get('case')==='radius'?'<button id="target" class="surface radius-small">Primary surface</button><button id="other" class="surface radius-small">Second surface</button>':'<p id="target" class="text-base bg-base" style="padding: 12px !important;">Example text</p>')+'</main><script type="module" src="/entry.js"></script>');
       return;
     }
     if (path === "/radius.css") {
@@ -100,6 +101,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const trigger = page.locator('[data-field-property="color"] select[data-picker]');
     const choose = async () => {
       await trigger.click();
+      await page.getByRole("button", { name: "Tokens", exact: true }).click();
       await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Accent" }).click();
     };
     const dark = baseline.startsWith("named") ? "rgb(255, 0, 0)" : "rgb(204, 204, 204)";
@@ -288,13 +290,20 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
       return { target: radii(element), outline: radii(outline), hidden: outline.hidden || getComputedStyle(outline).opacity === "0" };
     }, { id, marker });
     const aligned = async (id?: string, marker?: string) => {
+      if (!marker) {
+        const box = await target.boundingBox();
+        await page.mouse.move(box!.x + box!.width * .75, box!.y + box!.height / 2);
+      }
       await page.waitForFunction(() => !document.querySelector('button[aria-busy="true"]'));
       await expect.poll(async () => {
         const result = await shape(id, marker);
         return result.hidden ? Infinity : Math.max(...result.target.map((radius, index) => Math.abs(radius - result.outline[index])));
       }).toBeLessThan(0.1);
     };
-    const open = () => field.locator("select[data-picker]").click();
+    const open = async () => {
+      await field.locator("select[data-picker]").click();
+      expect((await shape()).hidden).toBe(true);
+    };
     const full = page.locator('.komo-tokens [role="option"]').filter({ hasText: "Full" });
     await aligned();
     await open();
@@ -311,8 +320,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await full.click();
     await aligned();
     await page.getByRole("button", { name: "Before", exact: true }).click();
+    expect((await shape()).hidden).toBe(true);
     await aligned();
     await page.getByRole("button", { name: "After", exact: true }).click();
+    expect((await shape()).hidden).toBe(true);
     await aligned();
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     await aligned();
@@ -402,7 +413,11 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
       await input.fill(text);
       await input.press("Enter");
     };
-    const open = async () => { await field.locator("select[data-picker]").click(); await page.locator(".komo-tokens").waitFor(); };
+    const open = async () => {
+      await field.locator("select[data-picker]").click();
+      await page.locator(".komo-tokens").waitFor();
+      await page.getByRole("button", { name: "Tokens", exact: true }).click();
+    };
     const primary = page.locator('.komo-tokens [role="option"]').filter({ hasText: "Primary" });
     await field.locator("select[data-picker]").waitFor();
     await raw("#ef3340");

@@ -96,7 +96,7 @@ describe.skipIf(!chrome).each(["reflow", "scaled"])("Frame style attributes in %
       return page.evaluate(() => (window as any).motionQA as { frames: string[]; samples: number[] });
     };
     const key = () => page.keyboard.press("Shift+L");
-    const button = () => page.getByRole("button", { name: /View all comments|Close comment sidebar/ }).click();
+    const button = () => page.locator('.morphing-menu__shortcut[data-menu-item="comments"]').click();
     for (const opening of [true, false]) {
       if (!opening) { await button(); await page.waitForTimeout(300); }
       const keyboard = await trace(key);
@@ -138,7 +138,7 @@ describe.skipIf(!chrome).each(["reflow", "scaled"])("Frame style attributes in %
     expect(await styles()).toEqual(original);
     await page.keyboard.press("l");
     await page.waitForFunction(() => document.querySelector("main")!.getBoundingClientRect().width < 900);
-    await page.getByRole("button", { name: /^Dismiss inline feedback/ }).click();
+    await page.locator('.morphing-menu__shortcut[data-menu-item="dismiss"]').click();
     await page.waitForTimeout(550);
     expect(await styles()).toEqual(original);
     expect(await page.locator("main").evaluate(node => node.getAnimations().length)).toBe(0);
@@ -159,7 +159,7 @@ describe.skipIf(!chrome).each([false, true])("native grid coordinates with touch
     const client = touch ? await context.newCDPSession(page) : null;
     for (let index = 0; index < 6; index++) {
       await page.locator("#popover").evaluate(node => { (node as HTMLElement).hidden = true; });
-      if (index % 2) await page.getByRole("button", { name: /Close comment sidebar/ }).click();
+      if (index % 2) await page.locator('.morphing-menu__shortcut[data-menu-item="comments"]').click();
       else await page.keyboard.press("Shift+L");
       const point = await page.locator("#grid").evaluate(node => {
         const box = node.getBoundingClientRect();
