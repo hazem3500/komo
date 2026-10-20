@@ -24,6 +24,8 @@ export interface DesignModeOptions {
   design?: DesignSystem;
   page?(): string;
   bounds?(element: Element): { left: number; top: number; right: number; bottom: number } | undefined;
+  /** Link for a component's repository-relative source, e.g. through `sourceUrl`. */
+  sourceHref?(path: string, line?: number): string | undefined;
 }
 
 type TextEdit = { kind: "text"; element: DesignTarget };

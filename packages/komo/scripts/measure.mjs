@@ -113,7 +113,10 @@ await writeFile(
 // All-features 206,935 -> 207,360 (+425 for the extra chunk boundaries and the wrapper).
 // Budgets are unchanged so the pending toolbar and layout work has room; import animate
 // from ./lazy-motion.js, not "motion", or Motion returns to the mount bundle.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 208_500)
+// All-features 209,300: design change cards name targets for reviewers, keep long paths, URLs
+// and diffs inside the card, and share the source ⓘ popover with Properties (207,582 -> 209,140,
+// all in the on-demand design comment chunk; initial +35).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 209_300)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

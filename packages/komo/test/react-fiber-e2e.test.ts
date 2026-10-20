@@ -65,8 +65,9 @@ const panelFields = (page: Page) =>
     const group = host.shadowRoot!.querySelector(".design-react-group")!;
     return {
       className: group.className,
-      heading: group.querySelector("summary")?.textContent,
-      note: group.querySelector(".design-react-source")?.textContent,
+      heading: group.querySelector(".design-react-name")?.textContent,
+      status: group.querySelector(".design-react-status")?.textContent,
+      note: group.querySelector(".komo-source__button")?.getAttribute("title"),
       fields: Object.fromEntries([...group.querySelectorAll("label")].map((label) => [label.querySelector("span")!.textContent, label.querySelector("input, select") as HTMLInputElement])
         .map(([name, input]) => [name, { value: (input as HTMLInputElement).title || (input as HTMLInputElement).value, disabled: (input as HTMLInputElement).disabled }])),
       editable: group.querySelectorAll("input:not(:disabled):not([readonly]), select").length,
@@ -80,9 +81,9 @@ describe.skipIf(!chrome).each([18, 19] as const)("react-fiber adapter in the dem
     await pick(page, ".team-badge", { x: 4, y: 4 });
     const panel = await panelFields(page);
     expect(panel.className).toContain("design-react-discovered");
-    expect(panel.heading).toBe("Discovered props");
-    expect(panel.note).toContain("TeamBadge · read-only");
-    expect(panel.note).toContain("rendered at examples/react-props/src/main.tsx:");
+    expect(panel.heading).toBe("TeamBadge");
+    expect(panel.status).toBe("Read-only");
+    expect(panel.note).toMatch(/^examples\/react-props\/src\/main\.tsx:\d+/);
     expect(panel.fields.team).toEqual({ value: '"Design systems"', disabled: false });
     expect(panel.fields.seats.value).toBe("12");
     expect(panel.fields.active.value).toBe("true");
@@ -97,9 +98,10 @@ describe.skipIf(!chrome).each([18, 19] as const)("react-fiber adapter in the dem
     await pick(page, ".promo-card", { x: 6, y: 6 });
     const panel = await panelFields(page);
     expect(panel.className).not.toContain("design-react-discovered");
-    expect(panel.heading).toBe("Properties");
+    expect(panel.heading).toBe("PromoCard");
+    expect(panel.status).toBeUndefined();
     expect(panel.editable).toBeGreaterThan(0);
-    expect(panel.note).toContain("PromoCard");
+    expect(panel.note).toContain("card.tsx");
     expect(errors).toEqual([]);
     await page.close();
   });
