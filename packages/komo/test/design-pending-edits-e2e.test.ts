@@ -92,16 +92,20 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
       await page.locator(".komo-color").waitFor({ state: "detached" });
       expect(await background()).toBe(orange);
     };
-    // Shift+Left steps ten local CSS pixels, so the resize is exact in every mode.
+    // Ctrl+Shift+Left on the focused selection steps ten local CSS pixels, so the resize is exact in
+    // every mode; holding the arrow down keeps the four steps in one gesture.
     const narrow = async () => {
       // Editing in the panel hides the handles until the canvas is targeted again.
       await card.hover();
-      const handle = page.getByRole("button", { name: "Resize width", exact: true });
-      await handle.waitFor();
-      await handle.focus();
-      await page.keyboard.press("Enter");
-      for (let step = 0; step < 4; step++) await page.keyboard.press("Shift+ArrowLeft");
-      await page.keyboard.press("Enter");
+      const selection = page.locator(".design-geometry__frame");
+      await selection.waitFor();
+      await selection.focus();
+      await page.keyboard.down("Control");
+      await page.keyboard.down("Shift");
+      for (let step = 0; step < 4; step++) await page.keyboard.down("ArrowLeft");
+      await page.keyboard.up("ArrowLeft");
+      await page.keyboard.up("Shift");
+      await page.keyboard.up("Control");
     };
 
     await page.keyboard.press("d");

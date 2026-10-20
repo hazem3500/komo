@@ -102,6 +102,9 @@ it("shares scoped Help semantics with platform-correct keycaps", () => {
   expect(renderKbd(parent.shortcut, true).textContent).toBe('⌥↑');
   expect(renderKbd(commands.find(command => command.label === 'Post comment or proposal')!.shortcut, true).getAttribute('aria-label')).toBe('Command + Enter');
   expect(commands.filter(command => command.group === 'Focused comparison controls').map(command => command.shortcut.key)).toEqual(['ArrowLeft', 'ArrowRight']);
+  const resize = commands.find(command => command.label.startsWith('Resize width'))!;
+  expect(renderKbd(resize.shortcut, true).getAttribute('aria-label')).toBe('Command + ArrowRight');
+  expect(renderKbd(designCommands(false).find(command => command.label.startsWith('Resize height'))!.shortcut, false).getAttribute('aria-label')).toBe('Control + ArrowDown');
 });
 
 it("leaves Escape to the nearest property field", () => {

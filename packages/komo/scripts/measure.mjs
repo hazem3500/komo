@@ -189,7 +189,11 @@ if (report.optionalTokenPage.gzip > 4_875)
 // Design mode opens; nothing else imports it. It was 3,375 gzip for normal-flow blocks only. Flex and
 // grid items (flex-basis/grow/shrink, stretch detection, numeric track spans), positioned and
 // aspect-locked boxes, per-element reasons with Select parent, and side-effect proposals measure 6,725.
-if (report.optionalGeometry.gzip > 7_000)
+// 8,400: Figma-style selection (1px outline, eight handles with hit areas and cursors, outward offsets
+// for thin padding and tiny boxes), a W × H readout, resize snapping to parent and sibling edges with
+// guides, Ctrl/⌘+arrow resize with a live region, and notes moved into the panel. Free-form Move and
+// its translate/offset fallback left the chunk (6,725 -> 8,141 measured), plus ~3%.
+if (report.optionalGeometry.gzip > 8_400)
   throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
 // API tokens load only when "API tokens" is opened in the Account panel; nothing else imports
 // the chunk. 5,671 measured, plus ~3%.
