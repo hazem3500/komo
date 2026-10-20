@@ -6,11 +6,18 @@ export function shortcutKeys(shortcut: Shortcut, mac = /Mac|iPhone|iPad/.test(na
   return { aria: names.join("+"), spoken: names.map(key => key === "Meta" && mac ? "Command" : key === "Alt" && mac ? "Option" : key).join(" + "), keys: names.map(key => symbols[key] ?? ({ ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓" } as Record<string, string>)[key] ?? key) };
 }
 
+/**
+ * Keycap look: "surface" is a quiet filled chip tinted from the surrounding ink,
+ * so it reads on dark and light surfaces alike; "outline" draws a bordered cap.
+ */
+export type KbdVariant = "surface" | "outline";
+
 /** Native keycaps shared by DOM surfaces and the existing lazy menu. */
-export function renderKbd(shortcut: Shortcut, mac?: boolean): HTMLElement {
+export function renderKbd(shortcut: Shortcut, mac?: boolean, variant: KbdVariant = "surface"): HTMLElement {
   const keys = shortcutKeys(shortcut, mac);
   const group = document.createElement("span");
   group.className = "komo-kbd";
+  group.dataset.variant = variant;
   group.setAttribute("role", "img");
   group.setAttribute("aria-label", keys.spoken);
   for (const key of keys.keys) {
