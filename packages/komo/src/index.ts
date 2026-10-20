@@ -82,7 +82,7 @@ import {
   reducedMotion,
   setAvatarResolver,
 } from "./dom.js";
-import { matchesShortcut, resolveShortcuts } from "./shortcuts.js";
+import { matchesShortcut, resolveShortcuts, type Shortcut } from "./shortcuts.js";
 import { renderKbd } from "./kbd.js";
 import { styles } from "./styles.js";
 import type {
@@ -3071,7 +3071,17 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   let disposeHeaderTip: (() => void) | undefined;
   // The sidebar's dark tooltip, shared by header tools and list card actions.
-  let sidebarTip: { show(target: HTMLElement, side?: "below" | "left"): void; hide(): void } | undefined;
+  let sidebarTip: { show(target: HTMLElement): void; hide(): void } | undefined;
+  /** Give a sidebar control the dark tooltip in place of a native title. */
+  const tipFor = (node: HTMLElement) => {
+    node.removeAttribute("title");
+    node.addEventListener("pointerenter", (event) => {
+      if (event.pointerType === "mouse") sidebarTip?.show(node);
+    });
+    node.addEventListener("focus", () => sidebarTip?.show(node));
+    for (const type of ["pointerleave", "blur", "pointerdown"])
+      node.addEventListener(type, () => sidebarTip?.hide());
+  };
   const dismissedTips = new Set<string>();
   const dismissedTipsKey = "branch-comments:dismissed-tips";
   const tips: [string, string][] = [
@@ -3435,32 +3445,21 @@ export function initComments(options: CommentsOptions): CommentsController {
         disposeHeaderTip = undefined;
         sidebarTip = undefined;
       };
-      const showTip = (target: HTMLElement, side: "below" | "left" = "below") => {
+      const showTip = (target: HTMLElement) => {
         clearTimeout(tipTimer);
         const reveal = () => {
           if (!target.isConnected) return;
           const box = target.getBoundingClientRect();
           tip.textContent = target.ariaLabel;
-          // Card actions sit on a row of a list: a tip beside them leaves the next card readable.
-          tip.dataset.side = side;
           const half = tip.offsetWidth / 2;
-          tip.style.left = side === "left" ? `${box.left - 8}px` : `${Math.max(8 + half, Math.min(innerWidth - 8 - half, box.left + box.width / 2))}px`;
-          tip.style.top = side === "left" ? `${box.top + box.height / 2}px` : `${box.bottom + 8}px`;
+          tip.style.left = `${Math.max(8 + half, Math.min(innerWidth - 8 - half, box.left + box.width / 2))}px`;
+          tip.style.top = `${box.bottom + 8}px`;
           tip.dataset.open = "true";
         };
         if (tip.dataset.open || Date.now() < tipWarmUntil) reveal();
         else tipTimer = window.setTimeout(reveal, 400);
       };
-      for (const node of tools.querySelectorAll("button")) {
-        node.removeAttribute("title");
-        node.addEventListener("pointerenter", (event) => {
-          if (event.pointerType === "mouse") showTip(node);
-        });
-        node.addEventListener("pointerleave", hideTip);
-        node.addEventListener("focus", () => showTip(node));
-        node.addEventListener("blur", hideTip);
-      }
-      tools.addEventListener("pointerdown", hideTip);
+      tools.querySelectorAll("button").forEach(tipFor);
       sidebarTip = { show: showTip, hide: hideTip };
       panel.append(head);
       sidebar.append(panel);
@@ -3713,15 +3712,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         "check",
       );
       quickResolve.disabled = !canResolve();
-      quickResolve.removeAttribute("title");
-      quickResolve.addEventListener("pointerenter", (event) => {
-        if (event.pointerType === "mouse") sidebarTip?.show(quickResolve, "left");
-      });
-      quickResolve.addEventListener("focus", () => {
-        if (quickResolve.matches(":focus-visible")) sidebarTip?.show(quickResolve, "left");
-      });
-      for (const type of ["pointerleave", "blur", "pointerdown"])
-        quickResolve.addEventListener(type, () => sidebarTip?.hide());
+      tipFor(quickResolve);
       item.insertBefore(card, livePreviews ?? null);
       item.insertBefore(quickResolve, livePreviews ?? null);
       item.insertBefore(route, livePreviews ?? null);
@@ -4043,7 +4034,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       save.disabled = pending;
       const mac = /Mac|iPhone|iPad/.test(navigator.platform);
       const withKeys = (node: HTMLButtonElement, label: string, key: string, modifier = false) => {
-        node.replaceChildren(label, renderKbd({ key, label: key, shift: false, alt: false, ctrl: modifier && !mac, meta: modifier && mac }, mac));
+        node.replaceChildren(label, renderKbd({ key, ctrl: modifier && !mac, meta: modifier && mac } as Shortcut, mac));
         node.removeAttribute("title");
         return node;
       };
