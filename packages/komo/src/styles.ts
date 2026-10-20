@@ -2376,20 +2376,26 @@ textarea {
 :host([data-comments-hidden]) .pins, :host([data-comments-hidden]) .pin-preview, :host([data-comments-hidden]) .component-hover, :host([data-comments-hidden]) .edge-sidebar-sensor { display: none !important; }
 :host([data-comments-hidden]) .edge-sidebar[data-collapsed] { visibility: hidden; }
 .morphing-menu__row[aria-pressed="false"] .morphing-menu__icon { visibility: hidden; }
-.pins[data-size] > .pin { transition: transform 120ms cubic-bezier(.22,1,.36,1), width 120ms cubic-bezier(.22,1,.36,1), height 120ms cubic-bezier(.22,1,.36,1); }
-.pins[data-size] > .pin .avatar { transition: left 120ms cubic-bezier(.22,1,.36,1), top 120ms cubic-bezier(.22,1,.36,1), width 120ms cubic-bezier(.22,1,.36,1), height 120ms cubic-bezier(.22,1,.36,1); }
+.pins { --pin-ring: var(--mm-ink); --pin-edge: rgb(0 0 0 / 8%); --pin-drop: 0 1px 3px rgb(0 0 0 / 28%); --pin-ease: cubic-bezier(.22,1,.36,1); }
+.pins[data-page="dark"] { --pin-ring: var(--mm-surface); --pin-edge: rgb(255 255 255 / 10%); --pin-drop: 0 1px 4px rgb(0 0 0 / 60%); }
+.pins[data-size] > .pin { overflow: visible; background-color: transparent !important; box-shadow: none; transition: transform 180ms var(--pin-ease), width 180ms var(--pin-ease), height 180ms var(--pin-ease); }
+.pins[data-size] > .pin .avatar { box-shadow: 0 0 0 2px var(--pin-ring), 0 0 0 2.5px var(--pin-edge), 0 3px 10px rgb(0 0 0 / 20%); transition: left 180ms var(--pin-ease), top 180ms var(--pin-ease), width 180ms var(--pin-ease), height 180ms var(--pin-ease), border-radius 180ms var(--pin-ease), box-shadow 180ms var(--pin-ease), opacity 180ms var(--pin-ease), font-size 180ms var(--pin-ease); }
+.pins[data-size] > .pin.active .avatar { box-shadow: 0 0 0 2px var(--pin-ring), 0 0 0 4px #4388ff, 0 4px 14px rgb(0 0 0 / 20%); }
+.pins[data-size] > .pin .avatar img { transition: opacity 180ms var(--pin-ease); }
 .pins[data-size] > .pin:is(:hover, :focus-visible, [data-near]) { z-index: 3; }
-${collapsed} { --pin-y: -18px; width: 24px; height: 24px; border-radius: 0; overflow: visible; background-color: transparent !important; box-shadow: none; }
+${collapsed} { --pin-y: -18px; width: 24px; height: 24px; border-radius: 0; }
 ${collapsed}[data-pointer="right"] { --pin-x: -15px; }
-${collapsed} .avatar { display: flex; align-items: center; justify-content: center; left: calc(50% - var(--pin-face) / 2); top: calc(50% - var(--pin-face) / 2); width: var(--pin-face); height: var(--pin-face); border-radius: 50% 50% 50% 5px; overflow: hidden; font-size: 0; box-shadow: 0 0 0 1.5px #fff, 0 1px 4px #0000004d; }
+${collapsed} .avatar { display: flex; align-items: center; justify-content: center; left: calc(50% - var(--pin-face) / 2); top: calc(50% - var(--pin-face) / 2); width: var(--pin-face); height: var(--pin-face); border-radius: 50% 50% 50% 5px; font-size: 0; box-shadow: 0 0 0 2px var(--pin-ring), 0 0 0 2.5px var(--pin-edge), var(--pin-drop); }
 ${collapsed}[data-pointer="right"] .avatar { border-radius: 50% 50% 5px 50%; }
-${collapsed} .avatar img { display: none; }
+${collapsed} .avatar img { opacity: 0; }
 .pins[data-size="compact"] > ${collapsedPin} { --pin-face: 20px; }
 .pins[data-size="compact"] > ${collapsedPin} .avatar::after { content: attr(data-initial); font-size: 10px; font-weight: 650; line-height: 1; }
-.pins[data-size="dot"] > ${collapsedPin} { --pin-face: 10px; }
-.pins[data-size="dot"] > ${collapsedPin}[data-pointer] .avatar { border-radius: 50%; box-shadow: 0 0 0 1px #fff, 0 1px 3px #00000059; }
-.pins[data-size="dot"] > ${collapsedPin}[data-read] .avatar { background-color: transparent !important; box-shadow: inset 0 0 0 2px var(--reviewer-accent, #c8b5f4), 0 0 0 1px #fff, 0 1px 3px #00000059; }
-@media (prefers-reduced-motion: reduce) { .pins[data-size] > .pin, .pins[data-size] > .pin .avatar { transition: none; } }
+.pins[data-size="dot"] > ${collapsedPin} { --pin-face: 12px; }
+.pins[data-size="dot"] > ${collapsedPin}[data-pointer] .avatar { border-radius: 50%; }
+.pins[data-size="dot"] > ${collapsedPin}[data-read] .avatar { opacity: .5; }
+.pins[data-size="dot"][data-breathe] > ${collapsedPin}:not([data-read])::before { content: ""; position: absolute; left: calc(50% - var(--pin-face) / 2); top: calc(50% - var(--pin-face) / 2); width: var(--pin-face); height: var(--pin-face); border-radius: 50%; background: var(--reviewer-accent, #c8b5f4); opacity: 0; pointer-events: none; animation: komo-pin-breathe 1800ms var(--pin-ease) var(--pin-breathe-delay, 0ms) infinite; }
+@keyframes komo-pin-breathe { 0% { opacity: .28; transform: scale(1); } 75%, 100% { opacity: 0; transform: scale(2.3); } }
+@media (prefers-reduced-motion: reduce) { .pins[data-size] > .pin, .pins[data-size] > .pin .avatar, .pins[data-size] > .pin .avatar img { transition: none; } .pins[data-size] > .pin::before { animation: none; display: none; } }
 
 :host { --komo-inset: 16px; --komo-avatar: 24px; --komo-gutter: 8px; --komo-action: 28px; }
 :host(.review-open) .panel { --komo-inset: 24px; padding-inline: var(--komo-inset); }

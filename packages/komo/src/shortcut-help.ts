@@ -1,9 +1,11 @@
-import { designCommands } from "./design-commands.js";
-import { renderKbd } from "./kbd.js";
+import { designCommands, designGestures } from "./design-commands.js";
+import { renderKbd, renderKeycaps } from "./kbd.js";
 import type { Shortcut } from "./shortcuts.js";
 
-export function showShortcutHelp(root: ShadowRoot, commands: Array<{ label: string; shortcut?: Shortcut | null; group?: string }>, design = false) {
-  if (design) commands.push(...designCommands());
+type HelpCommand = { label: string; shortcut?: Shortcut | null; group?: string; keys?: string[]; aria?: string };
+
+export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], design = false) {
+  if (design) commands.push(...designGestures(), ...designCommands());
   const previous = root.activeElement?.closest(".morphing-menu__panel")
     ? root.querySelector<HTMLElement>('[data-menu-item="more"]') : root.activeElement as HTMLElement | null;
   const dialog = document.createElement("dialog");
@@ -15,13 +17,14 @@ export function showShortcutHelp(root: ShadowRoot, commands: Array<{ label: stri
   close.type = "button";
   close.textContent = "Close help";
   dialog.append(title);
-  for (const group of new Set(commands.filter(item => item.shortcut).map(item => item.group ?? "Review"))) {
+  const listed = commands.filter(item => item.shortcut || item.keys);
+  for (const group of new Set(listed.map(item => item.group ?? "Review"))) {
     const heading = document.createElement("h3");
     heading.textContent = group;
     dialog.append(heading);
-    for (const command of commands.filter(item => item.shortcut && (item.group ?? "Review") === group)) {
+    for (const command of listed.filter(item => (item.group ?? "Review") === group)) {
       const line = document.createElement("div");
-      line.append(command.label, renderKbd(command.shortcut!));
+      line.append(command.label, command.shortcut ? renderKbd(command.shortcut) : renderKeycaps(command.keys!, command.aria ?? command.keys!.join(" + ")));
       dialog.append(line);
     }
   }

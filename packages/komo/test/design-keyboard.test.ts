@@ -14,8 +14,9 @@ function fixture() {
   let selected = document.querySelector<DesignTarget>("#first")!;
   const select = vi.fn((element: DesignTarget) => { selected = element; });
   const compareBefore = vi.fn();
+  const help = vi.fn();
   let reserved = false;
-  const handle = designKeyboard({ host, compare, selected: () => selected, select, compareBefore, reserved: () => reserved });
+  const handle = designKeyboard({ host, compare, selected: () => selected, select, compareBefore, help, reserved: () => reserved });
   const handled: boolean[] = [];
   document.addEventListener("keydown", event => { handled.push(handle(event)); }, { signal: cleanup.signal });
   const press = (key: string, target: Element = document.body, init: KeyboardEventInit = {}) => {
@@ -23,8 +24,20 @@ function fixture() {
     target.dispatchEvent(event);
     return event;
   };
-  return { root, compare, select, compareBefore, press, handled, selected: () => selected, reserve: () => { reserved = true; } };
+  return { root, compare, select, compareBefore, help, press, handled, selected: () => selected, reserve: () => { reserved = true; } };
 }
+
+it("opens shortcut help with ? on the canvas, but not from fields or reserved bindings", () => {
+  const f = fixture();
+  expect(f.press("?", document.body, { shiftKey: true }).defaultPrevented).toBe(true);
+  expect(f.help).toHaveBeenCalledTimes(1);
+  f.press("?", f.root.querySelector("input")!, { shiftKey: true });
+  f.press("?", document.body, { ctrlKey: true });
+  expect(f.help).toHaveBeenCalledTimes(1);
+  f.reserve();
+  expect(f.press("?", document.body, { shiftKey: true }).defaultPrevented).toBe(false);
+  expect(f.help).toHaveBeenCalledTimes(1);
+});
 let cleanup = new AbortController();
 afterEach(() => { cleanup.abort(); cleanup = new AbortController(); document.body.replaceChildren(); });
 

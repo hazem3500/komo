@@ -670,7 +670,10 @@ it("toggles Design mode with D, a configured key, and never while typing or disa
   expect(host.classList.contains("design-active")).toBe(true);
   for (let i = 0; i < 20 && !root.querySelector(".design-inspector__empty"); i++)
     await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(root.querySelector(".design-inspector__empty")?.textContent).toContain("Esc or D to exit");
+  // The exit keys moved to shortcut help; the empty state links there.
+  const help = root.querySelector<HTMLButtonElement>(".design-inspector__empty .design-inspector__help")!;
+  expect(help.hidden).toBe(false);
+  expect(help.getAttribute("aria-label")).toBe("Keyboard shortcuts");
   const sidebar = root.querySelector(".design-inspector")!.parentElement!;
   expect(sidebar.hasAttribute("data-design-empty")).toBe(true);
   expect(press({ key: "d" })).toBe(true);

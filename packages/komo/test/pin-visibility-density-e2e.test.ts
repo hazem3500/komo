@@ -197,7 +197,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pin density in 
       const rest = await box(page, ".pin");
       expect(rest).toMatchObject({ width: 24, height: 24 });
       const face = await box(page, ".pin .avatar");
-      expect(face.width).toBe(size === "compact" ? 20 : 10);
+      expect(face.width).toBe(size === "compact" ? 20 : 12);
       // The whole 24x24 target, corners included, belongs to the pin.
       for (const [dx, dy] of [[1, 1], [23, 1], [1, 23], [23, 23], [12, 12]])
         expect(await page.evaluate(([x, y]) => document.querySelector("[data-branch-comments]")!.shadowRoot!
@@ -245,17 +245,17 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pin density in 
   }, 60000);
 });
 
-it.skipIf(!chrome)("fills unread dots, hollows read ones, switches auto pins, and keeps a reviewer's size over the host default", async () => {
+it.skipIf(!chrome)("fills unread dots, quiets read ones, switches auto pins, and keeps a reviewer's size over the host default", async () => {
   const page = await open("size=dot");
-  const fill = (index: number) => page.locator(".pin .avatar").nth(index).evaluate(node => getComputedStyle(node).backgroundColor);
-  expect(await fill(0)).toBe("rgb(127, 86, 217)");
+  const fill = (index: number) => page.locator(".pin .avatar").nth(index).evaluate(node => [getComputedStyle(node).backgroundColor, getComputedStyle(node).opacity]);
+  expect(await fill(0)).toEqual(["rgb(127, 86, 217)", "1"]);
   await page.locator(".pin").first().click();
   await page.keyboard.press("Escape");
   await page.mouse.move(10, 790);
   await settle(page);
   expect(await page.locator(".pin").first().getAttribute("data-read")).toBe("");
-  expect(await fill(0)).toBe("rgba(0, 0, 0, 0)");
-  expect(await fill(1)).toBe("rgb(247, 144, 9)");
+  expect(await fill(0)).toEqual(["rgb(127, 86, 217)", "0.5"]);
+  expect(await fill(1)).toEqual(["rgb(247, 144, 9)", "1"]);
   // Reviewer choice from More wins over the host default after a reload.
   await openMore(page);
   await page.getByRole("button", { name: "Pin size: Dot" }).click();

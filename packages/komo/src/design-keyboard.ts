@@ -14,6 +14,7 @@ export function designKeyboard(options: {
   selected(): DesignTarget | null;
   select(element: DesignTarget): void;
   compareBefore(before?: boolean): void;
+  help?(): void;
 }) {
   return (event: KeyboardEvent): boolean => {
     if (event.isComposing || event.keyCode === 229) return false;
@@ -34,6 +35,12 @@ export function designKeyboard(options: {
     }
     const inspect = plain && (key === "enter" || key === " ");
     if (path.includes(options.host) || ownsKeyboard(event, inspect)) return false;
+    if (event.key === "?" && options.help && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      options.help();
+      return true;
+    }
     const selected = options.selected();
     const eligible = (element: Element | null): element is DesignTarget => isDesignTarget(element)
       && element.isConnected && element !== document.body && element !== document.documentElement

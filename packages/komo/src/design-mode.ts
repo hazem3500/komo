@@ -15,8 +15,8 @@ export interface DesignModeOptions {
   targetAt(x: number, y: number): Element | null;
   onComment(element: Element, proposal?: string): void;
   onExit(): void;
-  /** Label of the shortcut that toggles Design mode, shown in the empty state. */
-  exitKey?: string;
+  /** Opens komo's shortcut help; the empty state links to it and `?` opens it. */
+  shortcutHelp?(): void;
   reservedKey?(event: KeyboardEvent): boolean;
   /** Move the floating panel to the other side when it covers the target. */
   flip?(): void;
@@ -694,10 +694,11 @@ export function createDesignMode(options: DesignModeOptions) {
       selected: () => selectionPage === page() ? selected : null,
       select(element) { decorating = true; select(element); reveal(element); },
       compareBefore(before) { showBefore(before ?? !showingBefore); },
+      help: options.shortcutHelp,
     });
     module.watchDesignStatus(status, bar, () => !!textTools?.element, listeners.signal);
     views = module.selectionViews({
-      exitKey: options.exitKey,
+      help: options.shortcutHelp,
       review() {
         const target = [...previewTargets.keys()].reverse().find(element => element.isConnected && previewTargets.get(element) === page() && hasChanges(element));
         if (target) select(target);
