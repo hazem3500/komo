@@ -33,12 +33,18 @@ export interface TokenPickerOptions {
     field?: import("./design-panel.js").Field;
     onPreview(value: string): () => void;
     onSelect(value: string): void;
+    /** Live editors keep values while the popup stays open; the field holds them as one pending edit. */
+    onCommit?(value: string): void;
+    /** The popup closed: the pending edit becomes one history entry. */
+    onDone?(): void;
+    /** Escape: the pending edit is undone and leaves no history. */
+    onCancel?(): void;
   };
 }
 
 const css = `.komo-tokens{display:flex;flex-direction:column;overflow:hidden}.komo-tokens__bar{flex:none;display:flex;gap:4px;padding:8px;background:#232323;border-bottom:1px solid #ffffff0d}.komo-tokens__bar input{flex:1;min-width:0;height:28px;box-sizing:border-box;margin:0;padding:0 8px;border:0;border-radius:6px;outline:0;box-shadow:none;background:#ffffff0a;color:#f1efeb;font:inherit}.komo-tokens__bar input:focus{outline:0;box-shadow:inset 0 0 0 1px #bda6ef}.komo-tokens__bar button{flex:none;height:28px;padding:0 8px;border:0;border-radius:6px;background:none;color:#898680;font:inherit;white-space:nowrap;cursor:pointer}.komo-tokens__bar button:hover{background:#ffffff0f;color:#f1efeb}.komo-tokens__bar button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.komo-tokens [role=listbox]{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:0 4px 4px}.komo-tokens small{position:sticky;top:0;z-index:1;display:block;padding:8px 8px 4px;background:#232323;color:#77736f;font-size:10px;font-weight:500}.komo-tokens [role=option]{display:grid;grid-template-columns:20px minmax(0,1fr) 14px;align-items:center;gap:4px 8px;box-sizing:border-box;min-height:32px;padding:6px 8px;border-radius:7px;cursor:pointer}.komo-tokens [data-active]{background:#ffffff14;color:#f1efeb}.komo-tokens [aria-selected=true] .komo-tokens__name{color:#e6dcfb}.komo-tokens__name{grid-column:2;min-width:0;font-weight:500}.komo-tokens__name>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.komo-tokens__check{grid-column:3;justify-self:center}.komo-tokens [aria-selected=true] .komo-tokens__check{width:7px;height:3.5px;margin-top:-3px;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-tokens__pv{display:flex;align-items:center;height:16px;overflow:hidden}.komo-tokens__sw{display:flex;width:16px;height:16px;border-radius:4px;overflow:hidden;background:repeating-conic-gradient(#ffffff40 0 25%,#ffffff0d 0 50%) 0 0/8px 8px;outline:1px solid #ffffff1f;outline-offset:-1px}.komo-tokens__sw>span{flex:1}.komo-tokens__sw>[data-unresolved]{display:grid;place-items:center;background:#393939;color:#b6b1aa;font-size:10px}.komo-tokens__dim{height:4px;min-width:2px;border-radius:2px;background:#bda6ef}.komo-tokens__corner{width:12px;height:12px;box-sizing:border-box;border:solid #bda6ef;border-width:1.5px 0 0 1.5px}.komo-tokens__shadow{width:16px;height:12px;margin-left:2px;border-radius:3px;background:#f1efeb}.komo-tokens__ag{color:#f1efeb;font-size:13px;line-height:1;white-space:nowrap}.komo-tokens__empty{padding:12px 8px;color:#77736f}@media (pointer:coarse){.komo-tokens{font-size:13px}.komo-tokens [role=option]{min-height:44px}.komo-tokens__bar input,.komo-tokens__bar button{height:36px}}`;
 
-const modeStyles = `.komo-tokens__tabs{display:flex;flex:none;gap:4px;padding:6px;border-bottom:1px solid #ffffff14}.komo-tokens__tabs button{flex:1;border:0;border-radius:5px;padding:7px;font:inherit;color:inherit;background:none;cursor:pointer}.komo-tokens__tabs button[aria-pressed=true]{background:#ffffff18}.komo-tokens [hidden]{display:none!important}.komo-tokens button:focus-visible,.komo-tokens [role=listbox]:focus-visible{outline:1px solid #bda6ef;outline-offset:-2px}.komo-tokens[popover]{position:fixed;inset:auto;margin:0;border:0;padding:0}`;
+const modeStyles = `.komo-tokens__tabs{display:flex;flex:none;gap:2px;margin:8px 8px 0;padding:2px;border-radius:7px;background:#ffffff0a}.komo-tokens__tabs button{flex:1;height:22px;border:0;border-radius:5px;padding:0 8px;font:inherit;color:#898680;background:none;cursor:pointer}.komo-tokens__tabs button:hover{color:#f1efeb}.komo-tokens__tabs button[aria-pressed=true]{background:#ffffff1a;color:#f1efeb}.komo-tokens [hidden]{display:none!important}.komo-tokens button:focus-visible,.komo-tokens [role=listbox]:focus-visible{outline:1px solid #bda6ef;outline-offset:-2px}.komo-tokens[popover]{position:fixed;inset:auto;margin:0;border:0;padding:0}`;
 const styled = new WeakSet<Node>();
 /** Rows built per batch; the rest are built as the list scrolls or the keyboard reaches them. */
 const BATCH = 60;
@@ -282,10 +288,14 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   const listeners = new AbortController();
   const { signal } = listeners;
   const coarse = !!globalThis.matchMedia?.("(pointer:coarse)")?.matches;
-  function close(focus = false) {
+  function close(focus = false, cancel = false) {
     if (open?.close !== close) return;
     open = undefined;
+    // A live editor keeps the value it was previewing; Escape drops it with everything kept.
+    const pending = editor?.live && customValue;
     restorePreview();
+    if (pending && !cancel) (options.custom?.onCommit ?? options.custom?.onSelect)?.(pending);
+    options.custom?.[cancel ? "onCancel" : "onDone"]?.();
     listeners.abort();
     editor?.destroy();
     box.remove();
@@ -316,9 +326,11 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
       loadThemes();
     },
   };
+  // Color fields get the compact picker: narrower, and tall enough for its area, sliders and swatches.
+  const color = /color|^(fill|stroke)$/.test(property), tall = color ? 460 : 320;
   let customMode = !!options.custom && !tokens.some(token => token.path === options.current);
   let customValue: string | undefined;
-  let editor: ReturnType<typeof import("./token-custom.js").customEditor> | undefined;
+  let editor: (HTMLElement & { live?: true; refresh(value: string): void; destroy(): void }) | undefined;
   const tabs = el("div", "komo-tokens__tabs");
   const tokenTab = el("button", "", "Tokens"), customTab = el("button", "", "Custom");
   tokenTab.type = customTab.type = "button";
@@ -337,9 +349,25 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     if (editor) editor.hidden = !custom;
     if (custom && options.custom) {
       if (!editor) {
-        const { pickerEditor } = await import("./token-custom.js");
+        const module = await (color ? import("./color-editor.js") : import("./token-custom.js"));
         if (open?.close !== close || !customMode || editor) return;
-        editor = pickerEditor(options, customPreview, value => {
+        editor = "parseColor" in module ? module.pickerEditor(options, {
+          preview: customPreview,
+          // A host without live commits keeps the last value as a preview and takes it on close.
+          commit(value) {
+            if (!options.custom?.onCommit) return customPreview(value);
+            restorePreview();
+            customValue = undefined;
+            options.custom.onCommit(value);
+          },
+          token(token) {
+            restorePreview();
+            customValue = undefined;
+            options.custom?.onCancel?.();
+            close(true);
+            options.onSelect(token);
+          },
+        }) : module.pickerEditor(options, customPreview, value => {
           close(true);
           options.custom?.onSelect(value);
         });
@@ -375,7 +403,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     // A select open inside the popup closes its own list first.
     if (key === "Escape" && path[0] instanceof HTMLSelectElement && path[0] !== trigger && path[0].getAttribute("aria-expanded") === "true") return;
-    if (key === "Escape") close(true);
+    if (key === "Escape") close(true, true);
     else if (key === "Tab") return;
     else if (path[0] !== search && path[0] !== trigger && path[0] !== list) return;
     else if (step) activate(clamp(active + step, 0, items.length - 1));
@@ -435,11 +463,11 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     if (at === `${anchor.left} ${anchor.top}`) return;
     at = `${anchor.left} ${anchor.top}`;
     const area = popupBounds(host);
-    const width = clamp(area.right - area.left - 8, 120, 340);
+    const width = clamp(area.right - area.left - 8, 120, color ? 240 : 340);
     const below = innerHeight - anchor.bottom - 8;
-    const up = below < 320 && anchor.top - 8 > below;
+    const up = below < tall && anchor.top - 8 > below;
     box.style.width = `${width}px`;
-    box.style.maxHeight = `${Math.min(320, Math.max(up ? anchor.top - 8 : below, 120))}px`;
+    box.style.maxHeight = `${Math.min(tall, Math.max(up ? anchor.top - 8 : below, 120))}px`;
     box.style.left = `${clamp(anchor.left, area.left + 4, area.right - width - 4)}px`;
     box.style.top = up ? "" : `${anchor.bottom + 4}px`;
     box.style.bottom = up ? `${innerHeight - anchor.top + 4}px` : "";

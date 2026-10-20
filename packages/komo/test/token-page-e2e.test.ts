@@ -78,19 +78,22 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     const row = (name: string) => page.locator(".design-token-row").filter({ has: page.locator("b").getByText(name, { exact: true }) });
     const bar = page.locator(".design-token-bar");
     const count = bar.locator(".design-inspector__count");
-    // Colors type into the color editor; lengths use the typed number field, then Apply.
+    // Colors type into the live color editor and keep when the popup closes; lengths use the
+    // typed number field, then Apply.
     const custom = async (name: string, value: string) => {
       await row(name).locator("button").first().click();
       const length = /^([\d.]+)px$/.exec(value);
       if (length) {
         await page.locator('.komo-custom input[type="number"]').first().fill(length[1]);
         await page.getByRole("button", { name: "Apply custom", exact: true }).click();
+        await page.locator(".komo-custom").waitFor({ state: "detached" });
       } else {
-        const input = page.locator('.komo-custom input[aria-label="Color value"]');
-        await input.fill(value);
+        const input = page.locator('.komo-color input[aria-label="Hex"]');
+        await input.fill(value.replace("#", ""));
         await input.press("Enter");
+        await row(name).locator("button").first().click();
+        await page.locator(".komo-color").waitFor({ state: "detached" });
       }
-      await page.locator(".komo-custom").waitFor({ state: "detached" });
     };
     const theme = async (label: string) => {
       const switcher = page.locator(".design-theme-switch");
