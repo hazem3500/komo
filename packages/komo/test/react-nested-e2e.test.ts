@@ -144,8 +144,14 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await page.keyboard.press("d");
     await target.click();
     const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
-    await variant.evaluate(node => (window as any).originalControl = node);
     await variant.fill("primary");
+    // Unfocused controls may refresh on parent commits; track the control being edited.
+    await variant.evaluate(node => (window as any).originalControl = node);
+    const editingTick = await page.locator("output").textContent();
+    await page.evaluate(() => (window as any).nestedQA.commit());
+    await page.waitForFunction(previous => document.querySelector("output")?.textContent !== previous, editingTick);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(await variant.inputValue()).toBe("primary");
     await variant.press("Enter");
     await page.waitForFunction(() => document.querySelector("main button")?.className === "button-primary");
     expect(await variant.evaluate(node => node === (window as any).originalControl)).toBe(true);
