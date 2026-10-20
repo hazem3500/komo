@@ -298,7 +298,7 @@ describe("design comments", () => {
       });
     render();
     expect([...container.querySelectorAll(".design-card-title")].map((node) => node.textContent)).toEqual(["Style changes", "Token changes"]);
-    expect(container.querySelector(".design-card-target")!.textContent).toBe("h2");
+    expect(container.querySelector(".design-card-target")!.textContent).toBe("Heading “Old title”");
     expect(container.querySelector(".design-swatch")).not.toBeNull();
     expect(container.querySelector(".design-token")!.textContent).toBe("color.brand");
     // One Before/After switch per comment.
