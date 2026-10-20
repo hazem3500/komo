@@ -1,5 +1,7 @@
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
 
+export const previewMessage = "Runtime preview · Undo, Reset or reload to restore";
+
 export type StyleOriginal = { value: string; priority: string; computed?: string; restore?(): void; bindingUndo?(): void };
 export type StyleEdit = { kind: "style"; element: DesignTarget; property: string; before: StyleOriginal; after: StyleOriginal };
 
@@ -71,6 +73,8 @@ export function validStyleValue(property: string, value: string): string | null 
   return style.getPropertyValue(property) ? value : null;
 }
 
+const afterTransition = new WeakMap<DesignTarget, Array<() => void>>();
+
 /** Restore one declaration, retaining unrelated edits and the original shorthand when possible. */
 export function inlineStyleSnapshot(element: DesignTarget, property: string) {
   const attribute = element.getAttribute("style");
@@ -85,7 +89,10 @@ export function inlineStyleSnapshot(element: DesignTarget, property: string) {
     return style.cssText;
   };
   const others = without(css);
-  return { value, priority, computed, absent: attribute === null, restore() {
+  const snapshot = { value, priority, computed, absent: attribute === null, restore() {
+    afterTransition.get(element)?.push(() => {
+      if (element.style.getPropertyValue(property) === value && element.style.getPropertyPriority(property) === priority) snapshot.restore();
+    });
     if (without(element.style.cssText) === others) {
       if (attribute === null) {
         // Flush pending CSSOM serialization before removing the attribute.
@@ -98,6 +105,7 @@ export function inlineStyleSnapshot(element: DesignTarget, property: string) {
       if (attribute === null && !element.style.length) removeEmptyStyle(element);
     }
   } };
+  return snapshot;
 }
 
 export function removeEmptyStyle(element: DesignTarget) {
@@ -136,14 +144,17 @@ export function changePreviewStyles(element: DesignTarget, properties: Iterable<
   const transition = animate ? [...properties].map(property => `${property} .3s cubic-bezier(.22,1,.36,1)`).join() : "none";
   element.style.setProperty("transition", transition, "important");
   const applied = element.style.getPropertyValue("transition");
+  const settled: Array<() => void> = [];
   const restore = () => {
     transitions.delete(element);
     if (element.style.getPropertyValue("transition") !== applied || element.style.getPropertyPriority("transition") !== "important") return;
     if (value) element.style.setProperty("transition", value, priority);
     else element.style.removeProperty("transition");
     if (removeEmpty || absent) removeEmptyStyle(element);
+    for (const finish of settled) finish();
   };
-  apply();
+  afterTransition.set(element, settled);
+  try { apply(); } finally { afterTransition.delete(element); }
   if (animate) transitions.set(element, { restore, timer: window.setTimeout(restore, 320) });
   else {
     void getComputedStyle(element).color;
