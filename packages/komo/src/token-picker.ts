@@ -373,6 +373,8 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     const { key } = event;
     const step = ({ ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 } as Record<string, number>)[key];
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    // A select open inside the popup closes its own list first.
+    if (key === "Escape" && path[0] instanceof HTMLSelectElement && path[0] !== trigger && path[0].getAttribute("aria-expanded") === "true") return;
     if (key === "Escape") close(true);
     else if (key === "Tab") return;
     else if (path[0] !== search && path[0] !== trigger && path[0] !== list) return;
@@ -402,7 +404,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   list.addEventListener("mousedown", (event) => event.preventDefault(), { signal });
   const indexOf = (event: Event) => {
     const option = (event.target as Element).closest?.("[role=option]");
-    return option ? Number(option.id.slice(id.length + 1)) : -1;
+    return option && list.contains(option) ? Number(option.id.slice(id.length + 1)) : -1;
   };
   list.addEventListener("pointermove", (event) => {
     const index = indexOf(event);

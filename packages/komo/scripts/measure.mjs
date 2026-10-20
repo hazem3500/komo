@@ -163,8 +163,8 @@ if (report.optionalSelectMenu.gzip > 3_125)
 // The token picker (search, type previews, sticky groups, lazy rows, keyboard) loads the first
 // time a token field opens. 4,631 measured, plus ~3%. It now also hands its rows' previews and
 // styles to the Tokens view (4,770 measured).
-// 4,925: the popup opens in the top layer, follows its field and refreshes Custom when the field settles.
-if (report.optionalTokenPicker.gzip > 4_925)
+// 4,975: the popup opens in the top layer, follows its field, refreshes Custom when the field settles and leaves a select open inside it to its own list.
+if (report.optionalTokenPicker.gzip > 4_975)
   throw new Error("komo's token picker chunk exceeds its gzip budget.");
 // The Tokens view (every token with nothing selected, per-theme edits, its footer and page
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and
