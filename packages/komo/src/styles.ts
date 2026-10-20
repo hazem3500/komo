@@ -2404,7 +2404,7 @@ ${collapsed} .avatar img { display: none; }
 .card-status { flex: none; padding: 0 6px; border-radius: 9px; background: #ffffff0d; color: #999; font-size: 10px; line-height: 16px; white-space: nowrap; }
 :host(.review-open) .panel .card-resolve:hover { background: #ffffff12; color: #eee; }
 .card-page-row, .card-reply-toggle, .sidebar-replies { margin: 4px 12px 0 calc(12px + var(--komo-avatar) + var(--komo-gutter)); }
-.card-reply-toggle { display: flex; width: max-content; min-height: 24px; gap: 6px; color: #999; font-size: 12px; }
+.card-reply-toggle { display: flex; width: max-content; min-height: 24px; padding: 0; gap: 6px; color: #999; font-size: 12px; }
 .card-reply-toggle svg { width: 14px; height: 14px; }
 :host(.review-open:not([data-sidebar="mobile"])) .panel .list { margin-right: calc(-12px - var(--komo-scrollbar, 0px)); }
 .sidebar-replies { display: grid; gap: 12px; margin-top: 8px; }

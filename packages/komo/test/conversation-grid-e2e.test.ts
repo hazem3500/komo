@@ -118,7 +118,7 @@ describe.skipIf(!chrome)("shared conversation grid", () => {
         const list = {
           close: ".sidebar-title button:last-child", avatar: '[data-thread="missing"] .thread-card .avatar', author: '[data-thread="missing"] .thread-card .author',
           status: '[data-thread="missing"] .card-status', time: '[data-thread="missing"] .thread-card .row small', body: '[data-thread="missing"] .preview',
-          tags: '[data-thread="missing"] .card-tags', toggle: '[data-thread="missing"] .card-reply-toggle', card: '[data-thread="missing"]',
+          tags: '[data-thread="missing"] .card-tags', toggle: '[data-thread="missing"] .card-reply-toggle svg', card: '[data-thread="missing"]',
           next: '[data-thread="other"] .thread-card .row', helloAvatar: '[data-thread="hello"] .thread-card .avatar', helloBody: '[data-thread="hello"] .preview',
           replyAvatar: '[data-thread="hello"] .sidebar-reply .avatar', replyAuthor: '[data-thread="hello"] .sidebar-reply .author', replyTime: '[data-thread="hello"] .sidebar-reply small',
           replyBody: '[data-thread="hello"] .sidebar-reply p', replyField: '[data-thread="hello"] .reply-composer textarea', replySend: '[data-thread="hello"] .reply-composer .send',
