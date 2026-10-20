@@ -151,6 +151,11 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await page.evaluate(() => new Promise(requestAnimationFrame));
     expect(await page.evaluate(() => (window as any).originalControl.isConnected)).toBe(true);
     await variant.fill("primary");
+    const editingTick = await page.locator("output").textContent();
+    await page.evaluate(() => (window as any).nestedQA.commit());
+    await page.waitForFunction(previous => document.querySelector("output")?.textContent !== previous, editingTick);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(await variant.inputValue()).toBe("primary");
     await variant.press("Enter");
     await page.waitForFunction(() => document.querySelector("main button")?.className === "button-primary");
     expect(await variant.evaluate(node => node === (window as any).originalControl)).toBe(true);

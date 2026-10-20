@@ -83,7 +83,8 @@ import {
   reducedMotion,
   setAvatarResolver,
 } from "./dom.js";
-import { matchesShortcut, resolveShortcuts } from "./shortcuts.js";
+import { matchesShortcut, resolveShortcuts, type Shortcut } from "./shortcuts.js";
+import { renderKbd } from "./kbd.js";
 import { styles } from "./styles.js";
 import type {
   Anchor,
@@ -3140,6 +3141,18 @@ export function initComments(options: CommentsOptions): CommentsController {
     }, 2000);
   }
   let disposeHeaderTip: (() => void) | undefined;
+  // The sidebar's dark tooltip, shared by header tools and list card actions.
+  let sidebarTip: { show(target: HTMLElement): void; hide(): void } | undefined;
+  /** Give a sidebar control the dark tooltip in place of a native title. */
+  const tipFor = (node: HTMLElement) => {
+    node.removeAttribute("title");
+    node.addEventListener("pointerenter", (event) => {
+      if (event.pointerType === "mouse") sidebarTip?.show(node);
+    });
+    node.addEventListener("focus", () => sidebarTip?.show(node));
+    for (const type of ["pointerleave", "blur", "pointerdown"])
+      node.addEventListener(type, () => sidebarTip?.hide());
+  };
   const dismissedTips = new Set<string>();
   const dismissedTipsKey = "branch-comments:dismissed-tips";
   const tips: [string, string][] = [
@@ -3501,6 +3514,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         clearTimeout(tipTimer);
         tip.remove();
         disposeHeaderTip = undefined;
+        sidebarTip = undefined;
       };
       const showTip = (target: HTMLElement) => {
         clearTimeout(tipTimer);
@@ -3516,16 +3530,8 @@ export function initComments(options: CommentsOptions): CommentsController {
         if (tip.dataset.open || Date.now() < tipWarmUntil) reveal();
         else tipTimer = window.setTimeout(reveal, 400);
       };
-      for (const node of tools.querySelectorAll("button")) {
-        node.removeAttribute("title");
-        node.addEventListener("pointerenter", (event) => {
-          if (event.pointerType === "mouse") showTip(node);
-        });
-        node.addEventListener("pointerleave", hideTip);
-        node.addEventListener("focus", () => showTip(node));
-        node.addEventListener("blur", hideTip);
-      }
-      tools.addEventListener("pointerdown", hideTip);
+      tools.querySelectorAll("button").forEach(tipFor);
+      sidebarTip = { show: showTip, hide: hideTip };
       panel.append(head);
       sidebar.append(panel);
     }
@@ -3711,9 +3717,8 @@ export function initComments(options: CommentsOptions): CommentsController {
         cached.querySelector<HTMLButtonElement>(".card-resolve")!.disabled =
           !canResolve();
         cached.querySelector("small")!.textContent = age(first.createdAt);
-        cached.querySelectorAll(".reply-meta").forEach((node, index) => {
-          const reply = thread.comments[index + 1];
-          node.textContent = `${reply.author.name} · ${age(reply.createdAt)}`;
+        cached.querySelectorAll(".reply-meta small").forEach((node, index) => {
+          node.textContent = age(thread.comments[index + 1].createdAt);
         });
         updateCardPage(cached, thread);
         const input = cached.querySelector("textarea");
@@ -3728,10 +3733,14 @@ export function initComments(options: CommentsOptions): CommentsController {
         `thread-card${selected === thread.id ? " active" : ""}`,
       );
       card.replaceChildren();
+      // The accessible name is enough; a native title would paint a browser tooltip.
+      card.removeAttribute("title");
       const header = el("div", "row");
+      const status = el("span", "card-status");
       header.append(
         avatar(first.author),
         el("span", "author", first.author.name),
+        status,
         el("small", "", age(first.createdAt)),
       );
       const route = el("div", "card-page-row");
@@ -3746,9 +3755,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       }), "icon card-page-copy", "copy");
       const fullUrl = el("span", "card-page-url");
       route.append(icon("link"), pageLink, copyPage, fullUrl);
-      const status = el("span", "card-status");
       const preview = summary(el("p", "preview"), first.body);
-      card.append(header, status, preview);
+      card.append(header, preview);
       if (tagsEnabled && thread.tags?.length) {
         const tags = el("div", "card-tags");
         tags.setAttribute("role", "group");
@@ -3775,6 +3783,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         "check",
       );
       quickResolve.disabled = !canResolve();
+      tipFor(quickResolve);
       item.insertBefore(card, livePreviews ?? null);
       item.insertBefore(quickResolve, livePreviews ?? null);
       item.insertBefore(route, livePreviews ?? null);
@@ -3793,14 +3802,14 @@ export function initComments(options: CommentsOptions): CommentsController {
           else expandedReplies.add(thread.id);
           syncReplies();
         }, "card-reply-toggle");
-        toggle.replaceChildren(el("span", "", count), icon("chevron"));
+        toggle.replaceChildren(icon("comment"), el("span", "", count), icon("chevron"));
+        toggle.removeAttribute("title");
         toggle.setAttribute("aria-controls", previews.id);
         const syncReplies = () => {
           const open = expandedReplies.has(thread.id);
           previews.hidden = !open;
           toggle.setAttribute("aria-expanded", String(open));
           toggle.setAttribute("aria-label", `${open ? "Hide" : "Show"} ${count}`);
-          toggle.title = `${open ? "Hide" : "Show"} ${count}`;
           if (open) requestAnimationFrame(() =>
             previews.querySelector("textarea")?.dispatchEvent(new Event("komo-sync-reply")),
           );
@@ -3808,17 +3817,13 @@ export function initComments(options: CommentsOptions): CommentsController {
         syncReplies();
         for (const reply of thread.comments.slice(1)) {
           const row = el("div", "sidebar-reply");
-          row.append(avatar(reply.author));
-          const content = el("div");
-          content.append(
-            el(
-              "div",
-              "reply-meta",
-              `${reply.author.name} · ${age(reply.createdAt)}`,
-            ),
-            el("p", "", reply.body),
+          const meta = el("div", "row reply-meta");
+          meta.append(
+            avatar(reply.author),
+            el("span", "author", reply.author.name),
+            el("small", "", age(reply.createdAt)),
           );
-          row.append(content);
+          row.append(meta, el("p", "", reply.body));
           previews.insertBefore(row, liveComposer ?? null);
         }
         if (!liveComposer) previews.append(composer(thread));
@@ -3932,6 +3937,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     syncTips(!!list.querySelector(".empty [aria-label='Add a comment']"));
     requestAnimationFrame(pointTips);
     list.scrollTop = scroll;
+    // Cards outdent past the list's scrollbar gutter so their content keeps the panel's grid.
+    list.style.setProperty("--komo-scrollbar", `${list.offsetWidth - list.clientWidth}px`);
     if (animateRows) {
       let entered = 0;
       const bounds = list.getBoundingClientRect();
@@ -4041,12 +4048,27 @@ export function initComments(options: CommentsOptions): CommentsController {
     item.dataset.comment = comment.id;
     item.append(authorRow(comment));
     if (editing === comment.id) {
-      const input = el("textarea");
+      const content = el("div", "message-content message-edit");
+      const input = el("textarea", "message-editor");
       input.value = editText;
+      input.rows = 1;
       input.maxLength = 4000;
       input.setAttribute("aria-label", "Edit comment");
       input.dataset.focusKey = "edit";
-      input.addEventListener("input", () => (editText = input.value));
+      // Grow with the text from one line, like the read-only body it replaces.
+      const fit = () => {
+        input.style.height = "auto";
+        input.style.height = `${input.scrollHeight + input.offsetHeight - input.clientHeight}px`;
+      };
+      input.addEventListener("input", () => {
+        editText = input.value;
+        fit();
+      });
+      requestAnimationFrame(() => input.isConnected && fit());
+      const cancel = () => {
+        editing = null;
+        renderDialog();
+      };
       const save = button(
         "Save changes",
         () => {
@@ -4081,18 +4103,30 @@ export function initComments(options: CommentsOptions): CommentsController {
         "primary",
       );
       save.disabled = pending;
-      item.append(
-        input,
-        save,
-        button(
-          "Cancel",
-          () => {
-            editing = null;
-            renderDialog();
-          },
-          "secondary",
-        ),
+      const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+      const withKeys = (node: HTMLButtonElement, label: string, key: string, modifier = false) => {
+        node.replaceChildren(label, renderKbd({ key, ctrl: modifier && !mac, meta: modifier && mac } as Shortcut, mac));
+        node.removeAttribute("title");
+        return node;
+      };
+      input.addEventListener("keydown", (event) => {
+        if (event.isComposing) return;
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          cancel();
+        } else if (event.key === "Enter" && (mac ? event.metaKey : event.ctrlKey) && !save.disabled) {
+          event.preventDefault();
+          save.click();
+        }
+      });
+      const actions = el("div", "edit-actions");
+      actions.append(
+        withKeys(button("Cancel", cancel, "secondary"), "Cancel", "Escape"),
+        withKeys(save, "Save", "Enter", true),
       );
+      content.append(input, actions);
+      item.append(content);
       return item;
     }
     const content = el("div", "message-content");
@@ -4376,7 +4410,12 @@ export function initComments(options: CommentsOptions): CommentsController {
     send.type = "submit";
     send.disabled = pending;
 
-    if (thread) form.append(input, send);
+    if (thread) {
+      // The writer's avatar fills the avatar column, so the reply text starts
+      // where message bodies do.
+      if (api.user) form.append(avatar(api.user));
+      form.append(input, send);
+    }
     else {
       const body = el("div", "draft-body");
       if (api.user) body.append(avatar(api.user));
@@ -5146,7 +5185,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         );
         slot.classList.add("thread-tags");
         const first = messages.querySelector(".message");
-        const body = first?.querySelector(".message-text");
+        const body = first?.querySelector(".message-text, .edit-actions");
         if (body) body.after(slot);
         else first?.append(slot);
       }
