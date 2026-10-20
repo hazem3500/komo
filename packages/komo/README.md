@@ -128,7 +128,7 @@ Sources: [Figma layer properties and styles](https://help.figma.com/hc/en-us/art
 - `themes: ThemeAxis[]` are independent axes reviewers can flip from the Design panel, such as light/dark or a product palette. Proposals record the theme state they were made in.
 - `components: ComponentAdapter` identifies the component behind an element (name, props, source). Proposals name it with its props. A component registered with `useKomoInspectable` always takes precedence and keeps its editable props. An adapter may also supply `panel(identity)` to show read-only details in the Design panel.
 
-Each Design mode comment starts with its context, for example `Theme: mode=dark`, `Component: Button (src/ui/Button.tsx:12)` and `Props: variant="secondary"`. Its changes follow: token swaps, shared token values, prop changes, text, and raw CSS as a fallback. The CLI reads the comment back as a versioned `DesignEdit` record (`theme`, `target.component`, `changes`) that agents can apply; comments without context lines still parse. See [Agent CLI](#agent-cli).
+Each Design mode comment starts with its context, for example `Theme: mode=dark`, `Component: Button (src/ui/Button.tsx:12)` and `Props: variant="secondary"`. Its changes follow: token swaps, shared token values, prop changes, text, and raw CSS as a fallback. The CLI reads the comment back as a versioned `DesignEdit` record (`theme`, `target.component`, `changes`) that agents can apply; comments without context lines still parse. Token values edited from the [Tokens view](#editing-tokens-without-picking-an-element) become `{ kind: "token-value", path, theme?, from, to }` changes on target `:root`; `theme` is optional, so earlier version 1 records stay valid. See [Agent CLI](#agent-cli).
 
 #### Themes
 
@@ -192,6 +192,25 @@ initKomo({ project: "your-project", design: { tokens: classTokens } });
 ```
 
 Keep `resolve()` cheap and honest: report only properties you can vouch for. Define the adapter once, outside render, so `useKomo` sees the same object. The React props demo shows this adapter with `?tokens=classes`.
+
+#### Editing tokens without picking an element
+
+With nothing selected, the Design panel offers **Edit tokens**. The Tokens view lists every `list()` token in the same rows, sticky groups and search as the picker. A row opens the field popup in **Custom** for the token's raw value; a token with `alias` (the path it references) can instead be repointed from **Tokens**. With theme axes, an edit belongs to the current option, so the switcher at the top chooses which option you edit and the preview follows it. Edited tokens show a dot and a reset. The footer has the change count, Before/After (← → or B, flipping the whole preview), chronological Undo, Reset all and **Comment**, which posts one comment on the page:
+
+```text
+Proposed token changes (preview only)
+Token: color.text.primary (dark) #e6e6e6 → #f5f5f5
+Token: color.accent {color.blue.500} → {color.violet.500}
+Token adapter: css-variables
+```
+
+The theme in parentheses is the theme key: the current option of each switchable axis, joined with `+` (`docs+dark`). A repointed alias records token references in braces. Live preview is opt-in:
+
+- `previewValues(changes, theme)` receives every current edit, `{ path, value, theme?, alias? }`, on each edit and theme switch, after komo runs the previous cleanup. Return a cleanup that restores the page exactly; komo also runs it for Before, cancel, Reset, closing Design mode and destroy. `theme` is the current key, so an adapter that cannot scope a value to its theme can preview only the edits for it.
+- Without `previewValues`, edits are still recorded and commented, and the view says "No live preview".
+- A token may name its `cssVariable` and a `toCss(value)` transform. A variable holding raw channels such as `19 18 19`, used as `rgb(var(--color-surface))`, shows and edits as `#131213` while the variable receives `19 18 19`.
+
+`discoverCssTokens({ scopes: { dark: ".dark" } })` and `tailwindTokens(table, { scopes })` implement `previewValues` with one injected stylesheet: an edit without a theme sets the variable on `:root`, an option's edit uses its scope selector, and an option without one uses `:root` outside the other scopes. Removing the stylesheet restores the page. `discoverCssTokens` reports `alias` for a variable declared as exactly `var(--other)` (in `:root`, or in the current option's scope), and lists `--color-*` channel triplets as hex with `toCss`. Tailwind tables preview only tokens that set `cssVariable` (and `toCss` when needed). `cssVariableTokens()` previews registered tokens on their root's inline style, for the current theme only.
 
 #### Discovering CSS variables
 

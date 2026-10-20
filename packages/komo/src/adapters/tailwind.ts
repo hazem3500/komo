@@ -7,8 +7,9 @@
 // its design-system foundations); komo never parses the Tailwind config, and reads
 // the page's stylesheets only with `onlyGenerated`.
 // This module is a separate entry point and never enters the core bundle.
-import type { DesignToken, DesignTokenType, ThemeAxis, ThemeState, TokenAdapter, TokenUsage } from "../design-system.js";
+import type { DesignToken, DesignTokenType, ThemeAxis, ThemeState, TokenAdapter, TokenUsage, TokenValueChange } from "../design-system.js";
 import { inlineStyleSnapshot } from "../design-preview.js";
+import { previewVariables } from "./variable-preview.js";
 import { isDesignTarget } from "../design-target.js";
 
 /** One utility class (or a set of equivalent classes) that sets design tokens. */
@@ -40,6 +41,13 @@ export interface TailwindToken {
   description?: string;
   /** Interaction states the class carries itself, e.g. ["hover", "active", "disabled"]. */
   states?: string[];
+  /**
+   * The CSS variable the class reads, e.g. "--color-surface" for `bg-surface`.
+   * With it, the Tokens view previews new values page-wide by setting the variable.
+   */
+  cssVariable?: string;
+  /** Convert an edited value into the variable's form, e.g. "#131213" to "19 18 19". */
+  toCss?(value: string): string;
 }
 
 export interface TailwindTable {
@@ -63,6 +71,11 @@ export interface TailwindTokensOptions {
   onlyGenerated?: boolean;
   /** Return false to leave a token out of `list()`; it still resolves on elements. */
   filter?(token: TailwindToken): boolean;
+  /**
+   * Selector per theme option id where that option sets its variables, e.g.
+   * { dark: ".dark" }, for token values previewed through `cssVariable`.
+   */
+  scopes?: Record<string, string>;
 }
 
 const sides = ["top", "right", "bottom", "left"];
@@ -235,8 +248,16 @@ export function tailwindTokens(table: TailwindTable, options: TailwindTokensOpti
         ...(token.group ? { group: token.group } : {}),
         ...(token.description ? { description: token.description } : {}),
         ...(token.states ? { states: [...token.states] } : {}),
+        ...(token.cssVariable ? { cssVariable: token.cssVariable } : {}),
+        ...(token.toCss ? { toCss: token.toCss } : {}),
       }));
     },
+    // Only tables that name their variables can preview token values.
+    ...(table.tokens.some((token) => token.cssVariable) ? {
+      previewValues(changes: TokenValueChange[], theme?: string) {
+        return previewVariables(changes, (path) => byPath.get(path)?.token, options.scopes, theme);
+      },
+    } : {}),
     resolve(element) {
       const result: Record<string, TokenUsage> = {};
       const won = winners(readClass(element));

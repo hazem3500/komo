@@ -30,6 +30,9 @@ const selectMenu = (await readdir("dist"))
 const tokenPicker = (await readdir("dist"))
   .filter((file) => /^token-picker.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const tokenPage = (await readdir("dist"))
+  .filter((file) => /^token-page.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const entry = Object.keys(outputs).find(
   (path) => outputs[path].entryPoint === "dist/index.js"
 );
@@ -68,6 +71,7 @@ const report = {
   optionalDesignPanel: await sizes(new Set(designPanel)),
   optionalSelectMenu: await sizes(new Set(selectMenu)),
   optionalTokenPicker: await sizes(new Set(tokenPicker)),
+  optionalTokenPage: await sizes(new Set(tokenPage)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
   adapterCssVariables: await sizes(new Set(["dist/adapters/css-variables.js"])),
   adapterReactFiber: await sizes(new Set(["dist/adapters/react-fiber.js"])),
@@ -129,17 +133,25 @@ if (report.optionalDesignPanel.gzip > 4_300)
 if (report.optionalSelectMenu.gzip > 3_125)
   throw new Error("komo's select menu chunk exceeds its gzip budget.");
 // The token picker (search, type previews, sticky groups, lazy rows, keyboard) loads the first
-// time a token field opens. 4,631 measured, plus ~3%.
+// time a token field opens. 4,631 measured, plus ~3%. It now also hands its rows' previews and
+// styles to the Tokens view (4,770 measured).
 if (report.optionalTokenPicker.gzip > 4_775)
   throw new Error("komo's token picker chunk exceeds its gzip budget.");
+// The Tokens view (every token with nothing selected, per-theme edits, its footer and page
+// comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and
+// footer chunks, so its own chunk is small. 4,730 measured, plus ~3%.
+if (report.optionalTokenPage.gzip > 4_875)
+  throw new Error("komo's Tokens view chunk exceeds its gzip budget.");
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.
 // 2,600: opt-in onlyGenerated (stylesheet scan, escaped class matching, re-scan on sheet
 // changes) and the filter hook measure 2,551 (+342 bytes over 2,209); nothing loads it but the adapter.
-if (report.adapterTailwind.gzip > 2_600)
+// 3,075 / 2,650: Tokens view previews (one injected stylesheet scoped per theme option, aliases
+// and raw-channel colors) add ~430 and ~750 bytes; measured 2,981 and 2,559, plus ~3%.
+if (report.adapterTailwind.gzip > 3_075)
   throw new Error("komo's Tailwind token adapter exceeds its gzip budget.");
-if (report.adapterCssVariables.gzip > 2_000)
+if (report.adapterCssVariables.gzip > 2_650)
   throw new Error("komo's CSS variable token adapter exceeds its gzip budget.");
 // The React fiber adapter reads private React fields, serializes props safely and builds the
 // read-only panel rows itself, so none of that lives in core.

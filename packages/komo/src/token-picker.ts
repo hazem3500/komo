@@ -59,7 +59,7 @@ function pixels(value: string): number | undefined {
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 /** A small visual for the token's type: swatch, bar, corner, shadow card or "Ag". */
-function preview(token: DesignToken): HTMLElement {
+export function tokenPreview(token: DesignToken): HTMLElement {
   const box = el("span", "komo-tokens__pv");
   box.setAttribute("aria-hidden", "true");
   const part = (name: string) => {
@@ -114,7 +114,7 @@ function row(token: DesignToken, id: string, selected: boolean, themes: readonly
   const check = el("span", "komo-tokens__check");
   check.setAttribute("aria-hidden", "true");
   const unresolved = token.type === "color" && !resolvedColor(token.value);
-  node.append(preview(token), name, check);
+  node.append(tokenPreview(token), name, check);
   const perTheme = themes.flatMap((theme) => {
     const value = theme.values.get(token.path);
     return value && token.type === "color" ? [`${theme.label} ${value}`] : [];
@@ -125,6 +125,18 @@ function row(token: DesignToken, id: string, selected: boolean, themes: readonly
   return node;
 }
 
+
+/** Add the picker's styles once to the root holding `node`; returns that root. */
+export function stylePicker(node: Node): Node {
+  const root = node.getRootNode();
+  if ((root instanceof ShadowRoot || root === document) && !styled.has(root)) {
+    styled.add(root);
+    const style = el("style");
+    style.textContent = popupStyles + css + modeStyles;
+    (root instanceof ShadowRoot ? root : document.head).append(style);
+  }
+  return root;
+}
 
 export function refreshTokenPicker(trigger: HTMLElement, options?: TokenPickerOptions): void {
   if (open?.trigger === trigger) open.refresh(options);
@@ -137,13 +149,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   open?.close();
   const { trigger, property } = options;
   let tokens = options.tokens;
-  const root = trigger.getRootNode();
-  if ((root instanceof ShadowRoot || root === document) && !styled.has(root)) {
-    styled.add(root);
-    const style = el("style");
-    style.textContent = popupStyles + css + modeStyles;
-    (root instanceof ShadowRoot ? root : document.head).append(style);
-  }
+  const root = stylePicker(trigger);
   const id = `komo-tokens-${++count}`;
   const box = el("div", "komo-tokens");
   box.id = `${id}-popup`;
@@ -342,7 +348,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
       if (focus && !coarse) editor.querySelector<HTMLInputElement>("input")?.focus();
     } else if (focus && !coarse) (search.hidden ? list : search).focus();
   }
-  if (options.custom) {
+  if (options.custom && tokens.length) {
     tabs.append(tokenTab, customTab);
     box.prepend(tabs);
     tokenTab.onclick = () => { void mode(false); };

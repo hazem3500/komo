@@ -10,12 +10,19 @@
 // Previews and proposals write `var(--name)`, never the resolved value. Intended
 // for development builds; this module is a separate entry point, outside the core bundle.
 import type { DesignToken, DesignTokenType, TokenAdapter, TokenUsage } from "../design-system.js";
+import { previewVariables } from "./variable-preview.js";
 
 export interface DiscoverCssTokensOptions {
   /** Variable names to keep; defaults to every `--*` except Tailwind's internal `--tw-*`. */
   include?: (name: string) => boolean;
   /** Most tokens listed; default 300. */
   limit?: number;
+  /**
+   * Selector per theme option id where that option declares its variables, e.g.
+   * { dark: ".dark" }. Token edits for an option preview there; an option
+   * without one previews on :root, outside the other scopes.
+   */
+  scopes?: Record<string, string>;
 }
 
 interface Found {
@@ -25,6 +32,10 @@ interface Found {
   properties: string[];
   group: string;
   value: string;
+  /** The variable this one is declared as, `var(--other)`. */
+  declared?: string;
+  /** Separator of a raw-channel color such as "19 18 19", shown as hex. */
+  channels?: string;
 }
 
 const spacing = ["padding", "margin", "gap"];
@@ -48,14 +59,25 @@ const applies = (rule: CSSRule) => {
   return false;
 };
 const rootSelector = /^(:root|html|:host)$/;
-const collect = (rules: CSSRuleList, into: Map<string, string>) => {
+/** Root declarations name the tokens; the current theme's scope rules only refine what they are declared as. */
+const collect = (rules: CSSRuleList, into: Map<string, string>, scoped: Map<string, string>, active: Set<string>) => {
   for (const rule of Array.from(rules)) {
     if ("selectorText" in rule && (rule as CSSStyleRule).style) {
       const { selectorText, style } = rule as CSSStyleRule;
-      if (!selectorText.split(",").some((part) => rootSelector.test(part.trim()))) continue;
-      for (const name of Array.from(style)) if (name.startsWith("--")) into.set(name, "");
-    } else if ("cssRules" in rule) collect((rule as CSSGroupingRule).cssRules, into);
+      const parts = selectorText.split(",").map((part) => part.trim());
+      const root = parts.some((part) => rootSelector.test(part));
+      if (!root && !parts.some((part) => active.has(part))) continue;
+      for (const name of Array.from(style)) if (name.startsWith("--")) (root ? into : scoped).set(name, style.getPropertyValue(name).trim());
+    } else if ("cssRules" in rule) collect((rule as CSSGroupingRule).cssRules, into, scoped, active);
   }
+};
+const channelValue = /^(\d{1,3})(\s*,\s*|\s+)(\d{1,3})\2(\d{1,3})$/;
+/** "#131213" → "19 18 19", with the separator the page uses. */
+const toChannels = (separator: string) => (value: string) => {
+  const probe = document.createElement("span").style;
+  probe.color = value;
+  const parts = probe.color.match(/[\d.]+/g);
+  return parts && parts.length > 2 ? parts.slice(0, 3).map((part) => Math.round(+part)).join(separator) : value;
 };
 
 function classify(name: string, value: string): (Pick<Found, "type" | "properties" | "group"> & { ns?: string }) | null {
@@ -97,28 +119,36 @@ const sources: Record<string, string[]> = {
 export function discoverCssTokens(options: DiscoverCssTokensOptions = {}): TokenAdapter {
   const keep = options.include ?? ((name: string) => !name.startsWith("--tw-"));
   const limit = options.limit ?? 300;
+  const scopes = options.scopes ?? {};
   let found = new Map<string, Found>();
+  let listed = new Map<string, DesignToken>();
 
-  function scan(): Map<string, Found> {
+  function scan(theme: Record<string, string> = {}): Map<string, Found> {
     const names = new Map<string, string>();
+    const scoped = new Map<string, string>();
+    const active = new Set(Object.values(theme).flatMap((id) => (scopes[id] ? [scopes[id]] : [])));
     for (const sheet of Array.from(document.styleSheets)) {
       try {
-        collect(sheet.cssRules, names);
+        collect(sheet.cssRules, names, scoped, active);
       } catch {
         // Cross-origin stylesheets are unreadable; they are skipped, not guessed.
       }
     }
     const computed = getComputedStyle(document.documentElement);
     const next = new Map<string, Found>();
-    for (const name of names.keys()) {
-      const value = computed.getPropertyValue(name).trim();
+    for (const [name, declared] of names) {
+      let value = computed.getPropertyValue(name).trim();
       const kind = value && keep(name) ? classify(name, value) : null;
       if (!kind || next.size >= limit) continue;
       const body = name.slice(2);
       const { ns, ...rest } = kind;
       const dash = ns ? ns.length : body.indexOf("-");
       const path = dash > 0 && body.length > dash ? `${body.slice(0, dash)}.${body.slice(dash + 1)}` : body;
-      next.set(name, { name, path, value, ...rest });
+      // Raw channels ("19 18 19", used as rgb(var(--name))) read and edit as hex.
+      const channels = kind.type === "color" ? channelValue.exec(value) : null;
+      const rgb = channels && [channels[1], channels[3], channels[4]].map(Number);
+      if (rgb?.every((channel) => channel < 256)) value = `#${rgb.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+      next.set(name, { name, path, value, ...rest, declared: scoped.get(name) ?? declared, ...(rgb ? { channels: channels![2].includes(",") ? ", " : " " } : {}) });
     }
     found = next;
     return next;
@@ -171,19 +201,32 @@ export function discoverCssTokens(options: DiscoverCssTokensOptions = {}): Token
     return best ? referenced((best as { value: string }).value) : null;
   }
 
+  /** Every token, declared aliases included; previews look tokens up in the latest list. */
+  function list(theme?: Record<string, string>): DesignToken[] {
+    const tokens = [...scan(theme).values()].map((token): DesignToken => {
+      const alias = referenced(token.declared ?? "");
+      return {
+        path: token.path,
+        type: token.type,
+        value: token.value,
+        properties: [...token.properties],
+        group: token.group,
+        ref: token.name,
+        cssVariable: token.name,
+        ...(alias && alias !== token.name ? { alias: found.get(alias)!.path } : {}),
+        ...(token.channels ? { toCss: toChannels(token.channels) } : {}),
+      };
+    });
+    listed = new Map(tokens.map((token) => [token.path, token]));
+    return tokens;
+  }
+
   return {
     id: "css-variables",
-    list() {
-      return [...scan().values()].map(
-        (token): DesignToken => ({
-          path: token.path,
-          type: token.type,
-          value: token.value,
-          properties: [...token.properties],
-          group: token.group,
-          ref: token.name,
-        }),
-      );
+    list,
+    previewValues(changes, theme) {
+      if (!listed.size) list();
+      return previewVariables(changes, (path) => listed.get(path), scopes, theme);
     },
     resolve(element) {
       if (!found.size) scan();

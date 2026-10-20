@@ -45,6 +45,33 @@ export interface DesignToken {
   ref?: string;
   /** Interaction states the token carries itself, e.g. ["hover", "active", "disabled"]. */
   states?: string[];
+  /**
+   * Path of the token this one references, e.g. "color.gray.900" for a
+   * `color.text.primary` declared as `var(--color-gray-900)`. The Tokens view
+   * offers to repoint an alias to another token.
+   */
+  alias?: string;
+  /** The CSS custom property that carries the token, e.g. "--color-surface". */
+  cssVariable?: string;
+  /**
+   * Convert an edited value into what `cssVariable` holds, e.g. "#131213" to
+   * "19 18 19" for a variable used as `rgb(var(--color-surface))`. `value` and
+   * the editor keep the readable form; previews write the converted one.
+   */
+  toCss?(value: string): string;
+}
+
+/**
+ * One token value previewed from the Tokens view. `theme` is the theme key the
+ * edit applies to: the current option ids of every switchable axis, joined with
+ * "+" ("dark", "docs+dark"); absent without theme axes. With `alias`, the token
+ * is repointed to that token path, and `value` is the target's current value.
+ */
+export interface TokenValueChange {
+  path: string;
+  value: string;
+  theme?: string;
+  alias?: string;
 }
 
 /** A property that uses a token. */
@@ -82,6 +109,16 @@ export interface TokenAdapter {
    * 'Replace class "text-secondary" with "text-primary"'. Recorded on proposals.
    */
   describe?(element: Element, property: string, from: TokenUsage, to: DesignToken): string;
+  /**
+   * Preview token values page-wide until the returned cleanup runs; the cleanup
+   * restores the page exactly. komo runs the previous cleanup, then passes the
+   * full current change set, on every edit and theme switch. It also cleans up
+   * for Before, cancel, reset, closing Design mode and destroy. `theme` is the
+   * current theme key: an adapter that cannot scope a value to its theme applies
+   * only the changes for it. Without this method, the Tokens view records edits
+   * as proposals, labelled "No live preview".
+   */
+  previewValues?(changes: TokenValueChange[], theme?: string): () => void;
 }
 
 /** Theme state: axis id → option id, e.g. { mode: "dark", product: "docs" }. */
@@ -201,8 +238,12 @@ export interface DesignEdit {
 export type DesignEditChange =
   /** Use a different token for a property. `apply` is the adapter's `describe()` text. */
   | { kind: "token"; property: string; from: TokenUsage; to: TokenRef; apply?: string }
-  /** Change a shared token's value for everyone using it. */
-  | { kind: "token-value"; path: string; from: string; to: string }
+  /**
+   * Change a shared token's value for everyone using it. `theme` is the theme
+   * key it applies to ("dark", "docs+dark"); absent means every theme. A
+   * repointed alias records token references, e.g. "{color.gray.700}".
+   */
+  | { kind: "token-value"; path: string; theme?: string; from: string; to: string }
   /**
    * Change a component prop (from `useKomoInspectable` or the component adapter).
    * `token` is the style token path the new value binds, e.g. "color.brand"

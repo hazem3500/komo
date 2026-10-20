@@ -5521,8 +5521,12 @@ export function initComments(options: CommentsOptions): CommentsController {
               draftText = "";
               draftProposal = proposal ?? "";
               draftTags = [];
+              // The centre of the element's visible part, so a page-wide proposal (on body) pins in view.
               const rect = element.getBoundingClientRect();
-              const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+              const center = {
+                x: (Math.max(rect.left, 0) + Math.min(rect.right, innerWidth)) / 2,
+                y: (Math.max(rect.top, 0) + Math.min(rect.bottom, innerHeight)) / 2,
+              };
               composeAt(element, center, center, true);
             },
             onExit() {

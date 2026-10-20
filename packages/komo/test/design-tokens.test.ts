@@ -405,4 +405,26 @@ describe("explicit design-token preview bridge", () => {
     cleanup();
     root.style.removeProperty("--weight-title");
   });
+
+  it("previews Tokens view values on the registered root and restores its style exactly", async () => {
+    const { cssVariableTokens } = await import("../src/design-tokens.js");
+    document.body.innerHTML = '<main id="tokens-root" style="color: red; --brand: #224466"></main><section id="bare"></section>';
+    const main = document.querySelector<HTMLElement>("#tokens-root")!, bare = document.querySelector<HTMLElement>("#bare")!;
+    const cleanups = [registerDesignTokenSource(main, [tokens[0]]), registerDesignTokenSource(bare, [tokens[1]])];
+    const adapter = cssVariableTokens();
+    expect((adapter.list() as Array<{ path: string; cssVariable?: string }>).map((token) => token.cssVariable)).toEqual(["--brand", "--space-card"]);
+    const mainStyle = main.style.cssText;
+    const cleanup = adapter.previewValues!([
+      { path: "color.brand", value: "#ff0000", theme: "light" },
+      { path: "color.brand", value: "#00ff00", theme: "dark" },
+      { path: "spacing.card", value: "12px" },
+      { path: "spacing.card", value: "calc(1px; }" },
+    ], "dark");
+    expect([main.style.getPropertyValue("--brand"), main.style.getPropertyPriority("--brand")]).toEqual(["#00ff00", "important"]);
+    expect(bare.style.getPropertyValue("--space-card")).toBe("12px");
+    cleanup();
+    expect([main.style.cssText, main.style.getPropertyPriority("--brand")]).toEqual([mainStyle, ""]);
+    expect(bare.hasAttribute("style")).toBe(false);
+    for (const done of cleanups) done();
+  });
 });
