@@ -1,18 +1,31 @@
-import { Pool, types, type PoolClient } from "pg";
+import type { PoolClient } from "pg";
 
-// API timestamps, counters, and revisions are JavaScript numbers.
-types.setTypeParser(20, (value) => {
-  const number = Number(value);
-  if (!Number.isSafeInteger(number))
-    throw Error("PostgreSQL integer exceeds safe range");
-  return number;
-});
+type Pg = typeof import("pg");
+
+// pg is an optional peer: only the self-hosted Node server needs it, so browser hosts never install it.
+export async function loadPostgres(): Promise<Pg> {
+  let pg: Pg;
+  try {
+    const module = await import("pg");
+    pg = ((module as unknown as { default?: Pg }).default ?? module) as Pg;
+  } catch {
+    throw Error("The komo Node server needs the PostgreSQL client. Install it next to komo: npm install pg");
+  }
+  // API timestamps, counters, and revisions are JavaScript numbers.
+  pg.types.setTypeParser(20, (value) => {
+    const number = Number(value);
+    if (!Number.isSafeInteger(number))
+      throw Error("PostgreSQL integer exceeds safe range");
+    return number;
+  });
+  return pg;
+}
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 // Keep the D1-shaped boundary used by the API. A batch always has one transaction.
-export function postgresDatabase(connectionString: string) {
-  const pool = new Pool({ connectionString, max: 10 });
+export function postgresDatabase(connectionString: string, pg: Pg) {
+  const pool = new pg.Pool({ connectionString, max: 10 });
   const query = async (sql: string, values: unknown[], client?: PoolClient) => {
     const text = translate(sql);
     const result = await (client ?? pool).query(text, values);

@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
 import { isIP } from "node:net";
-import { postgresDatabase } from "./postgres";
+import { loadPostgres, postgresDatabase } from "./postgres";
 import worker from "./index";
 import { sitePattern } from "./validation";
 import { sendWebhookPinned } from "./node-webhooks";
@@ -37,7 +37,7 @@ if (
 ) {
   throw Error("PROJECTS must map project keys to repo and origins");
 }
-const db = postgresDatabase(databaseUrl);
+const db = postgresDatabase(databaseUrl, await loadPostgres());
 await db.migrate();
 const env = {
   DB: db,

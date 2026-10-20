@@ -9,6 +9,7 @@ import {
   rm,
   readdir,
 } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +49,14 @@ try {
     // react.d.ts imports React's types; a TypeScript consumer has them installed.
     "@types/react@19",
   ]);
+  // Browser hosts install komo for the client: no server, database or Workers packages ride along.
+  for (const name of ["pg", "@cloudflare/workers-types", "wrangler"]) {
+    assert.equal(existsSync(join(root, "node_modules", name)), false, `${name} must not install with komo`);
+  }
+  const shipped = JSON.parse(await readFile(join(root, "node_modules/@hazem3500/komo/package.json"), "utf8"));
+  assert.deepEqual(Object.keys(shipped.dependencies ?? {}), ["emoji-regex"], "runtime dependencies are browser-safe only");
+  // A Workers host that imports komo/server has the optional Workers types peer installed.
+  run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", `@cloudflare/workers-types@${shipped.peerDependencies["@cloudflare/workers-types"]}`]);
   assert.match(
     await readFile(join(root, "node_modules/@hazem3500/komo/dist/react.js"), "utf8"),
     /^['"]use client['"];?/,
