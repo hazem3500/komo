@@ -15,12 +15,17 @@ export type KbdVariant = "surface" | "outline";
 /** Native keycaps shared by DOM surfaces and the existing lazy menu. */
 export function renderKbd(shortcut: Shortcut, mac?: boolean, variant: KbdVariant = "surface"): HTMLElement {
   const keys = shortcutKeys(shortcut, mac);
+  return renderKeycaps(keys.keys, keys.spoken, variant);
+}
+
+/** Keycaps for any sequence, such as a pointer gesture, read aloud as `label`. */
+export function renderKeycaps(keys: string[], label: string, variant: KbdVariant = "surface"): HTMLElement {
   const group = document.createElement("span");
   group.className = "komo-kbd";
   group.dataset.variant = variant;
   group.setAttribute("role", "img");
-  group.setAttribute("aria-label", keys.spoken);
-  for (const key of keys.keys) {
+  group.setAttribute("aria-label", label);
+  for (const key of keys) {
     const cap = document.createElement("kbd");
     cap.textContent = key;
     cap.setAttribute("aria-hidden", "true");

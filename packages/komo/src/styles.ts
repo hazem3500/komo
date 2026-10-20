@@ -2376,20 +2376,24 @@ textarea {
 :host([data-comments-hidden]) .pins, :host([data-comments-hidden]) .pin-preview, :host([data-comments-hidden]) .component-hover, :host([data-comments-hidden]) .edge-sidebar-sensor { display: none !important; }
 :host([data-comments-hidden]) .edge-sidebar[data-collapsed] { visibility: hidden; }
 .morphing-menu__row[aria-pressed="false"] .morphing-menu__icon { visibility: hidden; }
-.pins[data-size] > .pin { transition: transform 120ms cubic-bezier(.22,1,.36,1), width 120ms cubic-bezier(.22,1,.36,1), height 120ms cubic-bezier(.22,1,.36,1); }
-.pins[data-size] > .pin .avatar { transition: left 120ms cubic-bezier(.22,1,.36,1), top 120ms cubic-bezier(.22,1,.36,1), width 120ms cubic-bezier(.22,1,.36,1), height 120ms cubic-bezier(.22,1,.36,1); }
+.pins { --pin-ring: var(--mm-ink); --pin-drop: 0 1px 3px #00000047; }
+.pins[data-page="dark"] { --pin-ring: var(--mm-surface); --pin-drop: 0 0 0 1px #ffffff1a, 0 1px 4px #00000099; }
+.pins[data-size] > .pin { overflow: visible; background-color: transparent !important; box-shadow: none; transition: transform 180ms cubic-bezier(.22,1,.36,1), width 180ms cubic-bezier(.22,1,.36,1), height 180ms cubic-bezier(.22,1,.36,1); }
+.pins[data-size] > .pin .avatar { box-shadow: 0 0 0 2px var(--pin-ring), 0 3px 10px #0003; transition: all 180ms cubic-bezier(.22,1,.36,1); }
+.pins[data-size] > .pin.active .avatar { box-shadow: 0 0 0 2px var(--pin-ring), 0 0 0 4px #4388ff, 0 4px 14px #0003; }
 .pins[data-size] > .pin:is(:hover, :focus-visible, [data-near]) { z-index: 3; }
-${collapsed} { --pin-y: -18px; width: 24px; height: 24px; border-radius: 0; overflow: visible; background-color: transparent !important; box-shadow: none; }
+.pins[data-size="compact"] { --pin-face: 20px; }
+.pins[data-size="dot"] { --pin-face: 12px; --pin-dot: 50%; --pin-read: .5; }
+${collapsed} { --pin-y: -18px; width: 24px; height: 24px; border-radius: 0; }
 ${collapsed}[data-pointer="right"] { --pin-x: -15px; }
-${collapsed} .avatar { display: flex; align-items: center; justify-content: center; left: calc(50% - var(--pin-face) / 2); top: calc(50% - var(--pin-face) / 2); width: var(--pin-face); height: var(--pin-face); border-radius: 50% 50% 50% 5px; overflow: hidden; font-size: 0; box-shadow: 0 0 0 1.5px #fff, 0 1px 4px #0000004d; }
-${collapsed}[data-pointer="right"] .avatar { border-radius: 50% 50% 5px 50%; }
+${collapsed} .avatar { display: flex; align-items: center; justify-content: center; left: calc(50% - var(--pin-face) / 2); top: calc(50% - var(--pin-face) / 2); width: var(--pin-face); height: var(--pin-face); border-radius: var(--pin-dot, 50% 50% 50% 5px); font-size: 0; box-shadow: 0 0 0 2px var(--pin-ring), var(--pin-drop); }
+${collapsed}[data-pointer="right"] .avatar { border-radius: var(--pin-dot, 50% 50% 5px 50%); }
+${collapsed}[data-read] .avatar { opacity: var(--pin-read, 1); }
 ${collapsed} .avatar img { display: none; }
-.pins[data-size="compact"] > ${collapsedPin} { --pin-face: 20px; }
 .pins[data-size="compact"] > ${collapsedPin} .avatar::after { content: attr(data-initial); font-size: 10px; font-weight: 650; line-height: 1; }
-.pins[data-size="dot"] > ${collapsedPin} { --pin-face: 10px; }
-.pins[data-size="dot"] > ${collapsedPin}[data-pointer] .avatar { border-radius: 50%; box-shadow: 0 0 0 1px #fff, 0 1px 3px #00000059; }
-.pins[data-size="dot"] > ${collapsedPin}[data-read] .avatar { background-color: transparent !important; box-shadow: inset 0 0 0 2px var(--reviewer-accent, #c8b5f4), 0 0 0 1px #fff, 0 1px 3px #00000059; }
-@media (prefers-reduced-motion: reduce) { .pins[data-size] > .pin, .pins[data-size] > .pin .avatar { transition: none; } }
+.pins[data-size="dot"][data-breathe] > ${collapsedPin}:not([data-read])::before { content: ""; position: absolute; inset: calc(50% - var(--pin-face) / 2); border-radius: 50%; background: var(--reviewer-accent, #c8b5f4); opacity: 0; pointer-events: none; animation: komo-pin-breathe 1800ms cubic-bezier(.22,1,.36,1) var(--pin-breathe-delay, 0ms) infinite; }
+@keyframes komo-pin-breathe { 0% { opacity: .28; } 75%, 100% { opacity: 0; transform: scale(2.3); } }
+@media (prefers-reduced-motion: reduce) { .pins[data-size] > .pin, .pins[data-size] > .pin .avatar { transition: none; } .pins > .pin::before { display: none; } }
 
 :host { --komo-inset: 16px; --komo-avatar: 24px; --komo-gutter: 8px; --komo-action: 28px; }
 :host(.review-open) .panel { --komo-inset: 24px; padding-inline: var(--komo-inset); }

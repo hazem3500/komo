@@ -99,7 +99,8 @@ export interface KomoPins {
   /**
    * Default pin size; a reviewer's choice in More wins and is remembered per
    * project. "full" (default) shows the author's avatar, "compact" a small
-   * initial, "dot" an accent dot that is filled while unread. "auto" is full
+   * initial, "dot" an accent dot, full strength while unread and quieter once
+   * read. "auto" is full
    * while commenting or with the sidebar open, and dots while browsing. Every
    * size expands to full on hover, focus, a nearby pointer, or selection.
    */

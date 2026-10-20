@@ -56,17 +56,12 @@ describe("design mode preview inspector", () => {
     const comment = shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:last-child")!;
     expect(inspector.hasAttribute("data-empty")).toBe(true);
     expect(empty.querySelector("strong")?.textContent).toBe("Select an element");
-    expect([...empty.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
-      "Click to inspect",
-      "Ctrl-click for an inner target",
-      "← previous sibling",
-      "→ next sibling",
-      "Alt↑ parent element",
-      "Alt↓ child element",
-      "Double-click text to edit",
-      "Esc to exit",
-    ]);
-    expect([...empty.querySelectorAll("kbd")].map((key) => key.textContent)).toEqual(["Click", "Ctrl-click", "←", "→", "Alt", "↑", "Alt", "↓", "Double-click", "Esc"]);
+    // One line of guidance; the full list lives in shortcut help.
+    expect([...empty.querySelectorAll("p")].map((item) => item.textContent)).toEqual(["Click to inspect · Double-click text to edit"]);
+    expect(empty.querySelectorAll("li")).toHaveLength(0);
+    // Without a help surface the shortcuts link stays hidden.
+    expect(empty.querySelector<HTMLElement>(".design-inspector__help")?.hidden).toBe(true);
+    expect([...empty.querySelectorAll("kbd")].map((key) => key.textContent)).toEqual(["?"]);
     expect(empty.querySelector("svg")).not.toBeNull();
     expect(comment.hidden).toBe(true);
     pointer("pointerdown", button);

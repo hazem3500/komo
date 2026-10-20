@@ -130,7 +130,8 @@ await writeFile(
 // All-features 213,250 -> 219,500: the Account panel's API tokens view (list, create with a
 // one-time reveal, inline revoke, its own styles) is a new on-demand chunk (~5,670 measured).
 // Initial grows ~530 bytes for the entry row, the view switch and the chunk boundary.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 219_500)
+// 219,500 -> 220,150: ringed, breathing dot pins at mount and the Design shortcuts link and help gestures on demand (+612 measured: 219,146 -> 219,758; initial +467).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 220_150)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

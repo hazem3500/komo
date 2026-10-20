@@ -146,6 +146,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   if (!pinSizes.includes(hostPinSize))
     throw new Error(`Invalid komo pins.size: "${hostPinSize}".`);
   const designEnabled = options.features?.designMode !== false;
+  // The toolbar's latest commands, for shortcut help.
+  let helpItems: ToolbarMenuItem[] = [];
   const toolbarItems = normalizeToolbarItems(options.toolbar?.items);
   const tagsEnabled = options.features?.tags !== false;
   const scope = JSON.stringify([
@@ -776,12 +778,19 @@ export function initComments(options: CommentsOptions): CommentsController {
     themeFrame ||= requestAnimationFrame(() => {
       themeFrame = 0;
       pageBackground = readPageBackground();
+      markPageTone();
       if (framed || pageTransitioning) surface.style.background = pageBackground;
     });
   });
+  // Pin rings take the page's tone, so collapsed pins sit on light and dark sites.
+  function markPageTone() {
+    const [r, g, b] = /^rgb/.test(pageBackground) ? pageBackground.match(/[\d.]+/g)!.map(Number) : [255, 255, 255];
+    pins.dataset.page = 0.2126 * r! + 0.7152 * g! + 0.0722 * b! < 128 ? "dark" : "light";
+  }
   let framed = false;
   let pageTransitioning = false;
   let pageBackground = readPageBackground();
+  markPageTone();
   for (const node of [html, document.body])
     themeWatch.observe(node, { attributes: true });
   let accountOpenTimer = 0;
@@ -2572,6 +2581,12 @@ export function initComments(options: CommentsOptions): CommentsController {
       )
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
+  // Help lists the toolbar's current commands; More and Design mode both open it.
+  function openShortcutHelp() {
+    void import("./shortcut-help.js").then(({ showShortcutHelp }) => showShortcutHelp(shadow, [
+      ...helpItems, { label: "Restore feedback", shortcut: shortcuts.restore, group: "Feedback" },
+    ], designEnabled));
+  }
   function renderToolbar() {
     toolbar.style.display = toolbarDismissed ? "none" : "";
     presence.update();
@@ -2761,10 +2776,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       },
     ];
     items.push({ id: "shortcuts", group: "Account & help", label: "Keyboard shortcuts", icon: glyph("info"), showInBar: false,
-      onSelect: () => { void import("./shortcut-help.js").then(({ showShortcutHelp }) => showShortcutHelp(shadow, [
-        ...items, { label: "Restore feedback", shortcut: shortcuts.restore, group: "Feedback" },
-      ], designEnabled)); },
+      onSelect: openShortcutHelp,
     });
+    helpItems = items;
     if (connection === "Offline")
       items.push({
         id: "retry",
@@ -2837,6 +2851,22 @@ export function initComments(options: CommentsOptions): CommentsController {
       pin.toggleAttribute("data-near", near);
     }
   }
+  // Unread dots breathe for three 1.8s cycles when they first appear, then
+  // rest until another unread thread arrives.
+  const breathed = new Set<string>();
+  let breatheStart = 0;
+  let breatheTimer = 0;
+  function breathe(visible: Thread[]) {
+    let fresh = false;
+    for (const thread of visible)
+      if (unread(thread) && !breathed.has(thread.id)) fresh = !!breathed.add(thread.id);
+    if (!fresh || reducedMotion()) return;
+    breatheStart = performance.now();
+    pins.style.setProperty("--pin-breathe-delay", "0ms");
+    pins.dataset.breathe = "";
+    clearTimeout(breatheTimer);
+    breatheTimer = window.setTimeout(() => delete pins.dataset.breathe, 5400);
+  }
   let pinSnapshot = "";
   // Threads on this page whose element can no longer be found or is not visible.
   const detachedThreads = new Set<string>();
@@ -2898,6 +2928,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         !t.resolved &&
         (!tagFilter || !!t.tags?.includes(tagFilter)),
     );
+    if (density === "dot") breathe(visible);
     const anchors = anchorPass();
     const stacks = pinStacks(visible, (thread) =>
       anchors.resolve(thread.anchor),
@@ -2946,6 +2977,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       ]),
     );
     pins.replaceChildren();
+    // Rebuilt pins pick up the breath where the previous ones left it.
+    if ("breathe" in pins.dataset)
+      pins.style.setProperty("--pin-breathe-delay", `${(breatheStart - performance.now()) % 1800}ms`);
     const stackElements = new Map<string, HTMLElement>();
     const measured = new Map(
       positions.map((position) => [position.thread.id, position]),
@@ -5656,7 +5690,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             root: shadow,
             panelRoot: sidebar,
             host,
-            exitKey: shortcuts.design?.label,
+            shortcutHelp: openShortcutHelp,
             reservedKey: event => Object.values(shortcuts).some(shortcut => matchesShortcut(event, shortcut)),
             design: options.design,
             sourceHref: sourceLink,
@@ -6517,6 +6551,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       cancelAnimationFrame(mobileEnterFrame);
       clearTimeout(mutationTimer);
       clearTimeout(pinScrollTimer);
+      clearTimeout(breatheTimer);
       clearTimeout(accountOpenTimer);
       clearTimeout(copiedPromptTimer);
       reactionSwaps.clear();

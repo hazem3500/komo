@@ -22,3 +22,14 @@ export function designCommands(mac = /Mac|iPhone|iPad/.test(navigator.platform))
     command("New line", "Enter", "Comment composer", { shift: true }),
   ];
 }
+
+/** Pointer gestures and help, listed beside the canvas keys in shortcut help. */
+export function designGestures(mac = /Mac|iPhone|iPad/.test(navigator.platform)) {
+  const group = "Design · canvas selection";
+  return [
+    { label: "Inspect element", group, keys: ["Click"], aria: "Click" },
+    { label: "Select an inner target", group, keys: [mac ? "⌘" : "Ctrl", "Click"], aria: `${mac ? "Command" : "Control"} + Click` },
+    { label: "Edit text", group, keys: ["Double-click"], aria: "Double-click" },
+    { label: "Keyboard shortcuts", group, keys: ["?"], aria: "?" },
+  ];
+}
