@@ -321,6 +321,49 @@ function pickerTrigger(select: HTMLSelectElement, options: () => Omit<TokenPicke
   };
 }
 
+function scheduleThemeFieldSync(target: Element, refresh: () => void, signal: AbortSignal): void {
+  if (signal.aborted) return;
+  const view = target.ownerDocument.defaultView;
+  if (!view) return;
+  refresh();
+  let frame = 0;
+  let runs = 0;
+  const tick = () => {
+    if (signal.aborted) return;
+    refresh();
+    if (++runs > 120) return;
+    frame = view.requestAnimationFrame(() => {
+      frame = 0;
+      for (let node: Element | null = target; node; node = node.parentElement) {
+        if (node.getAnimations?.().some(animation => animation.playState === "running")) {
+          tick();
+          return;
+        }
+      }
+    });
+  };
+  tick();
+  view.setTimeout(() => { if (!signal.aborted) refresh(); }, 320);
+}
+
+function bindFieldThemeRefresh(
+  label: HTMLElement,
+  element: Element,
+  input: Element,
+  refresh: () => void,
+  isFieldDirty?: (control: Element) => boolean,
+): void {
+  const root = label.getRootNode();
+  const events = new AbortController();
+  const cleanup = new MutationObserver(() => { if (!input.isConnected) events.abort(); });
+  cleanup.observe(root instanceof ShadowRoot ? root : document, { childList: true, subtree: true });
+  root.addEventListener("komo-theme-change", () => {
+    if (isFieldDirty?.(input)) return;
+    scheduleThemeFieldSync(element, refresh, events.signal);
+  }, { signal: events.signal });
+  events.signal.addEventListener("abort", () => cleanup.disconnect(), { once: true });
+}
+
 /** Custom uses the field's existing transaction handlers for one undoable commit. */
 function customPickerValue(element: DesignTarget, property: string, input?: HTMLElement | null): TokenPickerOptions["custom"] {
   if (!(input instanceof HTMLInputElement) || input.type === "number") return;
@@ -534,6 +577,7 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
   toHex?: (value: string) => string,
   design?: DesignSystem,
   onSwap?: (undo: () => void) => void,
+  isFieldDirty?: (control: Element) => boolean,
 ): void | Promise<void> {
   // Fields are found now, so an adapter that answers late never reaches a newer selection's fields.
   const found = fields.flatMap((field) => {
@@ -563,6 +607,7 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
         swatch?.addEventListener("click", open);
         swatch?.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") open(event); });
       }
+      bindFieldThemeRefresh(label, element, input, refresh, isFieldDirty);
     }
   };
   const adapter = design?.tokens;
@@ -721,7 +766,6 @@ export function createAdapterTokenControl(
       available = tokensFor(tokens, property);
       populate();
       update();
-      if (!(root instanceof ShadowRoot ? root.activeElement : document.activeElement)?.isSameNode(input ?? null)) refresh?.();
       picker.refresh();
     }, () => {});
   }, { signal: events.signal });

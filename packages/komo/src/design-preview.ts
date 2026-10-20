@@ -37,6 +37,7 @@ export function createStyleEdits(history: Array<StyleEdit | { element: DesignTar
       pending.delete(control);
       starts.delete(control);
     },
+    isDirty(control: Element) { return pending.has(control); },
   };
 }
 
