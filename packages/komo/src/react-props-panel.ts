@@ -111,7 +111,7 @@ export function attachDesignSystemControls(
   options: {
     signal: AbortSignal;
     select(element: DesignTarget): void;
-    refresh(): void;
+    refresh(retainedProps?: HTMLElement): void;
     retainedProps?: HTMLElement;
     updateActions(): void;
     history: Array<{ element: DesignTarget; undo(): void; props?: boolean } | { kind: string; element: DesignTarget }>;
@@ -1251,7 +1251,7 @@ export function createReactPropsPanel(
   styleRoot?: ShadowRoot,
   select?: (root: DesignTarget) => void,
   design?: DesignSystem,
-  refresh?: () => void,
+  refresh?: (retainedProps?: HTMLElement) => void,
   sourceHref?: SourceHref,
 ): HTMLElement | null {
   let component = inspectableFor(element);
@@ -1310,7 +1310,8 @@ export function createReactPropsPanel(
         synchronizers.forEach(sync => sync());
         if (focused?.closest(".design-inspector,.komo-tokens,.komo-select") || root.querySelector(".komo-tokens,.komo-select")) return;
         dirty = false;
-        refresh();
+        // A host commit re-reads the style fields; this panel and its controls stay the same nodes.
+        refresh(element.isConnected ? group : undefined);
       });
     };
     const unsubscribe = component.subscribe(() => {

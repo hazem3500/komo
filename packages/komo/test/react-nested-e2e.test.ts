@@ -145,6 +145,11 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await target.click();
     const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
     await variant.evaluate(node => (window as any).originalControl = node);
+    // Parent commits while focus is on the page refresh the panel in place; the prop controls stay the same nodes.
+    const idle = await page.locator("output").textContent();
+    await page.waitForFunction(previous => Number(document.querySelector("output")?.textContent) >= Number(previous) + 2, idle);
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+    expect(await page.evaluate(() => (window as any).originalControl.isConnected)).toBe(true);
     await variant.fill("primary");
     await variant.press("Enter");
     await page.waitForFunction(() => document.querySelector("main button")?.className === "button-primary");
