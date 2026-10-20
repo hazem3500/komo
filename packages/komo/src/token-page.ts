@@ -390,9 +390,11 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     bar.remove();
   }
 
-  // Design mode's Before/After, closing (which shows Before) and destroy all land here.
+  // Design mode's Before/After, closing (which shows Before and hides the panel) and destroy
+  // all land here. Closing also puts back a theme switched from this view's header.
   const life = new AbortController();
   new MutationObserver((_records, observer) => {
+    if (panel.getAttribute("aria-hidden") === "true") props.restoreThemes(panel);
     if (panel.isConnected) {
       edits.sync();
       return syncBar();
@@ -404,7 +406,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     changed?.();
     style.remove();
     pages.delete(panel);
-  }).observe(panel, { attributes: true, attributeFilter: ["data-before"] });
+  }).observe(panel, { attributes: true, attributeFilter: ["data-before", "aria-hidden"] });
   // Adapters that cannot scope a value to its theme preview the current theme's edits.
   host.root.addEventListener("komo-theme-change", () => edits.sync(), { signal: life.signal });
 

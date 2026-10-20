@@ -100,7 +100,7 @@ Design mode also takes interaction cues from established design tools: select a 
 
 ### Opt-in React prop inspection
 
-React teams can register selected component roots for typed prop previews through the `./react` entry. A build-time TypeScript Compiler API pass generates the prop manifest from an explicitly marked function component and props type; the inspector edits only strings, numbers, booleans, and literal unions. Functions, refs, `ReactNode`, objects, generics and unsupported types are omitted from editable controls. This metadata is a safe allowlist, not runtime discovery of every React component; `defaultProps` and every React component form are not inferred.
+React teams can register selected component roots for typed prop previews through the `./react` entry. A build-time TypeScript Compiler API pass generates the prop manifest from an explicitly marked function component and props type; the inspector edits only strings, numbers, booleans, and literal unions. Functions, refs, `ReactNode`, objects, generics and unsupported types are omitted from editable controls. This metadata is a safe allowlist, not runtime discovery of every React component; `defaultProps` and every React component form are not inferred. A literal-union prop previews each option as you hover it or move to it with the arrow keys, through the component's own `onChange`; click or Enter commits one Undo step, and moving off the list, Escape or clicking elsewhere puts the opening value back.
 
 The app provides an `onChange` callback that updates its own state. Komo previews those values through React's normal render cycle, offers undo/reset, and can prefill an explicit comment with the proposed before/after values and source path. Posting still requires the user to submit the comment. Komo's core never accesses React Fiber internals and never writes source files; the one exception is the separate, opt-in [React fiber adapter](#discovering-react-components), which reads React internals only for apps that install it. Preview prop changes reset on refresh. A component may opt one leaf render into direct text editing by setting `textProp` to the name of an allowed string prop; Komo does not infer which child text belongs to a prop. See [`examples/react-props`](./examples/react-props/README.md) for the generated fixture and limitations.
 
@@ -132,7 +132,7 @@ Each Design mode comment starts with its context, for example `Theme: mode=dark`
 
 #### Themes
 
-Each axis gets a row at the top of the Design panel: a segmented control for two or three options, a select for more. Switching calls `apply(id)`, then the panel re-reads `current()`, lists tokens for the new theme state, and refreshes the picked element's values, chips and outline.
+The Design panel and Tokens view headers show one theme control. A single axis with exactly two options is a one-click switch: a sun or moon when the options are light and dark (by id or label), otherwise both labels as two segments; its tooltip names the next state. More options or more axes open a compact menu with a row per axis: a segmented control for two or three options, a select for more. With no axis to choose from, there is no control; komo never adds a System option. Switching calls `apply(id)`, then the panel re-reads `current()`, lists tokens for the new theme state, and refreshes the picked element's values, chips and outline. Closing Design mode restores each axis's original option.
 
 ```ts
 import { classTheme } from "@hazem3500/komo/adapters/class-theme";

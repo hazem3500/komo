@@ -139,7 +139,8 @@ export interface ThemeOption {
 
 /**
  * One independent theme dimension reviewers can flip, such as light/dark. The
- * Design panel shows a switcher for each axis with two or more options.
+ * Design panel shows a one-click switch for a single two-option axis, and a compact
+ * menu for more options or axes; axes with fewer than two options are left out.
  */
 export interface ThemeAxis {
   id: string;
