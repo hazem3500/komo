@@ -1,7 +1,8 @@
+import { registerCustomField, inputValue } from "./custom-field.js";
 import { fieldLabel } from "./field-label.js";
 import type { DesignTarget } from "./design-target.js";
 import { designPanelStyles } from "./design-panel-styles.js";
-import { toHex, validStyleValue } from "./design-preview.js";
+import { toHex } from "./design-preview.js";
 
 /** The property controls load as their own chunk, so the Design mode entry stays small. */
 export { designPanelStyles };
@@ -54,6 +55,7 @@ export const fields: Field[] = [
   { property: "border-color", label: "Border color", kind: "color" },
   { property: "fill", label: "Fill", kind: "color", wide: true },
   { property: "stroke", label: "Stroke", kind: "color", wide: true },
+  { property: "box-shadow", label: "Shadow", kind: "text", wide: true },
   { property: "stroke-width", label: "Stroke width", kind: "length", min: 0, max: 24 },
 ];
 
@@ -77,22 +79,6 @@ export function valueFor(field: Field, element: DesignTarget): string {
     return match ? String(Math.round(Number(match[1]) * 10) / 10) : field.kind === "size" ? value || "auto" : "0";
   }
   return value;
-}
-
-function inputValue(field: Field, control: Control): string | null {
-  const value = control.value.trim();
-  if (field.kind === "color") return validStyleValue(field.property, value);
-  if (field.kind === "length") {
-    if (!value) return null;
-    const number = Number(value);
-    if (!Number.isFinite(number) || number < (field.min ?? -200) || number > (field.max ?? 1000)) return null;
-    return `${number}px`;
-  }
-  if (field.kind === "size" || field.property === "line-height") {
-    if (!/^(auto|normal|(?:\d+(?:\.\d+)?)(?:px|%|vw|vh|rem|em)?)$/.test(value)) return null;
-    return field.kind === "size" && /^[\d.]+$/.test(value) ? `${value}px` : value;
-  }
-  return validStyleValue(field.property, value);
 }
 
 /** Shared by every section, including the shared theme tokens. */
@@ -214,6 +200,7 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
     });
   });
   box.append(control);
+  registerCustomField(control, field, context);
   return box;
 }
 
@@ -283,6 +270,7 @@ export function renderPanel(container: HTMLElement, context: PanelContext) {
   const border = ["top", "right", "bottom", "left"].some((side) =>
     parseFloat(style.getPropertyValue(`border-${side}-width`)) > 0 && style.getPropertyValue(`border-${side}-style`) !== "none",
   ) || touched(["border", "border-width", "border-style", "border-color"]);
+  const shadow = (style.boxShadow && style.boxShadow !== "none") || touched(["box-shadow"]);
   const add = (name: string, property: string, value: string, focus: string) => toolButton(`Add ${name}`, "+", () => {
     const key = document.createElement("input");
     context.begin(key, property);
@@ -300,5 +288,8 @@ export function renderPanel(container: HTMLElement, context: PanelContext) {
     border
       ? section(context, "Border", ["border-width", "border-radius", "border-style", "border-color"])
       : section(context, "Border", null, [add("border", "border", "1px solid", "border-width")]),
+    shadow
+      ? section(context, "Effects", ["box-shadow"])
+      : section(context, "Effects", null, [add("shadow", "box-shadow", "0 1px 3px rgba(0, 0, 0, 0.12)", "box-shadow")]),
   );
 }

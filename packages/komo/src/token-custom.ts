@@ -1,8 +1,11 @@
+import { typedCustom } from "./typed-custom.js";
+import type { Field } from "./design-panel.js";
+import type { DesignToken } from "./design-system.js";
 import { fieldLabel } from "./field-label.js";
 import { el } from "./dom.js";
 
 /** The color editor is fetched only when Custom opens; typing never creates history. */
-export function customEditor(property: string, initial: string, preview: (value: string) => void, commit: (value: string) => void): HTMLElement & { refresh(value: string): void; destroy(): void } {
+export function customEditor(property: string, initial: string, preview: (value: string) => void, commit: (value: string) => void, field?: Field, tokens: readonly DesignToken[] = []): HTMLElement & { refresh(value: string): void; destroy(): void } {
   const box = el("div", "komo-custom");
   const body = el("div", "komo-custom__body");
   const actions = el("div", "komo-custom__actions");
@@ -18,6 +21,7 @@ export function customEditor(property: string, initial: string, preview: (value:
   let disposed = false;
   let current = initial;
   let dirty = false;
+  let refreshTyped: ((value: string) => void) | undefined;
   let display = (next: string) => next;
   const accept = (next: string) => {
     dirty = true;
@@ -124,17 +128,21 @@ export function customEditor(property: string, initial: string, preview: (value:
       body.append(pick);
     }
   } else {
-    value.oninput = () => accept(value.value);
-    body.append(fieldLabel(value, { property, label: "CSS value" }, box, true), value);
+    refreshTyped = typedCustom(body, property, initial, value, accept, field, tokens);
   }
   apply.onclick = () => { if (!apply.disabled) commit(current); };
-  value.onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); apply.click(); } };
+  box.onkeydown = event => { if (event.key === "Enter" && !event.isComposing && event.target instanceof HTMLInputElement && event.target.type !== "checkbox") { event.preventDefault(); event.stopPropagation(); apply.click(); } };
   actions.append(apply);
   return Object.assign(box, { destroy() { disposed = true; picker?.destroy(); }, refresh(next: string) {
     if (dirty) return;
     const start = value.selectionStart, end = value.selectionEnd;
     current = next;
     value.value = display(next);
+    refreshTyped?.(next);
     if (start !== null && end !== null) value.setSelectionRange(start, end);
   } });
+}
+
+export function pickerEditor(options: import("./token-picker.js").TokenPickerOptions, preview: (value: string) => void, commit: (value: string) => void) {
+  return customEditor(options.property, options.custom!.value, preview, commit, options.custom?.field, options.tokens);
 }
