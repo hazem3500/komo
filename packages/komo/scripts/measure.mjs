@@ -143,7 +143,8 @@ await writeFile(
 // pin's on-screen box. Initial +382 (the fitted default view and card placement run before any chunk
 // loads); the frame-size chunk +630 (Available space, the zoom readout, the "Layout follows your
 // browser window" note and its tooltip). Measured locally: main 219,704 -> 220,715.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 221_000)
+// 221,100: the pending-token chip and Layout field sync (#139) landed alongside (+~300).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 221_100)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
