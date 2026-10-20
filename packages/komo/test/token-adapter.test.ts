@@ -407,6 +407,39 @@ describe("custom token adapter in Design mode", () => {
     }
   });
 
+  it("refreshes the focused Text color hex field when the host theme changes", async () => {
+    const root = document.documentElement;
+    const styles = document.createElement("style");
+    styles.textContent = '[data-review-mode="dark"] .text-secondary{color:#cccccc;transition:color .25s}[data-review-mode="light"] .text-secondary{color:#555555;transition:color .25s}';
+    document.head.append(styles);
+    root.setAttribute("data-review-mode", "dark");
+    const values = { dark: ["#eeeeee", "#cccccc"], light: ["#222222", "#555555"] };
+    const adapter: TokenAdapter = {
+      id: "field-theme-values",
+      list(theme) {
+        const colors = values[(theme?.mode ?? root.getAttribute("data-review-mode")) as keyof typeof values];
+        return classTokens.slice(0, 2).map((token, index) => ({ ...token, value: colors[index] }));
+      },
+      resolve: () => ({ color: { path: "color.text.secondary" } }),
+    };
+    try {
+      await open({ tokens: adapter, themes: [{ id: "mode", options: [{ id: "light" }, { id: "dark" }], current: () => root.getAttribute("data-review-mode")!, apply: id => root.setAttribute("data-review-mode", id) }] });
+      expect(field("color").dataset.tokenMode).toBe("connected");
+      const raw = field("color").querySelector<HTMLInputElement>('input[data-property="color"]')!;
+      const swatch = field("color").querySelector<HTMLInputElement>('input[type="color"]')!;
+      expect(raw.value).toBe("#cccccc");
+      raw.focus();
+      root.setAttribute("data-review-mode", "light");
+      await vi.waitFor(() => expect(getComputedStyle(label).color).toBe("rgb(85, 85, 85)"));
+      await vi.waitFor(() => expect(raw.value).toBe("#555555"));
+      expect(swatch.value).toBe("#555555");
+      expect(tool("Undo").disabled).toBe(true);
+    } finally {
+      styles.remove();
+      root.removeAttribute("data-review-mode");
+    }
+  });
+
   it("keeps an open picker and its transient option current across an external theme change", async () => {
     const root = document.documentElement;
     root.setAttribute("data-review-mode", "dark");
