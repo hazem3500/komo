@@ -209,7 +209,7 @@ export interface ComponentAdapter {
 }
 
 export interface DesignSystem {
-  /** Opt in to experimental, reversible page-element move AND resize previews. Default false. */
+  /** Opt in to experimental, reversible page-element resize previews with Figma-style handles. Default false. */
   experimentalGeometry?: boolean;
   tokens?: TokenAdapter;
   themes?: ThemeAxis[];

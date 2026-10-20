@@ -15,6 +15,9 @@ export function designCommands(mac = /Mac|iPhone|iPad/.test(navigator.platform))
     command("After", "ArrowRight", "Focused comparison controls"),
     command("Inspect focused element", "Enter", canvas),
     command("Exit design mode", "Escape", canvas),
+    // Experimental geometry: Ctrl+arrows switch spaces on macOS, so ⌘ there; Alt stays parent/child.
+    command("Resize width (Shift: 10px)", "ArrowRight", "Focused selection · experimental geometry", mac ? { meta: true } : { ctrl: true }),
+    command("Resize height (Shift: 10px)", "ArrowDown", "Focused selection · experimental geometry", mac ? { meta: true } : { ctrl: true }),
     command("Commit text preview", "Enter", "Inline text editor"),
     command("New line", "Enter", "Inline text editor", { shift: true }),
     command("Cancel text preview", "Escape", "Inline text editor"),

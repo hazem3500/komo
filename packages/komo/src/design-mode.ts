@@ -162,7 +162,7 @@ export function createDesignMode(options: DesignModeOptions) {
       options, signal: listeners.signal, selected: () => selected,
       enabled: () => active && decorating && !showingBefore && !textTools?.element,
       remember, track, history, update: updateActions, select,
-      tokens: () => reactPanelModule,
+      tokens: () => reactPanelModule, panel: () => controls,
     });
   });
 

@@ -94,54 +94,62 @@ async function open(mode: string) {
   return { page, errors };
 }
 
-const handle = (page: Page, name: string) => page.locator(".design-geometry").getByRole("button", { name, exact: true });
-async function drag(page: Page, name: string, dx: number, dy: number) {
-  const box = await handle(page, name).boundingBox();
-  expect(box).not.toBeNull();
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+const handle = (page: Page, name: string) => page.locator(`.design-geometry__handle[data-handle=${name}]`);
+let picked = "";
+/** Wake the canvas (panel clicks leave it undecorated), then drag a handle by a screen delta. */
+async function drag(page: Page, name: string, dx: number, dy: number, modifier = "Alt") {
+  if (picked) await page.locator(`#${picked}`).hover();
+  await handle(page, name).waitFor({ state: "visible" });
+  const box = (await handle(page, name).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box!.x + box!.width / 2 + dx, box!.y + box!.height / 2 + dy, { steps: 6 });
+  // Alt keeps snapping out of exact-delta checks.
+  if (modifier) await page.keyboard.down(modifier);
+  await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy, { steps: 6 });
   await page.mouse.up();
+  if (modifier) await page.keyboard.up(modifier);
+}
+async function pick(page: Page, id: string) {
+  picked = id;
+  await page.locator(`#${id}`).click();
 }
 const inspector = (page: Page, name: string) => page.locator(".design-inspector").getByRole("button", { name, exact: true });
+const note = (page: Page) => page.locator(".design-inspector .design-geometry-note");
 
-// Each eligible box: move, two-axis resize, Undo, Before/After and Reset, with the exact attribute back.
+// Each eligible box: two-axis resize, an edge resize, Undo, Before/After and Reset, with the exact attribute back.
 const eligible: Array<{ id: string; ratio?: number }> = [
   { id: "card" }, { id: "cta" }, { id: "cell" }, { id: "popover" }, { id: "photo", ratio: 4 / 3 }, { id: "badge" },
 ];
 
 describe.skipIf(!chrome)("geometry across layouts", () => {
-  it.each(["floating", "frame", "frame-scaled"])("moves and resizes flex, grid, positioned and aspect boxes: %s", async mode => {
+  it.each(["floating", "frame", "frame-scaled"])("resizes flex, grid, positioned and aspect boxes: %s", async mode => {
     const { page, errors } = await open(mode);
     try {
       for (const { id, ratio } of eligible) {
         const target = page.locator(`#${id}`);
-        await target.click();
-        await handle(page, "Move").waitFor({ state: "visible" });
+        await pick(page, id);
+        await handle(page, "se").waitFor({ state: "visible" });
         const baseline = await target.getAttribute("style");
         const start = (await target.boundingBox())!;
         const siblings = await page.locator(".demo > div").evaluateAll(nodes => nodes.map(node => node.children.length));
-        await drag(page, "Move", 30, 20);
-        const moved = (await target.boundingBox())!;
-        expect(moved.x - start.x, `${id} x in ${mode}`).toBeCloseTo(30, 0);
-        expect(moved.y - start.y, `${id} y in ${mode}`).toBeCloseTo(20, 0);
-        expect(moved.width).toBeCloseTo(start.width, 0);
-        const movedStyle = await target.getAttribute("style");
-        await drag(page, "Resize width and height", 24, 16);
+        await drag(page, "se", 24, 16);
         const sized = (await target.boundingBox())!;
-        expect(sized.width - moved.width, `${id} width in ${mode}`).toBeCloseTo(24, 0);
+        expect(sized.width - start.width, `${id} width in ${mode}`).toBeCloseTo(24, 0);
         if (ratio) expect(sized.width / sized.height).toBeCloseTo(ratio, 2);
-        else expect(sized.height - moved.height, `${id} height in ${mode}`).toBeCloseTo(16, 0);
-        // Never reparented or reordered.
+        else expect(sized.height - start.height, `${id} height in ${mode}`).toBeCloseTo(16, 0);
+        const sizedStyle = await target.getAttribute("style");
+        await drag(page, ratio ? "nw" : "e", ratio ? -12 : 10, 0);
+        expect((await target.boundingBox())!.width - sized.width, `${id} second resize in ${mode}`).toBeGreaterThan(8);
+        // Never reparented or reordered, and no free-form move.
         expect(await page.locator(".demo > div").evaluateAll(nodes => nodes.map(node => node.children.length))).toEqual(siblings);
-        expect(await target.evaluate(node => node.style.transition)).toBe("");
+        expect(await target.evaluate(node => [node.style.transition, node.style.translate, node.style.left, node.style.top])).toEqual(["", "", "", ""]);
         if (id === "cta") await page.screenshot({ path: join(shots, `layouts-${mode}.png`) });
         await inspector(page, "Undo").click();
-        expect(await target.getAttribute("style")).toBe(movedStyle);
+        expect(await target.getAttribute("style")).toBe(sizedStyle);
         await inspector(page, "Before").click();
         expect(await target.getAttribute("style")).toBe(baseline);
         await inspector(page, "After").click();
-        expect(await target.getAttribute("style")).toBe(movedStyle);
+        expect(await target.getAttribute("style")).toBe(sizedStyle);
         await inspector(page, "Reset").click();
         expect(await target.getAttribute("style"), `${id} reset in ${mode}`).toBe(baseline);
       }
@@ -162,20 +170,19 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
       };
       for (const [id, attribute] of Object.entries(attributes)) {
         const target = page.locator(`#${id}`);
+        const [width, height] = id === "photo" ? ["se", "sw"] : ["e", "s"];
         await target.evaluate((node, value) => node.setAttribute("style", value), attribute);
-        await target.click();
-        await drag(page, "Move", -14, 9);
-        await drag(page, "Resize width and height", 18, 12);
+        await pick(page, id);
+        await drag(page, "se", -14, 9);
+        await drag(page, "se", 18, 12);
         await inspector(page, "Undo").click();
         await inspector(page, "Undo").click();
         expect(await target.getAttribute("style"), `${id} undo in ${mode}`).toBe(attribute);
-        await target.hover();
-        await drag(page, "Resize width", 22, 0);
-        await drag(page, "Move", 8, 8);
+        await drag(page, width, 22, 0);
+        await drag(page, height, 8, 8);
         await inspector(page, "Reset").click();
         expect(await target.getAttribute("style"), `${id} reset in ${mode}`).toBe(attribute);
-        await target.hover();
-        await drag(page, "Resize height", 0, 14);
+        await drag(page, height, 0, 14);
       }
       await page.keyboard.press("d");
       for (const [id, attribute] of Object.entries(attributes)) expect(await page.locator(`#${id}`).getAttribute("style"), `${id} suspended`).toBe(attribute);
@@ -187,64 +194,65 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
     } finally { await page.close(); }
   });
 
-  it("explains inline and display: contents targets and selects the nearest movable parent", async () => {
+  it("explains inline and display: contents targets in the panel and selects the nearest movable parent", async () => {
     const { page, errors } = await open("floating");
     try {
-      await page.locator("#inline").click();
-      const reason = page.locator(".design-geometry p");
+      await pick(page, "inline");
+      const reason = note(page).locator("p");
       await expect.poll(() => reason.textContent()).toBe("Inline text box can't be resized");
-      expect(await handle(page, "Move").isVisible()).toBe(false);
+      expect(await handle(page, "se").isVisible()).toBe(false);
       await page.screenshot({ path: join(shots, "layouts-inline-reason.png") });
-      await page.locator(".design-geometry").getByRole("button", { name: "Select movable parent p" }).click();
+      await note(page).getByRole("button", { name: "Select movable parent p" }).click();
       await expect.poll(() => page.locator(".design-inspector__target").textContent()).toBe("p#prose");
-      await handle(page, "Move").waitFor({ state: "visible" });
+      await page.locator("#prose").hover();
+      await handle(page, "se").waitFor({ state: "visible" });
 
-      await page.locator("#inner").click();
+      await pick(page, "inner");
       await page.locator(".design-inspector__parent").click();
       await expect.poll(() => page.locator(".design-inspector__target").textContent()).toBe("div#contents");
       await expect.poll(() => reason.textContent()).toBe("display: contents has no box");
-      expect(await handle(page, "Move").isVisible()).toBe(false);
-      await page.locator(".design-geometry").getByRole("button", { name: "Select movable parent div" }).click();
+      expect(await handle(page, "se").isVisible()).toBe(false);
+      await note(page).getByRole("button", { name: "Select movable parent div" }).click();
       await expect.poll(() => page.locator(".design-inspector__target").textContent()).toBe("div#side");
-      await handle(page, "Move").waitFor({ state: "visible" });
+      await page.locator("#side").hover({ position: { x: 4, y: 4 } });
+      await handle(page, "se").waitFor({ state: "visible" });
       expect(await page.locator("#contents").getAttribute("style")).toBe("display:contents");
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   });
 
-  it("discloses flex side effects in the UI and proposal, and snaps grid spans numerically", async () => {
+  it("discloses flex side effects in the panel and proposal, and snaps grid spans numerically", async () => {
     const { page, errors } = await open("floating");
     try {
-      await page.locator("#cta").click();
-      await drag(page, "Move", 12, -6);
-      await drag(page, "Resize width", -40, 0);
+      await pick(page, "cta");
+      await drag(page, "e", -40, 0);
       const style = await page.locator("#cta").evaluate(node => [node.style.flexBasis, node.style.flexGrow, node.style.width]);
       expect(style[0]).toBe(style[2]);
       expect(style[1]).toBe("0");
-      const note = page.locator(".design-geometry p");
-      await expect.poll(() => note.textContent()).toContain("width overrides flex: 1 1 0%");
-      expect(await note.textContent()).toContain(`sets flex-basis: ${style[0]}`);
+      await expect.poll(() => note(page).textContent()).toContain("width overrides flex: 1 1 0%");
+      expect(await note(page).textContent()).toContain(`sets flex-basis: ${style[0]}`);
+      expect(await page.locator(".design-geometry .design-geometry-note").count()).toBe(0);
 
-      await page.locator("#card").click();
-      await drag(page, "Resize height", 0, -30);
+      await pick(page, "card");
+      await drag(page, "s", 0, -30);
       expect(await page.locator("#card").evaluate(node => [node.style.flexBasis, node.style.flexGrow])).toEqual([expect.stringMatching(/px$/), "0"]);
 
-      await page.locator("#cell").click();
-      const snap = page.locator(".design-geometry").getByRole("button", { name: "Snap to grid tracks" });
+      await pick(page, "cell");
+      const snap = note(page).getByRole("button", { name: "Snap to grid tracks" });
       await snap.click();
       expect(await snap.getAttribute("aria-pressed")).toBe("true");
-      await drag(page, "Resize width and height", 112, 64);
+      await drag(page, "se", 112, 64);
       expect(await page.locator("#cell").evaluate(node => [node.style.gridColumnEnd, node.style.gridRowEnd, node.style.width])).toEqual(["span 2", "span 2", ""]);
-      await handle(page, "Resize width").focus();
-      await page.keyboard.press("Enter"); await page.keyboard.press("ArrowRight"); await page.keyboard.press("Enter");
+      await page.locator(".design-geometry__frame").focus();
+      await page.keyboard.press("Control+ArrowRight");
       expect(await page.locator("#cell").evaluate(node => node.style.gridColumnEnd)).toBe("span 3");
       await page.screenshot({ path: join(shots, "layouts-grid-snap.png") });
 
-      await page.locator("#cta").click();
+      await pick(page, "cta");
       await inspector(page, "Comment").click();
       await page.waitForSelector(".draft-proposal");
       const proposal = (await page.locator(".draft-proposal").textContent())!;
-      expect(proposal).toContain("Move (translate)");
+      expect(proposal).not.toContain("Move (translate)");
       expect(proposal).toContain("Resize (flex-basis) width");
       expect(proposal).toContain("sets flex-grow: 0");
       await page.keyboard.press("Escape");
@@ -253,22 +261,23 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
     } finally { await page.close(); }
   });
 
-  it("records mode, delta and side effects in copied proposals", async () => {
+  it("records mode, values and side effects in copied proposals", async () => {
     const { page } = await open("floating");
     try {
       await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-      for (const [id, name, dx, dy] of [["badge", "Move", 10, 5], ["photo", "Resize width", 32, 0], ["cell", "Resize width", 20, 0]] as const) {
-        await page.locator(`#${id}`).click();
+      for (const [id, name, dx, dy] of [["badge", "e", 10, 0], ["photo", "se", 32, 0], ["cell", "e", 20, 0]] as const) {
+        await pick(page, id);
         await drag(page, name, dx, dy);
       }
       await page.locator(".design-inspector__close").click();
       await page.keyboard.press("d");
       await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy pending proposals" }).click();
       const text = await page.evaluate(() => navigator.clipboard.readText());
-      expect(text).toMatch(/Proposed geometry changes \(preview only\)\nTarget: #badge\nLayout: position: relative\n- Move \(offset\): Δx 10px, Δy 5px · host styles override translate; moves with left\/top offsets/);
+      expect(text).toMatch(/Proposed geometry changes \(preview only\)\nTarget: #badge\nLayout: position: relative\n- Resize \(size\) width: [\d.]+px → [\d.]+px/);
       expect(text).toMatch(/- Resize \(size\) width: 160px → 192px · keeps aspect ratio 4 \/ 3/);
       expect(text).toMatch(/- Resize \(size\) height: 120px → 144px/);
       expect(text).toMatch(/Layout: grid item\n- Resize \(size\) width: \d+(\.\d+)?px → \d+(\.\d+)?px · width overrides justify-self: stretch/);
+      expect(text).not.toMatch(/Move \(/);
     } finally { await page.close(); }
   });
 });

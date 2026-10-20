@@ -686,9 +686,9 @@ Without `pageRoot`, a sole existing content element with a layout box enables Fr
 
 The `@hazem3500/komo/server` export loads built ESM in Node and includes Worker handler types. Wrangler selects the original TypeScript through the `workerd` condition; keep `nodejs_compat` enabled. Package metadata is available at `@hazem3500/komo/package.json`.
 
-### Experimental page-element move and resize
+### Experimental page-element resize
 
-Both capabilities are **off by default**. Opt in explicitly in the public configuration:
+Resize is **off by default**. Opt in explicitly in the public configuration:
 
 ```ts
 initKomo({
@@ -697,27 +697,29 @@ initKomo({
 });
 ```
 
-This loads geometry tools lazily in Design mode. Select a supported page element to see **Move**, right-edge width, bottom-edge height, and bottom-right width/height handles. Drag a handle, or focus it and press Enter/Space to arm it. Arrows adjust by one local CSS pixel (Shift+arrow: ten); Enter/Space commits, Escape cancels. Losing focus or pointer capture cancels. Shift does **not** lock aspect ratio. Minimum dimensions are 16 CSS pixels, or the border and padding footprint when larger. Each completed gesture is one chronological Undo, including a two-axis resize. The panel's Layout fields (Width, Height and the rest) show the new values as soon as a gesture commits, and again after Undo, Reset and Before/After. A field edit after a resize joins the same history; the proposal then reports the field's net value instead of the superseded resize.
+This loads geometry tools lazily in Design mode. A supported selection gets a 1px outline on its border box and Figma-style handles: four corners and four edge midpoints, 8px squares with 16px hit areas and resize cursors, centred on the outline and pushed outward where padding is thinner than half a handle, so they never cover content. Only applicable handles appear: aspect-locked boxes get corners only, and an axis pinned by equal `min-`/`max-` sizes has no handles. Boxes under 40px drop the midpoint squares; their edges still drag. Handles, outline and the readout keep their on-screen size at any Frame zoom.
 
-These are reversible runtime CSS proposals, not source or backend edits. Nothing is reparented or reordered. Undo returns to the previous preview; Reset restores the host baseline, including the exact original `style` attribute. Before/After, Browse suspension and Comment transfer use the existing Design proposal lifecycle. Controls disappear while the clean editing gate is active; target the canvas again to show them. The flag does not resize comment pins or the page-preview Frame.
+- **Drag** any handle. A W × H chip shows below the selection. The moving edge snaps to the parent's content edges and centre and to siblings' edges across the flow within 4px, with a thin guide; hold **Alt/Option** to resize freely. **Shift** on a corner keeps the box's proportions. Escape cancels.
+- **Keyboard:** focus the selection (Tab) and press **Ctrl+arrows** (or **⌘+arrows** on macOS, where Ctrl+arrows switch spaces) to resize from the bottom-right by one local CSS pixel, Shift for ten; snapped grid items step one track. Plain arrows and **Alt+arrows** keep their Design meaning (sibling and parent/child selection). Each step is announced politely, for example "Resized: width 241px".
+- Minimum dimensions are 16 CSS pixels, or the border and padding footprint when larger. Each completed gesture is one chronological Undo. The panel's Layout fields (Width, Height and the rest) show the new values as soon as a gesture commits, and again after Undo, Reset and Before/After. A field edit after a resize joins the same history; the proposal then reports the field's net value instead of the superseded resize.
+
+These are reversible runtime CSS proposals, not source or backend edits. Nothing is moved, reparented or reordered. Undo returns to the previous preview; Reset restores the host baseline, including the exact original `style` attribute. Before/After, Browse suspension and Comment transfer use the existing Design proposal lifecycle. Handles disappear while the clean editing gate is active; target the canvas again to show them. The flag does not resize comment pins or the page-preview Frame.
 
 How each layout previews:
 
-- **Move** composes with the element's own CSS `translate` (keeping its units, such as `calc(5% + 12px)`), so normal flow, siblings and existing transforms stay put. When a host rule overrides inline `translate` on a `position: relative` box, Move uses `left`/`top` offsets instead (`right` in RTL).
-- **Resize** sets `width`/`height`. On a flex item's main axis it also sets `flex-basis` when the basis isn't `auto`, `flex-grow: 0` when it grows, and `flex-shrink: 0` only when the box would otherwise shrink. Cross-axis and grid sizes override `align-self`/`justify-self: stretch`. Min/max limits clamp the preview and say so.
-- **Grid items** resize within their cell. **Snap to grid tracks** changes `grid-column-end`/`grid-row-end` to numeric `span N` values instead; arrows step one track.
+- **Resize** sets `width`/`height`. On a flex item's main axis it also sets `flex-basis` when the basis isn't `auto`, `flex-grow: 0` when it grows, and `flex-shrink: 0` only when the box would otherwise shrink. Cross-axis and grid sizes override `align-self`/`justify-self: stretch`. Min/max limits clamp the preview and say so. Layout decides which edge moves: a left or top handle grows the box too, and normal flow keeps its start edge.
+- **Grid items** resize within their cell. **Snap to grid tracks** (in the panel's Layout section) changes `grid-column-end`/`grid-row-end` to numeric `span N` values instead.
 - **Images, video, canvas, iframes, SVG roots and `aspect-ratio` boxes** resize with their aspect ratio locked.
 
-Side effects show beside the selection and in the proposal, for example `width overrides flex: 1 1 0%` or `sets flex-basis: 240px`. Comment proposals add a `Proposed geometry changes` section after the CSS rows:
+Side effects show as a quiet note in the Design panel's Layout section and in the proposal, for example `width overrides flex: 1 1 0%` or `sets flex-basis: 240px`. Comment proposals add a `Proposed geometry changes` section after the CSS rows:
 
 ```text
 Proposed geometry changes (preview only)
 Target: #save
 Layout: flex item, row
-- Move (translate): Δx 12px, Δy -4px
 - Resize (flex-basis) width: 260px → 240px · width overrides flex: 1 1 0% · sets flex-basis: 240px · sets flex-grow: 0
 ```
 
-The CLI reads these lines into `geometry` DesignEdit changes with `mode` (`translate`, `offset`, `size`, `flex-basis` or `span`), the delta or values, `layout` and `effects`.
+The CLI reads these lines into `geometry` DesignEdit changes with `mode` (`size`, `flex-basis` or `span`), the values, `layout` and `effects`. Earlier proposals with `Move (translate)` or `Move (offset)` lines still parse and render as `translate`/`offset` changes; the current UI no longer produces free-form moves.
 
-Supported targets are HTML boxes and SVG roots in normal flow, flex or grid, or relatively, absolutely, fixed or sticky positioned, through positive axis-aligned 2D scale chains and normal, reflow or explicitly scaled Frames. Pointer deltas are converted to local CSS pixels, and scroll during pointer capture is accounted for. Only boxes that can't be previewed are excluded, each with its own reason and a **Select parent** action that picks the nearest movable ancestor: inline text boxes, SVG shapes inside an SVG, `display: contents` or unrendered elements, table cells and rows, boxes split across lines or columns, rotated/skewed/3D/mirrored chains, and geometry animations in progress. This is deliberately not a universal layout editor.
+Supported targets are HTML boxes and SVG roots in normal flow, flex or grid, or relatively, absolutely, fixed or sticky positioned, through positive axis-aligned 2D scale chains and normal, reflow or explicitly scaled Frames. Pointer deltas are converted to local CSS pixels, and scroll during pointer capture is accounted for. Only boxes that can't be previewed are excluded, each with its own reason in the panel and a **Select parent** action that picks the nearest resizable ancestor: inline text boxes, SVG shapes inside an SVG, `display: contents` or unrendered elements, table cells and rows, boxes split across lines or columns, rotated/skewed/3D/mirrored chains, and geometry animations in progress. This is deliberately not a universal layout editor.

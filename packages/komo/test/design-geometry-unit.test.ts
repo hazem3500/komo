@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { composeTranslate, eligibleAncestor, geometryProposal, geometryReason, spanFor, type GeometryChange } from "../src/design-geometry.js";
+import { eligibleAncestor, geometryProposal, geometryReason, spanFor, type GeometryChange } from "../src/design-geometry.js";
 import { parseDesignComment } from "../src/design-comment.js";
 // @ts-expect-error CLI modules are plain JavaScript.
 import { designEditFromComment, formatDesignEdit, parseDesignEdit } from "../cli/design-edit.mjs";
@@ -57,14 +57,6 @@ describe("geometry eligibility reasons", () => {
 });
 
 describe("geometry math", () => {
-  it("composes with the host translate, keeping units and the z part", () => {
-    expect(composeTranslate("none", 12.345, -4)).toBe("12.35px -4px");
-    expect(composeTranslate("", 1, 2)).toBe("1px 2px");
-    expect(composeTranslate("10px", 5, 5)).toBe("15px 5px");
-    expect(composeTranslate("5% 8px", 3, -2)).toBe("calc(5% + 3px) 6px");
-    expect(composeTranslate("calc(5% + 3px) 1em 4px", -6, 0)).toBe("calc(calc(5% + 3px) - 6px) 1em 4px");
-  });
-
   it("picks the span whose end edge is nearest, adding implicit tracks", () => {
     const starts = [0, 110, 220], ends = [100, 210, 320];
     expect(spanFor(starts, ends, 10, 100, 0, 90)).toBe(1);
