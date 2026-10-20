@@ -153,7 +153,8 @@ if (report.optionalInlineTextEditing.gzip > 3_100)
 // so the Figma-style panel does not grow the Design mode entry (7,007 -> 5,677 gzip).
 // New budget: 4,262 measured for scrubbing, inline token chips and section rules.
 // The select trigger's chevron moved to the select menu chunk below (4,271 -> ~4,140).
-if (report.optionalDesignPanel.gzip > 4_300)
+// 4,375: color fields fetch their settled-value sync (live-colors, below) and read a bound token's value (4,246 -> 4,321).
+if (report.optionalDesignPanel.gzip > 4_375)
   throw new Error("komo's design panel chunk exceeds its gzip budget.");
 // The Design panel's styled select popups (listbox, keyboard, flip and check marks)
 // load as their own chunk beside the panel, so neither the panel nor the entry grows.
