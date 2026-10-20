@@ -119,6 +119,7 @@ const adapters = await build({
 // Compress the emitted modules without changing their split boundaries or exports.
 // Preserve framework directives ("use client") and linked license notices.
 // Spend the extra compression passes on the modules loaded at mount.
+// Hoist mount declarations to reduce gzip size; lazy chunks compress better without hoisting.
 const initial = new Set();
 function visit(path) {
   if (initial.has(path)) return;
@@ -133,7 +134,7 @@ await Promise.all(
     .map(async (path) => {
       const { code } = await minify(await readFile(path, "utf8"), {
         module: true,
-        compress: { passes: initial.has(path) ? 3 : 1, inline: initial.has(path) ? false : 3, directives: false },
+        compress: { passes: initial.has(path) ? 3 : 1, inline: initial.has(path) ? false : 3, hoist_funs: initial.has(path), hoist_vars: initial.has(path), directives: false },
         mangle: true,
         format: { comments: "some" },
       });
