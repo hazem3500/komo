@@ -58,3 +58,51 @@ export function mobileComposerPosition(
     y: top + Math.max(12, (height - cardHeight) / 2),
   };
 }
+
+type Box = { left: number; top: number; width: number; height: number };
+export type FrameView = Box & { scale: number; pan: boolean };
+/**
+ * Place a logical viewport in Frame's box. Fit shows all of it, centred, and
+ * never upscales; 100% keeps CSS pixels and pans when it is larger than the box.
+ */
+export function frameView(box: Box, [width, height]: number[], actual: boolean): FrameView {
+  const scale = actual ? 1 : Math.min(1, box.width / width, box.height / height);
+  return {
+    width,
+    height,
+    scale,
+    pan: width * scale > box.width + 0.5 || height * scale > box.height + 0.5,
+    left: box.left + Math.max(0, (box.width - width * scale) / 2),
+    top: box.top + Math.max(0, (box.height - height * scale) / 2),
+  };
+}
+
+type Edges = { left: number; top: number; right: number; bottom: number };
+/** The box a pin occupies around its point when there is no pin element to measure. */
+export const pinBox = ({ x, y }: { x: number; y: number }): Edges => ({ left: x - 4, top: y - 28, right: x + 12, bottom: y + 4 });
+/**
+ * Place a komo card beside a pin's on-screen box, in window pixels: right, left,
+ * below, then above, the first that fits the review area; otherwise the roomiest, clamped.
+ */
+export function placeCard(pin: Edges, width: number, height: number, area: Edges) {
+  const fit = (start: number, size: number, low: number, high: number) =>
+    Math.max(low, Math.min(start, high - size));
+  const x = fit(pin.left, width, area.left, area.right);
+  const y = fit(pin.top, height, area.top, area.bottom);
+  const options = [
+    [pin.right + 8, y],
+    [pin.left - width - 8, y],
+    [x, pin.bottom + 8],
+    [x, pin.top - 8 - height],
+  ];
+  const visible = ([left, top]: number[]) =>
+    Math.max(0, Math.min(left + width, area.right) - Math.max(left, area.left)) *
+    Math.max(0, Math.min(top + height, area.bottom) - Math.max(top, area.top));
+  const best =
+    options.find((option) => visible(option) >= width * height - 1) ??
+    options.reduce((a, b) => (visible(b) > visible(a) ? b : a));
+  return {
+    x: fit(best[0], width, area.left, area.right),
+    y: fit(best[1], height, area.top, area.bottom),
+  };
+}

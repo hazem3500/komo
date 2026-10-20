@@ -48,8 +48,11 @@ import { appendMessageLinks } from "./message-links.js";
 import { animate, loadMotion } from "./lazy-motion.js";
 import { actionMenu, selectionMenu } from "./action-menu.js";
 import {
+  frameView,
   isCompactReview,
   mobileComposerPosition,
+  pinBox,
+  placeCard,
   reviewLayout,
 } from "./review-layout.js";
 import type { FrameSizeControls } from "./frame-size.js";
@@ -713,7 +716,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   const frameViewport = createFrameViewport(host);
   // The visual frame in page CSS pixels, before any panning scroll.
   let frameBox = { left: 0, top: 0, width: 0, height: 0, logical: [0, 0], pan: false };
-  // Size controls own a chosen logical viewport; until they load, the box is the viewport.
+  // Size controls own a chosen logical viewport; until they load, it is the window at Fit.
   const frameSizeKey = `branch-comments:frame-size:${options.project}:${options.repo}`;
   let frameControls: FrameSizeControls | undefined;
   let frameControlsLoading = false;
@@ -727,7 +730,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         appliedViewport = "";
         scalePage();
         geometry();
-      });
+      }, frameView);
       // Re-layout only for a remembered size; the default keeps Frame's entrance motion.
       if (frameControls.sized) {
         appliedViewport = "";
@@ -739,7 +742,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     // Load a remembered size before Frame opens, so the page does not reflow twice.
     if (localStorage.getItem(frameSizeKey)) loadFrameControls();
   } catch {
-    /* Storage is blocked: the fitted default needs no controls until Frame opens. */
+    /* Storage is blocked: the default needs no controls until Frame opens. */
   }
   function framePortals() {
     const zoom = htmlZoom();
@@ -1903,7 +1906,11 @@ export function initComments(options: CommentsOptions): CommentsController {
     const wasPanned = framed && frameBox.pan;
     const area = { left: layout.left, top: layout.top, width: layout.visibleWidth, height: layout.height };
     const box = { left: area.left / zoom, top: area.top / zoom, width: area.width / zoom, height: area.height / zoom };
-    const view = (!scaled && frameControls?.view(box)) || { ...box, scale: 1, pan: false };
+    // Frame opens on the browser window's own size at Fit, so the page keeps its real layout.
+    const windowSize = [window.innerWidth / zoom, window.innerHeight / zoom];
+    const view = scaled
+      ? { ...box, scale: 1, pan: false }
+      : (frameControls?.view(box, windowSize) ?? frameView(box, windowSize, false));
     const pan = useFrame && !scaled && view.pan;
     frameArea = useFrame && !scaled ? area : null;
     host.style.setProperty("--review-viewport-height", `${viewportHeight}px`);
@@ -3098,15 +3105,17 @@ export function initComments(options: CommentsOptions): CommentsController {
           expanded && !compactSidebar
             ? 396
             : 12;
-        const left =
-          point.x + 20 + 320 > window.innerWidth - right
-            ? point.x - 340
-            : point.x + 20;
+        const place = placeCard(pin.getBoundingClientRect(), pinPreview.offsetWidth || 320, pinPreview.offsetHeight, {
+          left: 12,
+          top: 12,
+          right: window.innerWidth - right,
+          bottom: framed ? Math.min(window.innerHeight, surface.getBoundingClientRect().bottom) - 12 : window.innerHeight - 92,
+        });
         Object.assign(pinPreview.style, {
-          left: `${Math.max(12, left)}px`,
+          left: `${place.x}px`,
           transformOrigin:
-            point.x < Math.max(12, left) + 160 ? "top left" : "top right",
-          top: `${Math.max(12, Math.min(point.y - 28, window.innerHeight - pinPreview.offsetHeight - 92))}px`,
+            point.x < place.x + 160 ? "top left" : "top right",
+          top: `${place.y}px`,
         });
         if (
           wasHidden &&
@@ -5539,12 +5548,13 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     // Stay inside what's visible: the frame when framed, above the toolbar otherwise.
     // Content that loads later (design change cards) re-runs this through the observer.
-    const bottom = framed ? surface.getBoundingClientRect().bottom - 12 : availableHeight - 92;
+    const bottom = framed ? Math.min(availableHeight, surface.getBoundingClientRect().bottom) - 12 : availableHeight - 92;
     dialog.style.maxHeight = `${bottom - 12}px`;
     (dialogSize ??= new ResizeObserver(() => positionDialog())).observe(dialog);
     const anchor = draft ?? (thread && onThreadPage(thread) ? thread.anchor : null);
     // Areas and design changes are about a region: open beside it, not over it.
     let around: { left: number; top: number; right: number; bottom: number } | undefined;
+    let pinRect: DOMRect | undefined;
     const pin =
       draggedPin?.id === selected
         ? draggedPin
@@ -5566,6 +5576,7 @@ export function initComments(options: CommentsOptions): CommentsController {
                 pins.querySelector<HTMLElement>(
                   `[data-thread="${CSS.escape(selected)}"]`,
                 );
+              pinRect = indicator ? indicator.getBoundingClientRect() : undefined;
               return indicator ? indicatorPoint(indicator, rect) : rect;
             })()
           : null;
@@ -5597,17 +5608,17 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     let x = (window.innerWidth - 354) / 2,
       y = availableHeight - 450;
-    if (pin) {
-      x = pin.x + 20;
-      y = pin.y - 28;
-    }
     const right =
       expanded && !compactSidebar
         ? 396
         : 12;
     const w = dialog.offsetWidth,
       h = dialog.offsetHeight;
-    if (pin && x + w > window.innerWidth - right) x = pin.x - w - 20;
+    // The pin's point is on screen, after any Frame scale; the card itself is never scaled.
+    if (pin)
+      ({ x, y } = placeCard(pinRect?.width && !follow ? pinRect : pinBox(pin), w, h, {
+        left: 12, top: 12, right: window.innerWidth - right, bottom,
+      }));
     // Right, then left, then below, then above the region, 14px clear of it.
     // A region too wide for either side takes the roomier of below and above,
     // shortening the card to fit rather than covering the region.

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { frameView } from "../src/frame-size";
-import { mobileComposerPosition, reviewLayout } from "../src/review-layout";
+import { frameView, mobileComposerPosition, pinBox, placeCard, reviewLayout } from "../src/review-layout";
 
 describe("review viewport layout", () => {
   it.each([
@@ -73,8 +72,12 @@ describe("review viewport layout", () => {
 
 describe("frame view", () => {
   const box = { left: 24, top: 48, width: 852, height: 728 };
-  it("uses the box itself as the viewport by default, unscaled", () => {
-    expect(frameView(box, null, false)).toEqual({ width: 852, height: 728, scale: 1, pan: false, left: 24, top: 48 });
+  it("fits the browser window's own size into the box by default, scaled down", () => {
+    const window = frameView(box, [1280, 800], false);
+    expect(window).toMatchObject({ width: 1280, height: 800, pan: false, left: 24 });
+    expect(window.scale).toBeCloseTo(852 / 1280);
+    expect(window.scale).toBeLessThan(1);
+    expect(frameView(box, [852, 728], false)).toEqual({ width: 852, height: 728, scale: 1, pan: false, left: 24, top: 48 });
   });
   it("fits a larger logical viewport, centred, and never upscales a smaller one", () => {
     const desktop = frameView(box, [1440, 900], false);
@@ -90,6 +93,29 @@ describe("frame view", () => {
   it("keeps CSS pixels at 100% and pans a viewport larger than the box", () => {
     expect(frameView(box, [1440, 900], true)).toMatchObject({ scale: 1, pan: true, left: 24, top: 48 });
     expect(frameView(box, [768, 600], true)).toMatchObject({ scale: 1, pan: false });
+  });
+});
+
+describe("card placement", () => {
+  const area = { left: 12, top: 12, right: 550, bottom: 700 };
+  const pin = (x: number, y: number) => ({ left: x, top: y, right: x + 34, bottom: y + 34 });
+  it("prefers the right of the pin, then the left", () => {
+    expect(placeCard(pin(100, 200), 320, 140, area)).toEqual({ x: 142, y: 200 });
+    expect(placeCard(pin(450, 200), 320, 140, area)).toEqual({ x: 122, y: 200 });
+  });
+  it("goes below, then above, when neither side has room, without covering the pin", () => {
+    expect(placeCard(pin(250, 200), 320, 140, area)).toEqual({ x: 230, y: 242 });
+    expect(placeCard(pin(250, 600), 320, 140, area)).toEqual({ x: 230, y: 452 });
+  });
+  it("clamps the roomiest side into the area when nothing fits", () => {
+    const place = placeCard(pin(250, 300), 320, 680, area);
+    expect(place.x).toBeGreaterThanOrEqual(12);
+    expect(place.x + 320).toBeLessThanOrEqual(550);
+    expect(place.y).toBeGreaterThanOrEqual(12);
+    expect(place.y + 680).toBeLessThanOrEqual(700);
+  });
+  it("treats a bare point as a pin-sized box", () => {
+    expect(pinBox({ x: 100, y: 100 })).toEqual({ left: 96, top: 72, right: 112, bottom: 104 });
   });
 });
 

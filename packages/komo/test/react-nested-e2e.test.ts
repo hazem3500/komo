@@ -47,6 +47,8 @@ beforeAll(async () => {
         const reflow=new URLSearchParams(location.search).has('reflow');
         if(!frame&&!reflow)document.body.append(document.createElement('aside'));
         const tokens=tailwindTokens({tokens:[{path:'color.primary',label:'Primary',type:'color',class:'text-primary',properties:['color'],value:'#b42318'},{path:'color.secondary',label:'Secondary',type:'color',class:'text-secondary',properties:['color'],value:'#2468ff'},...Array.from({length:8},(_,index)=>({path:'color.fixture'+index,label:'Supplemental '+index,type:'color',class:'text-fixture-'+index,properties:['color'],value:'#123456'}))]});
+        // The reflow cases cover the unscaled in-place frame: the space beside the comments.
+        if(reflow)localStorage.setItem('branch-comments:frame-size:nested-props:example/review',JSON.stringify({size:'available'}));
         window.komo=initKomo({endpoint:location.origin,project:'nested-props',repo:'example/review',branch:'fixture',pageRoot:frame||reflow?document.querySelector('main'):undefined,sidebar:frame||reflow?'background':'edge',frame:{scale:frame},restoreOpen:false,design:{components:adapter,tokens}});
       `, resolveDir: process.cwd(), loader: "ts" },
       alias: { react: dirname(require.resolve("react/package.json")), "react-dom": dirname(require.resolve("react-dom/package.json")) },
