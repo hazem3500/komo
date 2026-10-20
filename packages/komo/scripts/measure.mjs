@@ -145,7 +145,11 @@ await writeFile(
 // browser window" note and its tooltip). Measured locally: main 219,704 -> 220,715.
 // 221,100: the pending-token chip and Layout field sync (#139) landed alongside (+~300).
 // 221,250: a subscribed adapter refreshes only when its list changed, so the color popup stays open (+~125).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 221_250)
+// 221,250 -> 223,200: the redesigned shortcut help (pinned header with a tooltip close button,
+// filter, two-column groups, mode-first order, focus trap and its own styles) is all in its
+// on-demand chunk (+1,746 measured on 0.9.59: 219,703 -> 221,449; 222,942 on 0.9.65). Its
+// styles left the mount bundle, so initial shrinks 85 bytes. Leaves room for geometry keys (#146).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 223_200)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

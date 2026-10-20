@@ -455,13 +455,6 @@ ${morphingMenuStyles}
 .morphing-menu[data-vertical="true"] .morphing-menu__separator { width:20px; height:1px; margin:4px 0; }
 .toolbar .morphing-menu__shortcut { position:relative; }
 .morphing-menu__badge { position:absolute; top:4px; left:calc(50% + 3px); min-width:16px; height:16px; padding:0 4px; box-sizing:border-box; border-radius:8px; background:var(--accent,#bda6ef); color:#1d1530; font-size:10px; font-weight:600; line-height:16px; font-variant-numeric:tabular-nums; text-align:center; pointer-events:none; }
-.komo-shortcuts { box-sizing:border-box; width:min(360px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow:auto; padding:20px; border:1px solid #ffffff28; border-radius:16px; background:#232323; color:#f1efeb; font:12px/1.5 system-ui; }
-.komo-shortcuts::backdrop { background:#0006; }
-.komo-shortcuts h2 { font-size:16px; margin:0 0 12px; }
-.komo-shortcuts h3 { font-size:11px; color:#aaa; margin:14px 0 6px; }
-.komo-shortcuts > div { display:flex; justify-content:space-between; gap:12px; padding:6px 0; }
-.komo-shortcuts p { color:#aaa; }
-.komo-shortcuts button { font:inherit; color:inherit; border:1px solid #ffffff30; border-radius:6px; background:#ffffff0a; padding:6px 12px; }
 .toolbar .review-avatar {
   display: grid;
   place-items: center;
