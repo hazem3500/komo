@@ -3,6 +3,9 @@ import { morphingMenuStyles } from "./morphing-menu-styles.js";
 // pin's tip; hover, focus, a nearby pointer or selection expand them in place.
 const collapsedPin = `.pin:not(.active, .hot, :hover, :focus-visible, [data-near], [data-moving], [data-dragging])`;
 const collapsed = `.pins[data-size] > ${collapsedPin}`;
+// Conversations share one grid (see the --komo-* properties at the end): an outer
+// inset, an avatar column, a gutter to the content column and a trailing action
+// column. Dividers span the content box, never the full bleed.
 export const styles: string = `
 .project-management[hidden], .project-management [hidden] { display:none !important; }
 .project-management .account-sites-summary { justify-content: space-between; }
@@ -1196,9 +1199,6 @@ ${morphingMenuStyles}
   display: grid;
   gap: 14px;
 }
-.sidebar-replies .reply-composer { padding:0; margin:0 0 0 28px; border:0; }
-.sidebar-replies .reply-composer textarea { display:block; min-height:40px; padding:9px 38px 9px 10px; border:1px solid #ffffff20; border-radius:8px; background:#ffffff05; color:#eee; font-size:13px; line-height:1.5; resize:none; }
-.sidebar-replies .reply-composer > .send { top:7px; right:6px; }
 .sidebar-reply {
   display: grid;
   grid-template-columns: 20px minmax(0,1fr);
@@ -1493,21 +1493,6 @@ ${morphingMenuStyles}
 }
 .emoji-choice:hover {
   background: #ffffff12;
-}
-.reply-composer {
-  position: relative;
-  display: block;
-}
-.reply-composer textarea {
-  width: 100%;
-  padding-right: 44px;
-}
-.reply-composer > .send {
-  position: absolute;
-  right: 22px;
-  top: 17px;
-  width: 26px;
-  height: 26px;
 }
 .new-comment-composer > .row > .send {
   margin-left: auto;
@@ -2600,4 +2585,91 @@ ${collapsed} .avatar img { display: none; }
 .pins[data-size="dot"] > ${collapsedPin}[data-pointer] .avatar { border-radius: 50%; box-shadow: 0 0 0 1px #fff, 0 1px 3px #00000059; }
 .pins[data-size="dot"] > ${collapsedPin}[data-read] .avatar { background-color: transparent !important; box-shadow: inset 0 0 0 2px var(--reviewer-accent, #c8b5f4), 0 0 0 1px #fff, 0 1px 3px #00000059; }
 @media (prefers-reduced-motion: reduce) { .pins[data-size] > .pin, .pins[data-size] > .pin .avatar { transition: none; } }
+
+:host { --komo-inset: 16px; --komo-avatar: 24px; --komo-gutter: 8px; --komo-action: 28px; }
+:host(.review-open) .panel { --komo-inset: 24px; padding-inline: var(--komo-inset); }
+:host([data-sidebar="mobile"]) .panel { --komo-inset: 20px; }
+.list { --komo-avatar: 20px; --komo-reply-avatar: 16px; }
+
+.thread-card { padding: 14px 12px 8px; }
+.thread-card .row { gap: var(--komo-gutter); padding-right: 0; }
+.thread-card .row .avatar { width: var(--komo-avatar); height: var(--komo-avatar); }
+.sidebar-reply .avatar, .sidebar-replies .reply-composer > .avatar { width: var(--komo-reply-avatar); height: var(--komo-reply-avatar); font-size: 7px; }
+.thread-card .row small, .reply-meta small { margin-left: auto; font-size: 10px; color: #888; transition: opacity 150ms ease; }
+.thread-card > :not(.row) { margin-left: calc(var(--komo-avatar) + var(--komo-gutter)); }
+.thread-card .preview { margin-top: 6px; }
+.card-status { display: inline-flex; flex: none; align-items: center; height: 16px; margin: 0; padding: 0 6px; border-radius: 999px; background: #ffffff0d; color: #999; font-size: 10px; white-space: nowrap; }
+.card-tags { margin-top: 6px; }
+.thread-item > .card-resolve, :host(.review-open) .panel .thread-item > .card-resolve { top: calc(14px + var(--komo-avatar) / 2 - var(--komo-action) / 2); right: 12px; width: var(--komo-action); height: var(--komo-action); border-radius: 7px; background: none; color: #909090; filter: none; }
+.thread-item > .card-resolve:hover, :host(.review-open) .panel .thread-item > .card-resolve:hover { background: #ffffff12; color: #eee; }
+.thread-item:is(:hover, :has(> .thread-card:focus-visible), :has(> .card-resolve:focus-visible)) > .card-resolve { opacity: 1; }
+.thread-item:is(:hover, :has(> .thread-card:focus-visible), :has(> .card-resolve:focus-visible)) > .thread-card .row small { opacity: 0; }
+@media (hover: none) { .thread-card .row small { display: none; } }
+.sidebar-tooltip[data-side="left"] { translate: -100% -50%; }
+.card-page-row { margin: 4px 12px 0 calc(12px + calc(var(--komo-avatar) + var(--komo-gutter))); }
+.card-reply-toggle { margin: 4px 12px 0 calc(12px + calc(var(--komo-avatar) + var(--komo-gutter))); min-height: 24px; padding: 0; gap: 6px; background: none; border-radius: 4px; color: #999; }
+.card-reply-toggle svg { width: 14px; height: 14px; }
+.thread-item::after, :host(.review-open) .panel .thread-item::after { left: 12px; right: 12px; }
+:host(.review-open:not([data-sidebar="mobile"])) .panel .list { margin-right: calc(-12px - var(--komo-scrollbar, 0px)); }
+.sidebar-replies { margin: 8px 12px 4px calc(12px + calc(var(--komo-avatar) + var(--komo-gutter))); gap: 12px; padding: 0; border: 0; }
+.sidebar-reply { display: block; padding: 0; border: 0; }
+.reply-meta { display: flex; align-items: center; gap: var(--komo-gutter); min-width: 0; }
+.reply-meta .author, .thread-card .author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 500; color: #b2b2b2; }
+.sidebar-reply p { margin: 4px 0 0 calc(var(--komo-reply-avatar) + var(--komo-gutter)); }
+
+.messages { padding: 0 var(--komo-inset); }
+.thread-pane .dialog { margin: 0 calc(-1 * var(--komo-inset)); }
+.thread-pane .dialog-head { padding: 0 var(--komo-inset) 8px; gap: var(--komo-gutter); }
+.thread-back { width: var(--komo-avatar); margin: 0; }
+.dialog-head > .row { gap: 2px; }
+.dialog-head .icon, .draft-close, .thread-pane .dialog-head .icon { width: var(--komo-action); height: var(--komo-action); }
+.dialog-head .thread-back, :host(.review-open) .panel .dialog-head .thread-back { width: var(--komo-avatar); }
+.dialog:not(.account-dialog) > .dialog-head:not(.thread-pane .dialog-head) { top: 10px; right: var(--komo-inset); }
+.draft-close { top: 12px; right: var(--komo-inset); }
+.message:first-child > .row { padding-right: calc(3 * var(--komo-action) + 4px); }
+.dialog:has(.thread-tag-action) .message:first-child > .row { padding-right: calc(4 * var(--komo-action) + 6px); }
+.thread-pane .message:first-child > .row { padding-right: 0; }
+.message .row { gap: var(--komo-gutter); }
+.message .avatar { width: var(--komo-avatar); height: var(--komo-avatar); }
+.message > .row > .comment-menu > summary { width: var(--komo-action); height: 24px; }
+.message + .message::before { left: 0; right: 0; }
+.message-content, .message-content:has(> .thread-tags) { display: grid; grid-template-columns: minmax(0, 1fr) var(--komo-action); align-items: start; gap: 0 var(--komo-gutter); margin-right: 0; padding-left: calc(var(--komo-avatar) + var(--komo-gutter)); }
+.message-content > .message-text { grid-column: 1; grid-row: 1; margin: 3px 0 0; }
+.message-content > .message-reaction { grid-column: 2; grid-row: 1; justify-self: center; width: var(--komo-action); }
+.message-content > .message-reaction.has-reactions { width: auto; min-width: var(--komo-action); justify-self: end; }
+.message-content > .thread-tags { grid-column: 1; grid-row: 2; margin: 8px 0 0; }
+.message .actions { padding-left: calc(var(--komo-avatar) + var(--komo-gutter)); }
+.message-edit > .message-editor { grid-column: 1; grid-row: 1; display: block; width: 100%; min-height: 0; max-height: 240px; margin: 0; padding: 5px 8px; border-radius: 8px; font-size: 13px; line-height: 1.5; resize: none; overflow-y: auto; }
+.edit-actions { grid-column: 1; grid-row: 2; display: flex; justify-content: flex-end; align-items: center; gap: var(--komo-gutter); margin-top: 8px; }
+.message-content.message-edit > .thread-tags { grid-row: 3; }
+.edit-actions > button { min-height: 28px; padding: 4px 6px 4px 10px; gap: 6px; border-radius: 8px; font-size: 12px; font-weight: 500; }
+.edit-actions > .primary { background: var(--accent, #c8b5f4); color: #21172f; }
+.edit-actions > .primary:hover { background: var(--accent, #c8b5f4); filter: brightness(1.08); }
+.edit-actions > .secondary, :host(.review-open) .panel .edit-actions > .secondary { background: none; color: #bbb; }
+.edit-actions > .secondary:hover, :host(.review-open) .panel .edit-actions > .secondary:hover { background: #ffffff0d; color: #eee; }
+.edit-actions .komo-kbd kbd { padding: 0 3px; border-color: currentColor; line-height: 15px; opacity: .6; }
+
+.composer.reply-composer { position: relative; display: grid; grid-template-columns: var(--komo-avatar) minmax(0, 1fr) var(--komo-action); align-items: center; gap: var(--komo-gutter); min-height: 0; margin: 0; border: 0; box-shadow: none; }
+.composer.reply-composer > .avatar { position: static; grid-column: 1; width: var(--komo-avatar); height: var(--komo-avatar); }
+.composer.reply-composer > textarea, .composer.reply-composer > textarea:focus { grid-column: 2; display: block; min-height: 0; padding: 5px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 13px; line-height: 22px; resize: none; }
+.composer.reply-composer > .send { position: static; grid-column: 3; justify-self: center; width: var(--komo-action); height: var(--komo-action); }
+.dialog > .composer.reply-composer { padding: 12px var(--komo-inset); }
+.dialog > .composer.reply-composer::before { content: ""; position: absolute; top: 0; left: var(--komo-inset); right: var(--komo-inset); height: 1px; background: #ffffff0c; transition: background 150ms ease; }
+.dialog > .composer.reply-composer:focus-within::before { background: #ffffff2e; }
+.sidebar-replies .composer.reply-composer { --komo-avatar: var(--komo-reply-avatar); margin: 0 -6px; padding: 3px 6px; border-radius: 10px; box-shadow: inset 0 0 0 1px #ffffff14; }
+.sidebar-replies .composer.reply-composer:focus-within { box-shadow: inset 0 0 0 1px #ffffff30; }
+.dialog:has(.draft-close) .new-comment-composer { padding: 16px var(--komo-inset); }
+.new-comment-composer .draft-body { grid-template-columns: var(--komo-avatar) minmax(0, 1fr) var(--komo-action); column-gap: var(--komo-gutter); }
+.new-comment-composer .draft-body:not(:has(.avatar)) { grid-template-columns: minmax(0, 1fr) var(--komo-action); }
+.dialog .new-comment-composer .draft-body .send { justify-self: center; }
+.new-comment-composer .draft-proposal { margin-right: calc(var(--komo-action) + var(--komo-gutter)); }
+.thread-navigation { margin: 0 var(--komo-inset) 12px; }
+
+.account-layer .account-dialog { --komo-inset: 24px; }
+.account-layer .account { padding: 32px var(--komo-inset) 24px; }
+.account-dialog .dialog-head { right: var(--komo-inset); }
+@media (max-width: 760px) { .account-layer .account-dialog { --komo-inset: 20px; } }
+
+:host(.review-open) .toolbar .morphing-menu { --mm-surface: #1c1c1c; }
+.toolbar .morphing-menu__shell { backdrop-filter: none; }
 `;
