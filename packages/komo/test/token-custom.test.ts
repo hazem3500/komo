@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { customEditor } from "../src/token-custom.js";
 import { openTokenPicker, refreshTokenPicker } from "../src/token-picker.js";
 
 vi.stubGlobal("CSS", { supports: (property: string, value: string) => {
@@ -9,27 +8,6 @@ vi.stubGlobal("CSS", { supports: (property: string, value: string) => {
   return !!style.getPropertyValue(property);
 } });
 afterEach(() => document.body.replaceChildren());
-
-it("previews alpha and typed color, rejects invalid input, and commits only on Apply", () => {
-  const preview = vi.fn(), commit = vi.fn();
-  const editor = customEditor("color", "rgb(51, 102, 153)", preview, commit);
-  document.body.append(editor);
-  const input = editor.querySelector<HTMLInputElement>('[aria-label="Color value"]')!;
-  input.value = "#33669980";
-  input.dispatchEvent(new Event("input"));
-  expect(preview).toHaveBeenLastCalledWith("#33669980");
-  expect(commit).not.toHaveBeenCalled();
-  expect(editor.querySelector<HTMLInputElement>('[aria-label="Opacity"]')!.value).toBe("50");
-  input.value = "invalid-color";
-  input.dispatchEvent(new Event("input"));
-  expect(input.getAttribute("aria-invalid")).toBe("true");
-  const apply = [...editor.querySelectorAll("button")].find(button => button.textContent === "Apply custom")!;
-  expect(apply.disabled).toBe(true);
-  input.value = "#112233";
-  input.dispatchEvent(new Event("input"));
-  apply.click();
-  expect(commit).toHaveBeenCalledExactlyOnceWith("#112233");
-});
 
 it("keeps the popup, query, active token and scroll position through async theme refresh", () => {
   const trigger = document.createElement("button");

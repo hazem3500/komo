@@ -576,7 +576,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   const replies = new Map<string, string>();
   const replySelections = new Map<string, [number, number, "forward" | "backward" | "none"]>();
   const host = el("div");
-  host.dataset.branchComments = "";
+  // Names the project, so per-project preferences (recent colors) need no extra wiring.
+  host.dataset.branchComments = options.project;
   host.dataset.sidebar = compactSidebar
     ? "mobile"
     : edgeSidebar

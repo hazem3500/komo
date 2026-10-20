@@ -4,6 +4,7 @@ import type { Control, Field, PanelContext } from "./design-panel.js";
 import type { DesignTarget } from "./design-target.js";
 import type { TokenPickerOptions } from "./token-picker.js";
 
+const live = new WeakSet<HTMLElement>();
 const fields = new WeakMap<HTMLElement, { field: Field; set(value: string): void }>();
 
 export function registerCustomField(control: Control, field: Field, context: Pick<PanelContext, "element" | "begin" | "apply" | "commit">) {
@@ -76,6 +77,21 @@ export function customPickerValue(element: DesignTarget, property: string, input
       input.value = value;
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
+    },
+    // The live color picker: every kept value updates one pending edit on the field, the
+    // popup closing makes it one history entry and Escape cancels it, as the field's own Escape does.
+    // Per field, so a refreshed popup (new options) still finishes the same edit.
+    onCommit(value) {
+      if (!live.has(input)) input.dispatchEvent(new Event("focus"));
+      live.add(input);
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    },
+    onDone() {
+      if (live.delete(input)) input.dispatchEvent(new Event("change", { bubbles: true }));
+    },
+    onCancel() {
+      if (live.delete(input)) input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     },
   };
 }

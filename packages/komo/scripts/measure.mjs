@@ -33,6 +33,9 @@ const geometry = (await readdir("dist"))
 const liveColors = (await readdir("dist"))
   .filter((file) => /^live-colors.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const colorEditor = (await readdir("dist"))
+  .filter((file) => /^color-editor.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const tokenPicker = (await readdir("dist"))
   .filter((file) => /^token-picker.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
@@ -84,6 +87,7 @@ const report = {
   optionalGeometry: await sizes(new Set(geometry)),
   optionalAccountTokens: await sizes(new Set(accountTokens)),
   optionalLiveColors: await sizes(new Set(liveColors)),
+  optionalColorEditor: await sizes(new Set(colorEditor)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
   adapterCssVariables: await sizes(new Set(["dist/adapters/css-variables.js"])),
   adapterReactFiber: await sizes(new Set(["dist/adapters/react-fiber.js"])),
@@ -155,7 +159,8 @@ if (report.optionalInlineTextEditing.gzip > 3_100)
 // New budget: 4,262 measured for scrubbing, inline token chips and section rules.
 // The select trigger's chevron moved to the select menu chunk below (4,271 -> ~4,140).
 // 4,375: color fields fetch their settled-value sync (live-colors, below) and read a bound token's value (4,246 -> 4,321).
-if (report.optionalDesignPanel.gzip > 4_375)
+// 4,625: field-label.ts moved into this chunk with the picker (it left a shared chunk the panel already loaded, because the typed Custom editor stopped importing it with the old color form).
+if (report.optionalDesignPanel.gzip > 4_625)
   throw new Error("komo's design panel chunk exceeds its gzip budget.");
 // The Design panel's styled select popups (listbox, keyboard, flip and check marks)
 // load as their own chunk beside the panel, so neither the panel nor the entry grows.
@@ -166,7 +171,9 @@ if (report.optionalSelectMenu.gzip > 3_125)
 // time a token field opens. 4,631 measured, plus ~3%. It now also hands its rows' previews and
 // styles to the Tokens view (4,770 measured).
 // 4,975: the popup opens in the top layer, follows its field, refreshes Custom when the field settles and leaves a select open inside it to its own list.
-if (report.optionalTokenPicker.gzip > 4_975)
+// 5,275: color fields open a 240px popup with live commits, finish or cancel the edit on close,
+// and keep a value for hosts without live commits (4,932 -> 5,123), plus ~3%.
+if (report.optionalTokenPicker.gzip > 5_275)
   throw new Error("komo's token picker chunk exceeds its gzip budget.");
 // The Tokens view (every token with nothing selected, per-theme edits, its footer and page
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and
@@ -187,6 +194,11 @@ if (report.optionalAccountTokens.gzip > 5_850)
 // panel as its own chunk. 704 measured, plus ~3%.
 if (report.optionalLiveColors.gzip > 725)
   throw new Error("komo's live color field chunk exceeds its gzip budget.");
+// The Custom color picker (area, sliders, eyedropper, value row with five formats, document and
+// recent swatches, token match) loads the first time a color field's Custom tab opens, instead of
+// the React color picker it replaces. 6,307 measured, plus ~3%.
+if (report.optionalColorEditor.gzip > 6_500)
+  throw new Error("komo's color editor chunk exceeds its gzip budget.");
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.

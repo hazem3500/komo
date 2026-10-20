@@ -100,7 +100,7 @@ const settle = (tab: Page) => tab.evaluate(async () => {
   await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
 });
 
-/** The field's text, its swatch, the open popup's Custom value and the element's computed value, as canvas colors. */
+/** The field's text, its swatch, the open popup's Custom color and the element's computed value, as canvas colors. */
 const read = (tab: Page, selector: string, property: string) => tab.evaluate(([selector, property]) => {
   const root = [...document.querySelectorAll("*")].find(node => node.shadowRoot?.querySelector(".design-inspector"))!.shadowRoot!;
   const field = root.querySelector(`[data-field-property="${property}"]`)!;
@@ -114,7 +114,7 @@ const read = (tab: Page, selector: string, property: string) => tab.evaluate(([s
   return {
     text: color(field.querySelector<HTMLInputElement>("input[data-property]")!.value),
     swatch: color(field.querySelector<HTMLInputElement>('input[type="color"]')!.value),
-    popup: color(root.querySelector<HTMLInputElement>('.komo-tokens input[aria-label="Color value"]')?.value),
+    popup: color(root.querySelector(".komo-tokens .komo-color") ? getComputedStyle(root.querySelector(".komo-color")!).getPropertyValue("--color") : undefined),
     computed: color(getComputedStyle(document.querySelector(selector)!).getPropertyValue(property)),
   };
 }, [selector, property] as const);
@@ -130,7 +130,7 @@ async function openCustom(tab: Page, property: string) {
   await tab.locator(".komo-tokens").waitFor();
   const custom = tab.locator(".komo-tokens__tabs button").filter({ hasText: "Custom" });
   if (await custom.getAttribute("aria-pressed") !== "true") await custom.evaluate(node => (node as HTMLButtonElement).click());
-  await tab.locator('.komo-tokens input[aria-label="Color value"]').waitFor();
+  await tab.locator(".komo-tokens .komo-color").waitFor();
 }
 
 async function agrees(tab: Page, selector: string, property: string, popup: boolean) {
@@ -205,7 +205,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("color fields in
       await field.scrollIntoViewIfNeeded();
       await frames(tab);
       await field.locator('input[type="color"]').click();
-      await tab.locator(".komo-tokens .react-colorful").waitFor();
+      await tab.locator(".komo-tokens .komo-color__area").waitFor();
       await tab.locator(".komo-tokens").evaluate(node => Promise.all(node.getAnimations().map(animation => animation.finished)));
       const result = await tab.evaluate(property => {
         const host = [...document.querySelectorAll("*")].find(node => node.shadowRoot?.querySelector(".design-inspector"))!;
@@ -218,9 +218,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("color fields in
           return [box.left + box.width / 2, box.top + box.height / 2];
         };
         const points = [
-          center(popup.querySelector(".react-colorful__saturation")),
-          center(popup.querySelector('input[aria-label="Color value"]')),
-          center([...popup.querySelectorAll("button")].find(button => button.textContent === "Apply custom")!),
+          center(popup.querySelector(".komo-color__area")),
+          center(popup.querySelector(".komo-color__hue")),
+          center(popup.querySelector(".komo-color__value")),
         ];
         for (const y of [.15, .5, .85]) for (const x of [.1, .5, .9]) points.push([rect.left + rect.width * x, rect.top + rect.height * y]);
         const misses = points.filter(([x, y]) => {
