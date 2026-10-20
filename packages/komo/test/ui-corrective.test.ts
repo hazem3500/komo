@@ -130,6 +130,33 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await expect.poll(()=>value.inputValue()).toBe('555555');
     } finally { await page.close(); }
   });
+  it("Custom stays untouched through rapid theme switches", async () => {
+    const page = await browser.newPage({ reducedMotion: "reduce" });
+    page.setDefaultTimeout(4000);
+    try {
+      await page.goto(origin + '/?mode=reflow&case=semantic&baseline=classes');
+      await page.waitForFunction(() => !!(window as any).komo);
+      const target = page.locator('#target');
+      const original = await target.evaluate(el => [el.className, el.getAttribute('style')]);
+      await page.keyboard.press('d'); await target.click();
+      await page.locator('[data-field-property="color"] select[data-picker]').click();
+      await page.getByRole('button', { name: 'Custom', exact: true }).click();
+      const value = page.getByRole('textbox', { name: 'Hex', exact: true });
+      await expect.poll(() => value.inputValue(), { timeout: 4000 }).toBe('CCCCCC');
+      // Each switch lands while the previous refresh may still be settling.
+      await page.evaluate(async () => {
+        for (let step = 0; step < 24; step++) {
+          (window as any).radiusQA.theme(step % 2 ? 'light' : 'dark');
+          await new Promise(resolve => step % 3 ? setTimeout(resolve, step % 4) : requestAnimationFrame(resolve));
+        }
+      });
+      await expect.poll(() => value.inputValue(), { timeout: 4000 }).toBe('555555');
+      expect(await target.evaluate(el => getComputedStyle(el).color)).toBe('rgb(85, 85, 85)');
+      expect(await target.evaluate(el => [el.className, el.getAttribute('style')])).toEqual(original);
+      await value.press('Escape');
+      expect(await target.evaluate(el => [el.className, el.getAttribute('style')])).toEqual(original);
+    } finally { await page.close(); }
+  });
   it("public Custom alpha commit and Undo restore exact binding", async () => {
     const page = await browser.newPage({ reducedMotion: "reduce" });
     page.setDefaultTimeout(4000);
