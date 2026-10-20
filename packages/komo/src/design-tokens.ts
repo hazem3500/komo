@@ -1,4 +1,5 @@
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
+import { counterpart } from "./frame-target.js";
 import type { DesignToken, TokenAdapter, TokenUsage } from "./design-system.js";
 
 /** Explicit bridge from a site's named CSS custom properties into Design mode. */
@@ -121,7 +122,8 @@ export function tokenSourceFor(target: Element | null): RegisteredDesignTokenSou
   if (!target) return null;
   let match: RegisteredDesignTokenSource | null = null;
   for (const source of sources) {
-    if ((source.root === target || source.root.contains(target)) &&
+    const root = counterpart(source.root, target.ownerDocument);
+    if (root && (root === target || root.contains(target)) &&
       (!match || match.root.contains(source.root))) match = source;
   }
   return match;
@@ -563,7 +565,7 @@ export function cssVariableTokens(): TokenAdapter {
     },
     describe: (_element, property, _from, to) => `Set ${property} to var(${to.ref})`,
     // Registered roots carry no theme scope, so only the current theme's edits apply.
-    previewValues(changes, theme) {
+    previewValues(changes, theme, target) {
       const restores: Array<() => void> = [];
       for (const change of changes) {
         if (change.theme && change.theme !== theme) continue;
@@ -572,7 +574,10 @@ export function cssVariableTokens(): TokenAdapter {
           const alias = change.alias && source.tokens.find((item) => item.path === change.alias);
           const value = alias ? `var(${alias.cssVariable})` : change.value;
           if (!token || !validTokenValue(source, token, value)) continue;
-          const { root } = source, styled = root.hasAttribute("style");
+          // In Frame's viewport iframe, the registered root's counterpart there.
+          const root = (target ? counterpart(source.root, target.document) : source.root) as HTMLElement | null;
+          if (!root?.style) continue;
+          const styled = root.hasAttribute("style");
           const before = root.style.getPropertyValue(token.cssVariable), priority = root.style.getPropertyPriority(token.cssVariable);
           root.style.setProperty(token.cssVariable, value, "important");
           restores.unshift(() => {

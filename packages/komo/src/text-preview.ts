@@ -16,14 +16,14 @@ export function snapshotText(element: HTMLElement): TextSnapshot {
 
 /** Replace only within one text node, preserving host markup and event owners. */
 export function insertText(element: HTMLElement, range: StaticRange, text: string): Range | null {
-  const node = range.startContainer === element && element.childNodes.length === 1 ? element.firstChild : range.startContainer;
-  if (!(node instanceof Text) || range.startContainer !== range.endContainer || !element.contains(node) || node.parentElement?.closest(lockedText)) return null;
+  const node = (range.startContainer === element && element.childNodes.length === 1 ? element.firstChild : range.startContainer) as Text | null;
+  if (node?.nodeType !== Node.TEXT_NODE || range.startContainer !== range.endContainer || !element.contains(node) || node.parentElement?.closest(lockedText)) return null;
   const offset = range.startContainer === element ? (range.startOffset ? node.length : 0) : range.startOffset;
   const end = range.endContainer === element ? (range.endOffset ? node.length : 0) : range.endOffset;
   const removed = end - offset;
   const insertion = text.replace(/\r\n?/g, "\n").slice(0, Math.max(0, 500 - (element.textContent ?? "").length + removed));
   node.replaceData(offset, removed, insertion);
-  const caret = document.createRange();
+  const caret = element.ownerDocument.createRange();
   caret.setStart(node, offset + insertion.length);
   caret.collapse(true);
   return caret;
@@ -47,7 +47,7 @@ export function holdText(element: HTMLElement, nodes: TextSnapshot, onLost?: () 
     observer.disconnect();
     observer.observe(element, { childList: true, characterData: true, subtree: true });
     // An owner can disappear without changing its subtree; follow attachment through shadow hosts too.
-    for (let parent: Node | null = element.parentNode; parent; parent = parent.parentNode ?? (parent instanceof ShadowRoot ? parent.host : null))
+    for (let parent: Node | null = element.parentNode; parent; parent = parent.parentNode ?? ((parent as ShadowRoot).host ?? null))
       observer.observe(parent, { childList: true });
   };
   watch();

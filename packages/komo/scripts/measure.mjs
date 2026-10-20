@@ -42,6 +42,9 @@ const tokenPicker = (await readdir("dist"))
 const tokenPage = (await readdir("dist"))
   .filter((file) => /^token-page.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const frameIframe = (await readdir("dist"))
+  .filter((file) => /^frame-iframe.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const accountTokens = (await readdir("dist"))
   .filter((file) => /^account-tokens.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
@@ -86,6 +89,7 @@ const report = {
   optionalTokenPage: await sizes(new Set(tokenPage)),
   optionalGeometry: await sizes(new Set(geometry)),
   optionalAccountTokens: await sizes(new Set(accountTokens)),
+  optionalFrameViewport: await sizes(new Set(frameIframe)),
   optionalLiveColors: await sizes(new Set(liveColors)),
   optionalColorEditor: await sizes(new Set(colorEditor)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
@@ -217,6 +221,11 @@ if (report.optionalGeometry.gzip > 13_900)
 // the chunk. 5,671 measured, plus ~3%.
 if (report.optionalAccountTokens.gzip > 5_850)
   throw new Error("komo's API tokens chunk exceeds its gzip budget.");
+// Viewport mode loads only when Frame opens with frame.mode "iframe": the iframe, its stage, the
+// same-origin and fallback checks (X-Frame-Options, frame-ancestors, cross-origin redirects, timeout) and
+// the frame geometry komo's page reads switch to. 2,216 measured, plus ~3%.
+if (report.optionalFrameViewport.gzip > 2_300)
+  throw new Error("komo's Viewport mode chunk exceeds its gzip budget.");
 // Color fields re-read the element once hover, focus, theme and transitions settle; fetched with the
 // panel as its own chunk. 704 measured, plus ~3%.
 if (report.optionalLiveColors.gzip > 725)

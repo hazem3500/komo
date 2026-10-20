@@ -3,6 +3,7 @@ import { textEntry } from "./dom.js";
 // Before/After preview. The comment body stays plain text for agents and the CLI.
 import { isDesignTarget } from "./design-target.js";
 import { elementLabel } from "./element-label.js";
+import { isHTMLElement, onFrame, previewTarget } from "./frame-target.js";
 import { inlineStyleSnapshot, removeEmptyStyle } from "./design-preview.js";
 import { previewText } from "./text-preview.js";
 import { sourceInfo, sourceInfoStyles, type SourceHref } from "./source-info.js";
@@ -203,7 +204,7 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
         values.push({ path: item.apply.property, value: alias ? context?.tokens.find(token => token.path === alias)?.value ?? "" : item.after,
           ...(item.apply.theme ? { theme: item.apply.theme } : {}), ...(alias ? { alias } : {}) });
       } else if (item.apply.kind === "variable") {
-        const root = document.documentElement;
+        const root = previewTarget().root;
         const previous = root.style.getPropertyValue(item.apply.property);
         root.style.setProperty(item.apply.property, item.after);
         restore.push(() => previous ? root.style.setProperty(item.apply!.property, previous) : root.style.removeProperty(item.apply!.property));
@@ -236,7 +237,7 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
           if (absent) removeEmptyStyle(element);
         });
       } else if (item.apply.kind === "text") {
-        const undo = element instanceof HTMLElement ? previewText(element, item.before, item.after, () => loseTextPreview(key)) : undefined;
+        const undo = isHTMLElement(element) ? previewText(element, item.before, item.after, () => loseTextPreview(key)) : undefined;
         if (undo) restore.push(undo);
         else unavailable = true;
       } else if (item.apply.kind === "style") unavailable = true;
@@ -276,7 +277,7 @@ function morph(sections: DesignSection[], resolve: (selector?: string) => Elemen
       else if (item.apply?.kind === "variable" || item.apply?.kind === "token") TOKEN_PROPERTIES.forEach((property) => properties.add(property));
       else if (item.apply?.kind === "text") {
         const element = resolve(section.target);
-        if (element instanceof HTMLElement)
+        if (isHTMLElement(element))
           element.animate?.([{ opacity: 1 }, { opacity: 0.25, offset: 0.4 }, { opacity: 1 }], { duration: 360, easing: EASE });
       }
     }
@@ -288,7 +289,7 @@ function morph(sections: DesignSection[], resolve: (selector?: string) => Elemen
   const style = document.createElement("style");
   // Komo's own UI lives in a shadow root, so this only reaches the page.
   style.textContent = `*, *::before, *::after { transition-property: ${[...properties].join(", ")} !important; transition-duration: 420ms !important; transition-timing-function: ${EASE} !important; transition-delay: 0s !important; }`;
-  document.head.append(style);
+  (previewTarget().document.head ?? previewTarget().root).append(style);
   // Leave the rule in place for the whole transition, then restore the page's own.
   morphing = { style, timer: setTimeout(() => { style.remove(); morphing = undefined; }, 480) };
 }
@@ -579,7 +580,7 @@ let shortcutBound = false;
 function listenForShortcut() {
   if (shortcutBound) return;
   shortcutBound = true;
-  document.addEventListener("keydown", (event) => {
+  const flip = (event: KeyboardEvent) => {
     // B toggles; ← shows Before and → shows After.
     const key = event.key === "ArrowLeft" ? 0 : event.key === "ArrowRight" ? 1 : event.key.toLowerCase() === "b" ? -1 : null;
     if (event.defaultPrevented || key === null || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) return;
@@ -592,7 +593,10 @@ function listenForShortcut() {
     if (!next) return;
     event.preventDefault();
     next.click();
-  });
+  };
+  document.addEventListener("keydown", flip);
+  // Also with focus inside Frame's viewport iframe.
+  onFrame("keydown", flip);
 }
 
 // The proposal last shown in the composer, so redraws keep its Before/After choice.

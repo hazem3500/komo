@@ -1,11 +1,12 @@
 import type { Anchor } from "./types.js";
+import { pageDocument, pageWindow, screenRect, toScreen, toView } from "./frame-target.js";
 
 const privateText =
   "input,textarea,select,script,style,[contenteditable],[hidden],[aria-hidden=true]";
 const trim = (text: string, limit = 160) =>
   text.replace(/\s+/g, " ").trim().slice(0, limit);
 function textFor(element: Element): string {
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   let text = "",
     node: Node | null;
   while ((node = walker.nextNode())) {
@@ -16,7 +17,7 @@ function textFor(element: Element): string {
   return trim(text);
 }
 function unique(selector: string): Element | null {
-  const matches = document.querySelectorAll(selector);
+  const matches = pageDocument().querySelectorAll(selector);
   return matches.length === 1 ? matches[0] : null;
 }
 // React useId (":r1:", "«r3»", "_r_15_") and Radix ids change between renders.
@@ -49,6 +50,7 @@ function stableFor(element: Element, preferred?: string): string | undefined {
   }
 }
 function selectorFor(element: Element): string {
+  const document = element.ownerDocument;
   const parts: string[] = [];
   let node: Element | null = element;
   while (node && node !== document.body && node !== document.documentElement) {
@@ -78,7 +80,7 @@ function labelFor(element: Element): string {
       (element.getAttribute("aria-labelledby") || "")
         .split(/\s+/)
         .map((id) => {
-          const label = id && document.getElementById(id);
+          const label = id && element.ownerDocument.getElementById(id);
           return label ? textFor(label) : "";
         })
         .join(" ") ||
@@ -89,6 +91,7 @@ function labelFor(element: Element): string {
   );
 }
 function nearbyFor(element: Element): string {
+  const document = element.ownerDocument;
   const parent =
     element.parentElement?.closest("li,article,tr,[data-comment-anchor]") ||
     element.parentElement;
@@ -102,6 +105,7 @@ const overlayBoundary = (element: Element) =>
   element.matches("dialog,[role=dialog],[role=alertdialog],[popover]") ||
   getComputedStyle(element).position === "fixed";
 function contextFor(element: Element): NonNullable<Anchor["context"]> {
+  const document = element.ownerDocument;
   let parent = overlayBoundary(element) ? null : element.parentElement,
     scope: string | undefined;
   while (parent && parent !== document.body) {
@@ -114,7 +118,7 @@ function contextFor(element: Element): NonNullable<Anchor["context"]> {
     }
     parent = parent.parentElement;
   }
-  const selection = window.getSelection();
+  const selection = document.defaultView?.getSelection();
   const selected = selection?.rangeCount ? selection.getRangeAt(0) : null;
   const style = getComputedStyle(element);
   return {
@@ -191,6 +195,7 @@ export function commentAnchorTarget(
   resolve?: (element: Element) => Element | undefined,
 ): Element {
   const ancestors: Element[] = [];
+  const document = element.ownerDocument;
   for (let node: Element | null = element; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
     if (node !== root || node === element) ancestors.push(node);
     if (node === root || overlayBoundary(node)) break;
@@ -210,6 +215,9 @@ export function captureAnchor(
   source?: string | ((element: Element) => string | undefined),
 ): Anchor {
   let target = element;
+  const document = element.ownerDocument, view = document.defaultView ?? window;
+  // Points arrive on screen; the anchor is in the page's own client pixels.
+  [start, end] = [toView(start.x, start.y, view), toView(end.x, end.y, view)];
   const left = Math.min(start.x, end.x),
     top = Math.min(start.y, end.y);
   const right = Math.max(start.x, end.x),
@@ -240,9 +248,9 @@ export function captureAnchor(
     y,
     width: area ? Math.min(1 - x, (right - left) / (rect.width || 1)) : 0,
     height: area ? Math.min(1 - y, (bottom - top) / (rect.height || 1)) : 0,
-    pageX: left + window.scrollX,
-    pageY: top + window.scrollY,
-    viewportWidth: window.innerWidth,
+    pageX: left + view.scrollX,
+    pageY: top + view.scrollY,
+    viewportWidth: view.innerWidth,
     source:
       (typeof source === "function" ? source(target) : source) ??
       target
@@ -269,7 +277,7 @@ export function resolveAnchor(
 ): Element | null {
   let element: Element | null = null;
   try {
-    const found = anchor.selector ? unique(anchor.selector) : document.body;
+    const found = anchor.selector ? unique(anchor.selector) : pageDocument().body;
     element = target?.isConnected && target === found ? target : found;
     if (element && stableFor(element, anchor.selector)) return element;
     if (element && !matches(element, anchor))
@@ -323,7 +331,7 @@ export function locateAnchor(
 }
 function measure(anchor: Anchor, element: Element | null) {
   if (element) {
-    const rect = element.getBoundingClientRect();
+    const rect = screenRect(element);
     if (rect.width && rect.height)
       return {
         x: rect.left + rect.width * anchor.x,
@@ -339,15 +347,14 @@ function measure(anchor: Anchor, element: Element | null) {
         },
       };
   }
-  return {
-    x:
-      (anchor.pageX * window.innerWidth) / anchor.viewportWidth -
-      window.scrollX,
-    y: anchor.pageY - window.scrollY,
+  const view = pageWindow();
+  const point = toScreen({
+    left: (anchor.pageX * view.innerWidth) / anchor.viewportWidth - view.scrollX,
+    top: anchor.pageY - view.scrollY,
     width: 0,
     height: 0,
-    attached: false,
-  };
+  }, view);
+  return { x: point.left, y: point.top, width: 0, height: 0, attached: false };
 }
 
 /** Synchronous geometry-pass cache: discard before the DOM can change. */

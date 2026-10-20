@@ -7,7 +7,7 @@
 // its design-system foundations); komo never parses the Tailwind config, and reads
 // the page's stylesheets only with `onlyGenerated`.
 // This module is a separate entry point and never enters the core bundle.
-import type { DesignToken, DesignTokenType, ThemeAxis, ThemeState, TokenAdapter, TokenUsage, TokenValueChange } from "../design-system.js";
+import type { DesignToken, DesignTokenType, PreviewTarget, ThemeAxis, ThemeState, TokenAdapter, TokenUsage, TokenValueChange } from "../design-system.js";
 import { inlineStyleSnapshot } from "../design-preview.js";
 import { previewVariables } from "./variable-preview.js";
 import { isDesignTarget } from "../design-target.js";
@@ -308,8 +308,8 @@ export function tailwindTokens(table: TailwindTable, options: TailwindTokensOpti
     },
     // Only tables that name their variables can preview token values.
     ...(table.tokens.some((token) => token.cssVariable) ? {
-      previewValues(changes: TokenValueChange[], theme?: string) {
-        return previewVariables(changes, (path) => byPath.get(path)?.token, options.scopes, theme);
+      previewValues(changes: TokenValueChange[], theme?: string, target?: PreviewTarget) {
+        return previewVariables(changes, (path) => byPath.get(path)?.token, options.scopes, theme, target?.document);
       },
     } : {}),
     // Only `onlyGenerated` lists depend on the page, so only they report changes.
