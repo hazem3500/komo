@@ -2888,15 +2888,15 @@ export function initComments(options: CommentsOptions): CommentsController {
     const route = item.querySelector<HTMLAnchorElement>(".page");
     if (!route) return;
     const url = new URL(thread.page, location.origin).href;
-    // All-pages threads keep their origin page in the detail and as the destination.
+    // All-pages threads read "All pages"; the link and its detail stay on their own page.
     const everywhere = everyPage(thread);
     const ownPage = thread.page === page();
     route.href = url;
     route.title = url;
-    route.setAttribute("aria-label", everywhere ? `All pages. Made on ${url}` : `Open page: ${url}`);
+    route.setAttribute("aria-label", `Open page: ${url}`);
     const row = route.closest<HTMLElement>(".card-page-row")!;
     row.hidden = ownPage && !everywhere;
-    row.querySelector(".card-page-url")!.textContent = everywhere ? `Made on ${url}` : url;
+    row.querySelector(".card-page-url")!.textContent = url;
     const key = everywhere ? "" : url;
     if (route.dataset.url !== key) {
       route.dataset.url = key;
@@ -4652,14 +4652,11 @@ export function initComments(options: CommentsOptions): CommentsController {
       await saveOptimistic(
         (items) => [...items, item],
         async () => {
-          const post = (extra?: object) => api.request<{ id: string; commentId?: string }>(
+          const result = await api.request<{ id: string; commentId?: string }>(
             "threads",
             "POST",
-            { page: item.page, anchor, body: comment.body, ...(tags.length ? { tags } : {}), ...extra },
+            { page: item.page, anchor, body: comment.body, ...(tags.length ? { tags } : {}), ...(scope && { scope }) },
           );
-          // An older API refuses the scope field; the comment still saves on this page.
-          const result = await (scope ? post({ scope }).catch((error) =>
-            error instanceof ApiError && error.message === "Unexpected request fields." ? post() : Promise.reject(error)) : post());
           // The initial message ID is returned so queued edits target the persisted comment.
           const saved =
             result.commentId ??
@@ -4870,7 +4867,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           onSelect: () => { void beginPinMove(thread); },
         }] : []),
         ...(canScope(thread) ? [{
-          label: everyPage(thread) ? thread.page === page() ? "Only on this page" : "Only on its own page" : "Show on all pages",
+          label: everyPage(thread) ? `Only on ${thread.page === page() ? "this" : "its own"} page` : "Show on all pages",
           icon: "expand" as const,
           onSelect: () => setScope(thread),
         }] : []),
@@ -4898,7 +4895,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           [
             `Repository: ${options.repo}`,
             `Branch: ${options.branch}`,
-            `Page: ${new URL(thread.page, location.origin).href}${everyPage(thread) ? " (shown on all pages)" : ""}`,
+            `Page: ${new URL(thread.page, location.origin).href}`,
             `Target: ${thread.anchor.selector || "Page position"}`,
             ...(thread.anchor.source
               ? [`Source: ${thread.anchor.source}`]
@@ -5849,7 +5846,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           await api.request(`threads/${id(thread.id)}`, "PATCH", { scope });
         },
       );
-      notify(scope === "all" ? "Shown on all pages" : "Shown only on its own page");
+      notify(`Shown on ${scope === "all" ? "all pages" : "its own page"}`);
     });
   }
   function cancelPinMove() {
@@ -6133,8 +6130,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     hoverOutline.style.opacity = "0";
   });
   function geometry() {
-    const moving = movingThread && threads.find(thread => thread.id === movingThread);
-    if (movingThread && !(moving && here(moving))) cancelPinMove();
+    if (movingThread && !threads.some(thread => thread.id === movingThread && here(thread))) cancelPinMove();
     if (frame || destroyed || document.hidden) return;
     const currentPage = page();
     if (
