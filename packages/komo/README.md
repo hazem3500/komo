@@ -466,6 +466,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `autoHideDrawer` | `boolean` | `true` | Set `false` to keep the drawer visible away from the pointer. |
 | `showToolbar` | `boolean` | `true` | Set `false` to keep the toolbar, drawer, and comment pins hidden until `controller.open()` or the restore shortcut. |
 | `shortcuts` | `{ comment?, browse?, design?, comments?, restore? }` | `C`, `V`, `D`, `L`, `Shift+K` | A key with optional `Ctrl`, `Alt`, `Shift`, or `Meta`, such as `"M"` or `"Shift+J"`. Set `false` to disable one. Escape and Tab are reserved. Tooltips and tips show the configured keys. |
+| `toolbar.items` | `ToolbarItem[]` | `browse`, `comment`, `design`, `\|`, `comments`, `\|`, `more`, `account`, `\|`, `dismiss` | Toolbar order and visibility. See [Arranging the toolbar](#arranging-the-toolbar). |
 | `features` | `{ designMode?, tags? }` | All `true` | Set a feature to `false` to remove it from the review UI, e.g. `{ designMode: false, tags: false }`. Existing tags stay stored and remain available to the CLI. |
 | `sidebar` | `"background" \| "edge"` | `"edge"` | `"edge"` (Floating) is a draggable sidebar that parks off and peeks from the viewport edge while closed. `"background"` (Frame) reflows the unscaled page beside the review sidebar. Account → Sidebar switches the two; that choice is remembered per project. |
 | `restoreOpen` | `"session" \| "always" \| false` | `"session"` | Reopen the sidebar if it was left open: after a reload in the same tab, across tabs and visits, or never. |
@@ -498,6 +499,24 @@ shortcuts: {
 ```
 
 Shortcuts never fire while focus is in a field or editable region, on the page or in komo. Bare letters follow the keyboard layout; with a modifier, komo also matches the physical key, so Caps Lock, other layouts, and macOS Alt characters still work. Bare letters keep working while focus is on komo's own buttons, sidebar, and panels.
+
+### Arranging the toolbar
+
+`toolbar.items` sets which controls appear in the toolbar and in what order. Omitted ids are hidden from the toolbar; `"|"` draws a separator.
+
+```ts
+toolbar: {
+  items: ["comment", "browse", "|", "comments", "|", "more"],
+}
+```
+
+Ids are `browse`, `comment`, `design`, `comments` (All comments, with an open-thread badge), `more`, `account` and `dismiss`. Every layout, including vertical edges, the open sidebar and mobile, follows the same order, and Tab and arrow keys move through it in that order.
+
+- Ids for disabled features, such as `design` with `features.designMode: false`, are skipped. Leading, trailing and doubled separators collapse.
+- Unknown or repeated ids are ignored with one console warning.
+- Hidden controls stay in More. Without `account`, reviewers are still asked for a name before their first comment. Without `dismiss`, the restore shortcut still works. Hiding `more` also hides the tools that live only there, such as copying comments for an agent.
+- An empty list hides the toolbar; shortcuts keep working.
+- First-run setup always shows its own account and project controls.
 
 ### Host events
 

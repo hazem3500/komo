@@ -456,9 +456,15 @@ ${morphingMenuStyles}
 .morphing-menu__count { font-size:11px; font-variant-numeric:tabular-nums; opacity:.7; }
 .morphing-menu__section + .morphing-menu__section { border-top:1px solid #ffffff18; margin-top:4px; padding-top:4px; }
 .morphing-menu__section h3 { margin:5px 12px 2px; font:inherit; font-size:10px; opacity:.6; }
+.morphing-menu__panel[aria-hidden="true"] .morphing-menu__section { border-color:transparent; }
+.morphing-menu__panel[aria-hidden="true"] h3 { opacity:0; }
 .morphing-menu__row { font-size:12px; }
 .morphing-menu__label { min-width:0; }
 .morphing-menu__tooltip .komo-kbd { margin-left:8px; }
+.morphing-menu__separator { flex:none; align-self:center; width:1px; height:20px; margin:0 4px; border-radius:1px; background:currentColor; opacity:.16; }
+.morphing-menu[data-vertical="true"] .morphing-menu__separator { width:20px; height:1px; margin:4px 0; }
+.toolbar .morphing-menu__shortcut { position:relative; }
+.morphing-menu__badge { position:absolute; top:4px; left:calc(50% + 3px); min-width:16px; height:16px; padding:0 4px; box-sizing:border-box; border-radius:8px; background:var(--accent,#bda6ef); color:#1d1530; font-size:10px; font-weight:600; line-height:16px; font-variant-numeric:tabular-nums; text-align:center; pointer-events:none; }
 .komo-shortcuts { box-sizing:border-box; width:min(360px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow:auto; padding:20px; border:1px solid #ffffff28; border-radius:16px; background:#232323; color:#f1efeb; font:12px/1.5 system-ui; }
 .komo-shortcuts::backdrop { background:#0006; }
 .komo-shortcuts h2 { font-size:16px; margin:0 0 12px; }
@@ -2393,6 +2399,11 @@ textarea {
   width: 0;
   height: var(--mm-button);
   flex: 1;
+}
+:host([data-sidebar="edge"]) .toolbar[data-edge-orient="horizontal"] .morphing-menu__separator {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
 }
 :host([data-sidebar="edge"]) .edge-sidebar[data-morphing="true"] .panel {
   padding-top: 0;

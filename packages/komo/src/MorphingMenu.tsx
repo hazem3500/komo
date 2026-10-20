@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronSelectorVertical } from "@untitledui/icons/ChevronSelectorVertical";
+import { DotsHorizontal } from "@untitledui/icons/DotsHorizontal";
 import { XClose } from "@untitledui/icons/XClose";
 import { ArrowLeft } from "@untitledui/icons/ArrowLeft";
 import { ChevronRight } from "@untitledui/icons/ChevronRight";
@@ -19,6 +19,7 @@ import {
 import { renderKbd, shortcutKeys } from "./kbd.js";
 import type { Shortcut } from "./shortcuts.js";
 import { onPage } from "./dom.js";
+import { badgeText, barLayout, countLabel } from "./toolbar-items.js";
 import { animate } from "motion";
 import { useReducedMotion } from "motion/react";
 import {
@@ -51,6 +52,8 @@ export type MenuItem = MenuAction & {
 
 export type MorphingMenuProps = {
   items: readonly MenuItem[];
+  /** Bar order: item ids, "more" and "|" separators. Defaults to bar items, More, then Dismiss. */
+  bar?: readonly string[];
   defaultActiveId?: string;
   activeId?: string;
   alignEnd?: boolean;
@@ -72,6 +75,7 @@ const HOVER_GRACE_PERIOD = 300;
 
 export function MorphingMenu({
   items,
+  bar,
   defaultActiveId,
   activeId,
   edge = "bottom",
@@ -88,6 +92,7 @@ export function MorphingMenu({
   const [selection, setSelection] = useState(defaultActiveId ?? items[0]?.id);
   const [tooltip, setTooltip] = useState<{
     label: string;
+    shortcut?: Shortcut | null;
     x: number;
     y: number;
   } | null>(null);
@@ -157,13 +162,14 @@ export function MorphingMenu({
   const reducedMotion = useReducedMotion();
   const selected = activeId ?? selection;
   const expanded = view.kind !== "collapsed";
-  const barItems = items.filter((item) => item.showInBar !== false);
-  const dismissItem = barItems.find((item) => item.id === "dismiss");
-  const primaryBarItems = barItems.filter((item) => item.id !== "dismiss");
+  const layout = barLayout(items, bar).filter(
+    (entry) => entry === "|" || entry === "more" || items.some((item) => item.id === entry),
+  );
+  const barCount = layout.filter((entry) => entry !== "|").length;
   const groups = items.filter((item) => item.children?.length);
   const barPositions = useRef(new Map<string, [number, number]>());
   const barMotion = useRef(new Map<string, ReturnType<typeof animate>>());
-  const barKey = barItems.map((item) => item.id).join("|");
+  const barKey = layout.join(" ");
   useLayoutEffect(() => {
     const next = new Map<string, [number, number]>();
     const moves = [...(barRef.current?.querySelectorAll<HTMLElement>("[data-menu-item]") ?? [])].map((node) => {
@@ -209,7 +215,7 @@ export function MorphingMenu({
     hintsRevealed.current = false;
   }
 
-  function showTooltip(element: HTMLElement, text: string, immediate = false) {
+  function showTooltip(element: HTMLElement, item: MenuAction | null, immediate = false) {
     clearTimeout(tooltipTimer.current);
     const root = rootRef.current;
     const bar = barRef.current;
@@ -218,7 +224,8 @@ export function MorphingMenu({
     const bounds = root.getBoundingClientRect();
     const target = element.getBoundingClientRect();
     const next = {
-      label: text,
+      label: item ? (item.count ? `${item.label} · ${item.count} open` : item.label) : moreLabel,
+      shortcut: item?.shortcut,
       x:
         edge === "left"
           ? bounds.width + 8
@@ -429,7 +436,7 @@ export function MorphingMenu({
       running.forEach((animation) => animation.stop());
       window.removeEventListener("resize", resize);
     };
-  }, [view, reducedMotion, edge, items.length, barItems.length]);
+  }, [view, reducedMotion, edge, items.length, barKey]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -483,8 +490,9 @@ export function MorphingMenu({
             {swapping ? swap(item.label) : item.label}
           </span>
         )}
+        {inBar && !!item.count && <span className="morphing-menu__badge" aria-hidden="true">{badgeText(item.count)}</span>}
         {!inBar && <span className="morphing-menu__trailing">
-          {item.count !== undefined && <span className="morphing-menu__count" aria-label={`${item.count} open comments`}>{item.count}</span>}
+          {!!item.count && <span className="morphing-menu__count" aria-hidden="true">{item.count}</span>}
           {item.shortcut && <Keycaps shortcut={item.shortcut} />}
         </span>}
         {!inBar && hasChildren && <Chevron />}
@@ -493,7 +501,7 @@ export function MorphingMenu({
     const props = {
       className: inBar ? "morphing-menu__shortcut" : "morphing-menu__row",
       "data-menu-item": item.id,
-      "aria-label": item.count === undefined ? item.label : `${item.label}, ${item.count} open comments`,
+      "aria-label": countLabel(item.label, item.count),
       "aria-keyshortcuts": item.shortcut ? shortcutKeys(item.shortcut).aria : undefined,
       "aria-current": active
         ? hasChildren
@@ -510,13 +518,13 @@ export function MorphingMenu({
           : select(item),
       onPointerEnter: (event: React.PointerEvent<HTMLElement>) => {
         if (inBar && event.pointerType === "mouse")
-          showTooltip(event.currentTarget, item.label);
+          showTooltip(event.currentTarget, item);
       },
       onPointerLeave: hideTooltip,
       onPointerDown: dismissTooltip,
       onFocus: (event: React.FocusEvent<HTMLElement>) => {
         if (inBar && event.currentTarget.matches(":focus-visible"))
-          showTooltip(event.currentTarget, item.label, true);
+          showTooltip(event.currentTarget, item, true);
       },
       onBlur: hideTooltip,
     };
@@ -552,7 +560,7 @@ export function MorphingMenu({
       data-edge={edge}
       data-vertical={vertical}
       data-align-end={alignEnd}
-      style={{ "--mm-count": barItems.length + 1, ...style } as CSSProperties}
+      style={{ "--mm-count": barCount, "--mm-gaps": layout.length - barCount, ...style } as CSSProperties}
       onPointerMove={(event) => {
         // A collapsing bar can move under a stationary cursor and fire enter.
         // Only an actual pointer movement should revive a dismissed hover hint.
@@ -568,7 +576,7 @@ export function MorphingMenu({
             ? event.target.closest<HTMLElement>(".morphing-menu__shortcut")
             : null;
         if (shortcut)
-          showTooltip(shortcut, shortcut.getAttribute("aria-label") ?? "");
+          showTooltip(shortcut, items.find((item) => item.id === shortcut.dataset.menuItem) ?? null);
       }}
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
@@ -614,9 +622,21 @@ export function MorphingMenu({
               hintsRevealed.current = false;
             }, HOVER_GRACE_PERIOD);
           }}
+          onKeyDown={(event) => {
+            // Arrow keys and Home/End move through the bar in its visual order.
+            const step = ({ ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 } as Record<string, number>)[event.key];
+            const controls = [...event.currentTarget.querySelectorAll<HTMLElement>("[data-menu-item]")];
+            const index = controls.indexOf(event.target as HTMLElement);
+            if (index < 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || (!step && event.key !== "Home" && event.key !== "End")) return;
+            event.preventDefault();
+            controls[event.key === "Home" ? 0 : event.key === "End" ? controls.length - 1 : (index + step + controls.length) % controls.length]!.focus({ preventScroll: true });
+          }}
         >
-          {primaryBarItems.map((item) => control(item, true))}
+          {layout.map((entry, index) => entry === "|" ? (
+            <span key={`separator-${index}`} className="morphing-menu__separator" aria-hidden="true" />
+          ) : entry !== "more" ? control(items.find((item) => item.id === entry)!, true) : (
           <button
+            key="more"
             type="button"
             className="morphing-menu__shortcut"
             data-menu-item="more"
@@ -628,19 +648,19 @@ export function MorphingMenu({
             }
             onPointerEnter={(event) => {
               if (event.pointerType === "mouse")
-                showTooltip(event.currentTarget, moreLabel);
+                showTooltip(event.currentTarget, null);
             }}
             onPointerLeave={hideTooltip}
             onPointerDown={dismissTooltip}
             onBlur={hideTooltip}
             onFocus={(event) => {
               if (event.currentTarget.matches(":focus-visible"))
-                showTooltip(event.currentTarget, moreLabel, true);
+                showTooltip(event.currentTarget, null, true);
             }}
           >
-            <ChevronSelectorVertical aria-hidden="true" />
+            <DotsHorizontal aria-hidden="true" />
           </button>
-          {dismissItem && control(dismissItem, true)}
+          ))}
         </div>
         <div
           id={`${id}-main`}
@@ -692,7 +712,7 @@ export function MorphingMenu({
           style={{ left: tooltip.x, top: tooltip.y }}
         >
           {tooltip.label}
-          {items.find(item => item.label === tooltip.label)?.shortcut && <Keycaps shortcut={items.find(item => item.label === tooltip.label)!.shortcut!} />}
+          {tooltip.shortcut && <Keycaps shortcut={tooltip.shortcut} />}
         </div>
       )}
     </nav>

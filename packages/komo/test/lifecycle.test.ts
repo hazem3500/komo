@@ -184,7 +184,7 @@ it("lets reviewers dismiss and restore the toolbar, and supports hidden initiali
   const barOrder = [...host.shadowRoot!.querySelectorAll<HTMLElement>(
     ".morphing-menu__bar [data-menu-item]",
   )].map((item) => item.dataset.menuItem);
-  expect(barOrder.slice(-2)).toEqual(["more", "dismiss"]);
+  expect(barOrder.slice(-3)).toEqual(["more", "account", "dismiss"]);
   expect(dismiss.querySelector("svg")?.outerHTML).toBe(
     icon("close").outerHTML,
   );
