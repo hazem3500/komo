@@ -784,12 +784,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   });
   // Pin rings take the page's tone, so collapsed pins sit on light and dark sites.
   function markPageTone() {
-    const color = pageBackground;
-    const [a = 255, b = 255, c = 255] = color.match(/[\d.]+/g)?.map(Number) ?? [];
-    const dark = /^rgba?\(/.test(color)
-      ? 0.2126 * a + 0.7152 * b + 0.0722 * c < 128
-      : /^(ok)?l(ab|ch)\(/.test(color) && a < (/^ok/.test(color) && !/^\S+\(\s*[\d.]+%/.test(color) ? 0.5 : 50);
-    pins.dataset.page = dark ? "dark" : "light";
+    const [r, g, b] = /^rgb/.test(pageBackground) ? pageBackground.match(/[\d.]+/g)!.map(Number) : [255, 255, 255];
+    pins.dataset.page = 0.2126 * r! + 0.7152 * g! + 0.0722 * b! < 128 ? "dark" : "light";
   }
   let framed = false;
   let pageTransitioning = false;
@@ -2855,22 +2851,21 @@ export function initComments(options: CommentsOptions): CommentsController {
       pin.toggleAttribute("data-near", near);
     }
   }
-  // Unread dots breathe for three cycles when they first appear, then rest
-  // until another unread thread arrives.
-  const breathePeriod = 1800;
+  // Unread dots breathe for three 1.8s cycles when they first appear, then
+  // rest until another unread thread arrives.
   const breathed = new Set<string>();
   let breatheStart = 0;
   let breatheTimer = 0;
   function breathe(visible: Thread[]) {
-    const fresh = visible.filter((thread) => unread(thread) && !breathed.has(thread.id));
-    if (!fresh.length) return;
-    for (const thread of fresh) breathed.add(thread.id);
-    if (reducedMotion()) return;
+    let fresh = false;
+    for (const thread of visible)
+      if (unread(thread) && !breathed.has(thread.id)) fresh = !!breathed.add(thread.id);
+    if (!fresh || reducedMotion()) return;
     breatheStart = performance.now();
     pins.style.setProperty("--pin-breathe-delay", "0ms");
     pins.dataset.breathe = "";
     clearTimeout(breatheTimer);
-    breatheTimer = window.setTimeout(() => delete pins.dataset.breathe, breathePeriod * 3);
+    breatheTimer = window.setTimeout(() => delete pins.dataset.breathe, 5400);
   }
   let pinSnapshot = "";
   // Threads on this page whose element can no longer be found or is not visible.
@@ -2984,7 +2979,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     pins.replaceChildren();
     // Rebuilt pins pick up the breath where the previous ones left it.
     if ("breathe" in pins.dataset)
-      pins.style.setProperty("--pin-breathe-delay", `${-((performance.now() - breatheStart) % breathePeriod)}ms`);
+      pins.style.setProperty("--pin-breathe-delay", `${(breatheStart - performance.now()) % 1800}ms`);
     const stackElements = new Map<string, HTMLElement>();
     const measured = new Map(
       positions.map((position) => [position.thread.id, position]),
