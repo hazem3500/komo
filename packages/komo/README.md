@@ -206,6 +206,8 @@ Token adapter: css-variables
 
 Token edits stay pending exactly like element previews. Escape or closing Design mode shows Before while it is closed, and reopening previews the edits again, never silently: with an element selected, the footer count includes them and a **Token changes · N** chip opens the Tokens view. Undo steps through token and element edits in the order they were made, Before/After flips both, the element's **Comment** adds the token section to its comment and then clears both, and **Reset all previews** clears them with the element previews.
 
+The comment's **Token changes** card has the same Before/After switch as an element's card when the adapter implements `previewValues`: Before runs the preview's cleanup, and After previews the edits again. Rows name each token by its label, or else the last part of its path. komo's tooltip shows the full path and theme.
+
 The theme in parentheses is the theme key: the current option of each switchable axis, joined with `+` (`docs+dark`). A repointed alias records token references in braces. Live preview is opt-in:
 
 - `previewValues(changes, theme)` receives every current edit, `{ path, value, theme?, alias? }`, on each edit and theme switch, after komo runs the previous cleanup. Return a cleanup that restores the page exactly; komo also runs it for Before, cancel, Reset, closing Design mode and destroy. `theme` is the current key, so an adapter that cannot scope a value to its theme can preview only the edits for it.

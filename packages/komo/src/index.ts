@@ -3068,6 +3068,7 @@ export function initComments(options: CommentsOptions): CommentsController {
               resolve: (selector) => onThreadPage(thread) ? designTarget(thread.anchor)(selector) : null,
               note: (node, text) => (node.textContent = text),
               compact: true,
+              design: options.design,
             }),
           );
         // The design card has its own Before/After buttons, so it sits beside the
@@ -4214,6 +4215,8 @@ export function initComments(options: CommentsOptions): CommentsController {
           resolve: (selector) => onThreadPage(thread) ? designTarget(thread.anchor)(selector) : null,
           note: appendMessageLinks,
           sourceHref: sourceLink,
+          design: options.design,
+          tip: tipFor,
           // The element can grow under the dialog; place it again once the change settles.
           onSwitch: () => positionDialog(),
         });
@@ -4527,6 +4530,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         return Promise.resolve(renderDraftProposal(card, proposal, target, {
           design: options.design,
           sourceHref: sourceLink,
+          tip: tipFor,
           onUpdate(body) { if (draft === anchor && draftProposal) draftProposal = body; },
         })).then(positionDialog);
       });

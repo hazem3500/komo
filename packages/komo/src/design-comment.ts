@@ -6,7 +6,7 @@ import { inlineStyleSnapshot, removeEmptyStyle } from "./design-preview.js";
 import { previewText } from "./text-preview.js";
 import { sourceInfo, sourceInfoStyles, type SourceHref } from "./source-info.js";
 import { listTokens, originalTokenUsage, previewToken, refreshTokenBaseline, themeState, watchThemes } from "./token-adapter.js";
-import type { DesignSystem, DesignToken, TokenAdapter } from "./design-system.js";
+import type { DesignSystem, DesignToken, TokenAdapter, TokenValueChange } from "./design-system.js";
 
 export interface DesignChange {
   label: string;
@@ -15,7 +15,7 @@ export interface DesignChange {
   /** Token path such as color.brand, when the change binds a design token. */
   token?: string;
   /** How to preview it on the page; absent when only the app can apply it. */
-  apply?: { kind: "style" | "variable" | "text"; property: string };
+  apply?: { kind: "style" | "variable" | "text" | "token"; property: string; theme?: string };
 }
 
 export interface DesignSection {
@@ -62,7 +62,8 @@ function change(line: string, kind: string): DesignChange | null {
     return { label: match[1], token: match[1], before: match[3], after: match[4], apply: { kind: "variable", property: match[2] } };
   // Token: color.text.primary (dark) #e6e6e6 → #f5f5f5, from the Tokens view.
   match = /^Token: ([\w.-]+)(?: \(([^()]+)\))? (.*?) → (.*)$/.exec(line);
-  if (match) return { label: match[2] ? `${match[1]} (${match[2]})` : match[1], token: match[1], before: match[3], after: match[4] };
+  // Its preview goes through the adapter's previewValues(), like the Tokens view's footer.
+  if (match) return { label: match[2] ? `${match[1]} (${match[2]})` : match[1], token: match[1], before: match[3], after: match[4], apply: { kind: "token", property: match[1], ...(match[2] ? { theme: match[2] } : {}) } };
   // Element color: rgb(…) → var(--color-brand) [color.brand]
   match = /^Element ([\w-]+): (.*?) → (.*?)(?: \[([^\]]+)\])*$/.exec(line);
   if (match) {
@@ -188,7 +189,8 @@ function settle(key: string) {
   pending.finish();
 }
 
-type DraftTokens = { adapter: TokenAdapter; tokens: readonly DesignToken[] };
+/** The adapter, its current list (empty for saved comments) and the theme key page token previews use. */
+type DraftTokens = { adapter: TokenAdapter; tokens: readonly DesignToken[]; theme?: string };
 
 function apply(key: string, sections: DesignSection[], resolve: (selector?: string) => Element | null, smooth = false, context?: DraftTokens) {
   if (lostPreviews.has(key)) return false;
@@ -197,12 +199,18 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
   const restoreStyles: Array<() => void> = [];
   const pinBefore: Array<() => void> = [];
   const styleless = new Set<Element>();
+  const values: TokenValueChange[] = [];
   let unavailable = false;
   for (const section of sections) {
     const element = resolve(section.target);
     for (const item of section.changes) {
       if (!item.apply || item.after === "(unset)") continue;
-      if (item.apply.kind === "variable") {
+      if (item.apply.kind === "token") {
+        // "{color.violet.500}" repoints an alias; the adapter resolves the reference.
+        const alias = /^\{(.+)\}$/.exec(item.after)?.[1];
+        values.push({ path: item.apply.property, value: alias ? context?.tokens.find(token => token.path === alias)?.value ?? "" : item.after,
+          ...(item.apply.theme ? { theme: item.apply.theme } : {}), ...(alias ? { alias } : {}) });
+      } else if (item.apply.kind === "variable") {
         const root = document.documentElement;
         const previous = root.style.getPropertyValue(item.apply.property);
         root.style.setProperty(item.apply.property, item.after);
@@ -242,6 +250,11 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
       } else if (item.apply.kind === "style") unavailable = true;
     }
   }
+  // One preview for every token row; its cleanup removes the adapter's stylesheet for Before.
+  if (values.length) {
+    try { restore.push(context!.adapter.previewValues!(values, context!.theme)); }
+    catch { unavailable = true; }
+  }
   if (styleless.size) restoreStyles.unshift(() => {
     for (const element of styleless) if (isDesignTarget(element)) removeEmptyStyle(element);
   });
@@ -268,7 +281,7 @@ function morph(sections: DesignSection[], resolve: (selector?: string) => Elemen
   for (const section of sections)
     for (const item of section.changes) {
       if (item.apply?.kind === "style") properties.add(item.apply.property);
-      else if (item.apply?.kind === "variable") TOKEN_PROPERTIES.forEach((property) => properties.add(property));
+      else if (item.apply?.kind === "variable" || item.apply?.kind === "token") TOKEN_PROPERTIES.forEach((property) => properties.add(property));
       else if (item.apply?.kind === "text") {
         const element = resolve(section.target);
         if (element instanceof HTMLElement)
@@ -422,7 +435,14 @@ export interface DesignCommentOptions {
   tokens?: DraftTokens;
   /** Link for a recorded source path, shown behind the card's ⓘ. */
   sourceHref?: SourceHref;
+  /** The app's design system: its token adapter previews page token rows. */
+  design?: DesignSystem;
+  /** Give a node komo's tooltip, which reads its aria-label. */
+  tip?(node: HTMLElement): void;
 }
+
+/** The theme key token edits use: the current option of each switchable axis, joined with "+". */
+const themeKeyOf = (design?: DesignSystem) => (design?.themes ?? []).filter(axis => axis.options?.length > 1).map(axis => themeState(design)[axis.id]).join("+") || undefined;
 
 /** Replace `container`'s content with a change card for each proposal. */
 export function renderDesignComment(container: HTMLElement, body: string, options: DesignCommentOptions) {
@@ -441,7 +461,11 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   // Compact cards show the first three rows across all sections and count the rest.
   let room = compact ? 3 : Infinity;
   let extra = 0;
-  const previewable = sections.some((section) => section.changes.some((item) => item.apply));
+  const adapter = options.tokens?.adapter ?? options.design?.tokens;
+  const context = adapter && { adapter, tokens: options.tokens?.tokens ?? [], theme: themeKeyOf(options.design) };
+  // Page token rows preview only through an adapter with previewValues().
+  const can = (item: DesignChange) => !!item.apply && (item.apply.kind !== "token" || !!adapter?.previewValues);
+  const previewable = sections.some((section) => section.changes.some(can));
   const toggles: HTMLElement[] = [];
   const sync = () => {
     const on = applied.has(options.key);
@@ -474,7 +498,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
     head.append(label);
     if (block.source && !compact) head.append(sourceInfo(block.component || where || "Change", block.source, options.sourceHref));
     // One Before/After switch for the whole comment, shown on its first previewable card.
-    if (previewable && !toggles.length && block.changes.some((item) => item.apply)) {
+    if (previewable && !toggles.length && block.changes.some(can)) {
       const toggle = document.createElement("div");
       toggle.dataset.previewKey = options.key;
       toggle.className = "design-toggle";
@@ -486,12 +510,13 @@ export function renderDesignComment(container: HTMLElement, body: string, option
         button.addEventListener("click", () => {
           const showAfter = index === 1;
           if (showAfter === applied.has(options.key)) return;
-          const element = options.resolve(sections.find((section) => section.target)?.target);
-          if (showAfter) element?.scrollIntoView({ block: "center", behavior: "smooth" });
+          // A page-wide token card has no element to bring into view.
+          const target = sections.find((section) => section.target)?.target;
+          if (showAfter && target) options.resolve(target)?.scrollIntoView({ block: "center", behavior: "smooth" });
           const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
           if (!reduced) morph(sections, options.resolve);
           if (showAfter) {
-            unavailable.hidden = apply(options.key, sections, options.resolve, !reduced, options.tokens);
+            unavailable.hidden = apply(options.key, sections, options.resolve, !reduced, context);
             unavailable.textContent = UNAVAILABLE;
           }
           else revert(options.key, !reduced);
@@ -515,8 +540,15 @@ export function renderDesignComment(container: HTMLElement, body: string, option
       const row = document.createElement("div");
       row.className = "design-row";
       row.hidden = !compact && index >= visible && block.changes.length > visible + 1;
-      const label = Object.assign(document.createElement("span"), { className: "design-prop", textContent: item.label });
+      // A token row names the token (its label, else the path's last part); the full path and theme are its tooltip.
+      const token = item.apply?.kind === "token" && item.token;
+      const short = token && (context?.tokens.find(entry => entry.path === token)?.label || token.split(".").pop());
+      const label = Object.assign(document.createElement("span"), { className: "design-prop", textContent: short || item.label });
       label.title = item.label;
+      if (short) {
+        label.setAttribute("aria-label", item.label);
+        options.tip?.(label);
+      }
       if (isProse(item)) {
         row.classList.add("design-row-prose");
         row.append(label, diff(item.before, item.after));
@@ -588,6 +620,7 @@ interface DraftOptions {
   design?: DesignSystem;
   sourceHref?: SourceHref;
   onUpdate?(body: string): void;
+  tip?(node: HTMLElement): void;
 }
 
 function currentDraftBody(body: string, tokens: readonly DesignToken[], design: DesignSystem, resolve: DesignCommentOptions["resolve"]): string {
@@ -627,7 +660,7 @@ export function renderDraftProposal(container: HTMLElement, body: string, resolv
     if (draftRuntime && draftRuntime.options.design === design && (body === draftRuntime.source || body === draftRuntime.body)) {
       draftRuntime.container = container;
       draftRuntime.options = options;
-      renderDesignComment(container, draftRuntime.body, { key: "draft", resolve: draftRuntime.resolve, tokens: draftRuntime.context, sourceHref: options.sourceHref, note: (element, text) => element.append(text) });
+      renderDesignComment(container, draftRuntime.body, { ...options, key: "draft", resolve: draftRuntime.resolve, tokens: draftRuntime.context, note: (element, text) => element.append(text) });
       return;
     }
     draftRuntime?.events.abort();
@@ -648,7 +681,7 @@ export function renderDraftProposal(container: HTMLElement, body: string, resolv
         const after = initial || applied.has("draft");
         initial = false;
         revert("draft");
-        runtime.context = { adapter: adapter!, tokens };
+        runtime.context = { adapter: adapter!, tokens, theme: themeKeyOf(design) };
         runtime.body = currentDraftBody(runtime.source, tokens, design!, runtime.resolve);
         draftBody = runtime.body;
         runtime.options.onUpdate?.(runtime.body);
@@ -659,7 +692,7 @@ export function renderDraftProposal(container: HTMLElement, body: string, resolv
         }
         if (after) apply("draft", sections, runtime.resolve, false, runtime.context);
         const focused = runtime.container.querySelector<HTMLButtonElement>(".design-toggle button:focus")?.textContent;
-        renderDesignComment(runtime.container, runtime.body, { key: "draft", resolve: runtime.resolve, tokens: runtime.context, sourceHref: runtime.options.sourceHref, note: (element, text) => element.append(text) });
+        renderDesignComment(runtime.container, runtime.body, { ...runtime.options, key: "draft", resolve: runtime.resolve, tokens: runtime.context, note: (element, text) => element.append(text) });
         if (focused) [...runtime.container.querySelectorAll<HTMLButtonElement>(".design-toggle button")].find(button => button.textContent === focused)?.focus({ preventScroll: true });
       },
     };
@@ -674,5 +707,5 @@ export function renderDraftProposal(container: HTMLElement, body: string, resolv
     draftBody = body;
     apply("draft", parseDesignComment(body).filter((block): block is DesignSection => "changes" in block), resolve);
   }
-  renderDesignComment(container, body, { key: "draft", resolve, sourceHref: options.sourceHref, note: (element, text) => element.append(text) });
+  renderDesignComment(container, body, { ...options, key: "draft", resolve, note: (element, text) => element.append(text) });
 }

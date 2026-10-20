@@ -83,11 +83,13 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     const tool = (name: string) => bar.getByRole("button", { name, exact: true });
     const editSurface = async () => {
       await page.getByRole("button", { name: /^Edit tokens/ }).click();
+      // The colour editor keeps each value as it is typed; clicking the row again closes it.
       await row("surface").locator("button").first().click();
-      const input = page.locator('.komo-custom input[aria-label="Color value"]');
-      await input.fill("#ff8000");
+      const input = page.locator('.komo-color input[aria-label="Hex"]');
+      await input.fill("ff8000");
       await input.press("Enter");
-      await page.locator(".komo-custom").waitFor({ state: "detached" });
+      await row("surface").locator("button").first().click();
+      await page.locator(".komo-color").waitFor({ state: "detached" });
       expect(await background()).toBe(orange);
     };
     // Shift+Left steps ten local CSS pixels, so the resize is exact in every mode.
@@ -168,9 +170,15 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     await tool("Comment").click();
     const draft = page.locator(".draft-proposal");
     await draft.waitFor();
-    expect(await draft.textContent()).toContain("color.surface");
-    expect(await background()).toBe(light);
+    await expect.poll(() => draft.locator(".design-prop").allTextContents()).toEqual(["width", "surface"]);
+    // The draft card starts on After for the element and the tokens alike; Before clears both.
+    await expect.poll(async () => [await background(), await cssWidth()]).toEqual([orange, "180px"]);
+    await draft.getByRole("button", { name: "Before", exact: true }).click();
+    expect([await background(), await cssWidth()]).toEqual([light, "240px"]);
+    await draft.getByRole("button", { name: "After", exact: true }).click();
+    await expect.poll(async () => [await background(), await cssWidth()]).toEqual([orange, "180px"]);
     await page.getByRole("button", { name: "Post comment", exact: true }).click();
+    await expect.poll(background).toBe(light);
     await page.waitForFunction(() => (window as any).pendingQA.posts.length === 1);
     const posted = await page.evaluate(() => (window as any).pendingQA.posts[0]);
     expect(posted.body).toMatch(/^Proposed style changes \(preview only\)\nTarget: #card\n- width: 240px → 180px/);

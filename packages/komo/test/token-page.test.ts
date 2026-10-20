@@ -3,10 +3,10 @@
 // previewed through the adapter's previewValues(), recorded as one page comment.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDesignMode } from "../src/design-mode.js";
-import { parseDesignComment, summarizeDesignComment } from "../src/design-comment.js";
+import { parseDesignComment, renderDesignComment, resetDesignPreviews, summarizeDesignComment } from "../src/design-comment.js";
 import { themeKey, tokenEdits, tokenProposal, tokenValueChanges, type TokenEdit } from "../src/token-page.js";
 import type { DesignSection } from "../src/design-comment.js";
-import type { DesignToken, ThemeAxis, ThemeState, TokenAdapter, TokenValueChange } from "../src/design-system.js";
+import type { DesignSystem, DesignToken, ThemeAxis, ThemeState, TokenAdapter, TokenValueChange } from "../src/design-system.js";
 // @ts-expect-error CLI modules are plain JavaScript.
 import { designEditFromComment } from "../cli/design-edit.mjs";
 
@@ -133,10 +133,60 @@ describe("token proposals", () => {
     expect(note).toEqual({ text: "Warmer text in dark mode." });
     expect((section as DesignSection).title).toBe("Token changes");
     expect((section as DesignSection).changes).toEqual([
-      { label: "color.text.primary (dark)", token: "color.text.primary", before: "#e6e6e6", after: "#f5f5f5" },
-      { label: "color.accent", token: "color.accent", before: "{color.blue.500}", after: "{color.violet.500}" },
+      { label: "color.text.primary (dark)", token: "color.text.primary", before: "#e6e6e6", after: "#f5f5f5", apply: { kind: "token", property: "color.text.primary", theme: "dark" } },
+      { label: "color.accent", token: "color.accent", before: "{color.blue.500}", after: "{color.violet.500}", apply: { kind: "token", property: "color.accent" } },
     ]);
     expect(summarizeDesignComment(body)).toBe("Token changes · 2 edits");
+  });
+
+  // The page-level card flips like the footer: Before runs previewValues()'s cleanup, After previews again.
+  describe("card", () => {
+    const tokens: DesignToken[] = [
+      { path: "color.text.primary", type: "color", value: "#e6e6e6", label: "Text primary" },
+      { path: "color.violet.500", type: "color", value: "#7c3aed" },
+    ];
+    function render(design?: DesignSystem, tip?: (node: HTMLElement) => void) {
+      const container = document.createElement("div");
+      document.body.append(container);
+      renderDesignComment(container, body, { key: `card-${Math.random()}`, resolve: () => document.body, note: (node, text) => node.append(text), design, tip,
+        ...(design?.tokens ? { tokens: { adapter: design.tokens, tokens } } : {}) });
+      const button = (name: string) => [...container.querySelectorAll<HTMLButtonElement>(".design-toggle button")].find((item) => item.textContent === name);
+      return { container, button };
+    }
+    afterEach(() => { resetDesignPreviews(); document.body.replaceChildren(); });
+
+    it("has Before/After that removes and re-applies the token preview", () => {
+      const calls: Array<[TokenValueChange[], string | undefined]> = [];
+      let live = 0;
+      const adapter: TokenAdapter = { id: "fixture", list: () => tokens, resolve: () => ({}), previewValues(changes, theme) { calls.push([changes, theme]); live++; return () => { live--; }; } };
+      const axis: ThemeAxis = { id: "mode", options: [{ id: "light" }, { id: "dark" }], current: () => "dark", apply() {} };
+      const { button } = render({ tokens: adapter, themes: [axis] });
+      expect(button("Before")!.getAttribute("aria-pressed")).toBe("true");
+      button("After")!.click();
+      expect(live).toBe(1);
+      expect(calls).toEqual([[[
+        { path: "color.text.primary", value: "#f5f5f5", theme: "dark" },
+        { path: "color.accent", value: "#7c3aed", alias: "color.violet.500" },
+      ], "dark"]]);
+      expect(button("After")!.getAttribute("aria-pressed")).toBe("true");
+      button("Before")!.click();
+      expect(live).toBe(0);
+    });
+
+    it("has no switch without an adapter that previews values", () => {
+      expect(render().button("After")).toBeUndefined();
+      expect(render({ tokens: { id: "plain", list: () => tokens, resolve: () => ({}) } }).button("After")).toBeUndefined();
+    });
+
+    it("names each token by its label, else the path's last part, with the full path and theme in komo's tooltip", () => {
+      const tipped: string[] = [];
+      const adapter: TokenAdapter = { id: "fixture", list: () => tokens, resolve: () => ({}), previewValues: () => () => {} };
+      const { container } = render({ tokens: adapter }, (node) => tipped.push(node.getAttribute("aria-label")!));
+      const labels = [...container.querySelectorAll<HTMLElement>(".design-prop")];
+      expect(labels.map((label) => label.textContent)).toEqual(["Text primary", "accent"]);
+      expect(labels.map((label) => label.getAttribute("aria-label"))).toEqual(["color.text.primary (dark)", "color.accent"]);
+      expect(tipped).toEqual(["color.text.primary (dark)", "color.accent"]);
+    });
   });
 });
 
