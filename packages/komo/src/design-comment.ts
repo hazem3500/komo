@@ -32,6 +32,7 @@ const TITLES: Record<string, string> = {
   style: "Style changes",
   "inline text": "Text change",
   "design-token": "Token changes",
+  token: "Token changes",
   "React prop": "Prop changes",
 };
 
@@ -53,6 +54,9 @@ function change(line: string, kind: string): DesignChange | null {
   let match = /^Shared theme (\S+) \((--[\w-]+)\): (.*?) → (.*?)(?:; preview scope .*)?$/.exec(line);
   if (match)
     return { label: match[1], token: match[1], before: match[3], after: match[4], apply: { kind: "variable", property: match[2] } };
+  // Token: color.text.primary (dark) #e6e6e6 → #f5f5f5, from the Tokens view.
+  match = /^Token: ([\w.-]+)(?: \(([^()]+)\))? (.*?) → (.*)$/.exec(line);
+  if (match) return { label: match[2] ? `${match[1]} (${match[2]})` : match[1], token: match[1], before: match[3], after: match[4] };
   // Element color: rgb(…) → var(--color-brand) [color.brand]
   match = /^Element ([\w-]+): (.*?) → (.*?)(?: \[([^\]]+)\])*$/.exec(line);
   if (match) {
@@ -107,7 +111,9 @@ export function summarizeDesignComment(body: string): string {
   const note = blocks.find((block): block is { text: string } => "text" in block)?.text;
   const count = sections.reduce((sum, section) => sum + section.changes.length, 0);
   const target = sections.find((section) => section.target)?.target;
-  const summary = `Design change · ${count} ${count === 1 ? "edit" : "edits"}${target ? ` on ${shortTarget(target)}` : ""}`;
+  // Page-wide token edits have no target: "Token changes · 3 edits".
+  const title = !target && sections.length && sections.every((section) => section.title === TITLES.token) ? TITLES.token : "Design change";
+  const summary = `${title} · ${count} ${count === 1 ? "edit" : "edits"}${target ? ` on ${shortTarget(target)}` : ""}`;
   return note ? `${note}\n${summary}` : summary;
 }
 

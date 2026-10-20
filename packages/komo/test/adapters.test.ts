@@ -168,6 +168,28 @@ describe("tailwindTokens", () => {
     expect(adapter.describe!(element, "color", { path: "color.text.secondary" }, token("color.text.primary"))).toBe('Replace class "text-secondary" with "text-primary"');
     undo();
   });
+
+  it("maps tokens to their CSS variable to preview Tokens view values", () => {
+    expect(tailwindTokens(table).previewValues).toBeUndefined();
+    const channels = (value: string) => value.replace("#", "").match(/../g)!.map((pair) => parseInt(pair, 16)).join(" ");
+    const adapter = tailwindTokens({ tokens: [
+      { path: "color.bg.surface", type: "color", class: "bg-surface", properties: ["background-color"], values: { light: "#131213", dark: "#e6e6e6" }, cssVariable: "--color-surface", toCss: channels },
+      { path: "color.bg.raised", type: "color", class: "bg-raised", properties: ["background-color"], value: "#222222", cssVariable: "--color-raised" },
+      { path: "radius.md", type: "dimension", class: "rounded-md", properties: ["border-radius"], value: "6px" },
+    ] }, { scopes: { dark: ".dark" } });
+    const listed = adapter.list({ mode: "dark" }) as DesignToken[];
+    expect(listed[0]).toMatchObject({ value: "#e6e6e6", cssVariable: "--color-surface" });
+    expect(listed[0].toCss!("#ff8000")).toBe("255 128 0");
+    const cleanup = adapter.previewValues!([
+      { path: "color.bg.surface", value: "#ff8000", theme: "dark" },
+      { path: "color.bg.raised", value: "#0f0f0f", alias: "color.bg.surface", theme: "light" },
+      { path: "radius.md", value: "8px" },
+    ]);
+    const sheet = document.querySelector("style[data-komo-token-preview]");
+    expect(sheet?.textContent).toBe(":is(.dark){--color-surface:255 128 0!important}:root:not(.dark){--color-raised:var(--color-surface)!important}");
+    cleanup();
+    expect(document.querySelector("style[data-komo-token-preview]")).toBeNull();
+  });
 });
 
 describe("tailwindSpacing", () => {

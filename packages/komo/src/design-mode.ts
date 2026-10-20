@@ -703,6 +703,7 @@ export function createDesignMode(options: DesignModeOptions) {
       reset: resetAll,
       proposals: () => [...previewTargets.keys()].filter(hasChanges).map(element => proposalFor(element, module.designProposal)),
       message: text => { status.textContent = text; },
+      mode: options,
     });
     style.textContent += views.styles;
     undo.innerHTML = views.icons.undo;

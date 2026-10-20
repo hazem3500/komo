@@ -218,6 +218,40 @@ describe("DesignEdit validation", () => {
   });
 });
 
+const pageTokens = `Proposed token changes (preview only)
+Token: color.text.primary (dark) #e6e6e6 → #f5f5f5
+Token: color.accent {color.blue.500} → {color.violet.500}
+Token: space.md 8px → 8px
+Token adapter: css-variables`;
+
+describe("page-wide token changes", () => {
+  it("parse Token lines as token-value changes on :root, with their theme", () => {
+    expect(designEditFromComment(pageTokens, "body")).toEqual({
+      komo: "design-edit",
+      version: 1,
+      target: { selector: ":root" },
+      tokens: "css-variables",
+      changes: [
+        { kind: "token-value", path: "color.text.primary", theme: "dark", from: "#e6e6e6", to: "#f5f5f5" },
+        { kind: "token-value", path: "color.accent", from: "{color.blue.500}", to: "{color.violet.500}" },
+      ],
+    });
+  });
+
+  it("keep version 1: records without theme stay valid and a theme must be text", () => {
+    const record = (change: object) => JSON.stringify({ komo: "design-edit", version: 1, target: { selector: ":root" }, changes: [change] });
+    const old = { kind: "token-value", path: "color.brand", from: "#4f5f42", to: "#c2410c" };
+    expect(parseDesignEdit(record(old))?.changes).toEqual([old]);
+    expect(parseDesignEdit(record({ ...old, theme: "docs+dark" }))?.changes).toEqual([{ ...old, theme: "docs+dark" }]);
+    expect(parseDesignEdit(record({ ...old, theme: 3 }))).toBeNull();
+    expect(parseDesignEdit(record({ ...old, theme: "" }))).toBeNull();
+    // An older Shared theme line still reads as a theme-less token-value change.
+    expect(designEditFromComment(cssVariables, "h2")?.changes.at(-1)).toEqual(old);
+    const markdown = formatDesignEdit(designEditFromComment(pageTokens, "body"));
+    expect(designEditFromComment(markdown, "other")).toEqual(designEditFromComment(pageTokens, "body"));
+  });
+});
+
 it("adds designEdit to CLI JSON and a delimited block to the agent prompt", async () => {
   const directory = await mkdtemp(join(tmpdir(), "komo-design-edit-"));
   const thread = {
@@ -234,9 +268,16 @@ it("adds designEdit to CLI JSON and a delimited block to the agent prompt", asyn
       { id: "c2", body: "Looks good.", author: { id: "b", name: "Ali", verified: true }, createdAt: 2, editedAt: null, reactions: {} },
     ],
   };
+  // A Tokens view comment anchors to the page.
+  const pageThread = {
+    ...thread,
+    id: "t2",
+    anchor: { ...thread.anchor, selector: "body", text: "" },
+    comments: [{ id: "c3", body: pageTokens, author: { id: "a", name: "Sam", verified: true }, createdAt: 3, editedAt: null, reactions: {} }],
+  };
   const api = createServer((req, res) => {
     res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify(req.url?.startsWith("/config") ? { repo: "owner/site" } : { threads: [thread], next: null }));
+    res.end(JSON.stringify(req.url?.startsWith("/config") ? { repo: "owner/site" } : { threads: [thread, pageThread], next: null }));
   });
   await new Promise<void>((resolve) => api.listen(0, "127.0.0.1", resolve));
   const env = {
@@ -253,11 +294,14 @@ it("adds designEdit to CLI JSON and a delimited block to the agent prompt", asyn
     (await promisify(execFile)(process.execPath, [entry, ...args], { env, cwd: directory })).stdout;
   try {
     const expected = designEditFromComment(styleAndTokens, "h2");
+    const tokens = designEditFromComment(pageTokens, "body");
     const prompt = await run("comments", "prompt");
     expect(prompt).toContain(formatDesignEdit(expected));
-    expect(prompt.match(/```json komo-design-edit/g)).toHaveLength(1);
+    expect(prompt).toContain(formatDesignEdit(tokens));
+    expect(prompt.match(/```json komo-design-edit/g)).toHaveLength(2);
     const json = JSON.parse(await run("comments", "prompt", "--json")).data;
-    expect(json.designEdits).toEqual([{ thread: "t1", comment: "c1", designEdit: expected }]);
+    expect(json.designEdits).toEqual([{ thread: "t1", comment: "c1", designEdit: expected }, { thread: "t2", comment: "c3", designEdit: tokens }]);
+    expect(tokens.changes[0]).toEqual({ kind: "token-value", path: "color.text.primary", theme: "dark", from: "#e6e6e6", to: "#f5f5f5" });
     const got = JSON.parse(await run("comments", "get", "t1")).data;
     expect(got.comments[0].designEdit).toEqual(expected);
     expect(got.comments[1]).not.toHaveProperty("designEdit");

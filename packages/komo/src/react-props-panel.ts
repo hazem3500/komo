@@ -64,6 +64,9 @@ import {
   watchThemes,
 } from "./token-adapter.js";
 export { originalTokenStyle as originalDesignTokenStyle } from "./token-adapter.js";
+// The Tokens view reaches these through this chunk, so it adds no shared chunk of its own.
+export { listTokens, themeState } from "./token-adapter.js";
+export { cssVariableTokens } from "./design-tokens.js";
 
 const originals = new Map<DesignTarget, Map<string, InspectableScalar>>();
 const edits = new Map<DesignTarget, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();

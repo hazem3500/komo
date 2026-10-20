@@ -110,3 +110,67 @@ describe("discoverCssTokens", () => {
     expect(adapter.describe!(el, "color", { path: "color.ink" }, ink)).toBe("Keep color: var(--color-ink)");
   });
 });
+
+describe("discoverCssTokens previewValues", () => {
+  const themed = `
+    :root { --color-gray-900: #131213; --color-gray-700: #444444; --color-text: var(--color-gray-900); --color-surface: 19 18 19; --radius-md: 6px; }
+    .dark { --color-text: var(--color-gray-700); }
+  `;
+  function page() {
+    const style = document.createElement("style");
+    style.textContent = themed;
+    document.head.append(style);
+    document.documentElement.setAttribute("style", "--radius-md: 4px");
+  }
+  const sheet = () => document.querySelector<HTMLStyleElement>("style[data-komo-token-preview]");
+  afterEach(() => {
+    document.documentElement.removeAttribute("style");
+    document.documentElement.className = "";
+  });
+
+  it("lists aliases, the variable, and raw channels as hex with a toCss transform", () => {
+    page();
+    const tokens = discoverCssTokens({ scopes: { dark: ".dark" } }).list({ mode: "light" }) as DesignToken[];
+    const byPath = Object.fromEntries(tokens.map((token) => [token.path, token]));
+    expect(byPath["color.text"]).toMatchObject({ alias: "color.gray-900", cssVariable: "--color-text" });
+    expect(byPath["color.gray-900"].alias).toBeUndefined();
+    expect(byPath["color.surface"].value).toBe("#131213");
+    expect(byPath["color.surface"].toCss!("#ff8000")).toBe("255 128 0");
+    // The dark scope's own declaration names a different alias.
+    const dark = discoverCssTokens({ scopes: { dark: ".dark" } }).list({ mode: "dark" }) as DesignToken[];
+    expect(dark.find((token) => token.path === "color.text")?.alias).toBe("color.gray-700");
+  });
+
+  it("writes one removable stylesheet, scoped per theme option, and tears down exactly", () => {
+    page();
+    const before = document.documentElement.outerHTML.replace(/<body[\s\S]*$/, "");
+    const adapter = discoverCssTokens({ scopes: { dark: ".dark" } });
+    adapter.list();
+    const cleanup = adapter.previewValues!([
+      { path: "radius.md", value: "10px" },
+      { path: "color.surface", value: "#ff8000", theme: "light" },
+      { path: "color.text", value: "#444444", alias: "color.gray-700", theme: "dark" },
+      { path: "color.text", value: "{color.unknown}" },
+    ]);
+    expect(sheet()?.textContent).toBe(
+      ":root{--radius-md:10px!important}:root:not(.dark){--color-surface:255 128 0!important}:is(.dark){--color-text:var(--color-gray-700)!important}",
+    );
+    expect(getComputedStyle(document.documentElement).getPropertyValue("--radius-md").trim()).toBe("10px");
+    cleanup();
+    expect(sheet()).toBeNull();
+    expect(document.documentElement.outerHTML.replace(/<body[\s\S]*$/, "")).toBe(before);
+    expect(document.documentElement.getAttribute("style")).toBe("--radius-md: 4px");
+  });
+
+  it("without scopes, previews only the current theme's edits", () => {
+    page();
+    const adapter = discoverCssTokens();
+    adapter.list();
+    const changes = [{ path: "radius.md", value: "10px", theme: "light" }, { path: "radius.md", value: "12px", theme: "dark" }];
+    const cleanup = adapter.previewValues!(changes, "dark");
+    expect(sheet()?.textContent).toBe(":root{--radius-md:12px!important}");
+    cleanup();
+    expect(adapter.previewValues!(changes, "contrast")).toBeTypeOf("function");
+    expect(sheet()).toBeNull();
+  });
+});

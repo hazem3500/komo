@@ -523,6 +523,7 @@ function designTokenFor(source: RegisteredDesignTokenSource, token: KomoDesignTo
     properties: [...token.properties],
     group: token.path.split(".")[0],
     ref: token.cssVariable,
+    cssVariable: token.cssVariable,
   };
 }
 
@@ -561,5 +562,27 @@ export function cssVariableTokens(): TokenAdapter {
       };
     },
     describe: (_element, property, _from, to) => `Set ${property} to var(${to.ref})`,
+    // Registered roots carry no theme scope, so only the current theme's edits apply.
+    previewValues(changes, theme) {
+      const restores: Array<() => void> = [];
+      for (const change of changes) {
+        if (change.theme && change.theme !== theme) continue;
+        for (const source of sources) {
+          const token = source.tokens.find((item) => item.path === change.path);
+          const alias = change.alias && source.tokens.find((item) => item.path === change.alias);
+          const value = alias ? `var(${alias.cssVariable})` : change.value;
+          if (!token || !validTokenValue(source, token, value)) continue;
+          const { root } = source, styled = root.hasAttribute("style");
+          const before = root.style.getPropertyValue(token.cssVariable), priority = root.style.getPropertyPriority(token.cssVariable);
+          root.style.setProperty(token.cssVariable, value, "important");
+          restores.unshift(() => {
+            if (before) root.style.setProperty(token.cssVariable, before, priority);
+            else root.style.removeProperty(token.cssVariable);
+            if (!styled && !root.getAttribute("style")) root.removeAttribute("style");
+          });
+        }
+      }
+      return () => { for (const restore of restores.splice(0)) restore(); };
+    },
   };
 }

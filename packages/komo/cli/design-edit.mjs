@@ -38,8 +38,10 @@ function change(value) {
       return { kind: "token", property: value.property, from, to: { path: value.to.path }, ...(value.apply ? { apply: value.apply } : {}) };
     }
     case "token-value":
+      // `theme` (a theme key such as "dark" or "docs+dark") is optional, so earlier records stay valid.
+      if (value.theme !== undefined && !text(value.theme, 200, false)) return null;
       return text(value.path, 200, false) && text(value.from, 1000) && text(value.to, 1000)
-        ? { kind: "token-value", path: value.path, from: value.from, to: value.to }
+        ? { kind: "token-value", path: value.path, ...(value.theme ? { theme: value.theme } : {}), from: value.from, to: value.to }
         : null;
     case "prop":
       if (value.token !== undefined && !text(value.token, 200, false)) return null;
@@ -146,6 +148,9 @@ function proseChange(line, kind) {
   // Shared theme color.brand (--color-brand): #4f5f42 → #c2410c; preview scope …
   let match = /^Shared theme (\S+) \(--[\w-]+\): (.*?) → (.*?)(?:; preview scope .*)?$/.exec(line);
   if (match) return { kind: "token-value", path: match[1], from: match[2], to: match[3] };
+  // Token: color.text.primary (dark) #e6e6e6 → #f5f5f5, from the Tokens view.
+  match = /^Token: ([\w.-]+)(?: \(([^()]+)\))? (.*?) → (.*)$/.exec(line);
+  if (match) return { kind: "token-value", path: match[1], ...(match[2] ? { theme: match[2] } : {}), from: unset(match[3]), to: unset(match[4]) };
   // Element color: #555 [color.muted] → var(--color-brand) [color.brand] [rebind]
   match = /^Element ([\w-]+): (.*?) → (.*)$/.exec(line);
   if (match) {
@@ -218,6 +223,8 @@ export function designEditFromProse(body, selector) {
     const lines = chunk.split(/\r?\n/);
     const header = HEADER.exec(lines[0].trim());
     if (!header) continue;
+    // Token values from the Tokens view apply page-wide, so they target :root.
+    if (header[1] === "token") target ||= ":root";
     for (const line of lines.slice(1)) {
       if (line.startsWith("Target: ")) target ||= line.slice(8).trim();
       // The first section's context lines name the theme and component for the whole proposal.

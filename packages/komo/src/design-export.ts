@@ -10,6 +10,8 @@ export function selectionViews(options: {
   reset(): void;
   proposals(): Array<string | undefined>;
   message(text: string): void;
+  /** Design mode's options, for the Tokens view. */
+  mode?: import("./token-page.js").TokenPageHost;
 }) {
   const glyph = (path: string) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
   const preciseKey = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘-click" : "Ctrl-click";
@@ -46,16 +48,27 @@ export function selectionViews(options: {
     catch { options.message("Couldn't copy pending proposals. Try again."); }
   });
   pending.append(label, review, copy, button("Reset all previews", options.reset));
+  // Tokens are edited page-wide, so the view opens with nothing selected.
+  const panel = () => options.mode?.root.querySelector<HTMLElement>(".design-inspector");
+  const tokens = button("Edit tokens", () => {
+    const inspector = panel(), { mode } = options;
+    if (inspector && mode) void import("./token-page.js").then(module => module.openTokenPage(inspector, mode), () => options.message("Tokens unavailable · try again"));
+  });
+  tokens.className = "design-inspector__tokens";
+  empty.append(tokens);
   return {
     empty, pending,
     icons: {
       undo: glyph("M5.5 3.5 2.5 6.5l3 3m-3-3h7a4 4 0 0 1 0 8h-2"),
       reset: glyph("M2.5 2.5v3h3M3 5.5a5.5 5.5 0 1 1-.5 2.5"),
     },
-    styles: '@keyframes design-status{from{opacity:0;translate:0 2px}}.design-inspector__count{white-space:nowrap;font-variant-numeric:tabular-nums}.design-inspector__status{display:none;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:design-status .2s var(--ease-smooth-out)}.design-inspector__bar[data-message] .design-inspector__status{display:block}.design-inspector__bar[data-message] .design-inspector__count,.design-inspector__bar:not([data-changes]) .design-inspector__tool{display:none}.design-inspector__compare { display:inline-flex; flex:none; padding:2px; border-radius:7px; background:#ffffff0a; }.design-inspector__compare[hidden],.design-inspector__bar[data-message] .design-inspector__compare { display:none; }.design-inspector__compare button { height:22px; padding:0 8px; border-radius:5px; color:#9a9a9a; font:inherit; font-size:11px; }.design-inspector__compare button:hover { color:#fff; }.design-inspector__compare button[aria-pressed="true"] { color:#fff; background:#ffffff1a; }.design-inspector__empty { display:flex; flex-direction:column; align-items:center; gap:4px; padding:0 24px 28px; color:#898680; font-size:11px; text-align:center; }.design-inspector__empty > svg { box-sizing:content-box; width:20px; height:20px; margin-bottom:8px; padding:8px; border-radius:10px; background:#ffffff0a; color:#77736f; }.design-inspector__empty strong { color:#e9e6e1; font-size:12px; font-weight:600; }.design-inspector__empty ul { display:grid; gap:6px; margin:8px 0 0; padding:0; list-style:none; }.design-inspector__empty kbd { display:inline-block; min-width:8px; padding:0 5px; border-radius:4px; background:#ffffff0f; box-shadow:inset 0 0 0 1px #ffffff12,inset 0 -1px 0 #ffffff12; color:#c9c5bf; font:inherit; font-size:10px; font-weight:500; line-height:17px; }.design-inspector__pick-hint{flex:none;margin:0 12px 10px;color:#989898;font-size:10px;line-height:1.5}.design-inspector__pending{margin:12px;padding:12px;border:1px solid #ffffff1a;border-radius:10px;display:flex;flex-wrap:wrap;gap:8px}.design-inspector__pending[hidden]{display:none}.design-inspector__pending p{flex-basis:100%;margin:0 0 4px;color:#aaa;line-height:1.5}.design-inspector__pending button{min-height:32px;padding:6px 10px;border:1px solid #ffffff20;border-radius:7px;background:#ffffff08;font:inherit;color:inherit;cursor:pointer}',
+    styles: '@keyframes design-status{from{opacity:0;translate:0 2px}}.design-inspector__count{white-space:nowrap;font-variant-numeric:tabular-nums}.design-inspector__status{display:none;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:design-status .2s var(--ease-smooth-out)}.design-inspector__bar[data-message] .design-inspector__status{display:block}.design-inspector__bar[data-message] .design-inspector__count,.design-inspector__bar:not([data-changes]) .design-inspector__tool{display:none}.design-inspector__compare { display:inline-flex; flex:none; padding:2px; border-radius:7px; background:#ffffff0a; }.design-inspector__compare[hidden],.design-inspector__bar[data-message] .design-inspector__compare { display:none; }.design-inspector__compare button { height:22px; padding:0 8px; border-radius:5px; color:#9a9a9a; font:inherit; font-size:11px; }.design-inspector__compare button:hover { color:#fff; }.design-inspector__compare button[aria-pressed="true"] { color:#fff; background:#ffffff1a; }.design-inspector__empty { display:flex; flex-direction:column; align-items:center; gap:4px; padding:0 24px 28px; color:#898680; font-size:11px; text-align:center; }.design-inspector__empty > svg { box-sizing:content-box; width:20px; height:20px; margin-bottom:8px; padding:8px; border-radius:10px; background:#ffffff0a; color:#77736f; }.design-inspector__empty strong { color:#e9e6e1; font-size:12px; font-weight:600; }.design-inspector__empty ul { display:grid; gap:6px; margin:8px 0 0; padding:0; list-style:none; }.design-inspector__empty kbd { display:inline-block; min-width:8px; padding:0 5px; border-radius:4px; background:#ffffff0f; box-shadow:inset 0 0 0 1px #ffffff12,inset 0 -1px 0 #ffffff12; color:#c9c5bf; font:inherit; font-size:10px; font-weight:500; line-height:17px; }.design-inspector__pick-hint{flex:none;margin:0 12px 10px;color:#989898;font-size:10px;line-height:1.5}.design-inspector__pending{margin:12px;padding:12px;border:1px solid #ffffff1a;border-radius:10px;display:flex;flex-wrap:wrap;gap:8px}.design-inspector__pending[hidden]{display:none}.design-inspector__pending p{flex-basis:100%;margin:0 0 4px;color:#aaa;line-height:1.5}.design-inspector__pending button{min-height:32px;padding:6px 10px;border:1px solid #ffffff20;border-radius:7px;background:#ffffff08;font:inherit;color:inherit;cursor:pointer}.design-inspector__tokens{margin-top:16px;min-height:30px;padding:0 12px;border-radius:8px;background:#ffffff0a;color:#e9e6e1;font:inherit;font-size:11px;font-weight:500}.design-inspector__tokens:hover{background:#ffffff14}.design-inspector__tokens[hidden]{display:none}',
     update(count: number, canReview: boolean) {
       label.textContent = `${count} element${count === 1 ? " has" : "s have"} pending runtime previews. Undo, Reset or reload to restore.`;
       review.hidden = !canReview;
+      const edits = Number(panel()?.dataset.tokenEdits);
+      tokens.hidden = !options.mode?.design?.tokens && !document.querySelector("[data-komo-design-tokens]");
+      tokens.textContent = edits ? `Edit tokens · ${edits} change${edits > 1 ? "s" : ""}` : "Edit tokens";
     },
   };
 }
