@@ -68,20 +68,26 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Commit the version bump
         if: steps.version.outputs.bumped == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Only the version file: build output must never be committed.
-          git add packages/komo/package.json
-          git commit -m "Release @hazem3500/komo ${{ steps.version.outputs.version }}"
-          # Package publication may overlap a new merge to main. Rebase only the
-          # version commit and retry a normal push; never overwrite newer work.
+          # Other merges may land while this run publishes. Rebuild the bump on the
+          # latest main (never older than what was published), retrying on a race.
+          git checkout -- packages/komo/package.json
           for attempt in 1 2 3; do
             git fetch origin main
-            git rebase origin/main
-            if git push origin HEAD:main; then
-              exit 0
-            fi
+            git checkout -f -B release-bump origin/main
+            current=$(node -p "require('./packages/komo/package.json').version")
+            newer=$(node -e 'const [a,b]=process.argv.slice(1).map(v=>v.split(".").map(Number));const i=a.findIndex((n,k)=>n!==b[k]);console.log(i>=0&&b[i]>a[i]?"yes":"no")' "$current" "$VERSION")
+            [ "$newer" = yes ] || exit 0
+            (cd packages/komo && npm version "$VERSION" --no-git-tag-version >/dev/null)
+            # Only the version file: build output must never be committed.
+            git add packages/komo/package.json
+            git commit -m "Release @hazem3500/komo $VERSION"
+            git push origin HEAD:main && exit 0
+            sleep $((attempt * 5))
           done
           exit 1
       - name: Tag the release
