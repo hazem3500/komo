@@ -1,4 +1,5 @@
 import { registerCustomField, inputValue } from "./custom-field.js";
+export { syncFields } from "./custom-field.js";
 import { fieldLabel } from "./field-label.js";
 import type { DesignTarget } from "./design-target.js";
 import { designPanelStyles } from "./design-panel-styles.js";
@@ -111,19 +112,21 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
   box.append(fieldLabel(control, field, box));
   control.dataset.property = field.property;
   control.setAttribute("aria-label", field.label);
-  control.value = valueFor(field, element);
-  if (control instanceof HTMLSelectElement && !control.value) {
-    const current = document.createElement("option");
-    current.value = current.textContent = valueFor(field, element);
-    control.prepend(current);
-    control.value = current.value;
-  }
+  /** The element's value, as on first render, Escape and syncFields. */
+  const show = () => {
+    const value = valueFor(field, element);
+    if (control instanceof HTMLSelectElement && ![...control.options].some((option) => option.value === value)) control.prepend(new Option(value, value));
+    control.value = value;
+    const swatch = box.querySelector<HTMLInputElement>('input[type="color"]');
+    if (swatch) swatch.value = toHex(value);
+  };
+  show();
   const begin = () => context.begin(control, field.property);
-  const apply = () => {
+  const apply = () => own(() => {
     context.apply(control, field.property, inputValue(field, control));
     context.commit(control, field.property, false);
-  };
-  const commit = () => context.commit(control, field.property);
+  });
+  const commit = () => own(() => context.commit(control, field.property));
   control.addEventListener("focus", begin);
   control.addEventListener("input", apply);
   control.addEventListener("change", commit);
@@ -194,15 +197,13 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
     event.preventDefault();
     event.stopImmediatePropagation();
     context.cancel(control, field.property);
-    control.value = valueFor(field, element);
-    const swatch = box.querySelector<HTMLInputElement>('input[type="color"]');
-    if (swatch) swatch.value = toHex(control.value);
+    show();
     queueMicrotask(() => {
       if (box.dataset.tokenMode !== "custom") box.querySelector<HTMLElement>(".design-token-binding select")?.focus();
     });
   });
   box.append(control);
-  registerCustomField(control, field, context);
+  const own = registerCustomField(control, field, context, show);
   return box;
 }
 

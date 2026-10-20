@@ -88,7 +88,7 @@ export function retainReactPropSelection(
   previous: DesignTarget,
   controls: HTMLElement,
   context: { root: ShadowRoot; host: HTMLElement },
-  history: ReadonlyArray<{ kind?: string; props?: boolean; element: DesignTarget }>,
+  history: ReadonlyArray<{ kind?: string; props?: boolean; element?: DesignTarget }>,
   textTools: import("./inline-text-editor.js").InlineTextTools | null,
   retain: (element: DesignTarget, panel: HTMLElement | undefined) => void,
 ): boolean {
@@ -114,7 +114,7 @@ export function attachDesignSystemControls(
     refresh(retainedProps?: HTMLElement): void;
     retainedProps?: HTMLElement;
     updateActions(): void;
-    history: Array<{ element: DesignTarget; undo(): void; props?: boolean } | { kind: string; element: DesignTarget }>;
+    history: Array<{ element: DesignTarget; undo(): void; props?: boolean } | { kind: string; element?: DesignTarget }>;
     syncStyles(): void;
     onStyleEdit: Parameters<typeof attachStyleTokenControls>[3];
     isFieldDirty?: (control: Element) => boolean;

@@ -12,6 +12,12 @@ export function selectionViews(options: {
   message(text: string): void;
   /** Design mode's options, for the Tokens view. */
   mode?: import("./token-page.js").TokenPageHost;
+  /** Design mode's chronological history; pending token steps join it. */
+  history?: Array<{ kind?: string; step?: object }>;
+  /** Re-sync Design mode after a token change. */
+  update?(): void;
+  /** Return to the empty panel, where the Tokens view opens. */
+  clear?(): void;
 }) {
   const glyph = (path: string) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
   const empty = el("div", "design-inspector__empty");
@@ -26,18 +32,29 @@ export function selectionViews(options: {
   };
   const review = button("Review previous element", options.review);
   const copy = button("Copy pending proposals", async () => {
-    const text = options.proposals().filter(Boolean).join("\n\n");
+    const text = [...options.proposals(), tokens?.proposal()].filter(Boolean).join("\n\n");
     try { await navigator.clipboard.writeText(text); options.message("Pending proposals copied"); }
     catch { options.message("Couldn't copy pending proposals. Try again."); }
   });
   pending.append(label, review, copy, button("Reset all previews", options.reset));
   // Tokens are edited page-wide, so the view opens with nothing selected.
   const panel = () => options.mode?.root.querySelector<HTMLElement>(".design-inspector");
-  const tokens = button("Edit tokens", () => {
-    const inspector = panel(), { mode } = options;
+  let tokens: import("./token-page.js").PageTokens | undefined;
+  const { history = [] } = options;
+  /** One history entry per pending token step, in order; new steps are the latest. */
+  const sync = () => {
+    const steps = new Set(tokens?.steps);
+    for (let index = history.length; index--;)
+      if (history[index].kind === "token" && !steps.delete(history[index].step!)) history.splice(index, 1);
+    for (const step of steps) history.push({ kind: "token", step });
+    options.update?.();
+  };
+  const mode = options.mode && { ...options.mode, link(page: import("./token-page.js").PageTokens) { tokens = page; return sync; } };
+  const edit = button("Edit tokens", () => {
+    const inspector = panel();
     if (inspector && mode) void import("./token-page.js").then(module => module.openTokenPage(inspector, mode), () => options.message("Tokens unavailable · try again"));
   });
-  tokens.className = "design-inspector__tokens";
+  edit.className = "design-inspector__tokens";
   // The full list of keys and gestures lives in shortcut help.
   const help = button("Keyboard shortcuts", () => options.help?.());
   help.className = "design-inspector__help";
@@ -45,20 +62,33 @@ export function selectionViews(options: {
   help.setAttribute("aria-keyshortcuts", "?");
   help.append(renderKeycaps(["?"], "?"));
   help.hidden = !options.help;
-  empty.append(tokens, help);
+  empty.append(edit, help);
+  // Pending token edits stay visible in the element view; the chip opens the Tokens view.
+  const chip = button("", () => {
+    options.clear?.();
+    tokens?.open();
+  });
+  chip.className = "design-inspector__token-chip";
+  chip.title = "Open the Tokens view";
+  chip.hidden = true;
   return {
-    empty, pending,
+    empty, pending, chip,
+    get tokens() { return tokens; },
     icons: {
       undo: glyph("M5.5 3.5 2.5 6.5l3 3m-3-3h7a4 4 0 0 1 0 8h-2"),
       reset: glyph("M2.5 2.5v3h3M3 5.5a5.5 5.5 0 1 1-.5 2.5"),
     },
-    styles: '@keyframes design-status{from{opacity:0;translate:0 2px}}.design-inspector__count{white-space:nowrap;font-variant-numeric:tabular-nums}.design-inspector__status{display:none;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:design-status .2s var(--ease-smooth-out)}.design-inspector__bar[data-message] .design-inspector__status{display:block}.design-inspector__bar[data-message] .design-inspector__count,.design-inspector__bar:not([data-changes]) .design-inspector__tool{display:none}.design-inspector__compare { display:inline-flex; flex:none; padding:2px; border-radius:7px; background:#ffffff0a; }.design-inspector__compare[hidden],.design-inspector__bar[data-message] .design-inspector__compare { display:none; }.design-inspector__compare button { height:22px; padding:0 8px; border-radius:5px; color:#9a9a9a; font:inherit; font-size:11px; }.design-inspector__compare button:hover { color:#fff; }.design-inspector__compare button[aria-pressed="true"] { color:#fff; background:#ffffff1a; }.design-inspector__empty { display:flex; flex-direction:column; align-items:center; gap:4px; padding:0 24px 28px; color:#898680; font-size:11px; text-align:center; }.design-inspector__empty > svg { box-sizing:content-box; width:20px; height:20px; margin-bottom:8px; padding:8px; border-radius:10px; background:#ffffff0a; color:#77736f; }.design-inspector__empty strong { color:#e9e6e1; font-size:12px; font-weight:600; }.design-inspector__empty p { margin:2px 0 0; line-height:1.5; }.design-inspector__pick-hint{flex:none;margin:0 12px 10px;color:#989898;font-size:10px;line-height:1.5}.design-inspector__pending{margin:12px;padding:12px;border:1px solid #ffffff1a;border-radius:10px;display:flex;flex-wrap:wrap;gap:8px}.design-inspector__pending[hidden]{display:none}.design-inspector__pending p{flex-basis:100%;margin:0 0 4px;color:#aaa;line-height:1.5}.design-inspector__pending button{min-height:32px;padding:6px 10px;border:1px solid #ffffff20;border-radius:7px;background:#ffffff08;font:inherit;color:inherit;cursor:pointer}.design-inspector__tokens{margin-top:16px;min-height:34px;padding:0 14px;border-radius:8px;background:var(--accent,#bda6ef);color:#211b2d;font:inherit;font-size:12px;font-weight:500}.design-inspector__tokens:hover{filter:brightness(1.08)}.design-inspector__help{gap:6px;margin-top:8px;min-height:28px;padding:0 8px;border-radius:7px;color:#898680;font:inherit;font-size:11px}.design-inspector__tokens[hidden]+.design-inspector__help{margin-top:14px}.design-inspector__help:hover{background:#ffffff0a;color:#e9e6e1}.design-inspector__tokens[hidden],.design-inspector__help[hidden]{display:none}',
-    update(count: number, canReview: boolean) {
-      label.textContent = `${count} element${count === 1 ? " has" : "s have"} pending runtime previews. Undo, Reset or reload to restore.`;
+    styles: '@keyframes design-status{from{opacity:0;translate:0 2px}}.design-inspector__count{white-space:nowrap;font-variant-numeric:tabular-nums}.design-inspector__status{display:none;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:design-status .2s var(--ease-smooth-out)}.design-inspector__bar[data-message] .design-inspector__status{display:block}.design-inspector__bar[data-message] .design-inspector__count,.design-inspector__bar:not([data-changes]) .design-inspector__tool{display:none}.design-inspector__compare { display:inline-flex; flex:none; padding:2px; border-radius:7px; background:#ffffff0a; }.design-inspector__compare[hidden],.design-inspector__bar[data-message] .design-inspector__compare { display:none; }.design-inspector__compare button { height:22px; padding:0 8px; border-radius:5px; color:#9a9a9a; font:inherit; font-size:11px; }.design-inspector__compare button:hover { color:#fff; }.design-inspector__compare button[aria-pressed="true"] { color:#fff; background:#ffffff1a; }.design-inspector__empty { display:flex; flex-direction:column; align-items:center; gap:4px; padding:0 24px 28px; color:#898680; font-size:11px; text-align:center; }.design-inspector__empty > svg { box-sizing:content-box; width:20px; height:20px; margin-bottom:8px; padding:8px; border-radius:10px; background:#ffffff0a; color:#77736f; }.design-inspector__empty strong { color:#e9e6e1; font-size:12px; font-weight:600; }.design-inspector__empty p { margin:2px 0 0; line-height:1.5; }.design-inspector__pick-hint{flex:none;margin:0 12px 10px;color:#989898;font-size:10px;line-height:1.5}.design-inspector__pending{margin:12px;padding:12px;border:1px solid #ffffff1a;border-radius:10px;display:flex;flex-wrap:wrap;gap:8px}.design-inspector__pending[hidden]{display:none}.design-inspector__pending p{flex-basis:100%;margin:0 0 4px;color:#aaa;line-height:1.5}.design-inspector__pending button{min-height:32px;padding:6px 10px;border:1px solid #ffffff20;border-radius:7px;background:#ffffff08;font:inherit;color:inherit;cursor:pointer}.design-inspector__tokens{margin-top:16px;min-height:34px;padding:0 14px;border-radius:8px;background:var(--accent,#bda6ef);color:#211b2d;font:inherit;font-size:12px;font-weight:500}.design-inspector__tokens:hover{filter:brightness(1.08)}.design-inspector__help{gap:6px;margin-top:8px;min-height:28px;padding:0 8px;border-radius:7px;color:#898680;font:inherit;font-size:11px}.design-inspector__tokens[hidden]+.design-inspector__help{margin-top:14px}.design-inspector__help:hover{background:#ffffff0a;color:#e9e6e1}.design-inspector__tokens[hidden],.design-inspector__help[hidden]{display:none}.design-inspector__token-chip{flex:none;align-self:flex-start;margin:0 12px 8px;min-height:24px;padding:0 8px;border-radius:6px;background:#bda6ef1f;color:#e6dcfb;font:inherit;font-size:11px}.design-inspector__token-chip:hover{background:#bda6ef33}.design-inspector__token-chip:focus-visible{outline:2px solid #bda6ef;outline-offset:1px}.design-inspector__token-chip[hidden]{display:none}',
+    /** `selected`: an element view is showing, so the chip stands for the pending token edits. */
+    update(count: number, canReview: boolean, selected = false) {
+      const edits = tokens?.size ?? 0;
+      // Token edits pend like element previews: "1 element and 2 token changes have pending runtime previews."
+      label.textContent = `${[count && `${count} element${count > 1 ? "s" : ""}`, edits && `${edits} token change${edits > 1 ? "s" : ""}`].filter(Boolean).join(" and ")} ${count + edits > 1 ? "have" : "has"} pending runtime previews. Undo, Reset or reload to restore.`;
       review.hidden = !canReview;
-      const edits = Number(panel()?.dataset.tokenEdits);
-      tokens.hidden = !options.mode?.design?.tokens && !document.querySelector("[data-komo-design-tokens]");
-      tokens.textContent = edits ? `Edit tokens · ${edits} change${edits > 1 ? "s" : ""}` : "Edit tokens";
+      edit.hidden = !options.mode?.design?.tokens && !document.querySelector("[data-komo-design-tokens]");
+      edit.textContent = edits ? `Edit tokens · ${edits} change${edits > 1 ? "s" : ""}` : "Edit tokens";
+      chip.hidden = !selected || !edits;
+      chip.textContent = `Token changes · ${edits}`;
     },
   };
 }

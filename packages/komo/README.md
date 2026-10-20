@@ -204,6 +204,10 @@ Token: color.accent {color.blue.500} → {color.violet.500}
 Token adapter: css-variables
 ```
 
+Token edits stay pending exactly like element previews. Escape or closing Design mode shows Before while it is closed, and reopening previews the edits again, never silently: with an element selected, the footer count includes them and a **Token changes · N** chip opens the Tokens view. Undo steps through token and element edits in the order they were made, Before/After flips both, the element's **Comment** adds the token section to its comment and then clears both, and **Reset all previews** clears them with the element previews.
+
+The comment's **Token changes** card has the same Before/After switch as an element's card when the adapter implements `previewValues`: Before runs the preview's cleanup, and After previews the edits again. Rows name each token by its label, or else the last part of its path. komo's tooltip shows the full path and theme.
+
 The theme in parentheses is the theme key: the current option of each switchable axis, joined with `+` (`docs+dark`). A repointed alias records token references in braces. Live preview is opt-in:
 
 - `previewValues(changes, theme)` receives every current edit, `{ path, value, theme?, alias? }`, on each edit and theme switch, after komo runs the previous cleanup. Return a cleanup that restores the page exactly; komo also runs it for Before, cancel, Reset, closing Design mode and destroy. `theme` is the current key, so an adapter that cannot scope a value to its theme can preview only the edits for it.
@@ -693,7 +697,7 @@ initKomo({
 });
 ```
 
-This loads geometry tools lazily in Design mode. Select a supported page element to see **Move**, right-edge width, bottom-edge height, and bottom-right width/height handles. Drag a handle, or focus it and press Enter/Space to arm it. Arrows adjust by one local CSS pixel (Shift+arrow: ten); Enter/Space commits, Escape cancels. Losing focus or pointer capture cancels. Shift does **not** lock aspect ratio. Minimum dimensions are 16 CSS pixels, or the border and padding footprint when larger. Each completed gesture is one chronological Undo, including a two-axis resize.
+This loads geometry tools lazily in Design mode. Select a supported page element to see **Move**, right-edge width, bottom-edge height, and bottom-right width/height handles. Drag a handle, or focus it and press Enter/Space to arm it. Arrows adjust by one local CSS pixel (Shift+arrow: ten); Enter/Space commits, Escape cancels. Losing focus or pointer capture cancels. Shift does **not** lock aspect ratio. Minimum dimensions are 16 CSS pixels, or the border and padding footprint when larger. Each completed gesture is one chronological Undo, including a two-axis resize. The panel's Layout fields (Width, Height and the rest) show the new values as soon as a gesture commits, and again after Undo, Reset and Before/After. A field edit after a resize joins the same history; the proposal then reports the field's net value instead of the superseded resize.
 
 These are reversible runtime CSS proposals, not source or backend edits. Nothing is reparented or reordered. Undo returns to the previous preview; Reset restores the host baseline, including the exact original `style` attribute. Before/After, Browse suspension and Comment transfer use the existing Design proposal lifecycle. Controls disappear while the clean editing gate is active; target the canvas again to show them. The flag does not resize comment pins or the page-preview Frame.
 

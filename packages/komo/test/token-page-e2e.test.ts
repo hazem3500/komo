@@ -178,10 +178,26 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     const draft = page.locator(".draft-proposal");
     await draft.waitFor();
     expect(await draft.locator(".design-card-title").textContent()).toBe("Token changes");
-    expect(await draft.textContent()).toContain("color.surface (light)");
+    // Like an element's card, it starts on After and flips the token preview stylesheet.
+    const label = draft.locator(".design-prop").first();
+    expect(await label.textContent()).toBe("surface");
+    expect(await label.getAttribute("aria-label")).toBe("color.surface (light)");
+    const toggle = draft.locator(".design-toggle");
+    expect(await toggle.getByRole("button", { name: "After", exact: true }).getAttribute("aria-pressed")).toBe("true");
+    expect((await look()).background).toBe("rgb(255, 128, 0)");
+    await toggle.getByRole("button", { name: "Before", exact: true }).click();
     expect(await look()).toEqual(light);
     expect(await page.locator("style[data-komo-token-preview]").count()).toBe(0);
+    await toggle.getByRole("button", { name: "After", exact: true }).click();
+    await expect.poll(async () => (await look()).background).toBe("rgb(255, 128, 0)");
+    expect(await page.locator("#card").evaluate(node => getComputedStyle(node).borderTopLeftRadius)).toBe("12px");
+    // komo's tooltip names the full path.
+    await label.hover();
+    await expect.poll(() => page.locator(".sidebar-tooltip[data-open]").textContent()).toBe("color.surface (light)");
+    await page.screenshot({ path: join(tmpdir(), `komo-token-page-${mode}-card.png`) });
     await page.getByRole("button", { name: "Post comment", exact: true }).click();
+    await expect.poll(look).toEqual(light);
+    expect(await page.locator("style[data-komo-token-preview]").count()).toBe(0);
     await page.waitForFunction(() => (window as any).tokenQA.posts.length === 1);
     const posted = await page.evaluate(() => (window as any).tokenQA.posts[0]);
     expect(posted.anchor.selector).toBe("body");

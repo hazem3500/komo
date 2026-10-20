@@ -121,9 +121,10 @@ export function customTokenOverride(element: Element, property: string): { prior
   const wasToken = !!swappedToken(element, property) || !!usage && "path" in usage;
   if (!properties) customs.set(element, properties = new Set());
   properties.add(property);
-  return { priority: "important", ...(!previous && wasToken ? { undo: () => {
+  // Undo takes the mark back too, so an undone edit of an off-token field leaves no change behind.
+  return { priority: "important", ...(!previous ? { undo: () => {
     removeCustom(element, property);
-    if (!showingBefore) { showTokenSwapsBefore(true); showTokenSwapsBefore(false); }
+    if (wasToken && !showingBefore) { showTokenSwapsBefore(true); showTokenSwapsBefore(false); }
   } } : {}) };
 }
 
