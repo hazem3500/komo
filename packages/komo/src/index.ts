@@ -454,7 +454,12 @@ export function initComments(options: CommentsOptions): CommentsController {
   let pinMoveRevision = 0;
   let github = false,
     guests = false,
-    guestResolve = false;
+    guestResolve = false,
+    apiTokens = false;
+  // The Account panel's API tokens view keeps its node (and a shown secret) until left.
+  let tokenView: import("./account-tokens.js").TokenView | undefined;
+  let tokenLoad: Promise<HTMLElement> | undefined;
+  let tokenApi: CommentsApi | undefined;
   let parkedDraft: { anchor: Anchor; text: string } | null = null;
   const recoveredDrafts: { anchor: Anchor; text: string }[] = [];
   let dialogKey: string | null = null;
@@ -1139,7 +1144,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     accessError = "";
     issue = null;
     connection = "Connecting";
-    google = github = guests = guestResolve = privateProject = false;
+    google = github = guests = guestResolve = privateProject = apiTokens = false;
     selected = null;
     draft = null;
     parkedDraft = null;
@@ -1530,6 +1535,40 @@ export function initComments(options: CommentsOptions): CommentsController {
       })
       .catch(fail);
     return slot;
+  }
+  const tokensAllowed = () =>
+    account && apiTokens && !options.onboarding && !!api.user?.verified && api.user.id.startsWith("google:");
+  function closeTokens() {
+    tokenView?.dispose();
+    tokenView = tokenLoad = tokenApi = undefined;
+  }
+  function openTokens() {
+    tokenApi = api;
+    renderDialog();
+    dialogs.querySelector(".account-dialog")!.scrollTop = 0;
+  }
+  // API tokens load as their own chunk the first time the view opens.
+  function tokensPanel() {
+    if (tokenView) return tokenView;
+    const client = api;
+    tokenLoad ??= import("./account-tokens.js").then(
+      ({ accountTokens }) => {
+        if (tokenApi !== client) return el("div");
+        tokenView = accountTokens(client, options.project, () => {
+          closeTokens();
+          renderDialog();
+          dialogs.querySelector<HTMLElement>('[data-focus-key="account-tokens"]')?.focus();
+        });
+        tokenView.focusStart();
+        return tokenView;
+      },
+      (reason) => {
+        tokenLoad = tokenApi = undefined;
+        renderDialog();
+        throw reason;
+      },
+    );
+    return later(el("p", "account account-usage-status", "Loading API tokens…"), tokenLoad);
   }
   function usagePanel(path?: string) {
     return later(
@@ -4566,6 +4605,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     { from: HTMLElement; to: string | undefined; started: number }
   >();
   function renderDialog() {
+    if (tokenApi && (tokenApi !== api || !tokensAllowed())) closeTokens();
     // Undo Before/After previews from comments that are no longer on screen.
     void designComments?.then(({ resetDesignPreviews }) =>
       resetDesignPreviews(
@@ -4810,7 +4850,8 @@ export function initComments(options: CommentsOptions): CommentsController {
         button("Close comment", dismiss, "draft-close icon", "close"),
       );
 
-    if (account) {
+    if (tokenApi) dialog.append(tokensPanel());
+    else if (account) {
       const content = el("form", "account");
       if (api.user) {
         profileDraft ??= {
@@ -4982,6 +5023,15 @@ export function initComments(options: CommentsOptions): CommentsController {
             "secondary",
           ),
         );
+        if (tokensAllowed()) {
+          const entry = button("API tokens", openTokens, "account-sites-summary account-tokens-entry");
+          entry.removeAttribute("title");
+          entry.replaceChildren(el("span", "", "API tokens"), icon("chevron"));
+          entry.dataset.focusKey = "account-tokens";
+          const box = el("div", "account-sites");
+          box.append(entry);
+          content.append(box);
+        }
         content.append(sessionActions);
         if (!api.user.verified && google) content.append(googleSignIn());
         if (!api.user.verified && github)
@@ -6298,7 +6348,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     projectLoaded = false;
     issue = null;
     connection = "Connecting";
-    google = github = guests = guestResolve = privateProject = false;
+    google = github = guests = guestResolve = privateProject = apiTokens = false;
     draft = parkedDraft = null;
     draftText = draftProposal = "";
     draftTags = [];
@@ -6543,6 +6593,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       guests: boolean;
       guestResolve: boolean;
       private?: boolean;
+      tokens?: boolean;
     };
     // Settle a stored session before starting reads: an expired token clears
     // session-bound reads, including a config launched alongside restore.
@@ -6581,6 +6632,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     guests = config.guests;
     guestResolve = config.guestResolve;
     privateProject = !!config.private;
+    apiTokens = config.tokens === true;
     // The list may already have failed with an expected anonymous 401.
     // Publish auth options before awaiting it so an open account can sign in.
     render();

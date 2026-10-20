@@ -363,7 +363,7 @@ Frame opens at **Fit**: the space beside the comments is the page's viewport, un
 
 Give a bot its own revocable credential instead of sharing your login.
 
-1. **Create a token.** Sign in with Google at `/account` on your komo server (`https://komo.offbr.co/account` when hosted). Name the token, pick an expiry, choose scopes, and optionally limit it to projects you own or have joined. The token is shown once; copy it into your secret manager. Guest sessions cannot create tokens.
+1. **Create a token.** Signed in with Google, open **Account → API tokens** in the komo toolbar, or `/account` on your komo server (`https://komo.offbr.co/account` when hosted). Name the token, pick an expiry, choose scopes, and optionally limit it to projects you own or have joined. The token is shown once; copy it into your secret manager. Guest sessions cannot create tokens.
 2. **Set `KOMO_TOKEN`.** Export it in the bot's environment, or save it once with `printf %s "$KOMO_TOKEN" | komo login --token` (stdin only; a token passed as an argument is refused). Check it with `komo whoami`. `komo logout` removes saved credentials.
 3. **Use the CLI as usual.** The project, endpoint, and origin come from `.komo/project.json` or the `KOMO_*` overrides.
 
@@ -376,7 +376,7 @@ Tokens start with `komo_pat_`, so secret scanners can find them. komo stores onl
 
 A token acts as its owner, narrowed by its scopes and project list: it never passes an ownership check or private-project invitation its owner would fail, and it cannot manage tokens, projects, members, or webhooks. Credentials resolve in this order: `KOMO_TOKEN`, a token saved by `komo login --token`, then a browser login session.
 
-**Rotate** by creating a replacement, updating the secret, confirming `komo whoami`, then revoking the old token. Prefer an expiry of 90 days or less. **Revoke** from `/account`; the token stops working on its next request (HTTP 401), and so does an expired one.
+**Rotate** by creating a replacement, updating the secret, confirming `komo whoami`, then revoking the old token. Prefer an expiry of 90 days or less. **Revoke** from **Account → API tokens** or `/account`; the token stops working on its next request (HTTP 401), and so does an expired one.
 
 GitHub Actions:
 

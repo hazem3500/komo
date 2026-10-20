@@ -2316,6 +2316,36 @@ describe("personal access tokens", () => {
     }
   });
 
+  it("advertises tokens and serves them to a project session on an approved site", async () => {
+    expect((await (await request("/config")).json()).tokens).toBe(true);
+    const inProject = (method: string, path = "/account/tokens", data?: unknown, session = "usage-owner-token") =>
+      request(path, method, data, session, "shared", "owner/site", "usage-project");
+    const listed = await inProject("GET");
+    expect(listed.status).toBe(200);
+    expect(listed.headers.get("access-control-allow-origin")).toBe(origin);
+    const before = (await listed.json()) as any;
+    expect(before).toMatchObject({ scopes: ["comments:read", "comments:write"] });
+    expect(before.projects).toContain("usage-project");
+    const created = await inProject("POST", "/account/tokens", {
+      name: "Widget bot",
+      scopes: ["comments:read"],
+      projects: ["usage-project"],
+      expiresInDays: 7,
+    });
+    expect(created.status).toBe(201);
+    const body = (await created.json()) as any;
+    expect(body.item).toMatchObject({ name: "Widget bot", projects: ["usage-project"], lastUsedAt: null });
+    const after = (await (await inProject("GET")).json()) as any;
+    const item = after.tokens.find((token: any) => token.id === body.item.id);
+    expect(item).not.toHaveProperty("token");
+    expect(JSON.stringify(after)).not.toContain(body.token);
+    // A token cannot manage tokens from a project either.
+    expect((await inProject("GET", "/account/tokens", undefined, body.token)).status).toBe(403);
+    expect((await inProject("DELETE", `/account/tokens/${body.item.id}`)).status).toBe(200);
+    expect((await inProject("DELETE", `/account/tokens/${body.item.id}`)).status).toBe(404);
+    expect((await inProject("GET", "/account/tokens", undefined, body.token)).status).toBe(401);
+  });
+
   it("rate-limits token creation", async () => {
     const statuses: number[] = [];
     for (let i = 0; i < 11; i++)

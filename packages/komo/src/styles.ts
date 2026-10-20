@@ -2128,6 +2128,7 @@ textarea {
 .account-sites-summary svg { width: 14px; height: 14px; color: #888; transform: scaleY(1); transition: transform 250ms cubic-bezier(.22,1,.36,1); }
 .account-sites-summary svg path { vector-effect: non-scaling-stroke; }
 .account-sites[data-open="true"] .account-sites-summary svg { transform: scaleY(-1); }
+.account-tokens-entry svg { margin-left: auto; rotate: -90deg; }
 .account-sites-reveal { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 250ms cubic-bezier(.22,1,.36,1); }
 .account-sites[data-open="true"] .account-sites-reveal { grid-template-rows: 1fr; }
 .account-sites-clip { min-height: 0; overflow: hidden; opacity: 0; transition: opacity 250ms cubic-bezier(.22,1,.36,1); }

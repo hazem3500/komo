@@ -36,6 +36,9 @@ const tokenPicker = (await readdir("dist"))
 const tokenPage = (await readdir("dist"))
   .filter((file) => /^token-page.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const accountTokens = (await readdir("dist"))
+  .filter((file) => /^account-tokens.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const entry = Object.keys(outputs).find(
   (path) => outputs[path].entryPoint === "dist/index.js"
 );
@@ -76,6 +79,7 @@ const report = {
   optionalTokenPicker: await sizes(new Set(tokenPicker)),
   optionalTokenPage: await sizes(new Set(tokenPage)),
   optionalGeometry: await sizes(new Set(geometry)),
+  optionalAccountTokens: await sizes(new Set(accountTokens)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
   adapterCssVariables: await sizes(new Set(["dist/adapters/css-variables.js"])),
   adapterReactFiber: await sizes(new Set(["dist/adapters/react-fiber.js"])),
@@ -123,7 +127,10 @@ await writeFile(
 // All-features 213,250: Frame size controls (presets, custom size, handles, Fit / 100%, the
 // fitted view and pan clipping) load as their own ~3,100-byte chunk when Frame first opens or a
 // size is remembered; Frame's sizing hooks add ~600 to initial. Main was at ~209,140.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 213_250)
+// All-features 213,250 -> 219,500: the Account panel's API tokens view (list, create with a
+// one-time reveal, inline revoke, its own styles) is a new on-demand chunk (~5,670 measured).
+// Initial grows ~530 bytes for the entry row, the view switch and the chunk boundary.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 219_500)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -165,6 +172,10 @@ if (report.optionalTokenPage.gzip > 4_875)
 // aspect-locked boxes, per-element reasons with Select parent, and side-effect proposals measure 6,725.
 if (report.optionalGeometry.gzip > 7_000)
   throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
+// API tokens load only when "API tokens" is opened in the Account panel; nothing else imports
+// the chunk. 5,671 measured, plus ~3%.
+if (report.optionalAccountTokens.gzip > 5_850)
+  throw new Error("komo's API tokens chunk exceeds its gzip budget.");
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.
