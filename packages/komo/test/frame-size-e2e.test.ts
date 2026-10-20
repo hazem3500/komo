@@ -61,7 +61,8 @@ beforeAll(async () => {
       const cell=document.getElementById('cell-4-11'),box=cell.getBoundingClientRect();
       const point={x:box.left+box.width/2,y:box.top+box.height/2};
       const anchor=captureAnchor(cell,point,point);
-      const threads=location.search.includes('pins')?[{id:'fixture-thread',page:'/',anchor,resolved:false,resolvedBy:null,createdAt:1,updatedAt:1,tags:[],comments:[{id:'fixture-comment',author:user,body:'Check this slot',createdAt:1,editedAt:null,reactions:{}}]}]:[];
+      const thread=(id,cell,body)=>{const box=cell.getBoundingClientRect(),point={x:box.left+box.width/2,y:box.top+box.height/2};return {id,page:'/',anchor:captureAnchor(cell,point,point),resolved:false,resolvedBy:null,createdAt:1,updatedAt:1,tags:[],comments:[{id:id+'-comment',author:user,body,createdAt:1,editedAt:null,reactions:{}}]};};
+      const threads=location.search.includes('pins')?[{...thread('fixture-thread',cell,'Check this slot'),anchor},thread('centre-thread',document.getElementById('cell-3-13'),'And this one')]:[];
       window.fetch=async input=>{
         const path=new URL(input instanceof URL?input.href:typeof input==='string'?input:input.url).pathname;
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads}:{});
@@ -119,6 +120,7 @@ function frame(page: Page) {
       label: shadow.querySelector(".frame-size-trigger")!.textContent,
       scale: shadow.querySelector(".frame-scale")!.textContent,
       pressed: [...shadow.querySelectorAll(".frame-zoom button")].map((button) => button.getAttribute("aria-pressed")),
+      note: !shadow.querySelector<HTMLElement>(".frame-note")!.hidden,
     };
   });
 }
@@ -146,26 +148,57 @@ async function select(page: Page, day: number, hour: number) {
 }
 
 describe.skipIf(!chrome)("Frame size controls", () => {
-  it("fits by default, applies presets and a custom size at Fit and 100%, and restores exactly", async () => {
+  it("opens on the window's own size at Fit, applies presets and a custom size at Fit and 100%, and restores exactly", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     page.setDefaultTimeout(5000);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     const original = await open(page);
+    // The window's own layout, scaled down until all of it is visible.
     const fitted = await frame(page);
-    expectFitted(fitted, [852, 728]);
-    expect(fitted.transform).toBe("none");
-    expect(fitted.label).toBe("Fit · 852 × 728");
+    expectFitted(fitted, [1280, 800]);
+    expect(fitted.transform).not.toBe("none");
+    expect(fitted.label).toBe("Desktop · 1280 × 800");
+    expect(fitted.scale).toBe("67%");
     expect(fitted.pressed).toEqual(["true", "false"]);
-    await page.screenshot({ path: join(shots, "fit-default.png") });
-    for (const [name, width, height] of [["Desktop", 1440, 900], ["Laptop", 1280, 800], ["Tablet", 768, 1024], ["Mobile", 390, 844]] as const) {
+    expect(fitted.note).toBe(false);
+    expect(await select(page, 2, 9)).toEqual({ target: [2, 9], coordinates: [2, 9] });
+    await page.screenshot({ path: join(shots, "default-window-fit.png") });
+    // 100% shows the same viewport in CSS pixels and pans.
+    await page.getByRole("button", { name: "100%", exact: true }).click();
+    await page.waitForTimeout(100);
+    const window100 = await frame(page);
+    expect(window100.logical).toEqual([1280, 800]);
+    expect(window100.scale).toBe("100%");
+    expect(window100.transform).toBe("none");
+    await page.screenshot({ path: join(shots, "default-window-100.png") });
+    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    await page.waitForTimeout(100);
+    expectFitted(await frame(page), [1280, 800]);
+    // The space beside the comments, unscaled: the page reflows in place.
+    await choose(page, "Available space");
+    const available = await frame(page);
+    expectFitted(available, [852, 728]);
+    expect(available.transform).toBe("none");
+    expect(available.label).toBe("Available · 852 × 728");
+    expect(available.note).toBe(true);
+    for (const [name, width, height] of [["Wide", 1440, 900], ["Laptop", 1280, 800], ["Tablet", 768, 1024], ["Mobile", 390, 844]] as const) {
       await choose(page, name);
       const state = await frame(page);
       expectFitted(state, [width, height]);
       expect(state.label).toBe(`${name} · ${width} × ${height}`);
+      expect(state.note).toBe(width !== 1280);
       expect(await select(page, 2, 9)).toEqual({ target: [2, 9], coordinates: [2, 9] });
       await page.screenshot({ path: join(shots, `preset-${name.toLowerCase()}-fit.png`) });
     }
+    // In place, a narrower viewport cannot change media queries; the bar says why.
+    await page.getByRole("button", { name: "Why the layout follows your browser window" }).hover();
+    await page.waitForTimeout(200);
+    const tip = page.getByRole("tooltip");
+    expect(await tip.isVisible()).toBe(true);
+    expect(await tip.textContent()).toContain("Media queries");
+    await page.screenshot({ path: join(shots, "preset-mobile-note.png") });
+    await page.mouse.move(10, 10);
     await page.locator(".frame-size-trigger").click();
     await page.getByLabel("Width", { exact: true }).fill("1000");
     await page.getByLabel("Height", { exact: true }).fill("700");
@@ -176,7 +209,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     expect(custom.label).toBe("Custom · 1000 × 700");
     await page.screenshot({ path: join(shots, "custom-1000x700-fit.png") });
 
-    await choose(page, "Desktop");
+    await choose(page, "Wide");
     await page.getByRole("button", { name: "100%", exact: true }).click();
     await page.waitForTimeout(100);
     const actual = await frame(page);
@@ -193,7 +226,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     near(panned.rect.left, 24 - 400, "panned left");
     near(panned.rect.top, 48 - 120, "panned top");
     expect(await select(page, 3, 10)).toEqual({ target: [3, 10], coordinates: [3, 10] });
-    await page.screenshot({ path: join(shots, "preset-desktop-100.png") });
+    await page.screenshot({ path: join(shots, "preset-wide-100.png") });
     await page.getByRole("button", { name: "Fit", exact: true }).click();
     await page.waitForTimeout(100);
     expectFitted(await frame(page), [1440, 900]);
@@ -217,6 +250,14 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await open(page);
     const edge = page.getByRole("slider", { name: "Frame width" });
+    // At the default Fit scale a drag moves the edge with the pointer, in logical pixels.
+    const scaled = (await edge.boundingBox())!;
+    await page.mouse.move(scaled.x + scaled.width / 2, scaled.y + scaled.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(scaled.x + scaled.width / 2 - 200, scaled.y + scaled.height / 2, { steps: 5 });
+    await page.mouse.up();
+    expectFitted(await frame(page), [Math.round(1280 - 200 / (852 / 1280)), 800]);
+    await choose(page, "Available space");
     const handle = (await edge.boundingBox())!;
     await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
     await page.mouse.down();
@@ -256,7 +297,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
   it("maps selection, pins, picking and portals through a fitted scale and follows window resizes", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await open(page, "?pins");
-    await choose(page, "Desktop");
+    await choose(page, "Wide");
     const state = await frame(page);
     expectFitted(state, [1440, 900]);
     expect(state.transform).not.toBe("none");
@@ -299,10 +340,99 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     await page.waitForTimeout(300);
     const resized = await frame(page);
     expectFitted(resized, [1440, 900], [1440, 900]);
+    expect(resized.note).toBe(false);
     const moved = (await page.locator("#dialog").boundingBox())!;
     near(moved.x + moved.width / 2, resized.rect.left + resized.rect.width / 2, "resized dialog centre x");
     expect(await select(page, 1, 9)).toEqual({ target: [1, 9], coordinates: [1, 9] });
     await page.screenshot({ path: join(shots, "fit-desktop-1440x900-window.png") });
     await page.close();
   });
+
+  it("opens cards beside their pin, unscaled and inside the review area, at Fit and 100%", async () => {
+    // A review area narrower than a card beside the pin on either side, and a roomy one.
+    for (const viewport of [{ width: 946, height: 800 }, { width: 1280, height: 800 }]) {
+      const page = await browser.newPage({ viewport });
+      await open(page, "?pins");
+      const shadow = (selector: string) => page.evaluate((selector) => {
+        const node = [...document.body.children].find((child) => child.shadowRoot)!.shadowRoot!.querySelector(selector);
+        if (!node) return null;
+        const { left, top, right, bottom } = node.getBoundingClientRect();
+        return { left, top, right, bottom, scale: getComputedStyle(node).scale, transform: getComputedStyle(node).transform };
+      }, selector);
+      const area = async () => {
+        const main = await page.locator("main").evaluate((node) => node.getBoundingClientRect().bottom);
+        return { left: 12, top: 12, right: viewport.width - 396, bottom: Math.min(viewport.height, main) - 12 };
+      };
+      const gap = (a: { left: number; top: number; right: number; bottom: number }, b: { x: number; y: number; width: number; height: number }) =>
+        Math.hypot(Math.max(0, a.left - b.x - b.width, b.x - a.right), Math.max(0, a.top - b.y - b.height, b.y - a.bottom));
+      const expectBeside = async (card: Awaited<ReturnType<typeof shadow>>, target: { x: number; y: number; width: number; height: number }, label: string) => {
+        expect(card, label).not.toBeNull();
+        const bounds = await area();
+        expect(card!.left, `${label} left`).toBeGreaterThanOrEqual(bounds.left - 1);
+        expect(card!.right, `${label} right`).toBeLessThanOrEqual(bounds.right + 1);
+        expect(card!.top, `${label} top`).toBeGreaterThanOrEqual(bounds.top - 1);
+        expect(card!.bottom, `${label} bottom`).toBeLessThanOrEqual(bounds.bottom + 1);
+        expect(gap(card!, target), `${label} gap to its pin`).toBeLessThanOrEqual(24);
+        // Beside the pin, never over it or the point it marks.
+        const overlap = Math.max(0, Math.min(card!.right, target.x + target.width) - Math.max(card!.left, target.x)) *
+          Math.max(0, Math.min(card!.bottom, target.y + target.height) - Math.max(card!.top, target.y));
+        expect(overlap, `${label} covers its pin`).toBeLessThanOrEqual(target.width * target.height > 1 ? 4 : 0);
+        expect([card!.transform, card!.scale].every((value) => value === "none" || value === "matrix(1, 0, 0, 1, 0, 0)" || value === "1"), `${label} unscaled`).toBe(true);
+      };
+      for (const [name, zoom] of [["custom", "Fit"], ["custom", "100%"], ["Wide", "Fit"], ["Mobile", "Fit"], ["Available space", "Fit"], ["Wide", "100%"]]) {
+        if (name === "custom") {
+          await page.locator(".frame-size-trigger").click();
+          await page.getByLabel("Width", { exact: true }).fill("978");
+          await page.getByLabel("Height", { exact: true }).fill("887");
+          await page.getByRole("button", { name: "Set" }).click();
+        } else await choose(page, name);
+        await page.getByRole("button", { name: zoom, exact: true }).click();
+        await page.waitForTimeout(150);
+        const state = await frame(page);
+        for (const [thread, cellId] of [["fixture-thread", "cell-4-11"], ["centre-thread", "cell-3-13"]]) {
+          const pin = page.locator(`.pin[data-thread="${thread}"]`);
+          if (zoom === "100%") {
+            await page.locator(`#${cellId}`).evaluate((node) => node.scrollIntoView({ block: "center", inline: "center" }));
+            await page.waitForTimeout(400);
+          }
+          const label = `${viewport.width}px window, ${state.label} at ${state.scale}, ${thread}`;
+          await page.mouse.move(2, 2);
+          await page.waitForTimeout(150);
+          await pin.hover();
+          await page.waitForTimeout(400);
+          const target = (await pin.boundingBox())!;
+          await expectBeside(await shadow(".pin-preview:not([hidden])"), target, `${label} hover card`);
+          await page.screenshot({ path: join(shots, `cards-${viewport.width}-${name.split(" ")[0].toLowerCase()}-${zoom === "Fit" ? "fit" : "100"}-${thread.split("-")[0]}-hover.png`) });
+          // The new-comment composer opens beside the point that was clicked.
+          await page.mouse.move(2, 2);
+          await page.keyboard.press("c");
+          const cell = (await page.locator("#cell-3-10").boundingBox())!;
+          const point = { x: Math.max(cell.x + 4, Math.min(cell.x + cell.width / 2, viewport.width - 400)), y: cell.y + cell.height / 2 };
+          await page.mouse.click(point.x, point.y);
+          await page.waitForTimeout(300);
+          await expectBeside(await shadow(".new-comment-composer"), { x: point.x - 0.5, y: point.y - 0.5, width: 1, height: 1 }, `${label} composer`);
+          await page.screenshot({ path: join(shots, `cards-${viewport.width}-${name.split(" ")[0].toLowerCase()}-${zoom === "Fit" ? "fit" : "100"}-${thread.split("-")[0]}-composer.png`) });
+          await page.keyboard.press("Escape");
+          await page.keyboard.press("Escape");
+          await page.keyboard.press("v");
+          // Design mode opens threads as floating cards rather than in the sidebar.
+          await page.keyboard.press("d");
+          await page.waitForTimeout(400);
+          if (zoom === "100%") {
+            await page.locator(`#${cellId}`).evaluate((node) => node.scrollIntoView({ block: "center", inline: "center" }));
+            await page.waitForTimeout(400);
+          }
+          await pin.click({ force: true });
+          await page.waitForTimeout(400);
+          await expectBeside(await shadow(".dialog:has(.messages)"), (await pin.boundingBox())!, `${label} thread card`);
+          await page.screenshot({ path: join(shots, `cards-${viewport.width}-${name.split(" ")[0].toLowerCase()}-${zoom === "Fit" ? "fit" : "100"}-${thread.split("-")[0]}-thread.png`) });
+          await page.keyboard.press("Escape");
+          await page.keyboard.press("Escape");
+          await page.keyboard.press("d");
+          await page.waitForTimeout(400);
+        }
+      }
+      await page.close();
+    }
+  }, 120_000);
 });

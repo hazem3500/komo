@@ -1,10 +1,13 @@
+import type { FrameView, frameView as placeView } from "./review-layout.js";
+
 type Box = { left: number; top: number; width: number; height: number };
 type Size = [number, number];
-export type FrameView = Box & { scale: number; pan: boolean };
+/** A chosen viewport: the browser window, the space beside the comments, or a fixed size. */
+type Choice = Size | "window" | "available";
 export type FrameSizeControls = {
-  /** Place the logical viewport in the box, both in page CSS pixels. */
-  view(box: Box): FrameView;
-  /** True when a remembered size or zoom differs from the fitted default. */
+  /** Place the logical viewport in the box, both in page CSS pixels; `window` is the window's size. */
+  view(box: Box, window: number[]): FrameView;
+  /** True when a remembered size or zoom differs from the default, the window at Fit. */
   sized: boolean;
   /** Follow the frame in its box, in window pixels; null hides the controls. */
   update(box: Box | null, zoom?: number): void;
@@ -12,31 +15,14 @@ export type FrameSizeControls = {
 };
 
 export const FRAME_PRESETS: Array<[string, number, number]> = [
-  ["Desktop", 1440, 900],
+  ["Wide", 1440, 900],
   ["Laptop", 1280, 800],
   ["Tablet", 768, 1024],
   ["Mobile", 390, 844],
 ];
 const MIN = 200;
 const MAX = 4000;
-const css = `.frame-size{position:fixed;inset:0;pointer-events:none;z-index:3;font-size:12px;font-weight:500;line-height:1;color:#d6d3ce}.frame-size>*{pointer-events:auto;position:fixed}.frame-size [hidden]{display:none}.frame-bar,.frame-zoom,.frame-custom{display:flex;align-items:center;gap:6px}.frame-size button,.frame-size input,.frame-zoom,.frame-menu{font:inherit;color:inherit;background:#1c1c1c;border:1px solid #ffffff14;border-radius:8px;height:28px;padding:0 10px;cursor:pointer}.frame-size button:hover{background:#262626}.frame-size :focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:1px}.frame-zoom{gap:2px;padding:2px}.frame-zoom button{height:22px;border:0;padding:0 8px}.frame-size [aria-pressed=true],.frame-size [aria-checked=true]{background:#ffffff1f;color:#f1efeb}.frame-menu{display:grid;gap:2px;height:auto;min-width:200px;padding:4px;border-radius:10px;box-shadow:0 8px 24px #0008;cursor:auto}.frame-menu button{display:flex;justify-content:space-between;gap:16px;border:0}.frame-size span,.frame-readout,.frame-custom{color:#898680;font-variant-numeric:tabular-nums}.frame-custom{gap:4px;padding:4px 4px 2px;border-top:1px solid #ffffff0d}.frame-custom input{width:64px;padding:0 6px;cursor:text}.frame-handle{width:10px;margin-left:-5px;cursor:ew-resize;touch-action:none}.frame-corner{width:18px;height:18px;margin:-9px 0 0 -9px;cursor:nwse-resize;touch-action:none}.frame-handle::after,.frame-corner::after{content:'';position:absolute;left:3px;top:calc(50% - 20px);width:4px;height:40px;border-radius:2px;background:#ffffff40}.frame-corner::after{inset:4px;width:auto;height:auto;background:none;border:solid #ffffff59;border-width:0 2px 2px 0;border-radius:0 0 4px 0}.frame-handle:hover::after,.frame-handle[data-active]::after{background:var(--accent,#bda6ef)}.frame-corner:hover::after,.frame-corner[data-active]::after{border-color:var(--accent,#bda6ef)}.frame-readout{padding:5px 8px;border-radius:6px;background:#1c1c1cf2;color:#f1efeb}`;
-
-/**
- * Fit scales a logical viewport larger than the box down to show all of it,
- * centred; 100% keeps CSS pixels and pans. Without a size the box is the viewport.
- */
-export function frameView(box: Box, size: Size | null, actual: boolean): FrameView {
-  const [width, height] = size ?? [box.width, box.height];
-  const scale = actual ? 1 : Math.min(1, box.width / width, box.height / height);
-  return {
-    width,
-    height,
-    scale,
-    pan: width * scale > box.width + 0.5 || height * scale > box.height + 0.5,
-    left: box.left + Math.max(0, (box.width - width * scale) / 2),
-    top: box.top + Math.max(0, (box.height - height * scale) / 2),
-  };
-}
+const css = `.frame-size{position:fixed;inset:0;pointer-events:none;z-index:3;font-size:12px;font-weight:500;line-height:1;color:#d6d3ce}.frame-size>*{pointer-events:auto;position:fixed}.frame-size [hidden]{display:none}.frame-bar,.frame-zoom,.frame-custom{display:flex;align-items:center;gap:6px}.frame-size button,.frame-size input,.frame-zoom,.frame-menu{font:inherit;color:inherit;background:#1c1c1c;border:1px solid #ffffff14;border-radius:8px;height:28px;padding:0 10px;cursor:pointer}.frame-size button:hover{background:#262626}.frame-size :focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:1px}.frame-zoom{gap:2px;padding:2px}.frame-zoom button{height:22px;border:0;padding:0 8px}.frame-size [aria-pressed=true],.frame-size [aria-checked=true]{background:#ffffff1f;color:#f1efeb}.frame-menu{display:grid;gap:2px;height:auto;min-width:200px;padding:4px;border-radius:10px;box-shadow:0 8px 24px #0008;cursor:auto}.frame-menu button{display:flex;justify-content:space-between;gap:16px;border:0}.frame-size span,.frame-readout,.frame-custom{color:#898680;font-variant-numeric:tabular-nums}.frame-custom{gap:4px;padding:4px 4px 2px;border-top:1px solid #ffffff0d}.frame-custom input{width:64px;padding:0 6px;cursor:text}.frame-handle{width:10px;margin-left:-5px;cursor:ew-resize;touch-action:none}.frame-corner{width:18px;height:18px;margin:-9px 0 0 -9px;cursor:nwse-resize;touch-action:none}.frame-handle::after,.frame-corner::after{content:'';position:absolute;left:3px;top:calc(50% - 20px);width:4px;height:40px;border-radius:2px;background:#ffffff40}.frame-corner::after{inset:4px;width:auto;height:auto;background:none;border:solid #ffffff59;border-width:0 2px 2px 0;border-radius:0 0 4px 0}.frame-handle:hover::after,.frame-handle[data-active]::after{background:var(--accent,#bda6ef)}.frame-corner:hover::after,.frame-corner[data-active]::after{border-color:var(--accent,#bda6ef)}.frame-readout{padding:5px 8px;border-radius:6px;background:#1c1c1cf2;color:#f1efeb}.frame-bar{white-space:nowrap}.frame-bar .frame-scale{min-width:44px;color:#f1efeb;font-size:14px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums}.frame-note{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding-left:4px}.frame-note>span:first-child{overflow:hidden;text-overflow:ellipsis}.frame-bar .frame-info{flex:none;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:none;color:#898680}.frame-bar .frame-info:hover{background:#ffffff12;color:#f1efeb}.frame-info::before{content:"i";display:inline-grid;place-items:center;width:12px;height:12px;border:1.2px solid;border-radius:50%;font:italic 600 9px/1 Georgia,serif}.frame-size .frame-tip{position:absolute;z-index:1;top:calc(100% + 8px);right:0;width:260px;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font-weight:400;line-height:1.45;white-space:normal;opacity:0;visibility:hidden;transition:opacity .15s}.frame-info:is(:hover,:focus-visible)+.frame-tip{opacity:1;visibility:visible}`;
 
 const element = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -71,25 +57,28 @@ export function mountFrameSize(
   surface: HTMLElement,
   key: string,
   apply: () => void,
+  // Passed in, so this chunk does not pull the eager layout module into a shared chunk.
+  frameView: typeof placeView,
 ): FrameSizeControls {
-  let size: Size | null = null;
+  let size: Choice = "window";
   let actual = false;
   try {
     const stored = JSON.parse(localStorage.getItem(key) ?? "{}");
-    if (stored.size?.every((value: unknown) => Number.isFinite(value)))
+    if (stored.size === "available") size = "available";
+    else if (stored.size?.every?.((value: unknown) => Number.isFinite(value)))
       size = [clamp(stored.size[0]), clamp(stored.size[1])];
     actual = stored.actual === true;
   } catch {
-    /* Use the fitted default when storage is blocked or unreadable. */
+    /* Use the default, the window at Fit, when storage is blocked or unreadable. */
   }
   let current: FrameView | null | undefined;
-  const change = (next: Size | null, zoom: boolean, persist = true) => {
+  const change = (next: Choice, zoom: boolean, persist = true) => {
     size = next;
     actual = zoom;
     apply();
     if (persist)
       try {
-        localStorage.setItem(key, JSON.stringify({ size, actual }));
+        localStorage.setItem(key, JSON.stringify({ size: size === "window" ? null : size, actual }));
       } catch {
         /* Keep the size for this session when storage is blocked. */
       }
@@ -105,32 +94,50 @@ export function mountFrameSize(
     "aria-haspopup": "menu",
     "aria-expanded": "false",
   });
+  const scale = element("span", "frame-scale", { "aria-live": "polite", title: "Zoom" });
   const zoom = element("div", "frame-zoom", {
     role: "group",
     "aria-label": "Zoom",
   });
-  const fit = element("button", "", { type: "button" }, "Fit");
-  const full = element("button", "", { type: "button" }, "100%");
+  const fit = element("button", "", { type: "button", title: "Show the whole viewport" }, "Fit");
+  const full = element("button", "", { type: "button", title: "Actual CSS pixels" }, "100%");
   zoom.append(fit, full);
-  const scale = element("span", "frame-scale", { "aria-live": "polite" });
-  bar.append(trigger, zoom, scale);
+  // In place, the page keeps the browser window's media queries; say so when they disagree.
+  const note = element("span", "frame-note", { hidden: "" });
+  const info = element("button", "frame-info", {
+    type: "button",
+    "aria-label": "Why the layout follows your browser window",
+    "aria-describedby": "frame-tip",
+  });
+  const tip = element(
+    "span",
+    "frame-tip",
+    { id: "frame-tip", role: "tooltip" },
+    "Media queries, window.innerWidth and resize events still match your browser window, because the page has no viewport of its own here. Resize the browser window to see another breakpoint.",
+  );
+  note.append(element("span", "", {}, "Layout follows your browser window"), info, tip);
+  bar.append(trigger, scale, zoom, note);
   const menu = element("div", "frame-menu", {
     role: "menu",
     "aria-label": "Frame size",
     hidden: "",
   });
-  const choices: Array<[string, Size | null]> = [
-    ["Fit", null],
+  const choices: Array<[name: string, label: string, choice: Choice]> = [
+    ["Desktop", "Your window", "window"],
+    ["Available", "Available space", "available"],
     ...FRAME_PRESETS.map(
-      ([name, width, height]) => [`${name} ${width}`, [width, height]] as [string, Size],
+      ([name, width, height]) => [name, `${name} ${width}`, [width, height]] as [string, string, Size],
     ),
   ];
-  const items = choices.map(([label, choice], index) => {
+  const readouts: HTMLElement[] = [];
+  const items = choices.map(([, label, choice]) => {
     const item = element("button", "", {
       type: "button",
       role: "menuitemradio",
     });
-    item.append(label, element("span", "", {}, index ? dimensions(choice!) : ""));
+    const readout = element("span", "", {}, typeof choice === "string" ? "" : dimensions(choice));
+    readouts.push(readout);
+    item.append(label, readout);
     item.addEventListener("click", () => {
       close();
       change(choice, actual);
@@ -264,16 +271,20 @@ export function mountFrameSize(
     });
   }
   return {
-    view(box) {
-      return (current = frameView(box, size, actual));
+    view(box, window) {
+      return (current = frameView(
+        box,
+        size === "window" ? window : size === "available" ? [box.width, box.height] : size,
+        actual,
+      ));
     },
-    sized: !!size || actual,
+    sized: size !== "window" || actual,
     update(box, zoom = 1) {
       const view = (current ??=
         box &&
         frameView(
           { left: box.left / zoom, top: box.top / zoom, width: box.width / zoom, height: box.height / zoom },
-          null,
+          [innerWidth / zoom, innerHeight / zoom],
           false,
         ));
       layer.hidden = !box || !view;
@@ -289,19 +300,25 @@ export function mountFrameSize(
             box.left - rect.left,
           ].map((value) => `${Math.max(0, value) / zoom}px`).join(" ")} round ${12 / zoom}px)`
         : surface.style.clipPath;
-      const preset = size
-        ? choices.findIndex(([, choice]) => choice?.[0] === size![0] && choice[1] === size![1])
-        : 0;
-      trigger.textContent = `${preset < 0 ? "Custom" : choices[preset][0].split(" ")[0]} · ${dimensions(logical())}`;
+      const preset = choices.findIndex(([, , choice]) =>
+        typeof choice === "string" || typeof size === "string"
+          ? choice === size
+          : choice[0] === size[0] && choice[1] === size[1],
+      );
+      trigger.textContent = `${preset < 0 ? "Custom" : choices[preset][0]} · ${dimensions(logical())}`;
+      readouts[0].textContent = dimensions([innerWidth / zoom, innerHeight / zoom]);
+      readouts[1].textContent = dimensions([box.width / zoom, box.height / zoom]);
       items.forEach((item, index) => item.setAttribute("aria-checked", String(index === preset)));
       fit.setAttribute("aria-pressed", String(!actual));
       full.setAttribute("aria-pressed", String(actual));
       scale.textContent = `${Math.round(view.scale * 100)}%`;
+      note.hidden = Math.abs(view.width - innerWidth / zoom) < 1;
       edge.setAttribute("aria-valuenow", String(Math.round(view.width)));
       edge.setAttribute("aria-valuetext", `${dimensions(logical())} pixels`);
       // The bar sits in the gutter above the box; handles follow the visual frame.
       const top = Math.max(8, box.top - 40);
       place(bar, box.left, top);
+      bar.style.maxWidth = `${box.width}px`;
       place(menu, box.left, top + 34);
       edge.hidden = corner.hidden = view.pan;
       place(edge, rect.right, rect.top, rect.height);

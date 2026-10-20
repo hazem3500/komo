@@ -40,6 +40,8 @@ beforeAll(async () => {
       scroller.addEventListener('scroll',position);window.addEventListener('resize',position);
       window.fetch=async()=>Response.json({threads:[],guests:true});
       window.mountGridQA=()=>initKomo({endpoint:location.origin,project:'grid-review',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',frame:{scale:new URLSearchParams(location.search).get('mode')==='scaled'},restoreOpen:false,shortcuts:new URLSearchParams(location.search).has('parity')?{comments:'Shift+L'}:undefined,pollInterval:60000});
+      // These cases cover the unscaled in-place frame: the space beside the comments.
+      localStorage.setItem('branch-comments:frame-size:grid-review:example/review',JSON.stringify({size:'available'}));
       window.komo=window.mountGridQA();
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -72,7 +74,7 @@ describe.skipIf(!chrome).each(["reflow", "scaled"])("Frame style attributes in %
   it.each(["no-preference", "reduce"] as const)("matches native pointer and configured shortcut motion with reduced motion=%s", async reducedMotion => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion });
     await page.goto(`${origin}/?mode=${mode}&parity=1`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).komo && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
     const original = await page.evaluate(() => (window as any).gridQA.styles());
     const trace = async (run: () => Promise<unknown>) => {
       await page.evaluate(() => {
@@ -120,7 +122,7 @@ describe.skipIf(!chrome).each(["reflow", "scaled"])("Frame style attributes in %
   it.each(["no-preference", "reduce"] as const)("preserves absent attributes through close, dismiss and interrupted motion with reduced motion=%s", async reducedMotion => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion });
     await page.goto(`${origin}/?mode=${mode}`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).komo && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
     const styles = () => page.evaluate(() => (window as any).gridQA.styles());
     const original = await page.evaluate(() => (window as any).gridQA.baseline);
     expect(original).toEqual([null, null, null]);
@@ -154,7 +156,7 @@ describe.skipIf(!chrome).each([false, true])("native grid coordinates with touch
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: touch, reducedMotion: "no-preference" });
     const page = await context.newPage();
     await page.goto(`${origin}/?parity=1`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).komo && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
     const original = await page.evaluate(() => (window as any).gridQA.styles());
     const client = touch ? await context.newCDPSession(page) : null;
     for (let index = 0; index < 6; index++) {
@@ -187,7 +189,7 @@ describe.skipIf(!chrome).each([false, true])("native grid coordinates with touch
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: touch });
     const page = await context.newPage();
     await page.goto(origin);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).komo && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     const original = await page.locator("main").getAttribute("style");
@@ -238,7 +240,7 @@ describe.skipIf(!chrome).each([false, true])("native grid coordinates with touch
 it.skipIf(!chrome)("restores Frame-owned declarations and priorities while retaining independent host styles", async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await page.goto(origin);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).komo && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
   await page.evaluate(() => {
     (window as any).komo.destroy();
     const root = document.querySelector<HTMLElement>("main")!;
