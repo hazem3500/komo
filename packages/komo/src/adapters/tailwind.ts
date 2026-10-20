@@ -4,7 +4,8 @@
 //   initKomo({ design: { tokens: tailwindTokens({ tokens: [...table, ...tailwindSpacing()] }) } });
 //
 // A token is a utility class. The app supplies the table (usually generated from
-// its design-system foundations); komo never parses CSS or the Tailwind config.
+// its design-system foundations); komo never parses the Tailwind config, and reads
+// the page's stylesheets only with `onlyGenerated`.
 // This module is a separate entry point and never enters the core bundle.
 import type { DesignToken, DesignTokenType, ThemeAxis, ThemeState, TokenAdapter, TokenUsage } from "../design-system.js";
 import { inlineStyleSnapshot } from "../design-preview.js";
@@ -53,6 +54,15 @@ export interface TailwindTokensOptions {
    * them. Defaults to every property named in the table; `false` reports none.
    */
   offToken?: string[] | false;
+  /**
+   * List only tokens whose class has a rule in the page's stylesheets, so the picker
+   * skips classes Tailwind's JIT never generated. When a stylesheet cannot be read
+   * (cross-origin without CORS, still loading, or failed), komo cannot tell, so every
+   * token stays listed. Elements that already use a hidden class still resolve to it.
+   */
+  onlyGenerated?: boolean;
+  /** Return false to leave a token out of `list()`; it still resolves on elements. */
+  filter?(token: TailwindToken): boolean;
 }
 
 const sides = ["top", "right", "bottom", "left"];
@@ -83,6 +93,46 @@ const classesOf = (value: string | string[]) => (Array.isArray(value) ? value : 
 const readClass = (element: Element) => element.getAttribute("class");
 /** Base-state utility name: variants ("hover:", "md:") are not the base state; "!" marks important. */
 const baseClass = (name: string) => (name.includes(":") ? null : name.replace(/^!|!$/g, ""));
+
+// Class selectors, still escaped as the CSSOM serializes them (".p-1\.5", ".md\:p-4", ".\32 xl\:p-4").
+// list() compares them with CSS.escape(class), the same serialization.
+const classPattern = /\.((?:\\[\da-f]{1,6} ?|\\[^]|[\w-]|[^\0-\x7f])+)/gi;
+type AnyRule = CSSRule & { selectorText?: string; cssRules?: CSSRuleList; styleSheet?: CSSStyleSheet | null };
+let seen: unknown[] = [];
+let generated: Set<string> | null = null;
+
+/** Escaped class names with a rule in the document, or null when a stylesheet cannot be read. */
+function generatedClasses(): Set<string> | null {
+  const sheets = [...document.styleSheets, ...(document.adoptedStyleSheets ?? [])];
+  // Re-scan only when a sheet is added, removed or replaced (a <style>'s text changed),
+  // its rule count changes, or a <link> stylesheet loads.
+  const key: unknown[] = [...document.querySelectorAll<HTMLLinkElement>("link[rel~=stylesheet]:not([disabled])")].map((link) => link.sheet);
+  for (const sheet of sheets) {
+    let count;
+    try {
+      count = sheet.cssRules.length;
+    } catch {}
+    key.push(sheet, count);
+  }
+  if (key.length === seen.length && key.every((item, index) => item === seen[index])) return generated;
+  seen = key;
+  const found = new Set<string>();
+  const walk = (rules: CSSRuleList) => {
+    for (const rule of rules as Iterable<AnyRule>) {
+      for (const match of rule.selectorText?.matchAll(classPattern) ?? []) found.add(match[1]);
+      if (rule.cssRules) walk(rule.cssRules); // @media, @supports, @layer, @container, nested rules
+      if (rule.styleSheet) walk(rule.styleSheet.cssRules); // @import
+    }
+  };
+  try {
+    if (key.includes(null)) throw 0; // a <link> stylesheet is still loading, or failed
+    for (const sheet of sheets) walk(sheet.cssRules); // throws for cross-origin sheets
+    return (generated = found);
+  } catch {
+    // Unknown: komo cannot prove a class is missing, so nothing is hidden.
+    return (generated = null);
+  }
+}
 
 /** Pick the theme-specific value: the most specific fully-matching key, else `value`. */
 export function tokenValue(token: Pick<TailwindToken, "value" | "values">, theme: ThemeState = {}): string {
@@ -174,7 +224,8 @@ export function tailwindTokens(table: TailwindTable, options: TailwindTokensOpti
     id: "tailwind",
     list(theme) {
       const state = theme ?? Object.fromEntries((options.themes ?? []).map((axis) => [axis.id, axis.current()]));
-      return entries.map(({ token, classes }): DesignToken => ({
+      const present = options.onlyGenerated ? generatedClasses() : null;
+      return entries.filter(({ token, classes }) => (!present || present.has(CSS.escape(classes[0]))) && (!options.filter || options.filter(token))).map(({ token, classes }): DesignToken => ({
         path: token.path,
         type: token.type,
         value: tokenValue(token, state),

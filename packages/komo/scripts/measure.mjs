@@ -134,7 +134,9 @@ if (report.optionalTokenPicker.gzip > 4_775)
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.
-if (report.adapterTailwind.gzip > 2_500)
+// 2,600: opt-in onlyGenerated (stylesheet scan, escaped class matching, re-scan on sheet
+// changes) and the filter hook measure 2,551 (+342 bytes over 2,209); nothing loads it but the adapter.
+if (report.adapterTailwind.gzip > 2_600)
   throw new Error("komo's Tailwind token adapter exceeds its gzip budget.");
 if (report.adapterCssVariables.gzip > 2_000)
   throw new Error("komo's CSS variable token adapter exceeds its gzip budget.");
