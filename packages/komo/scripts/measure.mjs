@@ -30,6 +30,9 @@ const selectMenu = (await readdir("dist"))
 const geometry = (await readdir("dist"))
   .filter((file) => /^design-geometry.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const liveColors = (await readdir("dist"))
+  .filter((file) => /^live-colors.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const tokenPicker = (await readdir("dist"))
   .filter((file) => /^token-picker.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
@@ -80,6 +83,7 @@ const report = {
   optionalTokenPage: await sizes(new Set(tokenPage)),
   optionalGeometry: await sizes(new Set(geometry)),
   optionalAccountTokens: await sizes(new Set(accountTokens)),
+  optionalLiveColors: await sizes(new Set(liveColors)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
   adapterCssVariables: await sizes(new Set(["dist/adapters/css-variables.js"])),
   adapterReactFiber: await sizes(new Set(["dist/adapters/react-fiber.js"])),
@@ -159,7 +163,8 @@ if (report.optionalSelectMenu.gzip > 3_125)
 // The token picker (search, type previews, sticky groups, lazy rows, keyboard) loads the first
 // time a token field opens. 4,631 measured, plus ~3%. It now also hands its rows' previews and
 // styles to the Tokens view (4,770 measured).
-if (report.optionalTokenPicker.gzip > 4_775)
+// 4,925: the popup opens in the top layer, follows its field and refreshes Custom when the field settles.
+if (report.optionalTokenPicker.gzip > 4_925)
   throw new Error("komo's token picker chunk exceeds its gzip budget.");
 // The Tokens view (every token with nothing selected, per-theme edits, its footer and page
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and
@@ -176,6 +181,10 @@ if (report.optionalGeometry.gzip > 7_000)
 // the chunk. 5,671 measured, plus ~3%.
 if (report.optionalAccountTokens.gzip > 5_850)
   throw new Error("komo's API tokens chunk exceeds its gzip budget.");
+// Color fields re-read the element once hover, focus, theme and transitions settle; fetched with the
+// panel as its own chunk. 704 measured, plus ~3%.
+if (report.optionalLiveColors.gzip > 725)
+  throw new Error("komo's live color field chunk exceeds its gzip budget.");
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.

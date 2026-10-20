@@ -61,6 +61,7 @@ export const fields: Field[] = [
 
 /** Fetched with the panel, so its first render already has styled selects. */
 const selectMenu = import("./select-menu.js").catch(() => null);
+const live = import("./live-colors.js").catch(() => null);
 
 const typography = ["font-family", "font-size", "line-height", "font-weight", "text-align", "color"];
 
@@ -71,8 +72,9 @@ function shortColor(value: string): string {
   return Number(alpha) ? value : "transparent";
 }
 
-export function valueFor(field: Field, element: DesignTarget): string {
-  const value = getComputedStyle(element).getPropertyValue(field.property).trim();
+/** The element's computed value, or `resolved` when a token already names it. */
+export function valueFor(field: Field, element: DesignTarget, resolved?: string): string {
+  const value = (resolved || getComputedStyle(element).getPropertyValue(field.property)).trim();
   if (field.kind === "color") return shortColor(value);
   if (field.kind === "length" || field.kind === "size") {
     const match = value.match(/^(-?\d+(?:\.\d+)?)px$/);
@@ -248,6 +250,12 @@ function section(context: PanelContext, name: string, properties: string[] | nul
   return wrap;
 }
 
+/** This render's color fields follow the element's settled value (see live-colors.ts). */
+function liveColors(container: HTMLElement, element: DesignTarget) {
+  const boxes = [...container.querySelectorAll<HTMLElement>(".design-field--color")];
+  if (boxes.length) void live.then((module) => module?.liveColors(boxes, element, valueFor));
+}
+
 /** Render only the sections that apply to the element; empty Fill and Border offer a quiet add. */
 export function renderPanel(container: HTMLElement, context: PanelContext) {
   const { element, changed } = context;
@@ -259,7 +267,7 @@ export function renderPanel(container: HTMLElement, context: PanelContext) {
       section(context, "Layout", element instanceof SVGSVGElement ? ["width", "height", "display"] : ["display"]),
       section(context, "Appearance", ["color", "fill", "stroke", "stroke-width"]),
     );
-    return;
+    return liveColors(container, element);
   }
   const touched = (properties: string[]) => properties.some((property) => changed?.has(property));
   // Direct text, or text styles the element sets inline for its children.
@@ -292,4 +300,5 @@ export function renderPanel(container: HTMLElement, context: PanelContext) {
       ? section(context, "Effects", ["box-shadow"])
       : section(context, "Effects", null, [add("shadow", "box-shadow", "0 1px 3px rgba(0, 0, 0, 0.12)", "box-shadow")]),
   );
+  liveColors(container, element);
 }

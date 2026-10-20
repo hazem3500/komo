@@ -625,7 +625,7 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
   container: HTMLElement,
   onEdit: (field: T, input: HTMLInputElement | HTMLSelectElement, before: string) => void,
   styleRoot?: ShadowRoot,
-  valueFor?: (field: T, element: DesignTarget) => string,
+  valueFor?: (field: T, element: DesignTarget, resolved?: string) => string,
   toHex?: (value: string) => string,
   design?: DesignSystem,
   onSwap?: (undo: () => void) => void,
@@ -642,13 +642,14 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
     for (const { field, label, input } of found) {
       if (label.querySelector(".design-token-binding") || !container.contains(label)) continue;
       const refresh = () => {
-        if (valueFor) input.value = valueFor(field, element);
+        if (valueFor) input.value = valueFor(field, element, label.querySelector<HTMLElement>(".design-token-binding")?.dataset.value);
         const dial = label.querySelector<HTMLInputElement>('input[type="range"],input[type="color"]');
         if (dial) dial.value = field.kind === "color" && toHex ? toHex(input.value) : input.value;
       };
       const control = attach(field, label, input, refresh);
       if (control) {
         label.append(control);
+        refresh();
         const swatch = label.querySelector<HTMLInputElement>('input[type="color"]');
         const trigger = control.querySelector("select");
         const open = (event: Event) => {
@@ -771,6 +772,14 @@ export function createAdapterTokenControl(
     chip.textContent = token ? `Uses ${tokenName(token)}` : path ? `Uses ${path}` : "";
     const mode = !path ? "custom" : swapped ? "token" : "connected";
     row.dataset.mode = mode;
+    // A bound color field shows its token's value for the current theme, not a mid-transition paint.
+    const probe = document.createElement("i").style;
+    if (token && /color|fill|stroke/.test(property)) probe.color = token.value;
+    const resolved = /^rgba?\(/.test(probe.color) ? probe.color : "";
+    if (row.dataset.value !== resolved) {
+      row.dataset.value = resolved;
+      if (row.isConnected) refresh?.();
+    }
     (label ?? row.parentElement)?.setAttribute("data-token-mode", mode);
     dot.hidden = !!path;
     const effective = effectiveTokenUsage(element, property, usage);
