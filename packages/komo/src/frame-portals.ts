@@ -15,6 +15,7 @@ type Constraints = {
     { original: SavedProperty; applied: string; maximum?: string }
   >;
   style: string | null;
+  bare: boolean;
 };
 type Entry = {
   translate: SavedProperty;
@@ -26,6 +27,8 @@ type Entry = {
   transform: string;
   positioningFrame: FrameMapping | null;
   constraints?: Map<HTMLElement, Constraints>;
+  layout?: [string, SavedProperty, string][];
+  bare: boolean;
 };
 
 const saved = (node: HTMLElement, name: string): SavedProperty => ({
@@ -34,6 +37,13 @@ const saved = (node: HTMLElement, name: string): SavedProperty => ({
 });
 const restore = (node: HTMLElement, name: string, property: SavedProperty) => {
   node.style.setProperty(name, property.value, property.priority);
+};
+// Leave no empty style attribute behind on nodes that had none.
+const tidy = (node: HTMLElement, bare: boolean) => {
+  if (bare && !node.style.length) {
+    node.getAttribute("style");
+    node.removeAttribute("style");
+  }
 };
 export function preserveFrameStyles(node: HTMLElement, names: string[]) {
   const attribute = node.getAttribute("style");
@@ -136,7 +146,61 @@ export function createFramePortals(
     }
     for (const [target, constraints] of entry.constraints ?? [])
       releaseConstraints(target, constraints);
+    releaseLayout(node, entry);
+    tidy(node, entry.bare);
     resize.unobserve(node);
+  }
+  function releaseLayout(node: HTMLElement, entry: Entry) {
+    const names = [];
+    for (const [name, original, applied] of entry.layout ?? []) {
+      restore(
+        node,
+        name,
+        node.style.getPropertyValue(name) === applied
+          ? original
+          : saved(node, name),
+      );
+      names.push(name);
+    }
+    cancelTransitions(node, names);
+    entry.layout = undefined;
+  }
+  // A smaller unscaled frame is the portal's viewport: resolve percentage
+  // geometry and right/bottom insets against it instead of the window.
+  function layout(node: HTMLElement, entry: Entry) {
+    const map = node.computedStyleMap?.();
+    const bounds = mapping!.bounds;
+    const zoom = mapping!.zoom ?? 1;
+    if (!map || !bounds) return;
+    const size = [bounds.width, bounds.height].map(
+      (value) => value / mapping!.scale,
+    );
+    const extra = [innerWidth / zoom - size[0], innerHeight / zoom - size[1]];
+    if (Math.abs(extra[0]) < 0.5 && Math.abs(extra[1]) < 0.5) return;
+    const layout: Entry["layout"] = (entry.layout = []);
+    ["left", "right", "width", "top", "bottom", "height"].forEach(
+      (name, index) => {
+        const axis = +(index > 2);
+        const end = index % 3 === 1;
+        let px: number, percent: number;
+        try {
+          [px, percent] = [
+            ...(map.get(name) as CSSNumericValue).toSum("px", "percent").values,
+          ].map((value) => (value as CSSUnitValue).value);
+        } catch {
+          return;
+        }
+        if (!percent && !end) return;
+        const original = saved(node, name);
+        node.style.setProperty(
+          name,
+          `${px + (percent / 100) * size[axis] + (end ? extra[axis] : 0)}px`,
+          "important",
+        );
+        layout.push([name, original, node.style.getPropertyValue(name)]);
+      },
+    );
+    cancelTransitions(node, layout.map(([name]) => name));
   }
   function releaseConstraints(
     node: HTMLElement,
@@ -148,6 +212,7 @@ export function createFramePortals(
         property.original = saved(node, name);
       restore(node, name, property.original);
     }
+    tidy(node, constraints.bare);
     if (!keepObserved) resize.unobserve(node);
   }
   function constrain(
@@ -159,7 +224,11 @@ export function createFramePortals(
     entry.constraints ??= new Map();
     let constraints = entry.constraints.get(node);
     if (!constraints) {
-      constraints = { properties: new Map(), style: null };
+      constraints = {
+        properties: new Map(),
+        style: null,
+        bare: !node.hasAttribute("style"),
+      };
       entry.constraints.set(node, constraints);
       resize.observe(node);
     }
@@ -234,6 +303,7 @@ export function createFramePortals(
           appliedTranslate: node.style.translate,
           appliedScale: node.style.scale,
           style: node.getAttribute("style"),
+          bare: !node.hasAttribute("style"),
           transform: node.style.transform,
           positioningFrame: entering ? null : { ...mapping! },
         };
@@ -291,6 +361,8 @@ export function createFramePortals(
         restore(node, "scale", entry.scale);
         cancelTransitions(node, ["translate", "scale"]);
       }
+      releaseLayout(node, entry);
+      if (position === "fixed") layout(node, entry);
       const dialogSelector = '[role="dialog"], [role="alertdialog"]';
       const content = node.matches(dialogSelector)
         ? null

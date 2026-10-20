@@ -12,6 +12,7 @@ import { pinDirection } from "./pin-direction.js";
 import { pinStacks } from "./pin-stacks.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
 import { createFramePortals, preserveFrameStyles } from "./frame-portals.js";
+import { createFrameViewport } from "./frame-viewport.js";
 import { OptimisticQueue } from "./optimistic.js";
 import { agentPrompt } from "./agent-prompt.js";
 import { accentPicker } from "./lazy-accent-picker.js";
@@ -655,15 +656,21 @@ export function initComments(options: CommentsOptions): CommentsController {
   const fixedHeaders = new Map<HTMLElement, () => void>();
   const savedHtmlBackground = html.style.background;
   const portalFrame = createFramePortals(surface, host, options.frame?.include, geometry);
+  // Reflow makes the frame the page's viewport, so viewport units follow it too.
+  const frameViewport = createFrameViewport(host);
   function framePortals() {
     const left = parseFloat(surface.style.left) || 0;
     const top = parseFloat(surface.style.top) || 0;
     const width = (parseFloat(surface.style.width) || surface.offsetWidth) * appliedScale;
     const height = (parseFloat(surface.style.height) || surface.offsetHeight) * appliedScale;
-    portalFrame.update(framed && !destroyed ? {
+    const active = framed && !destroyed;
+    const reflow = active && options.frame?.scale !== true;
+    if (reflow) frameViewport.update([width, height]);
+    portalFrame.update(active ? {
       scale: appliedScale, left, top, zoom: htmlZoom(),
       bounds: { left, top, right: left + width, bottom: top + height, width, height },
     } : null);
+    if (!reflow) frameViewport.update(null);
   }
   // The frame paints the page's own background; re-read it when a theme changes.
   // Frame's dark backdrop sits inline on body and html, so lift it while reading.

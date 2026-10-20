@@ -164,8 +164,9 @@ export interface CommentsOptions {
   pickRoots?: () => Element[];
   /**
    * Frame reflows the page at its available width without adding a scale,
-   * preserving native CSS-pixel interactions. Fixed body-level portals are
-   * kept inside the frame without moving their DOM.
+   * preserving native CSS-pixel interactions. The frame acts as the page's
+   * viewport: viewport units and fixed body-level portals resolve against it
+   * without moving their DOM.
    * `scale: true` opts into shrinking the original viewport instead. Hosts
    * deriving local values from client coordinates must handle that scale;
    * arbitrary canvas, drag, and grid handlers cannot be corrected generically.
