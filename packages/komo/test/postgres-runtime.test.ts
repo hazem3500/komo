@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { Pool } from "pg";
-import { postgresDatabase } from "../server/postgres";
+import { loadPostgres, postgresDatabase } from "../server/postgres";
 import worker from "../server/index";
 
 vi.mock("../server/setup-client.txt", () => ({ default: "" }));
@@ -17,7 +17,7 @@ beforeAll(async () => {
   await admin.query(`CREATE SCHEMA ${schema}`);
   const url = new URL(connection);
   url.searchParams.set("options", `-c search_path=${schema}`);
-  db = postgresDatabase(url.href);
+  db = postgresDatabase(url.href, await loadPostgres());
   await db.migrate();
   env = {
     DB: db,
