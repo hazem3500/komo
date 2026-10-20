@@ -21,6 +21,7 @@ const app = `<!doctype html><html><head><style>:root{--brand:#7c3aed}body{margin
 <body><main id="root"><div class="app"><aside class="sidebar" id="sidebar">Sidebar</aside><section class="content"><button class="drawer-toggle" id="drawer">Menu</button>
 <h1 id="title">Home</h1><a id="next" href="/other">Other page</a> <input id="field" aria-label="Field" placeholder="Type here">
 <div class="card" id="card-1">One</div><div class="card" id="card-2">Two</div><div class="card" id="card-3">Three</div><div class="card" id="card-4">Four</div><div class="card" id="card-5">Five</div><div class="card" id="card-6">Six</div></section></div></main>
+<div id="toast" role="status" style="position:fixed;right:12px;bottom:12px;width:40vw;height:40px;background:#0f172a;color:#fff">Saved</div>
 <script type="module" src="/entry.js"></script></body></html>`;
 
 beforeAll(async () => {
@@ -126,6 +127,8 @@ const inside = (frame: Frame) => frame.evaluate(() => ({
   sidebar: getComputedStyle(document.getElementById("sidebar")!).display,
   drawer: getComputedStyle(document.getElementById("drawer")!).display,
   resizes: (window as any).qa.resizes,
+  // A body-level fixed portal lays out against the frame's own viewport.
+  toast: (({ right, bottom, width }) => [Math.round(right), Math.round(bottom), Math.round(width)])(document.getElementById("toast")!.getBoundingClientRect()),
   komoHosts: [...document.body.children].filter((node) => node.shadowRoot).length,
 }));
 
@@ -147,6 +150,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
       const state = await inside(frame);
       expect(state, name).toMatchObject({ innerWidth: width, innerHeight: height, mobile, sidebar: mobile ? "none" : "block", drawer: mobile ? "block" : "none" });
       expect(state.resizes, `${name} resize events`).toBeGreaterThan(before);
+      expect(state.toast, `${name} portal`).toEqual([width - 12, height - 12, Math.round(width * 0.4)]);
       await page.screenshot({ path: join(shots, `viewport-${name.toLowerCase()}-fit.png`) });
     }
     // The page stays inert-free: komo inside the frame never mounts a second instance.
@@ -194,6 +198,13 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await frame.evaluate(() => scrollBy(0, 80));
     await page.waitForTimeout(300);
     expectOn(await pin.boundingBox(), await framed(page, "card-3"), "viewport pin after scrolling");
+    // Picking at 100% outlines the card where it is on screen, too.
+    await page.keyboard.press("c");
+    const card = await framed(page, "card-2");
+    await page.mouse.move(card.x + 40, card.y + 40);
+    await page.waitForTimeout(150);
+    expectNear((await page.locator(".component-hover").boundingBox())!, card, "100% outline", 4);
+    await page.keyboard.press("Escape");
     await page.screenshot({ path: join(shots, "viewport-pin-100.png") });
     await page.getByRole("button", { name: "Fit", exact: true }).click();
     await page.waitForTimeout(200);
@@ -274,6 +285,10 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await bar.getByRole("button", { name: "Before", exact: true }).click();
     expect(await frame.locator("#card-1").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(124, 58, 237)");
     await bar.getByRole("button", { name: "After", exact: true }).click();
+    expect(await frame.locator("#card-1").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(255, 128, 0)");
+    // The preview belongs to the page, so it holds at 100%.
+    await page.getByRole("button", { name: "100%", exact: true }).click();
+    await page.waitForTimeout(200);
     expect(await frame.locator("#card-1").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(255, 128, 0)");
     expect(errors).toEqual([]);
     await page.close();

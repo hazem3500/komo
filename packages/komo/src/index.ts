@@ -851,8 +851,9 @@ export function initComments(options: CommentsOptions): CommentsController {
     const left = frameBox.left - (frameBox.pan ? window.scrollX / zoom : 0);
     const top = frameBox.top - (frameBox.pan ? window.scrollY / zoom : 0);
     const { width, height } = frameBox;
-    const active = framed && !destroyed;
-    const reflow = active && options.frame?.scale !== true && !laidViewport;
+    // The viewport iframe lays out its own portals and units; this page stays as it was.
+    const active = framed && !destroyed && !laidViewport;
+    const reflow = active && options.frame?.scale !== true;
     if (reflow) frameViewport.update(frameBox.logical);
     portalFrame.update(active ? {
       scale: appliedScale, left, top, zoom,
