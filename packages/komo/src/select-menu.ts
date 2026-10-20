@@ -6,7 +6,7 @@ import { popupBounds, popupStyles, previewStyle, watchPopup } from "./design-pop
 // select in a container, including ones added later (props, tokens, theme).
 // The trigger's chevron ships here too, so a select only looks custom once it is.
 // Comments stay out of the CSS string: they would ship in the bundle.
-const css = `.design-field>select{appearance:none;padding-right:20px;cursor:pointer;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 7px center/8px no-repeat}.komo-select{width:max-content;max-height:240px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px;line-height:1.2}.komo-select [role=option]{display:flex;align-items:center;gap:8px;min-height:26px;padding:0 8px;border-radius:6px;white-space:nowrap;cursor:pointer}.komo-select [role=option] span{flex:1;overflow:hidden;text-overflow:ellipsis}.komo-select [data-active]{background:#ffffff14;color:#f1efeb}.komo-select [aria-selected=true]{color:#f1efeb}.komo-select [aria-selected=true]::after{content:'';flex:none;width:7px;height:3.5px;margin:-3px 1px 0 0;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-select [aria-disabled=true]{opacity:.4;cursor:default}.komo-select small{display:block;padding:8px 8px 4px;color:#77736f;font-size:10px;font-weight:500}.komo-select [role=group]+[role=group],.komo-select [role=option]+[role=group]{margin-top:4px;border-top:1px solid #ffffff0d}@media (pointer:coarse){.komo-select{font-size:13px}.komo-select [role=option]{min-height:40px}}`;
+const css = `.design-field>select{appearance:none;padding-right:20px;cursor:pointer;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 7px center/8px no-repeat}.komo-select{width:max-content;max-height:240px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px;line-height:1.2}.komo-select[popover]{position:fixed;inset:auto;margin:0;border:0}.komo-select [role=option]{display:flex;align-items:center;gap:8px;min-height:26px;padding:0 8px;border-radius:6px;white-space:nowrap;cursor:pointer}.komo-select [role=option] span{flex:1;overflow:hidden;text-overflow:ellipsis}.komo-select [data-active]{background:#ffffff14;color:#f1efeb}.komo-select [aria-selected=true]{color:#f1efeb}.komo-select [aria-selected=true]::after{content:'';flex:none;width:7px;height:3.5px;margin:-3px 1px 0 0;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-select [aria-disabled=true]{opacity:.4;cursor:default}.komo-select small{display:block;padding:8px 8px 4px;color:#77736f;font-size:10px;font-weight:500}.komo-select [role=group]+[role=group],.komo-select [role=option]+[role=group]{margin-top:4px;border-top:1px solid #ffffff0d}@media (pointer:coarse){.komo-select{font-size:13px}.komo-select [role=option]{min-height:40px}}`;
 
 const containers = new WeakSet<HTMLElement>();
 const targets = new WeakMap<HTMLElement, HTMLElement | SVGElement>();
@@ -223,26 +223,29 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
     if (enabled.includes(index)) choose(index);
   }, { signal });
   const host = select.closest<HTMLElement>(".design-field") ?? select.parentElement!;
-  host.append(list);
+  // In the top layer, like the token popup: a select inside that popup opens above it, and the
+  // list stays inside the popup's DOM so the popup still counts its clicks as its own.
+  list.popover = "manual";
+  (select.closest<HTMLElement>(".komo-tokens") ?? host).append(list);
+  list.showPopover?.();
   select.setAttribute("aria-haspopup", "listbox");
   select.setAttribute("aria-expanded", "true");
   select.setAttribute("aria-controls", id);
   // A select laid over a small icon anchors to its whole field instead.
   const anchor = (select.offsetWidth < 60 ? host : select).getBoundingClientRect();
   const box = popupBounds(host);
-  const origin = (list.offsetParent ?? host).getBoundingClientRect();
   // As wide as the trigger, or its longest option, within the panel.
   const width = Math.min(Math.max(anchor.width, list.offsetWidth + 2, 120), box.right - box.left - 8);
-  const below = box.bottom - anchor.bottom - 8;
-  const above = anchor.top - box.top - 8;
+  const below = innerHeight - anchor.bottom - 8;
+  const above = anchor.top - 8;
   const height = list.scrollHeight;
   const up = height > below && above > below;
   const room = Math.max(up ? above : below, 60);
   const shown = Math.min(height, 240, room);
   list.style.width = `${width}px`;
   list.style.maxHeight = `${Math.min(240, room)}px`;
-  list.style.left = `${Math.max(box.left + 4, Math.min(anchor.left, box.right - width - 4)) - origin.left}px`;
-  list.style.top = `${(up ? anchor.top - shown - 4 : anchor.bottom + 4) - origin.top}px`;
+  list.style.left = `${Math.max(box.left + 4, Math.min(anchor.left, box.right - width - 4))}px`;
+  list.style.top = `${up ? anchor.top - shown - 4 : anchor.bottom + 4}px`;
   list.toggleAttribute("data-up", up);
   activate(items.findIndex((item) => item.option.selected && !item.option.disabled), false);
   if (active < 0) step(0);

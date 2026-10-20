@@ -202,5 +202,41 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     expect(errors).toEqual([]);
     await page.close();
   });
+
+  it.each([{ width: 1280, height: 800 }, { width: 1280, height: 520 }, { width: 420, height: 760 }])("opens a row's popup above later rows, inside the viewport, at $width×$height", async viewport => {
+    const page = await browser.newPage({ viewport, reducedMotion: "reduce" });
+    page.setDefaultTimeout(5000);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(`${origin}/?mode=${mode}`);
+    await page.waitForFunction(() => !!(window as any).komo);
+    await page.keyboard.press("d");
+    await page.getByRole("button", { name: "Edit tokens", exact: true }).click();
+    const rows = page.locator(".design-token-row");
+    await rows.nth(2).waitFor();
+    // The first row has every other row after it, under where its popup opens.
+    const row = rows.first();
+    await row.locator("button").first().click();
+    const popup = page.locator(".komo-tokens");
+    await popup.waitFor();
+    await popup.evaluate(node => Promise.all(node.getAnimations().map(animation => animation.finished)));
+    const result = await popup.evaluate((node, anchor) => {
+      const root = node.getRootNode() as ShadowRoot, rect = node.getBoundingClientRect();
+      const points: number[][] = [];
+      for (const y of [.1, .3, .5, .7, .9]) for (const x of [.1, .5, .9]) points.push([rect.left + rect.width * x, rect.top + rect.height * y]);
+      return {
+        open: node.matches(":popover-open"),
+        misses: points.filter(([x, y]) => !node.contains(root.elementFromPoint(x, y))),
+        visible: rect.top >= 0 && rect.left >= 0 && rect.bottom <= innerHeight && rect.right <= innerWidth,
+        clear: rect.top >= anchor.bottom || rect.bottom <= anchor.top,
+      };
+    }, (await row.boundingBox().then(box => ({ top: box!.y, bottom: box!.y + box!.height }))));
+    await page.screenshot({ path: join(tmpdir(), `komo-token-page-popup-${mode}-${viewport.width}x${viewport.height}.png`) });
+    expect(result).toEqual({ open: true, misses: [], visible: true, clear: true });
+    await page.keyboard.press("Escape");
+    await expect.poll(() => popup.count()).toBe(0);
+    expect(errors).toEqual([]);
+    await page.close();
+  });
 });
 

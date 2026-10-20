@@ -62,7 +62,8 @@ export function customPickerValue(element: DesignTarget, property: string, input
   const registered = fields.get(input);
   if (!registered && (input instanceof HTMLSelectElement || input.type === "number")) return;
   return {
-    value: (!/color|^(fill|stroke)$/.test(property) && element.style.getPropertyValue(property).trim()) || getComputedStyle(element).getPropertyValue(property).trim(),
+    // Read when asked, so an open popup can follow a settled transition or theme.
+    get value() { return (!/color|^(fill|stroke)$/.test(property) && element.style.getPropertyValue(property).trim()) || getComputedStyle(element).getPropertyValue(property).trim(); },
     field: registered?.field,
     onPreview(value) {
       const before = inlineStyleSnapshot(element, property);

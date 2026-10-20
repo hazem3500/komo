@@ -163,4 +163,32 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.close();
   });
 
+  it("opens a select inside the Custom popup above the popup and keeps the popup open", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+    page.setDefaultTimeout(5000);
+    await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).komo);
+    await page.keyboard.press("d"); await page.locator("#target").click();
+    await page.locator('[data-field-property="border-radius"] select[data-picker]').click();
+    await page.getByRole("button", { name: "Custom", exact: true }).click();
+    const unit = page.locator('.komo-custom select[aria-label="Corner radius unit"]');
+    await unit.click();
+    const menu = page.locator(".komo-select");
+    await menu.waitFor();
+    // Every option in view in the select's own listbox is hit-testable over the popup it opened from.
+    const hits = await menu.evaluate(list => {
+      const root = list.getRootNode() as ShadowRoot, frame = list.getBoundingClientRect();
+      return [...list.querySelectorAll("[role=option]")].flatMap(option => {
+        const box = option.getBoundingClientRect(), y = box.top + box.height / 2;
+        return y > frame.top && y < frame.bottom ? [list.contains(root.elementFromPoint(box.left + box.width / 2, y))] : [];
+      });
+    });
+    expect(hits.length).toBeGreaterThan(1);
+    expect(hits.every(Boolean)).toBe(true);
+    await menu.locator("[role=option]").filter({ hasText: /^rem$/ }).click();
+    await expect.poll(() => unit.inputValue()).toBe("rem");
+    expect(await page.locator(".komo-tokens").count()).toBe(1);
+    expect(await page.locator(".komo-tokens [aria-pressed=true]").textContent()).toBe("Custom");
+    await page.close();
+  });
+
 });
