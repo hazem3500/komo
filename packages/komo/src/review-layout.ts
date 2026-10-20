@@ -1,6 +1,8 @@
 const SIDEBAR_WIDTH = 380;
 const PAGE_SCALE = 0.9;
 const PAGE_GAP = 24;
+/** Reflow Frame keeps room above the page for its size controls. */
+export const FRAME_BAR = 48;
 export const REVIEW_BREAKPOINT = 760;
 
 export const isCompactReview = (width: number, height: number) =>
@@ -22,9 +24,9 @@ export function reviewLayout(
   const scale = desktop && scaled ? (fit ? Math.min(PAGE_SCALE, (width - right - PAGE_GAP) / width) : PAGE_SCALE) : 1;
   const sheetTop = mobile ? (account ? 0 : height * 0.18) : height;
   // A fitted frame is the viewport scaled down, so pages sized with 100vh fill it exactly.
-  const frameHeight = mobile ? pageHeight : desktop ? (scaled ? height * (fit ? scale : PAGE_SCALE) : Math.max(1, height - PAGE_GAP * 2)) : height;
+  const frameHeight = mobile ? pageHeight : desktop ? (scaled ? height * (fit ? scale : PAGE_SCALE) : Math.max(1, height - PAGE_GAP - FRAME_BAR)) : height;
   const left = desktop ? (fit || !scaled ? PAGE_GAP : width - right - width * scale) : 0;
-  const top = desktop ? (height - frameHeight) / 2 : 0;
+  const top = desktop ? (scaled ? (height - frameHeight) / 2 : FRAME_BAR) : 0;
   return {
     desktop,
     mobile,

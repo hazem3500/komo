@@ -52,6 +52,7 @@ import {
   mobileComposerPosition,
   reviewLayout,
 } from "./review-layout.js";
+import type { FrameSizeControls } from "./frame-size.js";
 import { createToolbar, type ToolbarMenuItem } from "./lazy-toolbar.js";
 import { defaultToolbarItems, normalizeToolbarItems, toolbarLayout } from "./toolbar-items.js";
 import { canonicalPage } from "./page.js";
@@ -689,6 +690,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   const savedStyle = rememberStyles(surface, [
     "width", "boxSizing", "zoom", "transformOrigin", "transform", "position", "left", "top",
     "height", "minHeight", "paddingBottom", "overflow", "borderRadius", "background",
+    "borderRight", "borderBottom", "clipPath",
   ]);
   const surfaceProperties = Object.keys(savedStyle).map((key) => key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`));
   const restoreSurface = preserveFrameStyles(surface, surfaceProperties);
@@ -700,16 +702,46 @@ export function initComments(options: CommentsOptions): CommentsController {
   const portalFrame = createFramePortals(surface, host, options.frame?.include, geometry);
   // Reflow makes the frame the page's viewport, so viewport units follow it too.
   const frameViewport = createFrameViewport(host);
+  // The visual frame in page CSS pixels, before any panning scroll.
+  let frameBox = { left: 0, top: 0, width: 0, height: 0, logical: [0, 0], pan: false };
+  // Size controls own a chosen logical viewport; until they load, the box is the viewport.
+  const frameSizeKey = `branch-comments:frame-size:${options.project}:${options.repo}`;
+  let frameControls: FrameSizeControls | undefined;
+  let frameControlsLoading = false;
+  let frameArea: { left: number; top: number; width: number; height: number } | null = null;
+  function loadFrameControls() {
+    if (frameControlsLoading) return;
+    frameControlsLoading = true;
+    void import("./frame-size.js").then(({ mountFrameSize }) => {
+      if (destroyed) return;
+      frameControls = mountFrameSize(shadow, surface, frameSizeKey, () => {
+        appliedViewport = "";
+        scalePage();
+        geometry();
+      });
+      // Re-layout only for a remembered size; the default keeps Frame's entrance motion.
+      if (frameControls.sized) {
+        appliedViewport = "";
+        scalePage();
+      } else frameControls.update(frameArea, htmlZoom());
+    });
+  }
+  try {
+    // Load a remembered size before Frame opens, so the page does not reflow twice.
+    if (localStorage.getItem(frameSizeKey)) loadFrameControls();
+  } catch {
+    /* Storage is blocked: the fitted default needs no controls until Frame opens. */
+  }
   function framePortals() {
-    const left = parseFloat(surface.style.left) || 0;
-    const top = parseFloat(surface.style.top) || 0;
-    const width = (parseFloat(surface.style.width) || surface.offsetWidth) * appliedScale;
-    const height = (parseFloat(surface.style.height) || surface.offsetHeight) * appliedScale;
+    const zoom = htmlZoom();
+    const left = frameBox.left - (frameBox.pan ? window.scrollX / zoom : 0);
+    const top = frameBox.top - (frameBox.pan ? window.scrollY / zoom : 0);
+    const { width, height } = frameBox;
     const active = framed && !destroyed;
     const reflow = active && options.frame?.scale !== true;
-    if (reflow) frameViewport.update([width, height]);
+    if (reflow) frameViewport.update(frameBox.logical);
     portalFrame.update(active ? {
-      scale: appliedScale, left, top, zoom: htmlZoom(),
+      scale: appliedScale, left, top, zoom,
       bounds: { left, top, right: left + width, bottom: top + height, width, height },
     } : null);
     if (!reflow) frameViewport.update(null);
@@ -1786,6 +1818,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       host.classList.toggle("review-open", expanded);
       framed = false;
       framePortals();
+      frameControls?.update(null);
       pins.style.clipPath = "";
       Object.assign(catcher.style, {
         left: "",
@@ -1816,30 +1849,60 @@ export function initComments(options: CommentsOptions): CommentsController {
       options.frame?.scale === true,
     );
     const useFrame = layout.framed;
+    const scaled = options.frame?.scale === true;
+    const wasPanned = framed && frameBox.pan;
+    const area = { left: layout.left, top: layout.top, width: layout.visibleWidth, height: layout.height };
+    const box = { left: area.left / zoom, top: area.top / zoom, width: area.width / zoom, height: area.height / zoom };
+    const view = (!scaled && frameControls?.view(box)) || { ...box, scale: 1, pan: false };
+    const pan = useFrame && !scaled && view.pan;
+    frameArea = useFrame && !scaled ? area : null;
     host.style.setProperty("--review-viewport-height", `${viewportHeight}px`);
     host.style.height = `${viewportHeight}px`;
     host.style.top = "";
     host.classList.toggle("review-open", expanded);
     host.classList.toggle("design-active", designActive);
     if (useFrame) {
-      appliedScale = layout.scale;
+      appliedScale = scaled ? layout.scale : view.scale;
       const effective = appliedScale * zoom;
       // Native client coordinates stay in viewport CSS pixels. Reflow by
-      // default so host handlers can use local CSS dimensions without scaling.
+      // default so host handlers can use local CSS dimensions without scaling;
+      // a chosen viewport larger than the box is scaled only to fit it.
+      frameBox = scaled
+        ? {
+            left: layout.left / zoom,
+            top: layout.top / zoom,
+            width: (window.innerWidth / zoom) * appliedScale,
+            height: layout.height / zoom,
+            logical: [window.innerWidth / zoom, layout.height / effective],
+            pan: false,
+          }
+        : {
+            left: view.left,
+            top: view.top,
+            width: view.width * view.scale,
+            height: view.height * view.scale,
+            logical: [view.width, view.height],
+            pan,
+          };
+      // A pannable 100% frame scrolls the document, with room beside the sidebar.
+      const gap = (value: number) => (pan ? `${value / zoom}px solid transparent` : "");
       Object.assign(surface.style, {
-        position: "fixed",
-        transform: options.frame?.scale ? `scale(${appliedScale})` : savedStyle.transform,
+        position: pan ? "absolute" : "fixed",
+        transform: appliedScale !== 1 ? `scale(${appliedScale})` : savedStyle.transform,
         transformOrigin: "top left",
-        left: `${layout.left / zoom}px`,
-        top: `${layout.top / zoom}px`,
-        width: `${(options.frame?.scale ? window.innerWidth : layout.visibleWidth) / zoom}px`,
+        left: `${frameBox.left}px`,
+        top: `${frameBox.top}px`,
+        width: `${scaled ? window.innerWidth / zoom : view.width + (pan ? layout.right / zoom : 0)}px`,
         boxSizing: "border-box",
-        height: `${layout.height / effective}px`,
+        height: `${scaled ? layout.height / effective : view.height + (pan ? 24 / zoom : 0)}px`,
         paddingBottom: savedStyle.paddingBottom,
         zoom: savedStyle.zoom,
-        overflow: options.frame?.scale ? "hidden auto" : "auto",
+        overflow: scaled ? "hidden auto" : "auto",
         borderRadius: `${12 / effective}px`,
         background: pageBackground,
+        borderRight: gap(layout.right) || savedStyle.borderRight,
+        borderBottom: gap(24) || savedStyle.borderBottom,
+        clipPath: savedStyle.clipPath,
       });
       for (const header of surface.querySelectorAll<HTMLElement>("header")) {
         if (
@@ -1851,17 +1914,21 @@ export function initComments(options: CommentsOptions): CommentsController {
           header.style.marginBottom = `-${header.offsetHeight}px`;
         }
       }
-      html.style.overflow = "hidden";
-      document.body.style.overflow = "hidden";
+      html.style.overflow = pan ? "auto" : "hidden";
+      document.body.style.overflow = pan ? "visible" : "hidden";
       html.style.background = document.body.style.background = "#080808";
       surface.scrollTop = scroll;
+      if (pan !== wasPanned) window.scrollTo({ left: 0, top: 0, behavior: "instant" });
     } else {
       restorePage();
-      if (framed) window.scrollTo({ top: scroll * zoom, behavior: "instant" });
+      if (framed) window.scrollTo({ left: frameBox.pan ? 0 : window.scrollX, top: scroll * zoom, behavior: "instant" });
       appliedScale = 1;
+      frameBox.pan = false;
     }
     framed = useFrame;
     framePortals();
+    if (frameArea) loadFrameControls();
+    frameControls?.update(frameArea, zoom);
     if (!useFrame && options.drawerContainer?.isConnected) {
       const rect = options.drawerContainer.getBoundingClientRect();
       drawerContainerCenter = rect.width
@@ -1908,17 +1975,21 @@ export function initComments(options: CommentsOptions): CommentsController {
         geometry();
       }).catch(() => {});
     }
+    // Pins and picking follow the visible frame, which a fitted viewport may not fill.
+    const visible = scaled || pan
+      ? { left: layout.visibleLeft, top: layout.visibleTop, width: layout.visibleWidth, height: layout.visibleHeight }
+      : { left: frameBox.left * zoom, top: frameBox.top * zoom, width: frameBox.width * zoom, height: frameBox.height * zoom };
     pins.style.clipPath = useFrame
-      ? `inset(${layout.visibleTop}px ${layout.right}px ${layout.bottom}px ${layout.visibleLeft}px)`
+      ? `inset(${visible.top}px ${window.innerWidth - visible.left - visible.width}px ${viewportHeight - visible.top - visible.height}px ${visible.left}px)`
       : "";
     Object.assign(
       catcher.style,
       useFrame
         ? {
-            left: `${layout.visibleLeft}px`,
-            top: `${layout.visibleTop}px`,
-            width: `${layout.visibleWidth}px`,
-            height: `${layout.visibleHeight}px`,
+            left: `${visible.left}px`,
+            top: `${visible.top}px`,
+            width: `${visible.width}px`,
+            height: `${visible.height}px`,
           }
         : { left: "", top: "", width: "", height: "" },
     );
@@ -5919,6 +5990,10 @@ export function initComments(options: CommentsOptions): CommentsController {
         (target instanceof Node && target.getRootNode() === shadow)) return;
       const scroller = target === document ? document.scrollingElement : target;
       if (!(scroller instanceof Element)) return;
+      if (framed && frameBox.pan && target === document) {
+        framePortals();
+        frameControls?.update(frameArea, htmlZoom());
+      }
       if (!movingThread) {
         pinsScrolling = true;
         pins.dataset.scrolling = "true";
@@ -6341,6 +6416,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      frameControls?.destroy();
       cancelThreadRequest();
       cancelPinMove();
       polling?.stop();
