@@ -1,4 +1,8 @@
 import { morphingMenuStyles } from "./morphing-menu-styles.js";
+// Compact and dot pins draw small inside a 24px hit target anchored at the
+// pin's tip; hover, focus, a nearby pointer or selection expand them in place.
+const collapsedPin = `.pin:not(.active, .hot, :hover, :focus-visible, [data-near], [data-moving], [data-dragging])`;
+const collapsed = `.pins[data-size] > ${collapsedPin}`;
 export const styles: string = `
 .project-management[hidden], .project-management [hidden] { display:none !important; }
 .project-management .account-sites-summary { justify-content: space-between; }
@@ -2026,7 +2030,7 @@ textarea {
 
 .pin {
   --pin-x: -9px;
-  transform: translate(var(--pin-x), -28px) scale(1);
+  transform: translate(var(--pin-x), var(--pin-y, -28px)) scale(1);
   transform-origin: bottom left;
   transition: transform 120ms cubic-bezier(.22,1,.36,1);
 }
@@ -2035,7 +2039,7 @@ textarea {
   border-radius: 50% 50% 5px 50%;
   transform-origin: bottom right;
 }
-.pin.hot { z-index: 3; transform: translate(var(--pin-x), -28px) scale(1.12); }
+.pin.hot { z-index: 3; transform: translate(var(--pin-x), var(--pin-y, -28px)) scale(1.12); }
 .pins { transition:opacity 120ms ease; }
 .pins[data-scrolling="true"] { opacity:0; }
 .pins[data-scrolling="true"] .pin { pointer-events:none; }
@@ -2574,4 +2578,21 @@ textarea {
 .thread-back { margin-left: -6px; }
 .thread-back svg { rotate: 90deg; }
 .thread-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; }
+:host([data-comments-hidden]) .pins, :host([data-comments-hidden]) .pin-preview, :host([data-comments-hidden]) .component-hover, :host([data-comments-hidden]) .edge-sidebar-sensor { display: none !important; }
+:host([data-comments-hidden]) .edge-sidebar[data-collapsed] { visibility: hidden; }
+.morphing-menu__row[aria-pressed="false"] .morphing-menu__icon { visibility: hidden; }
+.pins[data-size] > .pin { transition: transform 120ms cubic-bezier(.22,1,.36,1), width 120ms cubic-bezier(.22,1,.36,1), height 120ms cubic-bezier(.22,1,.36,1); }
+.pins[data-size] > .pin .avatar { transition: left 120ms cubic-bezier(.22,1,.36,1), top 120ms cubic-bezier(.22,1,.36,1), width 120ms cubic-bezier(.22,1,.36,1), height 120ms cubic-bezier(.22,1,.36,1); }
+.pins[data-size] > .pin:is(:hover, :focus-visible, [data-near]) { z-index: 3; }
+${collapsed} { --pin-y: -18px; width: 24px; height: 24px; border-radius: 0; overflow: visible; background-color: transparent !important; box-shadow: none; }
+${collapsed}[data-pointer="right"] { --pin-x: -15px; }
+${collapsed} .avatar { display: flex; align-items: center; justify-content: center; left: calc(50% - var(--pin-face) / 2); top: calc(50% - var(--pin-face) / 2); width: var(--pin-face); height: var(--pin-face); border-radius: 50% 50% 50% 5px; overflow: hidden; font-size: 0; box-shadow: 0 0 0 1.5px #fff, 0 1px 4px #0000004d; }
+${collapsed}[data-pointer="right"] .avatar { border-radius: 50% 50% 5px 50%; }
+${collapsed} .avatar img { display: none; }
+.pins[data-size="compact"] > ${collapsedPin} { --pin-face: 20px; }
+.pins[data-size="compact"] > ${collapsedPin} .avatar::after { content: attr(data-initial); font-size: 10px; font-weight: 650; line-height: 1; }
+.pins[data-size="dot"] > ${collapsedPin} { --pin-face: 10px; }
+.pins[data-size="dot"] > ${collapsedPin}[data-pointer] .avatar { border-radius: 50%; box-shadow: 0 0 0 1px #fff, 0 1px 3px #00000059; }
+.pins[data-size="dot"] > ${collapsedPin}[data-read] .avatar { background-color: transparent !important; box-shadow: inset 0 0 0 2px var(--reviewer-accent, #c8b5f4), 0 0 0 1px #fff, 0 1px 3px #00000059; }
+@media (prefers-reduced-motion: reduce) { .pins[data-size] > .pin, .pins[data-size] > .pin .avatar { transition: none; } }
 `;

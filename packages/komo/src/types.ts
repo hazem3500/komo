@@ -85,6 +85,25 @@ export interface KomoShortcuts {
   restore?: string | false;
   /** Open or close the comment list. Defaults to "L". */
   comments?: string | false;
+  /**
+   * Hide or show comments. Defaults to "H"; that default steps aside when
+   * another configured shortcut already uses H.
+   */
+  visibility?: string | false;
+}
+
+/** How large comment pins are drawn on the page. */
+export type PinSize = "full" | "compact" | "dot" | "auto";
+
+export interface KomoPins {
+  /**
+   * Default pin size; a reviewer's choice in More wins and is remembered per
+   * project. "full" (default) shows the author's avatar, "compact" a small
+   * initial, "dot" an accent dot that is filled while unread. "auto" is full
+   * while commenting or with the sidebar open, and dots while browsing. Every
+   * size expands to full on hover, focus, a nearby pointer, or selection.
+   */
+  size?: PinSize;
 }
 
 /** Optional review features. Each defaults to true; false removes it from the UI. */
@@ -134,6 +153,8 @@ export interface CommentsOptions {
   features?: KomoFeatures;
   /** Toolbar order, visibility and separators. Hidden controls stay in More. */
   toolbar?: KomoToolbar;
+  /** Comment pin presentation, e.g. { size: "compact" }. */
+  pins?: KomoPins;
   /**
    * Sidebar presentation when the review opens. "edge" (default) is a floating,
    * draggable sidebar that parks off and peeks from the viewport edge while

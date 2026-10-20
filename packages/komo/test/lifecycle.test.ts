@@ -961,13 +961,13 @@ it("opens threads inside the open sidebar, switches in place, and steps back wit
   // The floating dialog layer is empty: the thread lives in the sidebar.
   expect(shadow.querySelector(":scope > div > .dialog")).toBeNull();
   expect(
-    shadow.querySelector('.pin.active[aria-label^="Comment 1:"]'),
+    shadow.querySelector('.pin.active[aria-label^="Comment 1 by Panel Reviewer: First thread"]'),
   ).not.toBeNull();
 
-  shadow.querySelector<HTMLButtonElement>('.pin[aria-label^="Comment 2:"]')!.click();
+  shadow.querySelector<HTMLButtonElement>('.pin[aria-label^="Comment 2 by Panel Reviewer: Second thread"]')!.click();
   expect(pane()?.querySelector(".thread-title")?.textContent).toBe("Second thread");
   expect(
-    shadow.querySelector('.pin.active[aria-label^="Comment 2:"]'),
+    shadow.querySelector('.pin.active[aria-label^="Comment 2 by Panel Reviewer: Second thread"]'),
   ).not.toBeNull();
 
   const reply = pane()!.querySelector("textarea")!;

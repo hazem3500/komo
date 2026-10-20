@@ -34,7 +34,11 @@ function glyph(value: ToolbarIcon): ReturnType<typeof createElement> {
 const view = (props: ToolbarProps) =>
   createElement(MorphingMenu, {
     ...props,
-    items: props.items.map((item) => ({ ...item, icon: glyph(item.icon) })),
+    items: props.items.map((item) => ({
+      ...item,
+      icon: glyph(item.icon),
+      children: item.children?.map((child) => ({ ...child, icon: glyph(child.icon) })),
+    })),
   });
 export function mountToolbar(element: HTMLElement, props: ToolbarProps) {
   element.replaceChildren();
