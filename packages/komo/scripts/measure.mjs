@@ -103,6 +103,12 @@ await writeFile(
 // 102,450 / 208,450: comments open beside the region they discuss, and Design mode
 // comments collapse the sidebar (~200 bytes in positionDialog, which runs at mount).
 // +50 for the Floating/Frame switch in the toolbar menu.
+// Trimming pass: Motion (~21.9 KB gzip) left the mount bundle. Core reaches it through
+// src/lazy-motion.ts, which prefetches it on idle and holds an element on its first
+// keyframe until it arrives; the toolbar menu shares the chunk. Initial 101,872 -> 80,342.
+// All-features 206,935 -> 207,360 (+425 for the extra chunk boundaries and the wrapper).
+// Budgets are unchanged so the pending toolbar and layout work has room; import animate
+// from ./lazy-motion.js, not "motion", or Motion returns to the mount bundle.
 if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 208_500)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional

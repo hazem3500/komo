@@ -45,7 +45,7 @@ import {
 import { recordEmoji } from "./emoji-history.js";
 import { reactionPicker } from "./reaction-picker.js";
 import { appendMessageLinks } from "./message-links.js";
-import { animate } from "motion";
+import { animate, loadMotion } from "./lazy-motion.js";
 import { actionMenu, selectionMenu } from "./action-menu.js";
 import {
   isCompactReview,
@@ -6508,5 +6508,9 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   if (!options.onboarding?.inProject)
     run(() => loadProject().finally(() => polling?.wake(false)));
+  // Motion drives sidebar and dock moves only; fetch it once mount work is done.
+  const prefetch = () => void loadMotion().catch(() => {});
+  if ("requestIdleCallback" in window) requestIdleCallback(prefetch, { timeout: 2e3 });
+  else setTimeout(prefetch, 200);
   return controller;
 }
