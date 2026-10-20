@@ -138,8 +138,10 @@ function installBridge(): boolean {
             if (!edit) continue;
             edit.value = value;
             props[name] = value;
-            if (Object.is(value, edit.before)) {
-              if (!edit.present) delete props[name];
+            // komo has no null: unset hands a null prop back as null, and an absent one stays absent.
+            if (Object.is(value, edit.before) || value === undefined && edit.before === null) {
+              if (edit.present) props[name] = edit.before;
+              else delete props[name];
               owned.delete(name);
             }
           }

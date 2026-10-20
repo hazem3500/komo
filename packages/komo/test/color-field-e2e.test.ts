@@ -147,11 +147,9 @@ async function agrees(tab: Page, selector: string, property: string, popup: bool
 }
 
 async function switchTheme(tab: Page, label: string) {
-  const summary = tab.locator('summary[aria-label="Preview theme"]');
-  await summary.click();
-  await tab.locator(".design-theme-options button").filter({ hasText: label }).click();
+  const toggle = tab.locator(".design-theme-toggle");
+  if ((await toggle.getAttribute("aria-label")) !== `Theme: ${label}`) await toggle.click();
   await tab.waitForFunction(id => document.documentElement.getAttribute("data-mode") === id, label.toLowerCase());
-  if (await tab.locator(".design-theme-switch[open]").count()) await tab.locator('summary[aria-label="Preview theme"]').click();
 }
 
 describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("color fields in %s", mode => {

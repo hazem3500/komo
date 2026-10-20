@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-// The Design panel's theme switcher: one row per axis, switching re-lists tokens
-// for the new theme, and Design mode puts the original theme back when it closes.
-// Theme is context, not an edit, so Before/After, Undo and Reset leave it alone.
+// The Design panel's theme control: one light/dark axis is a one-click switch, more
+// options or axes are a compact menu with one row per axis, and nothing to choose shows
+// nothing. Switching re-lists tokens for the new theme, and Design mode puts the
+// original theme back when it closes. Theme is context, not an edit, so Before/After,
+// Undo and Reset leave it alone.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDesignMode } from "../src/design-mode.js";
 import { designContext } from "../src/react-props-panel.js";
@@ -73,6 +75,7 @@ const option = (path: string) => field().querySelector<HTMLOptionElement>(`.desi
 const switcher = () => shadow.querySelector<HTMLElement>(".design-theme-switch");
 const themeButton = (name: string) =>
   [...shadow.querySelectorAll<HTMLButtonElement>(".design-theme-options button")].find((button) => button.textContent === name)!;
+const toggle = () => shadow.querySelector<HTMLButtonElement>(".design-theme-toggle")!;
 const tool = (name: string) => shadow.querySelector<HTMLButtonElement>(`.design-inspector__actions [aria-label="${name}"]`)!;
 
 afterEach(() => {
@@ -106,14 +109,14 @@ describe("Design panel theme switcher", () => {
     const mode = modeAxis();
     await open({ tokens, themes: [mode] });
     expect(option("color.text.secondary")!.title).toContain("#6b6b6b");
-    themeButton("Dark").click();
+    toggle().click();
     expect(mode.apply).toHaveBeenCalledWith("dark");
     await vi.waitFor(() => expect(option("color.text.secondary")?.title).toContain("#a3a3a3"));
     expect(tokens.list).toHaveBeenLastCalledWith({ mode: "dark" });
     expect(field().querySelector(".design-token-chip")!.textContent).toBe("Uses color.text.secondary");
-    expect(themeButton("Dark").getAttribute("aria-pressed")).toBe("true");
+    expect(toggle().getAttribute("aria-label")).toBe("Theme: Dark");
     // Focus follows the switch across the re-render.
-    expect(shadow.activeElement).toBe(themeButton("Dark"));
+    expect(shadow.activeElement).toBe(toggle());
     expect(designContext(label, { themes: [mode] })).toEqual(["Theme: mode=dark"]);
     // Theme is context: no change to count, undo or reset.
     expect(tool("Undo").disabled).toBe(true);
@@ -124,8 +127,8 @@ describe("Design panel theme switcher", () => {
     const mode = modeAxis();
     document.documentElement.dataset.mode = "light";
     await open({ tokens: adapter(), themes: [mode] });
-    themeButton("Dark").click();
-    await vi.waitFor(() => expect(themeButton("Dark").getAttribute("aria-pressed")).toBe("true"));
+    toggle().click();
+    await vi.waitFor(() => expect(toggle().getAttribute("aria-checked")).toBe("true"));
     expect(document.documentElement.dataset.mode).toBe("dark");
     controller!.setActive(false);
     expect(document.documentElement.dataset.mode).toBe("light");
@@ -134,7 +137,7 @@ describe("Design panel theme switcher", () => {
     mode.apply.mockClear();
     controller!.setActive(true);
     pick();
-    await vi.waitFor(() => expect(themeButton("Light").getAttribute("aria-pressed")).toBe("true"));
+    await vi.waitFor(() => expect(toggle().getAttribute("aria-label")).toBe("Theme: Light"));
     controller!.setActive(false);
     expect(mode.apply).not.toHaveBeenCalled();
   });
@@ -143,8 +146,9 @@ describe("Design panel theme switcher", () => {
     const mode = modeAxis();
     document.documentElement.dataset.mode = "dark";
     await open({ tokens: adapter(), themes: [mode] });
-    themeButton("Light").click();
-    await vi.waitFor(() => expect(themeButton("Light").getAttribute("aria-pressed")).toBe("true"));
+    expect(toggle().getAttribute("aria-label")).toBe("Theme: Dark");
+    toggle().click();
+    await vi.waitFor(() => expect(toggle().getAttribute("aria-label")).toBe("Theme: Light"));
     expect(document.documentElement.dataset.mode).toBe("light");
     controller!.destroy();
     controller = undefined;
@@ -154,7 +158,7 @@ describe("Design panel theme switcher", () => {
   it("keeps the theme through Before/After, Undo and Reset", async () => {
     const mode = modeAxis();
     await open({ tokens: adapter(), themes: [mode] });
-    themeButton("Dark").click();
+    toggle().click();
     await vi.waitFor(() => expect(option("color.text.primary")?.title).toContain("#f5f5f5"));
     const picker = field().querySelector<HTMLSelectElement>(".design-token-binding select")!;
     picker.value = "color.text.primary";
@@ -198,13 +202,100 @@ describe("Design panel theme switcher", () => {
     expect([...switcher()!.querySelector(".design-theme-popup")!.children].map((row) => row.querySelector("span")!.textContent)).toEqual(["Density", "Mode"]);
     expect(() => themeButton("Compact").click()).not.toThrow();
     await vi.waitFor(() => expect(themeButton("Compact").getAttribute("aria-pressed")).toBe("true"));
-    expect(field().querySelector(".design-token-binding")).not.toBeNull();
+    await vi.waitFor(() => expect(field().querySelector(".design-token-binding")).not.toBeNull());
     themeButton("Dark").click();
     await vi.waitFor(() => expect(themeButton("Dark").getAttribute("aria-pressed")).toBe("true"));
     // Restoring tries every axis, even after one throws.
     expect(() => controller!.setActive(false)).not.toThrow();
     expect(failing.apply).toHaveBeenLastCalledWith("cozy");
     expect(document.documentElement.dataset.mode).toBe("light");
+  });
+
+  it("switches one light/dark axis with a single click on a sun/moon switch", async () => {
+    const mode = modeAxis();
+    await open({ tokens: adapter(), themes: [mode] });
+    expect(switcher()).toBeNull();
+    const control = toggle();
+    expect(control.parentElement).toBe(shadow.querySelector(".design-inspector__heading"));
+    expect(control.nextElementSibling).toBe(shadow.querySelector(".design-inspector__close"));
+    expect(control.getAttribute("role")).toBe("switch");
+    expect(control.getAttribute("aria-checked")).toBe("false");
+    expect(control.getAttribute("aria-label")).toBe("Theme: Light");
+    expect(control.dataset.tip).toBe("Switch to Dark");
+    expect(control.querySelector("svg")).not.toBeNull();
+    expect(control.textContent).toBe("");
+    control.click();
+    expect(mode.apply).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(toggle().getAttribute("aria-label")).toBe("Theme: Dark"));
+    expect(toggle().getAttribute("aria-checked")).toBe("true");
+    expect(toggle().dataset.tip).toBe("Switch to Light");
+    toggle().click();
+    await vi.waitFor(() => expect(document.documentElement.dataset.mode).toBe("light"));
+    // Never a third, invented option.
+    expect(mode.apply.mock.calls.map(([id]) => id)).toEqual(["dark", "light"]);
+  });
+
+  it("matches light/dark by label too, and keeps the supplied labels", async () => {
+    let id = "day";
+    const axis: ThemeAxis = {
+      id: "appearance", options: [{ id: "day", label: "Light" }, { id: "night", label: "Dark" }],
+      current: () => id, apply: (next) => { id = next; },
+    };
+    await open({ tokens: adapter(), themes: [axis] });
+    expect(toggle().querySelector("svg")).not.toBeNull();
+    expect(toggle().getAttribute("aria-label")).toBe("Theme: Light");
+    toggle().click();
+    await vi.waitFor(() => expect(toggle().getAttribute("aria-label")).toBe("Theme: Dark"));
+    expect(id).toBe("night");
+  });
+
+  it("shows two other options as a two-segment switch with their labels", async () => {
+    let density = "cozy";
+    const axis: ThemeAxis = {
+      id: "density", options: [{ id: "cozy", label: "Cozy" }, { id: "compact", label: "Compact layout" }],
+      current: () => density, apply: (next) => { density = next; },
+    };
+    await open({ tokens: adapter(), themes: [axis] });
+    expect(switcher()).toBeNull();
+    expect([...toggle().querySelectorAll("span")].map(span => span.textContent)).toEqual(["Cozy", "Compact layout"]);
+    expect(toggle().querySelector("svg")).toBeNull();
+    expect(toggle().dataset.on).toBe("0");
+    expect(toggle().getAttribute("aria-label")).toBe("Theme: Cozy");
+    expect(toggle().dataset.tip).toBe("Switch to Compact layout");
+    toggle().click();
+    await vi.waitFor(() => expect(toggle().dataset.on).toBe("1"));
+    expect(density).toBe("compact");
+    expect(toggle().getAttribute("aria-label")).toBe("Theme: Compact layout");
+  });
+
+  it("keeps three options in the compact menu", async () => {
+    const axis: ThemeAxis = {
+      id: "mode", options: [{ id: "light" }, { id: "dark" }, { id: "contrast" }],
+      current: () => document.documentElement.dataset.mode ?? "light",
+      apply: (id) => { document.documentElement.dataset.mode = id; },
+    };
+    await open({ tokens: adapter(), themes: [axis] });
+    expect(shadow.querySelector(".design-theme-toggle")).toBeNull();
+    expect(switcher()!.querySelector("summary")!.textContent).toBe("Light");
+    expect([...switcher()!.querySelectorAll(".design-theme-options button")].map(button => button.textContent)).toEqual(["Light", "Dark", "Contrast"]);
+    themeButton("Contrast").click();
+    await vi.waitFor(() => expect(switcher()!.querySelector("summary")!.textContent).toBe("Contrast"));
+  });
+
+  it("follows a theme the host changes outside the inspector", async () => {
+    const listeners = new Set<() => void>();
+    const mode: ThemeAxis = { ...modeAxis(), subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener); } };
+    await open({ tokens: adapter(), themes: [mode] });
+    document.documentElement.dataset.mode = "dark";
+    listeners.forEach(listener => listener());
+    await vi.waitFor(() => expect(toggle().getAttribute("aria-label")).toBe("Theme: Dark"));
+    expect(toggle().dataset.tip).toBe("Switch to Light");
+  });
+
+  it.each([["no themes", undefined], ["an empty list", []]])("shows no control for %s", async (_, themes) => {
+    await open({ tokens: adapter(), themes: themes as ThemeAxis[] | undefined });
+    await Promise.resolve();
+    expect(shadow.querySelector(".design-theme-switch, .design-theme-toggle")).toBeNull();
   });
 
   it("shows no switcher without an axis that has a choice", async () => {

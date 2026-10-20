@@ -129,6 +129,33 @@ describe("React props inspector bridge", () => {
     expect(comments[0].proposal).toContain('\nProps: title="A preview title", tone="calm", compact=false, visits=3\n');
   });
 
+  it("previews an enum option outside history and puts the opening value back unless something else changed it", async () => {
+    await vi.waitFor(() => expect(shadow.querySelector(".design-react-group")).not.toBeNull());
+    const tone = shadow.querySelector<HTMLSelectElement>('[aria-label="PromoCard tone"]')!;
+    const preview = (detail: string | null) => tone.dispatchEvent(new CustomEvent("komo-preview", { detail }));
+    const undo = shadow.querySelector<HTMLButtonElement>('.design-inspector__actions [aria-label="Undo"]')!;
+    preview("bold");
+    expect(changes.at(-1)).toMatchObject({ tone: "bold", title: "A preview title" });
+    expect(undo.disabled).toBe(true);
+    preview(null);
+    expect(changes.at(-1)?.tone).toBe("calm");
+    expect(changes).toHaveLength(2);
+    // An invalid option previews nothing; a second cancel is a no-op.
+    preview("arbitrary-value");
+    preview(null);
+    expect(changes.at(-1)?.tone).toBe("calm");
+    // A commit after a preview records one step from the opening value.
+    preview("bold");
+    preview(null);
+    tone.value = "bold";
+    tone.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(changes.at(-1)?.tone).toBe("bold");
+    expect(undo.disabled).toBe(false);
+    undo.click();
+    expect(changes.at(-1)?.tone).toBe("calm");
+    expect(undo.disabled).toBe(true);
+  });
+
   it("supports undo and reset through the React state callback", async () => {
     await vi.waitFor(() => expect(shadow.querySelector(".design-react-group")).not.toBeNull());
     const titleInput = shadow.querySelector<HTMLInputElement>('[aria-label="PromoCard title"]')!;
