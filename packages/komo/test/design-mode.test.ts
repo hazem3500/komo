@@ -59,11 +59,14 @@ describe("design mode preview inspector", () => {
     expect([...empty.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
       "Click to inspect",
       "Ctrl-click for an inner target",
-      "Alt+↑ parent · Alt+↓ child",
+      "← previous sibling",
+      "→ next sibling",
+      "Alt↑ parent element",
+      "Alt↓ child element",
       "Double-click text to edit",
       "Esc to exit",
     ]);
-    expect([...empty.querySelectorAll("kbd")].map((key) => key.textContent)).toEqual(["Click", "Ctrl-click", "Alt+↑", "Alt+↓", "Double-click", "Esc"]);
+    expect([...empty.querySelectorAll("kbd")].map((key) => key.textContent)).toEqual(["Click", "Ctrl-click", "←", "→", "Alt", "↑", "Alt", "↓", "Double-click", "Esc"]);
     expect(empty.querySelector("svg")).not.toBeNull();
     expect(comment.hidden).toBe(true);
     pointer("pointerdown", button);
@@ -307,10 +310,10 @@ describe("design mode preview inspector", () => {
     expect(compare.hidden).toBe(false);
     const press = (key: string, target: EventTarget = document.body) =>
       target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, composed: true }));
-    press("ArrowLeft");
+    press("ArrowLeft", compare.querySelector("button")!);
     expect(button.style.color).toBe("");
     expect(compare.querySelector('[aria-pressed="true"]')?.textContent).toBe("Before");
-    press("ArrowRight");
+    press("ArrowRight", compare.querySelector("button")!);
     expect(button.style.color).toBe("rgb(255, 0, 0)");
     press("b");
     expect(button.style.color).toBe("");
@@ -453,14 +456,14 @@ describe("design mode preview inspector", () => {
     expect(input("insertText", at(rich, 4), "er").defaultPrevented).toBe(true);
     expect(input("deleteContentBackward", at(rich, 0, 1)).defaultPrevented).toBe(true);
     expect(nested.innerHTML).toBe("<strong>icher</strong> text");
-    // Deleting across the <strong> boundary, or starting a new paragraph, is refused.
+    // Cross-markup deletion is refused; newlines stay in the original text node.
     const across = document.createRange();
     across.setStart(rich, 4);
     across.setEnd(nested.lastChild!, 1);
     input("deleteContentForward", across);
     input("insertParagraph", at(rich, 2));
     expect(nested.querySelector("strong")).toBe(strong);
-    expect(nested.innerHTML).toBe("<strong>icher</strong> text");
+    expect(nested.innerHTML).toBe("<strong>ic\nher</strong> text");
 
     nested.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
     expect(nested.hasAttribute("contenteditable")).toBe(false);
@@ -549,11 +552,13 @@ describe("design mode preview inspector", () => {
   });
 
   it("lets keyboard users select a focused page element without activating it", () => {
-    button.focus();
+    const label = document.querySelector<HTMLElement>("#label")!;
+    label.tabIndex = 0;
+    label.focus();
     const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true });
-    button.dispatchEvent(event);
+    label.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
-    expect(shadow.querySelector(".design-inspector__target")?.textContent).toBe("button#hero");
+    expect(shadow.querySelector(".design-inspector__target")?.textContent).toBe("span#label");
   });
 
   it("supports undo and reset, then restores original inline declarations on destroy", () => {

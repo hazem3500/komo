@@ -1,0 +1,58 @@
+import { isDesignTarget, type DesignTarget } from "./design-target.js";
+
+// Check ancestors in the composed path, including widgets across shadow boundaries.
+export function ownsKeyboard(event: KeyboardEvent, inspect = false): boolean {
+  return event.composedPath().some(node => node instanceof Element && !(inspect && node.matches('button,a[href],summary') && !node.matches('[contenteditable],[inert],[role]:not([role=button]):not([role=link])')) && node.matches(
+    'input,textarea,select,button,a[href],summary,dialog,[contenteditable]:not([contenteditable="false"]),[inert],[role]:not([role="none"]):not([role="presentation"]):not([role="img"]):not([role="group"]):not([role="region"]):not([role="main"]):not([role="article"]):not([role="heading"]):not([role="paragraph"]):not([role="generic"])',
+  ));
+}
+
+export function designKeyboard(options: {
+  host: HTMLElement;
+  compare: HTMLElement;
+  reserved?(event: KeyboardEvent): boolean;
+  selected(): DesignTarget | null;
+  select(element: DesignTarget): void;
+  compareBefore(before?: boolean): void;
+}) {
+  return (event: KeyboardEvent): boolean => {
+    if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || options.reserved?.(event)) return false;
+    const key = event.key.toLowerCase();
+    const path = event.composedPath();
+    if (key === "escape" && path.some(node => node instanceof Element && node.matches("[data-field-property]"))) return true;
+    const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+    const horizontal = key === "arrowleft" || key === "arrowright";
+    const comparison = path.includes(options.compare);
+    if (plain && !options.compare.hidden && (comparison && horizontal || key === "b" && (comparison || !path.includes(options.host) && !ownsKeyboard(event)))) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      options.compareBefore(key === "b" ? undefined : key === "arrowleft");
+      return true;
+    }
+    const inspect = plain && (key === "enter" || key === " ");
+    if (path.includes(options.host) || ownsKeyboard(event, inspect)) return false;
+    const selected = options.selected();
+    const eligible = (element: Element | null): element is DesignTarget => isDesignTarget(element)
+      && element.isConnected && element !== document.body && element !== document.documentElement
+      && !options.host.contains(element) && !element.matches("script,style,defs,title,desc,metadata,[hidden],[inert]")
+      && getComputedStyle(element).display !== "none" && getComputedStyle(element).visibility !== "hidden";
+    let next: Element | null = null;
+    if (selected?.isConnected && plain && horizontal) {
+      const direction = key === "arrowleft" ? "previousElementSibling" : "nextElementSibling";
+      next = selected[direction];
+      while (next && !eligible(next)) next = next[direction];
+      // Own the bounded canvas arrow even at an edge; never scroll or wrap.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    } else if (selected?.isConnected && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      if (key === "arrowup") next = selected.parentElement;
+      if (key === "arrowdown") next = [...selected.children].find(eligible) ?? null;
+    } else if (inspect) next = document.activeElement;
+    if (!eligible(next)) return event.defaultPrevented;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    next.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    options.select(next);
+    return true;
+  };
+}

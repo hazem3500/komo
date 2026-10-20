@@ -1,11 +1,9 @@
+import { designCommands } from "./design-commands.js";
 import { renderKbd } from "./kbd.js";
 import type { Shortcut } from "./shortcuts.js";
 
 export function showShortcutHelp(root: ShadowRoot, commands: Array<{ label: string; shortcut?: Shortcut | null; group?: string }>, design = false) {
-  if (design) {
-    for (const [label, key, alt] of [["Parent element", "ArrowUp", true], ["Child element", "ArrowDown", true], ["Compare changes (with previews)", "B", false], ["Before (with previews)", "ArrowLeft", false], ["After (with previews)", "ArrowRight", false], ["Inspect focused element", "Enter", false], ["Exit design mode", "Escape", false]] as const)
-      commands.push({ label, group: "Design · outside editors", shortcut: { key, alt, shift: false, ctrl: false, meta: false, label: key } });
-  }
+  if (design) commands.push(...designCommands());
   const previous = root.activeElement?.closest(".morphing-menu__panel")
     ? root.querySelector<HTMLElement>('[data-menu-item="more"]') : root.activeElement as HTMLElement | null;
   const dialog = document.createElement("dialog");

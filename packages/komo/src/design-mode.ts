@@ -1,7 +1,7 @@
 import { isDesignTarget, pickDesignTarget, type DesignTarget } from "./design-target.js";
 import { changePreviewStyles, createStyleEdits, inlineStyleSnapshot, removeEmptyStyle, restoreStyle, type StyleEdit, type StyleOriginal } from "./design-preview.js";
 import { designModeStyles } from "./design-mode-styles.js";
-import { editable, el, icon } from "./dom.js";
+import { el, icon } from "./dom.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
 import type { Control, PanelContext } from "./design-panel.js";
 import type { InlineTextTools } from "./inline-text-editor.js";
@@ -17,6 +17,7 @@ export interface DesignModeOptions {
   onExit(): void;
   /** Label of the shortcut that toggles Design mode, shown in the empty state. */
   exitKey?: string;
+  reservedKey?(event: KeyboardEvent): boolean;
   /** Move the floating panel to the other side when it covers the target. */
   flip?(): void;
   /** The app's design-system adapters; `tokens` replaces CSS-variable token chips. */
@@ -465,6 +466,8 @@ export function createDesignMode(options: DesignModeOptions) {
     event.preventDefault();
     event.stopImmediatePropagation();
     select(element);
+    const focused = options.root.activeElement ?? document.activeElement;
+    if (focused instanceof HTMLElement) focused.blur();
   }
   function onClick(event: MouseEvent) {
     if (!active || event.composedPath().includes(options.host)) return;
@@ -476,52 +479,18 @@ export function createDesignMode(options: DesignModeOptions) {
     // The second pointerdown of a double-click already selected the target; edit it where it was clicked.
     if (event.detail === 2 && selected?.contains(event.target as Node) && !editText.disabled && !textTools?.element) editText.dispatchEvent(new MouseEvent("click", event));
   }
+  let keyboard: ((event: KeyboardEvent) => boolean) | undefined;
   function onKey(event: KeyboardEvent) {
+    if (event.isComposing || event.keyCode === 229) return;
     if (textTools?.handleKey(event)) {
       editText.focus({ preventScroll: true });
       return;
     }
-    // ← Before, → After, B flips, as on design comments; never while typing in a field.
-    const key = event.key.toLowerCase();
-    const origin = event.composedPath()[0];
-    const typing = editable(origin) || origin instanceof HTMLElement && origin.matches("[role=slider],[role=radio]");
-    if (typing && event.key === "Escape" && (origin as HTMLElement).closest("[data-field-property]")) return;
-    if (active && selected && event.altKey && !event.ctrlKey && !event.metaKey && !typing && (key === "arrowup" || key === "arrowdown")) {
-      const next = (key === "arrowup" ? selected.parentElement : [...selected.children].find(element => isDesignTarget(element) && !element.matches("script,style,defs,title,desc,metadata"))) ?? null;
-      if (isDesignTarget(next) && next !== document.body && next !== document.documentElement && !options.host.contains(next)) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        decorating = true;
-        select(next);
-        reveal(next);
-      }
-      return;
-    }
-    if (
-      active && !compare.hidden && !event.metaKey && !event.ctrlKey && !event.altKey &&
-      (key === "b" || key === "arrowleft" || key === "arrowright") &&
-      !typing
-    ) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      showBefore(key === "b" ? !showingBefore : key === "arrowleft");
-      return;
-    }
-    if (active && !textTools?.element && (event.key === "Enter" || event.key === " ") && !event.composedPath().includes(options.host)) {
-      const focused = document.activeElement;
-      if (isDesignTarget(focused) && focused !== document.body && focused !== document.documentElement) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        decorating = true;
-        select(focused);
-        reveal(focused);
-        return;
-      }
-    }
+    if (active && keyboard?.(event)) return;
     if (event.composedPath().includes(options.host)) escape(event);
   }
   function escape(event: KeyboardEvent) {
-    if (!active || event.key !== "Escape") return;
+    if (!active || event.key !== "Escape" || event.isComposing || event.keyCode === 229) return;
     if (event.defaultPrevented && !event.composedPath().includes(options.host)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -706,6 +675,12 @@ export function createDesignMode(options: DesignModeOptions) {
   watchHighlight(options.host, () => active ? [selected ?? hovered, hovered] : [], scheduleOutline, listeners.signal, clearSelection);
   const selectionReady = exporter().then(module => {
     if (listeners.signal.aborted) return;
+    keyboard = module.designKeyboard({
+      host: options.host, compare, reserved: options.reservedKey,
+      selected: () => selectionPage === page() ? selected : null,
+      select(element) { decorating = true; select(element); reveal(element); },
+      compareBefore(before) { showBefore(before ?? !showingBefore); },
+    });
     views = module.selectionViews({
       exitKey: options.exitKey,
       review() {

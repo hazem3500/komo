@@ -1,7 +1,8 @@
+import { ownsKeyboard } from "./design-keyboard.js";
 // Loaded on demand: renders Design mode proposals as a change card with a
 // Before/After preview. The comment body stays plain text for agents and the CLI.
 import { isDesignTarget } from "./design-target.js";
-import { removeEmptyStyle } from "./design-preview.js";
+import { inlineStyleSnapshot, removeEmptyStyle } from "./design-preview.js";
 import { previewText } from "./text-preview.js";
 import { listTokens, originalTokenUsage, previewToken, refreshTokenBaseline, themeState, watchThemes } from "./token-adapter.js";
 import type { DesignSystem, DesignToken, TokenAdapter } from "./design-system.js";
@@ -61,6 +62,7 @@ function change(line: string, kind: string): DesignChange | null {
   match = /^- (.+?): (.*) → (.*?)(?: \[([^\]]+)\])?$/.exec(line);
   if (!match) return null;
   const [, label, before, after, note] = match;
+  if (kind === "inline text" && label === "white-space") return { label, before, after, apply: { kind: "style", property: label } };
   if (kind === "inline text") return { label: "Text", before: unquote(before), after: unquote(after), apply: { kind: "text", property: "text" } };
   if (kind === "React prop") return { label, before: unquote(before), after: unquote(after), ...(note && note !== "custom value" ? { token: note } : {}) };
   return { label, before, after, apply: { kind: "style", property: label } };
@@ -185,6 +187,7 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
         const priority = element.style.getPropertyPriority(item.apply.property);
         const absent = !element.hasAttribute("style");
         const property = item.apply.property;
+        const whitespace = property === "white-space" ? inlineStyleSnapshot(element, property) : undefined;
         const pin = () => {
           if (item.before === "(unset)") return false;
           element.style.setProperty(property, item.before, "important");
@@ -195,6 +198,7 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
         element.style.setProperty(property, item.after, "important");
         pinBefore.push(pin);
         restoreStyles.push(() => {
+          if (whitespace) { whitespace.restore(); return; }
           if (previous) element.style.setProperty(item.apply!.property, previous, priority);
           else element.style.removeProperty(item.apply!.property);
           if (absent) removeEmptyStyle(element);
@@ -519,11 +523,11 @@ function listenForShortcut() {
   document.addEventListener("keydown", (event) => {
     // B toggles; ← shows Before and → shows After.
     const key = event.key === "ArrowLeft" ? 0 : event.key === "ArrowRight" ? 1 : event.key.toLowerCase() === "b" ? -1 : null;
-    if (key === null || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) return;
-    const origin = event.composedPath()[0];
-    if (origin instanceof HTMLElement && (origin.isContentEditable || origin.matches("input, textarea, select"))) return;
-    // The most recently drawn switch still on screen belongs to the open comment.
-    const toggle = [...visibleToggles].reverse().find((item) => item.isConnected);
+    if (event.defaultPrevented || key === null || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) return;
+    const path = event.composedPath();
+    const focused = [...visibleToggles].find(item => item.isConnected && path.includes(item));
+    if (!focused && (key !== -1 || ownsKeyboard(event))) return;
+    const toggle = focused ?? [...visibleToggles].reverse().find(item => item.isConnected);
     const buttons = toggle?.querySelectorAll<HTMLButtonElement>("button");
     const next = key === -1 ? toggle?.querySelector<HTMLButtonElement>('button[aria-pressed="false"]') : buttons?.[key];
     if (!next) return;

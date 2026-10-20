@@ -1,3 +1,6 @@
+export { designKeyboard } from "./design-keyboard.js";
+import { designCommands } from "./design-commands.js";
+import { renderKbd } from "./kbd.js";
 import { el, icon } from "./dom.js";
 
 /** Selection guidance and recovery controls load with the proposal helpers. */
@@ -19,7 +22,11 @@ export function selectionViews(options: {
   };
   line("", "Click", " to inspect");
   line("", preciseKey, " for an inner target");
-  line("", "Alt+↑", " parent · ", "Alt+↓", " child");
+  for (const command of designCommands().slice(0, 4)) {
+    const item = el("li");
+    item.append(renderKbd(command.shortcut), ` ${command.label.toLowerCase()}`);
+    hints.append(item);
+  }
   line("", "Double-click", " text to edit");
   if (options.exitKey) line("", "Esc", " or ", options.exitKey, " to exit");
   else line("", "Esc", " to exit");
