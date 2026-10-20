@@ -22,11 +22,19 @@ beforeAll(async () => {
       stdin: { contents: `
         import React from 'react';
         import {createRoot} from 'react-dom/client';
+        import {useKomoInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
         import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
         import {renderDraftProposal,resetDesignPreviews} from ${JSON.stringify(resolve("src/design-comment.ts"))};
         import {startInlineTextEditor} from ${JSON.stringify(resolve("src/inline-text-editor.ts"))};
         const qa=window.textQA={actions:0};
         qa.startText=async()=>{const editor=await startInlineTextEditor(document.querySelector('#target'),{loadReactBridge:async()=>null,onFinish(){}});qa.finishText=cancel=>editor.finish(cancel)};
+        const definition={id:'heading',name:'Heading',textProp:'title',props:[{name:'title',kind:'string',required:true,typeLabel:'string'}]};
+        function Bridge(){
+          const[props,setProps]=React.useState({title:'Original title'});
+          const inspect=useKomoInspectable({enabled:true,component:definition,props,onChange:setProps});
+          qa.props=props;
+          return React.createElement('p',{...inspect,id:'bridge',style:{whiteSpace:'pre-wrap'}},props.title);
+        }
         function App(){
           const[label,setLabel]=React.useState('Original title');
           const[tick,setTick]=React.useState(0);
@@ -45,12 +53,12 @@ beforeAll(async () => {
         const proposal='Proposed inline text change (preview only)\\nTarget: #target\\n- Text: "Original title" → "Edited title"';
         qa.review=()=>renderDraftProposal(review,proposal,()=>document.querySelector('#target'));
         qa.clear=()=>{resetDesignPreviews();review.replaceChildren()};
-        createRoot(document.querySelector('main')).render(React.createElement(App));
+        createRoot(document.querySelector('main')).render(React.createElement(new URLSearchParams(location.search).has('bridge')?Bridge:App));
         const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
         const key='branch-comments:'+location.origin+':text-preview';
         localStorage.setItem(key,'synthetic-session');
         localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
-        window.fetch=async input=>{const path=new URL(input instanceof Request?input.url:String(input)).pathname;return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:[]}:{});};
+        window.fetch=async (input,init)=>{const path=new URL(input instanceof Request?input.url:String(input)).pathname;if(init?.method==="POST"&&path.endsWith("/threads"))qa.post=JSON.parse(init.body);return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:[]}:{});};
         const mode=new URLSearchParams(location.search).get('mode');
         if(mode==='floating')document.body.append(document.createElement('aside'));
         window.komo=initKomo({endpoint:location.origin,project:'text-preview',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false});
@@ -84,6 +92,170 @@ afterAll(async () => {
 });
 
 describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version => {
+  it("inspects focused native buttons, links and summaries with Enter/Space without host activation", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    await page.goto(`${origin}/?react=${version}&mode=floating`);
+    await page.locator('#target').waitFor();
+    await page.evaluate(() => {
+      const area = document.createElement('section');
+      area.innerHTML = '<button id="native-button">Action</button><a id="native-link" href="#destination">Navigate</a><details><summary id="native-summary">Details</summary>Body</details>';
+      document.querySelector('main')!.append(area);
+      area.addEventListener('click', () => (window as any).textQA.actions++);
+    });
+    await page.keyboard.press('d');
+    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    for (const id of ['native-button', 'native-link', 'native-summary']) for (const key of ['Enter', 'Space']) {
+      await page.locator(`#${id}`).focus();
+      await page.keyboard.press(key);
+      expect(await page.locator('.design-inspector__target').textContent()).toContain(`#${id}`);
+      expect(await page.evaluate(() => (window as any).textQA.actions)).toBe(0);
+      expect(new URL(page.url()).hash).toBe('');
+      expect(await page.locator('main details').getAttribute('open')).toBeNull();
+    }
+    await page.locator('#native-button').focus();
+    await page.keyboard.press('ArrowRight');
+    expect(await page.locator('.design-inspector__target').textContent()).toContain('#native-summary');
+    await page.locator('#native-button').click();
+    await page.keyboard.press('ArrowRight');
+    expect(await page.locator('.design-inspector__target').textContent()).toContain('#native-link');
+    await page.evaluate(() => (window as any).komo.destroy());
+    await page.close();
+  });
+
+  it("keeps source-formatting newlines at baseline geometry in Before and Undo", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    await page.goto(`${origin}/?react=${version}&mode=floating`);
+    await page.locator('#target').waitFor();
+    const baseline = await page.locator('#target').evaluate(node => {
+      node.querySelector('strong')!.firstChild!.textContent = 'Original\n title';
+      (node as HTMLElement).style.setProperty('white-space', 'normal', 'important');
+      const qa = (window as any).textQA;
+      qa.owner = node; qa.icon = node.querySelector('svg'); qa.text = node.querySelector('strong')!.firstChild;
+      const rect = node.getBoundingClientRect();
+      return { width: rect.width, height: rect.height, whitespace: getComputedStyle(node).whiteSpace, style: node.getAttribute('style') };
+    });
+    const geometry = () => page.locator('#target').evaluate(node => { const rect = node.getBoundingClientRect(); return { width: rect.width, height: rect.height, whitespace: getComputedStyle(node).whiteSpace, style: node.getAttribute('style') }; });
+    const start = async () => {
+      await page.getByRole('button', { name: 'Edit selected text inline', exact: true }).click();
+      await page.locator('#target[contenteditable="true"]').waitFor();
+    };
+    const compare = page.locator('.design-inspector__compare');
+    await page.keyboard.press('d');
+    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await page.locator('#target').click({ position: { x: 5, y: 5 } });
+    await start();
+    await page.keyboard.type(' edited');
+    await page.keyboard.press('Enter');
+    expect((await geometry()).whitespace).toBe('normal');
+    await compare.getByRole('button', { name: 'Before', exact: true }).click();
+    expect(await geometry()).toEqual(baseline);
+    await compare.getByRole('button', { name: 'After', exact: true }).click();
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    expect(await geometry()).toEqual(baseline);
+    await start();
+    await page.keyboard.press('Shift+Enter');
+    await page.keyboard.type('line');
+    await page.keyboard.press('Enter');
+    expect((await geometry()).whitespace).toBe('pre-wrap');
+    await compare.getByRole('button', { name: 'Before', exact: true }).click();
+    expect(await geometry()).toEqual(baseline);
+    await compare.getByRole('button', { name: 'After', exact: true }).click();
+    await page.locator('.design-inspector__actions button:last-child').click();
+    const proposal = page.locator('.draft-proposal');
+    await proposal.locator('.design-toggle').waitFor();
+    expect(await proposal.textContent()).toContain('white-space');
+    expect((await geometry()).whitespace).toBe('pre-wrap');
+    await proposal.getByRole('button', { name: 'Before', exact: true }).click();
+    expect(await geometry()).toEqual(baseline);
+    await proposal.getByRole('button', { name: 'After', exact: true }).click();
+    expect((await geometry()).whitespace).toBe('pre-wrap');
+    expect(await page.locator('#target').evaluate(node => node === (window as any).textQA.owner && node.querySelector('svg') === (window as any).textQA.icon && node.querySelector('strong')!.firstChild === (window as any).textQA.text)).toBe(true);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#target')!).whiteSpace === 'normal');
+    expect(await geometry()).toEqual(baseline);
+    await page.evaluate(() => (window as any).komo.destroy());
+    await page.close();
+  });
+
+  it("commits physical multiline typing through the registered React text bridge and Undo", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    await page.goto(`${origin}/?react=${version}&mode=floating&bridge=1`);
+    const target = page.locator('#bridge[data-komo-text-prop]');
+    await target.waitFor();
+    await page.keyboard.press('d');
+    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await target.click();
+    const tab = page.getByRole('tab', { name: 'Design', exact: true });
+    if (await tab.count()) await tab.click();
+    await page.getByRole('button', { name: 'Edit selected text inline', exact: true }).click();
+    await page.locator('#bridge[contenteditable="true"]').waitFor();
+    await page.keyboard.press('Shift+Enter');
+    await page.keyboard.type('bridge');
+    await page.keyboard.press('Enter');
+    expect(await target.textContent()).toBe('Original title\nbridge');
+    expect(await page.evaluate(() => (window as any).textQA.props.title)).toBe('Original title\nbridge');
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.waitForFunction(() => (window as any).textQA.props.title === 'Original title');
+    expect(await target.textContent()).toBe('Original title');
+    await page.evaluate(() => (window as any).komo.destroy());
+    await page.close();
+  });
+
+  it("moves canvas siblings without comparing or activating the host, and reveals the selected outline", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    await page.goto(`${origin}/?react=${version}&mode=floating`);
+    await page.locator("#target").waitFor();
+    await page.evaluate(() => {
+      const sibling = document.createElement('p');
+      sibling.id = 'sibling'; sibling.textContent = 'Next element'; sibling.style.marginTop = '1200px';
+      document.querySelector('#target')!.after(sibling);
+    });
+    await page.keyboard.press('d');
+    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await page.locator('#target').click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press('ArrowRight');
+    expect(await page.locator('.design-inspector__target').textContent()).toBe('p#sibling');
+    const rect = await page.locator('#sibling').boundingBox();
+    expect(rect!.y).toBeGreaterThanOrEqual(0);
+    expect(rect!.y).toBeLessThan(800);
+    expect(await page.locator('.design-outline:not(.design-outline--prospective)').isVisible()).toBe(true);
+    await page.keyboard.press('ArrowRight');
+    expect(await page.locator('.design-inspector__target').textContent()).toBe('p#sibling');
+    await page.keyboard.press('ArrowLeft');
+    expect(await page.locator('.design-inspector__target').textContent()).toBe('a#target');
+    expect(await page.evaluate(() => (window as any).textQA.actions)).toBe(0);
+    expect(new URL(page.url()).hash).toBe('');
+    await page.evaluate(() => (window as any).komo.destroy());
+    await page.close();
+  });
+
+  it.each(['Meta+Enter', 'Control+Enter'])("submits the real proposal composer with %s", async shortcut => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    await page.goto(`${origin}/?react=${version}&mode=floating`);
+    await page.locator('#target').waitFor();
+    await page.keyboard.press('d');
+    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await page.locator('#target').click({ position: { x: 5, y: 5 } });
+    const designTab = page.getByRole('tab', { name: 'Design', exact: true });
+    if (await designTab.count()) await designTab.click();
+    await page.getByRole('button', { name: 'Edit selected text inline', exact: true }).click();
+    await page.locator('#target[contenteditable="true"]').waitFor();
+    await page.keyboard.press('Shift+Enter');
+    await page.keyboard.type('proposal');
+    await page.keyboard.press('Enter');
+    await page.locator('.design-inspector__actions button:last-child').click();
+    const composer = page.getByRole('textbox', { name: 'Comment', exact: true });
+    await composer.fill('Please update');
+    await composer.press(shortcut);
+    await page.waitForFunction(() => !!(window as any).textQA.post);
+    const posted = await page.evaluate(() => (window as any).textQA.post);
+    expect(JSON.stringify(posted)).toContain('Please update');
+    expect(posted.body).toContain(JSON.stringify('Original title\nproposal'));
+    expect(await page.evaluate(() => (window as any).textQA.actions)).toBe(0);
+    await page.evaluate(() => (window as any).komo.destroy());
+    await page.close();
+  });
+
   it("restores absent, empty and prioritized focus styles without a DOM observer flushing attributes", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await page.goto(`${origin}/?react=${version}&mode=floating`);
@@ -191,6 +363,8 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       return node === qa.owner && node.querySelector("svg") === qa.icon && node.querySelector("strong")!.firstChild === qa.text && qa.actions === 0;
     });
     const start = async () => {
+      const tab = page.getByRole("tab", { name: "Design", exact: true });
+      if (await tab.count()) await tab.click();
       await page.getByRole("button", { name: "Edit selected text inline", exact: true }).click();
       await page.locator('#target[contenteditable="true"]').waitFor();
     };
@@ -200,55 +374,72 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await start();
     expect(await target.evaluate(node => getComputedStyle(node).outlineColor)).toBe("rgb(189, 166, 239)");
     expect(await target.evaluate(node => getComputedStyle(node).boxShadow)).toBe("none");
-    await page.keyboard.press("Space");
+    await page.keyboard.press("Shift+Enter");
     await page.keyboard.press("q");
     await page.keyboard.press("a");
     await page.keyboard.press("Enter");
-    expect(await text()).toBe("Original title qa");
+    expect(await text()).toBe("Original title\nqa");
     await page.waitForTimeout(400);
-    expect(await target.getAttribute("style")).toBeNull();
+    expect(await target.evaluate(node => getComputedStyle(node).whiteSpace)).toBe("pre-wrap");
+    await page.locator(".design-inspector__compare button").first().waitFor({ state: "visible" });
+    await page.locator(".design-inspector__compare button").first().focus();
     await page.keyboard.press("ArrowLeft");
     expect(await text()).toBe("Original title");
     await page.keyboard.press("ArrowRight");
-    expect(await text()).toBe("Original title qa");
+    expect(await text()).toBe("Original title\nqa");
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     expect(await text()).toBe("Original title");
     await start();
-    await page.keyboard.type(" cancel");
+    await page.keyboard.press("Shift+Enter");
+    await page.keyboard.type("reset");
+    await page.keyboard.press("Meta+Enter");
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    expect(await text()).toBe("Original title");
+    expect(await target.getAttribute("style")).toBeNull();
+    await start();
+    await page.keyboard.press("Shift+Enter");
+    await page.keyboard.type("cancel");
     await page.keyboard.press("Escape");
     expect(await text()).toBe("Original title");
     expect(await target.getAttribute("style")).toBeNull();
     await start();
-    await page.keyboard.type(" proposal");
+    await page.keyboard.press("Shift+Enter");
+    await page.keyboard.type("proposal");
     await page.keyboard.press("Enter");
     await page.evaluate(() => (window as any).textQA.rewrite());
     await page.waitForTimeout(250);
-    expect(await text()).toBe("Original title proposal");
+    expect(await text()).toBe("Original title\nproposal");
+    await page.locator("#target").evaluate(node => (node as HTMLElement).blur());
     await page.keyboard.press("v");
     expect(await text()).toBe("Original title");
     await page.evaluate(() => (window as any).textQA.rewrite());
     await page.waitForTimeout(150);
     expect(await text()).toBe("Host update");
     await page.keyboard.press("d");
-    expect(await text()).toBe("Original title proposal");
+    expect(await text()).toBe("Original title\nproposal");
     await page.locator(".design-inspector__actions button:last-child").click();
     const proposal = page.locator(".draft-proposal");
     await proposal.locator(".design-toggle").waitFor();
     expect(await proposal.getByRole("button", { name: "After", exact: true }).getAttribute("aria-pressed")).toBe("true");
-    expect(await text()).toBe("Original title proposal");
+    expect(await text()).toBe("Original title\nproposal");
     await page.evaluate(() => (window as any).textQA.rewrite());
     await page.waitForTimeout(150);
-    expect(await text()).toBe("Original title proposal");
+    expect(await text()).toBe("Original title\nproposal");
     await proposal.getByRole("button", { name: "Before", exact: true }).click();
     expect(await text()).toBe("Original title");
     await proposal.getByRole("button", { name: "After", exact: true }).click();
-    expect(await text()).toBe("Original title proposal");
+    expect(await text()).toBe("Original title\nproposal");
     await page.keyboard.press("ArrowLeft");
     expect(await text()).toBe("Original title");
     await page.keyboard.press("ArrowRight");
-    expect(await text()).toBe("Original title proposal");
+    expect(await text()).toBe("Original title\nproposal");
     expect(await same()).toBe(true);
-    await page.keyboard.press("Escape");
+    if (mode === "floating") await page.evaluate(() => {
+      history.pushState({}, '', '/next');
+      dispatchEvent(new PopStateEvent('popstate'));
+    });
+    else await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.querySelector('#target strong')?.textContent === 'Original title');
     expect(await text()).toBe("Original title");
     await page.waitForTimeout(400);
     expect(await target.evaluate(node => ({ html: node.innerHTML, attributes: [...node.attributes].map(attr => [attr.name, attr.value]) }))).toEqual(original);

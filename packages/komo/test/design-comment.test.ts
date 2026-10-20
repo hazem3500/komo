@@ -368,7 +368,7 @@ describe("design comments", () => {
     const container = document.createElement("div");
     document.body.append(container);
     renderDesignComment(container, style, { key: "c7", resolve: () => title, note: () => {} });
-    const press = (key: string) => document.body.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    const press = (key: string) => container.querySelector(".design-toggle button")!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
     press("ArrowRight");
     expect(title.style.width).toBe("308px");
     press("ArrowRight");

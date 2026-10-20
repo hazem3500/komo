@@ -1,4 +1,4 @@
-import { createTextPreviewHistory, holdText, lockedText, restoreText, snapshotText, type TextSnapshot } from "./text-preview.js";
+import { createTextPreviewHistory, insertText, holdText, lockedText, restoreText, snapshotText, type TextSnapshot } from "./text-preview.js";
 import { inlineStyleSnapshot } from "./design-preview.js";
 export { createTextPreviewHistory } from "./text-preview.js";
 export type { TextSnapshot, TextPreviewHistory } from "./text-preview.js";
@@ -17,6 +17,7 @@ export interface InlineTextEditResult {
   reactProp?: string;
   /** Text node values before the edit, for elements with nested markup. */
   nodes?: TextSnapshot;
+  multiline?: boolean;
 }
 
 /** Restore text without touching markup: nested elements keep their nodes, so React keeps its references. */
@@ -204,15 +205,6 @@ function placeCaret(element: HTMLElement, offset: number) {
   selection.addRange(range);
 }
 
-function plainTextAtCaret(element: HTMLElement, text: string) {
-  const offset = caretOffset(element);
-  if (offset < 0) return;
-  const current = element.textContent ?? "";
-  const insertion = text.slice(0, Math.max(0, 500 - current.length));
-  setText(element, current.slice(0, offset) + insertion + current.slice(offset));
-  placeCaret(element, offset + insertion.length);
-}
-
 export async function startInlineTextEditor(
   element: HTMLElement,
   options: InlineTextEditorOptions,
@@ -241,6 +233,7 @@ export async function startInlineTextEditor(
   };
   const listeners = new AbortController();
   let finished = false;
+  let composing = false;
 
   function restoreAttributes() {
     element.removeAttribute("contenteditable");
@@ -259,7 +252,7 @@ export async function startInlineTextEditor(
   });
   const input = () => {
     capture();
-    if (rich) return;
+    if (composing || rich) return;
     if ((element.textContent ?? "").length > 500) setText(element, (element.textContent ?? "").slice(0, 500));
     if (reactText && bridge) {
       caret = caretOffset(element);
@@ -267,15 +260,20 @@ export async function startInlineTextEditor(
     }
   };
   /** Replace a range that sits inside one editable text node; anything that would cross markup is ignored. */
+  let newlineCaret: StaticRange | null = null;
+  let multiline = false;
   const replace = (range: StaticRange, text: string) => {
-    const node = range.startContainer;
-    if (node !== range.endContainer || !(node instanceof Text) || !element.contains(node) || node.parentElement?.closest(lockedText)) return;
-    const removed = range.endOffset - range.startOffset;
-    const insertion = text.replace(/[\r\n]+/g, " ").slice(0, Math.max(0, 500 - (element.textContent ?? "").length + removed));
-    node.replaceData(range.startOffset, removed, insertion);
+    if (newlineCaret) range = newlineCaret;
+    newlineCaret = null;
+    const caretRange = insertText(element, range, text);
+    if (!caretRange) return;
     capture();
-    const caretRange = document.createRange();
-    caretRange.setStart(node, range.startOffset + insertion.length);
+    if (text.includes("\n")) multiline = true;
+    // Chrome normalizes a caret after a trailing LF back before it.
+    if (text.endsWith("\n")) newlineCaret = new StaticRange({
+      startContainer: caretRange.startContainer, endContainer: caretRange.endContainer,
+      startOffset: caretRange.startOffset, endOffset: caretRange.endOffset,
+    });
     const selection = document.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(caretRange);
@@ -283,35 +281,48 @@ export async function startInlineTextEditor(
   const beforeInput = (event: InputEvent) => {
     caret = -1;
     // IME composition cannot be cancelled; it edits the focused text node itself.
-    if (reactText || event.inputType === "insertCompositionText") return;
+    if (composing || event.isComposing || event.inputType === "insertCompositionText") return;
+    if (event.inputType === "insertLineBreak" || event.inputType === "insertParagraph") {
+      event.preventDefault();
+      const selection = document.getSelection();
+      const range = event.getTargetRanges()[0] ?? (selection?.rangeCount ? selection.getRangeAt(0) : null);
+      if (range) replace(range, "\n");
+      input();
+      return;
+    }
+    if (reactText && !newlineCaret) return;
     event.preventDefault();
     const range = event.getTargetRanges()[0] as StaticRange | undefined;
     const type = event.inputType;
+    if (newlineCaret && type === "deleteContentBackward") newlineCaret = new StaticRange({
+      startContainer: newlineCaret.startContainer, endContainer: newlineCaret.endContainer,
+      startOffset: Math.max(0, newlineCaret.startOffset - 1), endOffset: newlineCaret.endOffset,
+    });
     if (range && (type.startsWith("delete") || type === "insertText" || type === "insertReplacementText"))
       replace(range, type.startsWith("delete") ? "" : event.data ?? event.dataTransfer?.getData("text/plain") ?? "");
+    if (reactText) input();
   };
   const paste = (event: ClipboardEvent) => {
     event.preventDefault();
     const text = event.clipboardData?.getData("text/plain") ?? "";
     const selection = document.getSelection();
-    if (rich) {
-      if (selection?.rangeCount) replace(selection.getRangeAt(0), text);
-      return;
-    }
-    plainTextAtCaret(element, text.replace(/[\r\n]+/g, " ").slice(0, 500));
+    if (selection?.rangeCount) replace(selection.getRangeAt(0), text);
     input();
   };
   const drop = (event: DragEvent) => event.preventDefault();
   // The browser's own insertion is observed before "input"; only restore after it.
   element.addEventListener("beforeinput", beforeInput, { signal: listeners.signal });
   element.addEventListener("input", input, { signal: listeners.signal });
+  element.addEventListener("compositionstart", () => { composing = true; }, { signal: listeners.signal });
+  element.addEventListener("compositionend", () => { composing = false; input(); }, { signal: listeners.signal });
   if (reactText) keepCaret.observe(element, { childList: true, characterData: true, subtree: true });
   element.addEventListener("paste", paste, { signal: listeners.signal });
   element.addEventListener("drop", drop, { signal: listeners.signal });
+  element.addEventListener("pointerdown", () => { newlineCaret = null; }, { signal: listeners.signal });
   element.setAttribute("contenteditable", "true");
   element.setAttribute("role", "textbox");
   element.setAttribute("aria-label", "Inline text preview");
-  element.setAttribute("aria-multiline", "false");
+  element.setAttribute("aria-multiline", "true");
   element.dataset.komoInlineEditing = "true";
   element.spellcheck = false;
   element.style.setProperty("outline", `2px solid ${options.accent ?? "#bda6ef"}`, "important");
@@ -345,10 +356,15 @@ export async function startInlineTextEditor(
       } else if (reactText && bridge) {
         bridge.finishReactTextEdit(element, reactText.propName, before, after);
       }
-      options.onFinish({ element, before, after, nodes, ...(reactText ? { reactProp: reactText.propName } : {}) }, cancel);
+      options.onFinish({ element, before, after, nodes, multiline, ...(reactText ? { reactProp: reactText.propName } : {}) }, cancel);
     },
     handleKey(event) {
-      if (event.isComposing) return false;
+      if (/^(Arrow|Home|End|Page)/.test(event.key) || event.metaKey || event.ctrlKey) newlineCaret = null;
+      if (composing || event.isComposing || event.keyCode === 229) {
+        event.stopImmediatePropagation();
+        return false;
+      }
+      if (event.key === "Enter" && event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) return false;
       if (event.key === "Enter") {
         event.preventDefault();
         event.stopImmediatePropagation();

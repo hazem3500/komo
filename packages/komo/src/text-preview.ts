@@ -1,6 +1,7 @@
+import { inlineStyleSnapshot } from "./design-preview.js";
 import type { InlineTextEditResult } from "./inline-text-editor.js";
 
-export type TextSnapshot = Array<[Text, string]>;
+export type TextSnapshot = Array<[Text, string]> & { multiline?: boolean };
 export const lockedText = "script,style,svg,input,textarea,select,[data-private],[data-sensitive]";
 
 export function snapshotText(element: HTMLElement): TextSnapshot {
@@ -13,6 +14,21 @@ export function snapshotText(element: HTMLElement): TextSnapshot {
   return nodes;
 }
 
+/** Replace only within one text node, preserving host markup and event owners. */
+export function insertText(element: HTMLElement, range: StaticRange, text: string): Range | null {
+  const node = range.startContainer === element && element.childNodes.length === 1 ? element.firstChild : range.startContainer;
+  if (!(node instanceof Text) || range.startContainer !== range.endContainer || !element.contains(node) || node.parentElement?.closest(lockedText)) return null;
+  const offset = range.startContainer === element ? (range.startOffset ? node.length : 0) : range.startOffset;
+  const end = range.endContainer === element ? (range.endOffset ? node.length : 0) : range.endOffset;
+  const removed = end - offset;
+  const insertion = text.replace(/\r\n?/g, "\n").slice(0, Math.max(0, 500 - (element.textContent ?? "").length + removed));
+  node.replaceData(offset, removed, insertion);
+  const caret = document.createRange();
+  caret.setStart(node, offset + insertion.length);
+  caret.collapse(true);
+  return caret;
+}
+
 export function restoreText(nodes: TextSnapshot, owner: HTMLElement) {
   for (const [node, value] of nodes)
     if ((!node.isConnected || owner.contains(node)) && !node.parentElement?.closest(lockedText) && node.data !== value) node.data = value;
@@ -20,9 +36,11 @@ export function restoreText(nodes: TextSnapshot, owner: HTMLElement) {
 
 /** Keep a visual preview on the same nodes through host text updates; never adopt replacement markup. */
 export function holdText(element: HTMLElement, nodes: TextSnapshot, onLost?: () => void): () => void {
+  const whitespace = nodes.multiline && getComputedStyle(element).whiteSpace !== "pre-wrap" ? inlineStyleSnapshot(element, "white-space") : undefined;
+  if (whitespace) element.style.setProperty("white-space", "pre-wrap", "important");
   restoreText(nodes, element);
   const observer = new MutationObserver(() => {
-    if (!element.isConnected || nodes.some(([node]) => !element.contains(node))) { observer.disconnect(); onLost?.(); }
+    if (!element.isConnected || nodes.some(([node]) => !element.contains(node))) { observer.disconnect(); whitespace?.restore(); onLost?.(); }
     else { restoreText(nodes, element); watch(); }
   });
   const watch = () => {
@@ -33,7 +51,7 @@ export function holdText(element: HTMLElement, nodes: TextSnapshot, onLost?: () 
       observer.observe(parent, { childList: true });
   };
   watch();
-  return () => observer.disconnect();
+  return () => { observer.disconnect(); whitespace?.restore(); };
 }
 
 /** Apply only the changed character range, retaining every element and text node. */
@@ -79,7 +97,7 @@ export interface TextPreviewHistory {
 }
 
 export function createTextPreviewHistory(): TextPreviewHistory {
-  const originals = new Map<HTMLElement, { text: string; nodes: TextSnapshot }>();
+  const originals = new Map<HTMLElement, { text: string; nodes: TextSnapshot; whitespace: string }>();
   const edits: InlineTextEditResult[] = [];
   const previews = new Map<HTMLElement, () => void>();
   const current = new Map<HTMLElement, TextSnapshot>();
@@ -91,14 +109,17 @@ export function createTextPreviewHistory(): TextPreviewHistory {
     resume(element) { const nodes = current.get(element); if (nodes) show(element, nodes); },
     record(result) {
       if (result.reactProp || result.before === result.after) return;
-      if (!originals.has(result.element)) originals.set(result.element, { text: result.before, nodes: result.nodes ?? snapshotText(result.element) });
+      if (!originals.has(result.element)) originals.set(result.element, { text: result.before, nodes: result.nodes ?? snapshotText(result.element), whitespace: getComputedStyle(result.element).whiteSpace || "normal" });
+      const multiline = current.get(result.element)?.multiline;
+      if (result.nodes) result.nodes.multiline = multiline;
       edits.push(result);
       const nodes = snapshotText(result.element);
+      nodes.multiline = (result.multiline || multiline) && result.after.includes("\n");
       current.set(result.element, nodes);
       show(result.element, nodes);
     },
     remember(element, text) {
-      if (!originals.has(element)) originals.set(element, { text, nodes: snapshotText(element) });
+      if (!originals.has(element)) originals.set(element, { text, nodes: snapshotText(element), whitespace: getComputedStyle(element).whiteSpace || "normal" });
     },
     original(element) { return originals.get(element)?.text; },
     reconcile(element, text) { if (originals.get(element)?.text === text) clear(element); },
@@ -113,7 +134,7 @@ export function createTextPreviewHistory(): TextPreviewHistory {
       const before = originals.get(element)?.text;
       const after = current.get(element)?.map(([, value]) => value).join("") ?? element.textContent ?? "";
       return before !== undefined && before !== after
-        ? `Proposed inline text change (preview only)\n- Text: ${JSON.stringify(before)} → ${JSON.stringify(after)}\n- Source markup is unchanged; refresh resets this preview.`
+        ? `Proposed inline text change (preview only)\n- Text: ${JSON.stringify(before)} → ${JSON.stringify(after)}${current.get(element)?.multiline ? `\n- white-space: ${originals.get(element)!.whitespace} → pre-wrap` : ""}\n- Source markup is unchanged; refresh resets this preview.`
         : undefined;
     },
     restoreAll() {
@@ -137,6 +158,7 @@ export function createTextPreviewHistory(): TextPreviewHistory {
       if (originals.get(edit.element)?.text === edit.before) clear(edit.element);
       else {
         const nodes = snapshotText(edit.element);
+        nodes.multiline = edit.nodes?.multiline;
         current.set(edit.element, nodes);
         show(edit.element, nodes);
       }

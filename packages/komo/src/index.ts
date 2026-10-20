@@ -5236,6 +5236,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             panelRoot: sidebar,
             host,
             exitKey: shortcuts.design?.label,
+            reservedKey: event => Object.values(shortcuts).some(shortcut => matchesShortcut(event, shortcut)),
             design: options.design,
             page,
             bounds: element => framed && surface.contains(element) ? surface.getBoundingClientRect() : undefined,
