@@ -119,6 +119,14 @@ export interface TokenAdapter {
    * as proposals, labelled "No live preview".
    */
   previewValues?(changes: TokenValueChange[], theme?: string): () => void;
+  /**
+   * For token sets that change at runtime: call `onChange` when `list()` would
+   * return something different, and stop when the returned function runs. komo
+   * subscribes once Design mode shows tokens; on each call it lists again and
+   * refreshes chips, proposals and open pickers. Without it, `list()` runs once
+   * per theme state.
+   */
+  subscribe?(onChange: () => void): () => void;
 }
 
 /** Theme state: axis id → option id, e.g. { mode: "dark", product: "docs" }. */

@@ -140,7 +140,9 @@ export function themeState(design?: DesignSystem): ThemeState {
   return state;
 }
 
+/** Run `update` when the theme state changes, or when `design.tokens` reports a new token set. */
 export function watchThemes(design: DesignSystem | undefined, document: Document, update: () => void, signal: AbortSignal): void {
+  watchTokenList(design?.tokens, update, signal);
   if (signal.aborted || !design?.themes?.length) return;
   let key = JSON.stringify(themeState(design));
   const changed = () => {
@@ -166,7 +168,25 @@ export function watchThemes(design: DesignSystem | undefined, document: Document
   }, { once: true });
 }
 
-/** `list()` runs once per adapter and theme state; a failed call is retried next time. */
+/**
+ * Run `update` after an adapter with `subscribe()` reports a new token set, until
+ * `signal` aborts. Each report drops the adapter's cached lists. Adapters without
+ * `subscribe()` cost nothing.
+ */
+export function watchTokenList(adapter: TokenAdapter | undefined, update: () => void, signal: AbortSignal): void {
+  if (!adapter?.subscribe || signal.aborted) return;
+  // Changes made while nobody was subscribed went unreported.
+  lists.delete(adapter);
+  try {
+    const stop = adapter.subscribe(() => {
+      lists.delete(adapter);
+      update();
+    });
+    signal.addEventListener("abort", () => { try { stop(); } catch { /* Ignore a failing unsubscribe. */ } }, { once: true });
+  } catch { /* An adapter whose subscribe() throws keeps its cached lists. */ }
+}
+
+/** `list()` runs once per adapter and theme state, until a subscribed adapter reports a change; a failed call is retried next time. */
 export function listTokens(adapter: TokenAdapter, theme: ThemeState = {}): Promise<DesignToken[]> {
   let cache = lists.get(adapter);
   if (!cache) lists.set(adapter, (cache = new Map()));

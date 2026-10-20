@@ -38,8 +38,9 @@ beforeAll(async () => {
   await build({
     stdin: { contents: `
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
-      const adapter = tailwindTokens({ tokens: ${JSON.stringify(classes)}.map(name => ({ path: name, type: "dimension", class: name, properties: ["padding"], value: "1px" })) }, { onlyGenerated: true });
-      window.listed = () => adapter.list({}).map(token => token.path);
+      const table = { tokens: ${JSON.stringify(classes)}.map(name => ({ path: name, type: "dimension", class: name, properties: ["padding"], value: "1px" })) };
+      const adapter = tailwindTokens(table, { onlyGenerated: true }), strict = tailwindTokens(table, { onlyGenerated: { strict: true } });
+      window.listed = (mode) => (mode === "strict" ? strict : adapter).list({}).map(token => token.path);
     `, resolveDir: process.cwd(), loader: "ts" },
     outfile: join(directory, "entry.js"), bundle: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -54,11 +55,13 @@ beforeAll(async () => {
     if (url.pathname === "/") {
       const extra = { cross: `<link rel="stylesheet" href="${crossOrigin}/plain.css">`, cors: `<link rel="stylesheet" crossorigin href="${crossOrigin}/cors.css">`, import: `<style>@import url("${crossOrigin}/plain.css");</style>` }[url.searchParams.get("case") ?? ""] ?? "";
       response.setHeader("content-type", "text/html");
-      response.end(`<!doctype html><link rel="stylesheet" href="/app.css">${extra}<main>Fixture</main><script type="module" src="/entry.js"></script>`);
+      const app = url.searchParams.get("case") === "app-import" ? "/app-import.css" : "/app.css";
+      response.end(`<!doctype html><link rel="stylesheet" href="${app}">${extra}<main>Fixture</main><script type="module" src="/entry.js"></script>`);
     } else if (url.pathname.endsWith(".css")) {
       if (url.pathname === "/slow.css") await new Promise((done) => setTimeout(done, 400));
       response.setHeader("content-type", "text/css");
-      response.end(url.pathname === "/slow.css" ? ".p-16{padding:64px}" : appCss);
+      // Like an app sheet that starts with @import url(https://<font CDN>/css2?…), served without CORS.
+      response.end(url.pathname === "/slow.css" ? ".p-16{padding:64px}" : url.pathname === "/app-import.css" ? `@import url("${crossOrigin}/plain.css");\n${appCss}` : appCss);
     } else if (url.pathname === "/entry.js") {
       response.setHeader("content-type", "text/javascript");
       response.end(await readFile(join(directory, "entry.js")));
@@ -84,7 +87,7 @@ async function open(query = ""): Promise<Page> {
   await page.waitForFunction(() => typeof (window as unknown as { listed?: unknown }).listed === "function");
   return page;
 }
-const listed = (page: Page) => page.evaluate(() => (window as unknown as { listed: () => string[] }).listed());
+const listed = (page: Page, mode?: "strict") => page.evaluate((mode) => (window as unknown as { listed: (mode?: string) => string[] }).listed(mode), mode);
 
 describe.skipIf(!chrome)("tailwindTokens onlyGenerated in Chrome", () => {
   it("matches Chrome's serialized selectors, including escapes, variants, layers and nesting", async () => {
@@ -104,6 +107,10 @@ describe.skipIf(!chrome)("tailwindTokens onlyGenerated in Chrome", () => {
     expect(await listed(page)).toEqual([...generated.slice(0, 1), "p-9", ...generated.slice(1)]);
     await page.evaluate(() => { document.getElementById("late")!.textContent = ".p-14{padding:56px}"; });
     expect(await listed(page)).toEqual(generated);
+    await page.evaluate(() => { document.getElementById("late")!.textContent = ".p-9{padding:36px}"; });
+    expect(await listed(page)).toContain("p-9");
+    await page.evaluate(() => document.getElementById("late")!.remove());
+    expect(await listed(page)).toEqual(generated);
     await page.evaluate(() => { (document.styleSheets[0] as CSSStyleSheet).insertRule(".p-6{padding:24px}", 0); });
     expect(await listed(page)).toContain("p-6");
     await page.evaluate(() => {
@@ -120,10 +127,11 @@ describe.skipIf(!chrome)("tailwindTokens onlyGenerated in Chrome", () => {
     await page.close();
   });
 
-  it("keeps every token while a cross-origin sheet is unreadable, and reads it with CORS", async () => {
-    for (const query of ["?case=cross", "?case=import"]) {
+  it("skips an unreadable cross-origin sheet or @import by default, keeps every token with strict, and reads it with CORS", async () => {
+    for (const query of ["?case=cross", "?case=import", "?case=app-import"]) {
       const page = await open(query);
-      expect(await listed(page)).toEqual(classes);
+      expect(await listed(page)).toEqual(generated);
+      expect(await listed(page, "strict")).toEqual(classes);
       await page.close();
     }
     const page = await open("?case=cors");
