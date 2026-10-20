@@ -243,13 +243,13 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("the color picke
     await tab.close();
   });
 
-  it.each(["light", "dark"])("stays 240px wide, inside the viewport and off the field near the panel bottom (%s page)", async theme => {
+  it.each(["light", "dark"])("stays 256px wide like every Custom editor, inside the viewport and off the field near the panel bottom (%s page)", async theme => {
     const { tab, errors } = await open(mode, { theme, viewport: { width: 1280, height: 700 } });
     await tab.locator(".design-inspector__controls").evaluate(node => { node.scrollTop = node.scrollHeight; });
     await settle(tab);
     const popup = await picker(tab, "border-color");
     const box = (await popup.boundingBox())!, field = (await tab.locator('[data-field-property="border-color"]').boundingBox())!;
-    expect(box.width).toBeLessThanOrEqual(240);
+    expect(box.width).toBeLessThanOrEqual(256);
     expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.y + box.height).toBeLessThanOrEqual(700);
     expect(box.y + box.height <= field.y || box.y >= field.y + field.height).toBe(true);

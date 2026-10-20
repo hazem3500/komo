@@ -300,7 +300,8 @@ export function pickerEditor(options: TokenPickerOptions, host: ColorEditorHost)
       if (numeric) input.inputMode = "decimal";
       const typed = (text: string): boolean => {
         if (format === "CSS") { const ok = !!text.trim() && !!globalThis.CSS?.supports?.(property, text) && !/[{};]/.test(text); if (ok) { raw = text.trim(); read(text); } return ok; }
-        if (!numeric) return /^[\da-f]{3}([\da-f]{3})?$/i.test(text.trim()) && read(text);
+        // Hex digits set the color; the opacity channel keeps its own value.
+        if (!numeric) { const opacity = a; const ok = /^[\da-f]{3}([\da-f]{3})?$/i.test(text.trim()) && read(text); a = opacity; return ok; }
         const number = Number(text);
         if (text.trim() === "" || !Number.isFinite(number)) return false;
         const values = [...channels.querySelectorAll("input")].map(item => Number(item === input ? number : item.value));
@@ -433,17 +434,6 @@ export function pickerEditor(options: TokenPickerOptions, host: ColorEditorHost)
   };
   setTimeout(() => { if (box.isConnected) fill(); }, 16);
 
-  // Tab stays inside the popup, from its last control back to its first and the other way.
-  queueMicrotask(() => box.parentElement?.addEventListener("keydown", event => {
-    if (event.key !== "Tab" || box.hidden) return;
-    const popup = box.parentElement!;
-    const focusable = [...popup.querySelectorAll<HTMLElement>("button,input,select,[tabindex='0']")].filter(node => !node.closest("[hidden]") && node.getClientRects().length);
-    const current = (popup.getRootNode() as Document | ShadowRoot).activeElement;
-    const edge = event.shiftKey ? focusable[0] : focusable[focusable.length - 1];
-    if (current !== edge) return;
-    event.preventDefault();
-    focusable[event.shiftKey ? focusable.length - 1 : 0]?.focus();
-  }));
 
   paint();
   return Object.assign(box, {

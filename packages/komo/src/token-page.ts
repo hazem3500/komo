@@ -200,6 +200,30 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
   searchBar.append(search);
   const list = make("div", "design-token-page__list");
   view.append(note, searchBar, list);
+  // A row's details show in komo's tooltip beside the panel, or above a narrow sheet, so it never
+  // covers rows or group headings; only without room for either does it show below the row.
+  const tip = make("div", "morphing-menu__tooltip sidebar-tooltip");
+  tip.setAttribute("aria-hidden", "true");
+  let tipTimer = 0;
+  const hideTip = () => { clearTimeout(tipTimer); delete tip.dataset.open; };
+  const showTip = (event: Event) => {
+    const row = (event.target as Element | null)?.closest?.<HTMLElement>(".design-token-row > button[data-tip]");
+    if (!row || (event.type === "focusin" && !row.matches(":focus-visible"))) return hideTip();
+    clearTimeout(tipTimer);
+    tipTimer = window.setTimeout(() => {
+      if (!row.isConnected) return;
+      if (!tip.isConnected) host.root.append(tip);
+      tip.textContent = row.dataset.tip ?? "";
+      const box = row.getBoundingClientRect(), side = panel.getBoundingClientRect(), half = tip.offsetWidth / 2;
+      const beside = side.left - 8 - tip.offsetWidth > 8, above = side.top - 8 - tip.offsetHeight > 8;
+      tip.style.left = `${beside ? side.left - 8 - half : Math.max(8 + half, Math.min(innerWidth - 8 - half, box.left + box.width / 2))}px`;
+      tip.style.top = `${beside ? box.top + (box.height - tip.offsetHeight) / 2 : above ? side.top - 8 - tip.offsetHeight : box.bottom + 6}px`;
+      tip.dataset.open = "true";
+    }, tip.dataset.open ? 0 : 400);
+  };
+  list.addEventListener("pointerover", showTip);
+  list.addEventListener("focusin", showTip);
+  for (const type of ["pointerleave", "pointerdown", "focusout", "scroll"]) list.addEventListener(type, hideTip);
 
   // The footer is Design mode's bar: change count, Before/After, Undo, Reset all and Comment.
   const bar = make("div", "design-inspector__bar design-token-bar");
@@ -329,7 +353,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
       const shown = edited?.value ?? token.value;
       value.textContent = alias ? labelOf(alias) : shown;
       main.replaceChildren(picker.tokenPreview({ ...token, value: shown }), name, value);
-      main.title = [token.path, token.ref, alias ? `${alias} · ${shown}` : shown, token.description].filter(Boolean).join(" · ");
+      main.dataset.tip = [token.path, token.ref, alias ? `${alias} · ${shown}` : shown, token.description].filter(Boolean).join(" · ");
       main.setAttribute("aria-label", `${name.textContent}, ${value.textContent}${edited ? ", edited" : ""}`);
       item.toggleAttribute("data-changed", !!edited);
       back.disabled = !edited;
@@ -400,6 +424,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     events = undefined;
     panel.removeAttribute("data-tokens");
     bar.remove();
+    hideTip();
   }
 
   // Design mode's Before/After, closing (which shows Before and hides the panel) and destroy
@@ -417,6 +442,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     edits.stop();
     changed?.();
     style.remove();
+    tip.remove();
     pages.delete(panel);
   }).observe(panel, { attributes: true, attributeFilter: ["data-before", "aria-hidden"] });
   // Adapters that cannot scope a value to its theme preview the current theme's edits.

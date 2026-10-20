@@ -33,6 +33,9 @@ const geometry = (await readdir("dist"))
 const liveColors = (await readdir("dist"))
   .filter((file) => /^live-colors.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const typedEditor = (await readdir("dist"))
+  .filter((file) => /^token-custom.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const colorEditor = (await readdir("dist"))
   .filter((file) => /^color-editor.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
@@ -88,6 +91,7 @@ const report = {
   optionalAccountTokens: await sizes(new Set(accountTokens)),
   optionalLiveColors: await sizes(new Set(liveColors)),
   optionalColorEditor: await sizes(new Set(colorEditor)),
+  optionalTypedEditor: await sizes(new Set(typedEditor)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
   adapterCssVariables: await sizes(new Set(["dist/adapters/css-variables.js"])),
   adapterReactFiber: await sizes(new Set(["dist/adapters/react-fiber.js"])),
@@ -226,6 +230,11 @@ if (report.optionalLiveColors.gzip > 725)
 // the React color picker it replaces. 6,307 measured, plus ~3%.
 if (report.optionalColorEditor.gzip > 6_500)
   throw new Error("komo's color editor chunk exceeds its gzip budget.");
+// The typed Custom editors (lengths, spacing, radius, shadows, fonts: compact fields with inline
+// units, scrubbing, nudges and live apply) load the first time a non-color Custom tab opens.
+// 3,009 with the Apply form; the compact live fields and in-place shadow layers measure 4,564, plus ~3%.
+if (report.optionalTypedEditor.gzip > 4_700)
+  throw new Error("komo's typed Custom editor chunk exceeds its gzip budget.");
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.
