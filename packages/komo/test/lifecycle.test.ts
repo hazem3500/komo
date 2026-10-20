@@ -1385,8 +1385,11 @@ it.each([1, 3])("keeps route, tags and %s reply previews separate from thread na
   const toggle = item.querySelector<HTMLButtonElement>(".card-reply-toggle")!;
   const previews = item.querySelector<HTMLElement>(".sidebar-replies")!;
   const resolve = item.querySelector<HTMLButtonElement>(".card-resolve")!;
-  expect(route.textContent).toBe(destination);
-  expect(route.title).toBe(new URL(destination, location.origin).href);
+  const destinationUrl = new URL(destination, location.origin);
+  expect(route.textContent).toBe("projects › 123456789 › calendar › a long destination");
+  expect(route.title).toBe(destinationUrl.href);
+  expect(route.getAttribute("aria-label")).toBe(`Open page: ${destinationUrl.href}`);
+  expect(item.querySelector(".card-page-url")!.textContent).toBe(destinationUrl.href);
   expect(card.getAttribute("aria-description")).toContain(route.title);
   expect(tags.previousElementSibling?.textContent).toBe(main.comments[0].body);
   expect(tags.children).toHaveLength(2);
@@ -1411,8 +1414,12 @@ it.each([1, 3])("keeps route, tags and %s reply previews separate from thread na
   expect(empty.querySelector<HTMLElement>(".card-page-row")!.hidden).toBe(true);
   expect(empty.querySelector<HTMLElement>(".card-status")!.hidden).toBe(true);
   expect(empty.querySelector(".card-tags")).toBeNull();
-  expect(empty.querySelector(".card-reply-toggle")).toBeNull();
-  expect(empty.querySelector(".sidebar-replies")).toBeNull();
+  const emptyToggle = empty.querySelector<HTMLButtonElement>(".card-reply-toggle")!;
+  const emptyPreviews = empty.querySelector<HTMLElement>(".sidebar-replies")!;
+  expect(emptyToggle.textContent).toBe("Reply");
+  expect(emptyPreviews.hidden).toBe(true);
+  expect(emptyPreviews.querySelectorAll(".sidebar-reply")).toHaveLength(0);
+  expect(emptyPreviews.querySelector("textarea")).toBeTruthy();
   card.click();
   await vi.waitFor(() => expect(navigate).toHaveBeenCalledOnce());
   const url = navigate.mock.calls[0][0] as URL;

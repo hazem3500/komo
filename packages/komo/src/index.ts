@@ -1,3 +1,4 @@
+import { readablePageLabel } from "./page-label.js";
 import {
   connectProject,
   rememberProject,
@@ -519,6 +520,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     frame = 0,
     githubTimer = 0;
   const replies = new Map<string, string>();
+  const replySelections = new Map<string, [number, number, "forward" | "backward" | "none"]>();
   const host = el("div");
   host.dataset.branchComments = "";
   host.dataset.sidebar = compactSidebar
@@ -2563,22 +2565,38 @@ export function initComments(options: CommentsOptions): CommentsController {
   let pinSnapshot = "";
   // Threads on this page whose element can no longer be found or is not visible.
   const detachedThreads = new Set<string>();
-  const pageLabel = (thread: Thread) =>
-    thread.page !== page()
-      ? thread.page
-      : detachedThreads.has(thread.id)
-        ? "Not found on page"
-        : "";
+  const pageLabels = new Map<string, Promise<string>>();
   function updateCardPage(item: Element, thread: Thread) {
-    const route = item.querySelector<HTMLElement>(".page");
+    const route = item.querySelector<HTMLAnchorElement>(".page");
     if (!route) return;
     const url = new URL(thread.page, location.origin).href;
-    route.textContent = thread.page !== page() ? thread.page : "";
+    route.href = url;
     route.title = url;
-    route.parentElement!.hidden = !route.textContent;
+    route.setAttribute("aria-label", `Open page: ${url}`);
+    const row = route.closest<HTMLElement>(".card-page-row")!;
+    row.hidden = thread.page === page();
+    row.querySelector(".card-page-url")!.textContent = url;
+    if (route.dataset.url !== url) {
+      route.dataset.url = url;
+      const fallback = readablePageLabel(new URL(url));
+      route.textContent = fallback;
+      if (options.pageLabel) {
+        let label = pageLabels.get(url);
+        if (!label) {
+          label = Promise.resolve().then(() => options.pageLabel!(new URL(url)))
+            .then(value => value?.trim() || fallback, () => fallback);
+          pageLabels.set(url, label);
+        }
+        void label.then(value => {
+          if (!destroyed && route.dataset.url === url) route.textContent = value;
+        });
+      }
+    }
     const status = item.querySelector<HTMLElement>(".card-status")!;
     status.textContent = thread.resolved ? "Resolved" : detachedThreads.has(thread.id) ? "Not found on page" : "";
     status.hidden = !status.textContent;
+    item.classList.toggle("resolved", thread.resolved);
+    item.classList.toggle("active", selected === thread.id);
     item.querySelector(".thread-card")!.setAttribute("aria-description", [url, status.textContent].filter(Boolean).join(" · "));
   }
   let pinsScrolling = false;
@@ -3098,6 +3116,10 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (!expanded && (edgeSidebar || compactSidebar)) return;
     const existingList = sidebar.querySelector(".list");
     const scroll = existingList?.scrollTop ?? 0;
+    const editing = shadow.activeElement?.closest<HTMLElement>(".thread-item");
+    const retained = editing?.querySelector(".reply-composer")?.contains(shadow.activeElement)
+      ? editing : null;
+    const retainedMarker = el("div");
     const focusedSearch =
       shadow.activeElement?.getAttribute("aria-label") === "Search comments";
     const searchCaret = focusedSearch
@@ -3413,7 +3435,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           previous.set(card.dataset.thread, box.top);
       }
     }
-    const list = el("div", "list");
+    let list = el("div", "list");
     const rows = filtered();
     if (rows.length > 40) list.dataset.long = "";
     const loading = !knownThreads && connection === "Connecting";
@@ -3446,7 +3468,10 @@ export function initComments(options: CommentsOptions): CommentsController {
           node.textContent = `${reply.author.name} · ${age(reply.createdAt)}`;
         });
         updateCardPage(cached, thread);
-        list.append(cached);
+        const input = cached.querySelector("textarea");
+        if (input && shadow.activeElement !== input)
+          requestAnimationFrame(() => input.dispatchEvent(new Event("komo-sync-reply")));
+        list.append(cached === retained ? retainedMarker : cached);
         continue;
       }
       const card = button(
@@ -3462,10 +3487,20 @@ export function initComments(options: CommentsOptions): CommentsController {
         el("small", "", age(first.createdAt)),
       );
       const route = el("div", "card-page-row");
-      route.append(icon("link"), el("span", "page"));
+      const pageLink = el("a", "page", "Page link");
+      pageLink.addEventListener("click", event => {
+        event.preventDefault();
+        selectThread(thread);
+      });
+      const copyPage = button("Copy page URL", () => run(async () => {
+        await navigator.clipboard.writeText(new URL(thread.page, location.origin).href);
+        notify("Page URL copied");
+      }), "icon card-page-copy", "copy");
+      const fullUrl = el("span", "card-page-url");
+      route.append(icon("link"), pageLink, copyPage, fullUrl);
       const status = el("span", "card-status");
       const preview = summary(el("p", "preview"), first.body);
-      card.append(header, route, status, preview);
+      card.append(header, status, preview);
       if (tagsEnabled && thread.tags?.length) {
         const tags = el("div", "card-tags");
         tags.setAttribute("role", "group");
@@ -3477,7 +3512,13 @@ export function initComments(options: CommentsOptions): CommentsController {
         }
         card.append(tags);
       }
-      const item = el("div", "thread-item");
+      const keep = retained?.dataset.thread === thread.id ? retained : null;
+      const item = keep ?? el("div", "thread-item");
+      const livePreviews = keep?.querySelector<HTMLElement>(".sidebar-replies");
+      const liveComposer = livePreviews?.querySelector(".reply-composer");
+      if (keep) for (const child of [...keep.children]) {
+        if (child !== livePreviews) child.remove();
+      }
       item.dataset.thread = thread.id;
       const quickResolve = button(
         thread.resolved ? "Reopen comment" : "Resolve comment",
@@ -3486,20 +3527,25 @@ export function initComments(options: CommentsOptions): CommentsController {
         "check",
       );
       quickResolve.disabled = !canResolve();
-      item.append(card, quickResolve);
+      item.insertBefore(card, livePreviews ?? null);
+      item.insertBefore(quickResolve, livePreviews ?? null);
+      item.insertBefore(route, livePreviews ?? null);
       updateCardPage(item, thread);
-      if (thread.comments.length > 1) {
-        const previews = el("div", "sidebar-replies");
+      {
+        const previews = livePreviews ?? el("div", "sidebar-replies");
+        if (liveComposer) for (const child of [...previews.children]) {
+          if (child !== liveComposer) child.remove();
+        }
         previews.id = `replies-${thread.id}`;
         previews.setAttribute("role", "group");
         previews.setAttribute("aria-label", `Replies to ${first.author.name}`);
-        const count = `${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}`;
+        const count = thread.comments.length === 1 ? "Reply" : `${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}`;
         const toggle = button(count, () => {
           if (expandedReplies.has(thread.id)) expandedReplies.delete(thread.id);
           else expandedReplies.add(thread.id);
           syncReplies();
         }, "card-reply-toggle");
-        toggle.replaceChildren(icon("comment"), el("span", "", count), icon("chevron"));
+        toggle.replaceChildren(el("span", "", count), icon("chevron"));
         toggle.setAttribute("aria-controls", previews.id);
         const syncReplies = () => {
           const open = expandedReplies.has(thread.id);
@@ -3507,6 +3553,9 @@ export function initComments(options: CommentsOptions): CommentsController {
           toggle.setAttribute("aria-expanded", String(open));
           toggle.setAttribute("aria-label", `${open ? "Hide" : "Show"} ${count}`);
           toggle.title = `${open ? "Hide" : "Show"} ${count}`;
+          if (open) requestAnimationFrame(() =>
+            previews.querySelector("textarea")?.dispatchEvent(new Event("komo-sync-reply")),
+          );
         };
         syncReplies();
         for (const reply of thread.comments.slice(1)) {
@@ -3522,20 +3571,22 @@ export function initComments(options: CommentsOptions): CommentsController {
             el("p", "", reply.body),
           );
           row.append(content);
-          previews.append(row);
+          previews.insertBefore(row, liveComposer ?? null);
         }
-        item.append(toggle, previews);
-        item.addEventListener("keydown", (event) => {
+        if (!liveComposer) previews.append(composer(thread));
+        item.insertBefore(toggle, livePreviews ?? null);
+        if (!livePreviews) item.append(previews);
+        item.onkeydown = (event) => {
           if (event.key !== "Escape" || !expandedReplies.has(thread.id)) return;
           event.preventDefault();
           event.stopPropagation();
           expandedReplies.delete(thread.id);
           syncReplies();
           toggle.focus({ preventScroll: true });
-        });
+        };
       }
       listItems.set(thread, item);
-      list.append(item);
+      list.append(keep ? retainedMarker : item);
     }
     if (!list.childElementCount) {
       const empty = el("div", "empty");
@@ -3615,7 +3666,20 @@ export function initComments(options: CommentsOptions): CommentsController {
       list.prepend(
         button("Saved comments · Try again", retryConnection, "secondary"),
       );
-    if (existingList) existingList.replaceWith(list);
+    if (existingList && retained && retainedMarker.parentNode === list) {
+      // Keep the editing subtree connected: moving it would end native composition.
+      for (const child of [...existingList.children]) if (child !== retained) child.remove();
+      for (const child of [...list.children]) {
+        if (child === retainedMarker) break;
+        existingList.insertBefore(child, retained);
+      }
+      retainedMarker.remove();
+      existingList.append(...list.childNodes);
+      existingList.setAttribute("aria-busy", String(loading));
+      if (rows.length > 40) (existingList as HTMLElement).dataset.long = "";
+      else delete (existingList as HTMLElement).dataset.long;
+      list = existingList as HTMLDivElement;
+    } else if (existingList) existingList.replaceWith(list);
     else panel.append(list);
     syncTips(!!list.querySelector(".empty [aria-label='Add a comment']"));
     requestAnimationFrame(pointTips);
@@ -4028,6 +4092,15 @@ export function initComments(options: CommentsOptions): CommentsController {
     input.value = thread ? (replies.get(thread.id) ?? "") : draftText;
     input.setAttribute("aria-label", thread ? "Reply" : "Comment");
     input.dataset.focusKey = "body";
+    if (thread) {
+      const selection = replySelections.get(thread.id);
+      if (selection) input.setSelectionRange(...selection);
+      const rememberSelection = () => replySelections.set(thread.id,
+        [input.selectionStart, input.selectionEnd, input.selectionDirection]);
+      input.addEventListener("select", rememberSelection);
+      input.addEventListener("keyup", rememberSelection);
+      input.addEventListener("pointerup", rememberSelection);
+    }
     const resizeInput = () => {
       input.style.height = "auto";
       input.style.height = `${Math.min(128, Math.max(thread ? 34 : 28, input.scrollHeight))}px`;
@@ -4074,6 +4147,14 @@ export function initComments(options: CommentsOptions): CommentsController {
       send.disabled = pending || (!input.value.trim() && !proposal);
     });
     send.disabled ||= !input.value.trim() && !proposal;
+    input.addEventListener("komo-sync-reply", () => {
+      if (!thread || !input.isConnected || (shadow.activeElement === input && replies.has(thread.id))) return;
+      input.value = replies.get(thread.id) ?? "";
+      const selection = replySelections.get(thread.id);
+      if (selection) input.setSelectionRange(...selection);
+      send.disabled = pending || !input.value.trim();
+      if (!input.closest<HTMLElement>(".sidebar-replies")?.hidden) resizeInput();
+    });
     if (proposal) {
       const card = el("div", "draft-proposal");
       card.textContent = proposal;
@@ -5934,6 +6015,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     draftText = draftProposal = "";
     draftTags = [];
     replies.clear();
+    replySelections.clear();
     recoveredDrafts.length = 0;
     queuedProfile = profileDraft = confirmedProfile = null;
     profileRevision++;

@@ -1,0 +1,24 @@
+import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
+import { mkdir, readFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+const require = createRequire(resolve('packages/komo/package.json'));
+const { build } = require('esbuild');
+const out = '/private/tmp/komo-conversation-review';
+await mkdir(out, {recursive:true});
+const before = process.argv.includes('--before');
+await build({stdin:{contents:`
+import {initKomo} from ${JSON.stringify(resolve('packages/komo/src/index.ts'))};
+const user={id:'fixture',name:'Alex Morgan',verified:true};
+const anchor={selector:'#target',text:'',x:.5,y:.5,width:0,height:0,pageX:0,pageY:0,viewportWidth:1280};
+const comment=(id,body,name='Alex Morgan')=>({id,body,author:{...user,name},createdAt:Date.now()-600000,editedAt:null,reactions:{}});
+const thread=(id,page,body,replies=[],tags=[])=>({id,page,anchor,resolved:false,resolvedBy:null,createdAt:Date.now(),updatedAt:Date.now(),tags,comments:[comment(id,body),...replies]});
+const threads=[thread('one','/reports/123/summary','The summary needs a little more context. Could we show which period these figures cover?',[comment('reply','Agreed. A date range beside the heading would help.','Sam Lee')],['content','review']),thread('many','/','@Alex the longer explanation should wrap naturally.\\nKeep the description together with the relevant actions.',[comment('r2','This is a second point with a longer explanation that wraps across several lines.','Sam Lee'),comment('r3','Thanks, that makes sense.','Taylor Reed')],['accessibility','a-long-tag-that-still-needs-to-wrap-without-overflow']),thread('zero','/','The empty state is clear and easy to read.')];
+window.qa={writes:[],navigation:[],threads};
+Object.defineProperty(navigator,'clipboard',{value:{writeText:async value=>window.qa.copied=value}});
+window.fetch=async(input,init)=>{const method=init?.method||'GET';if(method!=='GET'){window.qa.writes.push(method);throw Error('Fixture is read only')}const path=new URL(String(input),location.origin).pathname;return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads}:{});};
+window.komo=initKomo({endpoint:location.origin,project:'neutral-conversation',repo:'example/fixture',branch:'local',restoreOpen:false,sidebar:new URLSearchParams(location.search).get('mode')==='frame'?'background':'edge',pageRoot:document.querySelector('main'),pageLabel:url=>url.pathname==='/reports/123/summary'&&new URLSearchParams(location.search).has('deferred')?new Promise(resolve=>window.qa.resolveLabel=resolve):url.pathname==='/reports/123/summary'?'Reports › Summary':undefined,navigate:url=>{window.qa.navigation.push(url.href);history.pushState({},'',url);window.dispatchEvent(new PopStateEvent('popstate'));}});
+window.komo.open();
+`,resolveDir:process.cwd(),loader:'ts'},plugins:before?[{name:'baseline',setup(b){b.onLoad({filter:/\/src\/(index|styles|types)\.ts$/},async args=>({contents:await readFile('/private/tmp/komo-u02-before/'+args.path.split('/').pop(),'utf8'),loader:'ts',resolveDir:resolve('packages/komo/src')}));}}]:[],outdir:out,entryNames:before?'before':'after',bundle:true,splitting:true,format:'esm',target:'es2022',platform:'browser'});
+const server=createServer(async(req,res)=>{const path=new URL(req.url,'http://localhost').pathname;if(path.endsWith('.js')){try{res.setHeader('content-type','text/javascript');res.end(await readFile(resolve(out,'.'+path)));}catch{res.statusCode=404;res.end();}return;}res.setHeader('content-type','text/html');res.end(`<style>body{margin:0;background:#f6f5f2;color:#303330;font:16px system-ui}main{padding:64px;min-height:100vh;box-sizing:border-box}h1{font-size:32px;font-weight:500}p{max-width:480px;line-height:1.6}#target{margin-top:40px;padding:24px;border:1px solid #ddd;border-radius:8px;max-width:420px}@media(prefers-color-scheme:dark){body{background:#202220;color:#ddd}}</style><main><small>Example workspace</small><h1>Reports</h1><p>A neutral fixture for reviewing conversation layout. All comments are synthetic and all writes are blocked.</p><div id="target">Summary for October</div></main><script type="module" src="/${before?'before':'after'}.js"></script>`);});
+server.listen(before?4391:4392,'127.0.0.1',()=>console.log('http://127.0.0.1:'+server.address().port));

@@ -183,6 +183,8 @@ export interface CommentsOptions {
    * a reload or retries the router automatically.
    */
   navigate?: (url: URL) => void | Promise<void>;
+  /** Optional display-only breadcrumb; defaults to readable URL segments. Does not change page identity or navigation. */
+  pageLabel?: (url: URL) => string | undefined | Promise<string | undefined>;
   pollInterval?: number;
   /** Full emoji JSON URL; fetched only when choosing another emoji. */
   emojiDataSource?: string;
