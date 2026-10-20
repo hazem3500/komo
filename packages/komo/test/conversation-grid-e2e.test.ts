@@ -167,6 +167,19 @@ describe.skipIf(!chrome)("shared conversation grid", () => {
         await page.locator('.thread-item[data-thread="hello"] .thread-card').click();
         await page.locator(".dialog .message").first().waitFor();
         expectConversationGrid(await boxes(page, thread), true);
+        // Dividers span the content box: the message rule fills its row, the composer rule is inset like it.
+        expect(await page.locator(".dialog .message + .message").first().evaluate((node) => {
+          const rule = getComputedStyle(node, "::before");
+          return [rule.left, rule.right];
+        })).toEqual(["0px", "0px"]);
+        const composerRule = await page.locator(".dialog > .reply-composer").evaluate((node) => {
+          const rule = getComputedStyle(node, "::before"), box = node.getBoundingClientRect();
+          return [box.left + parseFloat(rule.left), box.right - parseFloat(rule.right)];
+        });
+        const grid = await boxes(page, { ...thread, pane: ".thread-pane .dialog", composer: ".dialog > .reply-composer" });
+        near(grid.composer.bottom, grid.pane.bottom);
+        near(composerRule[0], grid.avatar.left);
+        near(composerRule[1], grid.close.right);
 
         await page.locator('.dialog .message[data-comment="c3"] summary').click();
         await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
