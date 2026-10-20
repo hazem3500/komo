@@ -1,4 +1,4 @@
-import { inlineStyleSnapshot } from "./design-preview.js";
+import { customPickerValue } from "./custom-field.js";
 import { previewStyle, watchPopup } from "./design-popup.js";
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
 import {
@@ -430,25 +430,6 @@ function bindFieldThemeRefresh(
   events.signal.addEventListener("abort", () => cleanup.disconnect(), { once: true });
 }
 
-/** Custom uses the field's existing transaction handlers for one undoable commit. */
-function customPickerValue(element: DesignTarget, property: string, input?: HTMLElement | null): TokenPickerOptions["custom"] {
-  if (!(input instanceof HTMLInputElement) || input.type === "number") return;
-  return {
-    value: getComputedStyle(element).getPropertyValue(property).trim(),
-    onPreview(value) {
-      const before = inlineStyleSnapshot(element, property);
-      element.style.setProperty(property, value, "important");
-      return before.restore;
-    },
-    onSelect(value) {
-      input.dispatchEvent(new Event("focus"));
-      input.value = value;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    },
-  };
-}
-
 /**
  * "Matches Text primary · Use token" under a field whose off-token value equals a
  * relevant token's value. Only a suggestion: the field stays unbound until Use token.
@@ -711,7 +692,8 @@ export function createAdapterTokenControl(
   reload?: () => Promise<DesignToken[]>,
 ): HTMLElement | null {
   let available = tokensFor(tokens, property);
-  if (!available.length && !usage) return null;
+  const custom = customPickerValue(element, property, input);
+  if (!available.length && !usage && !custom) return null;
   const initialUsage = rememberTokenUsage(element, property, usage, adapter, tokens);
   const off = usage && "offToken" in usage ? usage.offToken : undefined;
   const match = off === undefined ? undefined : closestToken(available, off);
@@ -731,7 +713,7 @@ export function createAdapterTokenControl(
   detach.innerHTML = '<svg viewBox="0 0 12 12"><path d="M5 3.5 6.5 2a2.1 2.1 0 0 1 3 3L8 6.5M7 8.5 5.5 10a2.1 2.1 0 0 1-3-3L4 5.5M2 2l8 8"/></svg>';
   const select = document.createElement("select");
   select.setAttribute("aria-label", `Style token for ${property}`);
-  select.disabled = !available.length;
+  select.disabled = !available.length && !custom;
   const none = document.createElement("option");
   none.value = "";
   none.textContent = "Choose a token";
@@ -739,7 +721,7 @@ export function createAdapterTokenControl(
   // Grouped by the adapter's group, in list order; ungrouped tokens come first.
   const populate = () => {
     select.replaceChildren(none);
-    select.disabled = !available.length;
+    select.disabled = !available.length && !custom;
     const groups = new Map<string, HTMLElement>([["", select]]);
     for (const token of available) {
       const key = token.group ?? "";

@@ -662,7 +662,7 @@ describe("design mode preview inspector", () => {
     box.append(document.createElement("span"));
     page.append(box);
     pointer("pointerdown", box);
-    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border (empty)"]);
+    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border (empty)", "Effects (empty)"]);
     expect(shadow.querySelector('[data-property="gap"]')).toBeNull();
     expect(shadow.querySelector("[aria-label='Edit selected text inline']")).toBeNull();
 
@@ -670,14 +670,14 @@ describe("design mode preview inspector", () => {
     box.style.border = "2px solid red";
     pointer("pointerdown", box);
     expect(shadow.querySelector('[data-property="gap"]')).not.toBeNull();
-    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border"]);
+    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border", "Effects (empty)"]);
 
     pointer("pointerdown", button);
-    expect(sections()).toEqual(["Layout", "Typography", "Fill (empty)", "Border (empty)"]);
+    expect(sections()).toEqual(["Layout", "Typography", "Fill (empty)", "Border (empty)", "Effects (empty)"]);
     expect(shadow.querySelector(".design-section:nth-child(2) [aria-label='Edit selected text inline']")).not.toBeNull();
     shadow.querySelector<HTMLButtonElement>('[aria-label="Add fill"]')!.click();
     expect(button.style.backgroundColor).toBe("rgb(255, 255, 255)");
-    expect(sections()).toEqual(["Layout", "Typography", "Fill", "Border (empty)"]);
+    expect(sections()).toEqual(["Layout", "Typography", "Fill", "Border (empty)", "Effects (empty)"]);
     expect(shadow.querySelector<HTMLInputElement>('[data-property="background-color"]')?.value).toBe("#ffffff");
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button")!.click();
     expect(button.style.backgroundColor).toBe("");

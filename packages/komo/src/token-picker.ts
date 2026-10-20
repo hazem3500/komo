@@ -30,6 +30,7 @@ export interface TokenPickerOptions {
   onSelect(token: DesignToken): void;
   custom?: {
     value: string;
+    field?: import("./design-panel.js").Field;
     onPreview(value: string): () => void;
     onSelect(value: string): void;
   };
@@ -330,9 +331,9 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     if (editor) editor.hidden = !custom;
     if (custom && options.custom) {
       if (!editor) {
-        const { customEditor } = await import("./token-custom.js");
+        const { pickerEditor } = await import("./token-custom.js");
         if (open?.close !== close || !customMode || editor) return;
-        editor = customEditor(property, options.custom.value, customPreview, value => {
+        editor = pickerEditor(options, customPreview, value => {
           close(true);
           options.custom?.onSelect(value);
         });
