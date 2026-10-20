@@ -183,7 +183,10 @@ if (report.optionalAccountTokens.gzip > 5_850)
 // changes) and the filter hook measure 2,551 (+342 bytes over 2,209); nothing loads it but the adapter.
 // 3,075 / 2,650: Tokens view previews (one injected stylesheet scoped per theme option, aliases
 // and raw-channel colors) add ~430 and ~750 bytes; measured 2,981 and 2,559, plus ~3%.
-if (report.adapterTailwind.gzip > 3_075)
+// 3,450: onlyGenerated reports stylesheet changes through subscribe() (a MutationObserver
+// and <link> load/error listeners, only while komo is subscribed) and skips unreadable
+// sheets one by one, with a strict mode (+372 bytes); measured 3,353, plus ~3%.
+if (report.adapterTailwind.gzip > 3_450)
   throw new Error("komo's Tailwind token adapter exceeds its gzip budget.");
 if (report.adapterCssVariables.gzip > 2_650)
   throw new Error("komo's CSS variable token adapter exceeds its gzip budget.");

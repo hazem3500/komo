@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDesignMode } from "../src/design-mode.js";
 import { cssVariableTokens, registerDesignTokenSource, type KomoDesignToken } from "../src/design-tokens.js";
 import { createAdapterTokenControl, proposedDesignChanges } from "../src/react-props-panel.js";
-import { closestToken, listTokens, originalTokenStyle, refreshTokenSwaps, rememberTokenUsage, resetTokenSwaps, showTokenSwapsBefore, swapToken, tokenSwapChanges } from "../src/token-adapter.js";
+import { closestToken, listTokens, originalTokenStyle, refreshTokenSwaps, rememberTokenUsage, resetTokenSwaps, showTokenSwapsBefore, swapToken, tokenSwapChanges, watchTokenList } from "../src/token-adapter.js";
+import { tailwindTokens } from "../src/adapters/tailwind.js";
 import { parseDesignComment } from "../src/design-comment.js";
 import type { DesignSystem, DesignToken, TokenAdapter, TokenUsage } from "../src/design-system.js";
 // @ts-expect-error CLI modules are plain JavaScript.
@@ -560,4 +561,134 @@ describe("custom token adapter in Design mode", () => {
     } finally { root.removeAttribute("data-review-mode"); }
   });
 
+  const accent: DesignToken = { path: "color.text.accent", type: "color", value: "#123456", properties: ["color"], group: "Text", label: "Text accent", ref: "text-accent" };
+  async function openPicker() {
+    picker("color").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, composed: true }));
+    await vi.waitFor(() => expect(shadow.querySelector(".komo-tokens [role=option]")).not.toBeNull());
+    const popup = shadow.querySelector<HTMLElement>(".komo-tokens")!;
+    const search = popup.querySelector<HTMLInputElement>("input")!;
+    search.value = "text";
+    search.dispatchEvent(new Event("input"));
+    search.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, composed: true }));
+    return { popup, search, active: () => popup.querySelector("[data-active]")?.getAttribute("aria-label") };
+  }
+
+  it("refreshes an open picker in place when a subscribed adapter reports a new token set", async () => {
+    let tokens = classTokens.slice(0, 2);
+    const listeners = new Set<() => void>();
+    const adapter = {
+      id: "live-list",
+      list: vi.fn(() => tokens),
+      resolve: () => ({ color: { path: "color.text.secondary" } }),
+      subscribe: vi.fn((listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; }),
+    } satisfies TokenAdapter;
+    await open({ tokens: adapter });
+    expect(adapter.subscribe).toHaveBeenCalledTimes(1);
+    const calls = adapter.list.mock.calls.length;
+    const { popup, search, active } = await openPicker();
+    const row = active();
+    const previewed = getComputedStyle(label).color;
+    expect(row).toBeTruthy();
+    expect(popup.textContent).not.toContain("Text accent");
+    tokens = [...tokens, accent];
+    listeners.forEach(listener => listener());
+    await vi.waitFor(() => expect(popup.textContent).toContain("Text accent"));
+    expect(adapter.list.mock.calls.length).toBe(calls + 1);
+    expect(shadow.querySelector(".komo-tokens")).toBe(popup);
+    expect(popup.querySelector("input")).toBe(search);
+    expect(search.value).toBe("text");
+    expect(active()).toBe(row);
+    expect(getComputedStyle(label).color).toBe(previewed);
+    expect(picker("color").querySelector('option[value="color.text.accent"]')).not.toBeNull();
+    search.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+    expect(label.getAttribute("style")).toBeNull();
+    controller.destroy();
+    expect(listeners.size).toBe(0);
+  });
+
+  it("shows a class from a late <style> in an already-open onlyGenerated Tailwind picker", async () => {
+    const styles = document.createElement("style");
+    styles.textContent = ".text-primary{color:#1f1f1f}.text-secondary{color:#6b6b6b}";
+    document.head.append(styles);
+    const late = document.createElement("style");
+    try {
+      await open({ tokens: tailwindTokens({ tokens: [
+        { path: "color.text.primary", type: "color", class: "text-primary", properties: ["color"], value: "#1f1f1f", label: "Text primary" },
+        { path: "color.text.secondary", type: "color", class: "text-secondary", properties: ["color"], value: "#6b6b6b", label: "Text secondary" },
+        { path: "color.text.accent", type: "color", class: "text-accent", properties: ["color"], value: "#123456", label: "Text accent" },
+      ] }, { onlyGenerated: true }) });
+      const { popup, search, active } = await openPicker();
+      const row = active();
+      expect(popup.textContent).not.toContain("Text accent");
+      late.textContent = ".text-accent{color:#123456}";
+      document.head.append(late);
+      await vi.waitFor(() => expect(popup.textContent).toContain("Text accent"));
+      expect(shadow.querySelector(".komo-tokens")).toBe(popup);
+      expect(search.value).toBe("text");
+      expect(active()).toBe(row);
+      late.remove();
+      await vi.waitFor(() => expect(popup.textContent).not.toContain("Text accent"));
+      expect(search.value).toBe("text");
+    } finally { styles.remove(); late.remove(); }
+  });
+
+});
+
+describe("token list invalidation", () => {
+  const paths = (tokens: DesignToken[]) => tokens.map(token => token.path);
+
+  it("reuses list() until a subscribed adapter reports a change, and unsubscribes on abort", async () => {
+    let version = 0;
+    const listeners = new Set<() => void>();
+    const adapter = {
+      id: "versioned",
+      list: vi.fn(() => [{ path: `t.${version}`, type: "other" as const, value: "" }]),
+      resolve: () => ({}),
+      subscribe: vi.fn((listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; }),
+    } satisfies TokenAdapter;
+    expect(paths(await listTokens(adapter))).toEqual(["t.0"]);
+    version = 1;
+    expect(paths(await listTokens(adapter))).toEqual(["t.0"]);
+    expect(adapter.list).toHaveBeenCalledTimes(1);
+    const first = new AbortController(), second = new AbortController();
+    const one = vi.fn(), two = vi.fn();
+    watchTokenList(adapter, one, first.signal);
+    watchTokenList(adapter, two, second.signal);
+    expect(adapter.subscribe).toHaveBeenCalledTimes(2);
+    // A change made before anyone subscribed is not served from the old cache.
+    expect(paths(await listTokens(adapter))).toEqual(["t.1"]);
+    await listTokens(adapter);
+    expect(adapter.list).toHaveBeenCalledTimes(2);
+    version = 2;
+    listeners.forEach(listener => listener());
+    expect(one).toHaveBeenCalledTimes(1);
+    expect(two).toHaveBeenCalledTimes(1);
+    expect(paths(await listTokens(adapter, { mode: "dark" }))).toEqual(["t.2"]);
+    expect(paths(await listTokens(adapter))).toEqual(["t.2"]);
+    first.abort();
+    expect(listeners.size).toBe(1);
+    listeners.forEach(listener => listener());
+    expect(one).toHaveBeenCalledTimes(1);
+    expect(two).toHaveBeenCalledTimes(2);
+    second.abort();
+    expect(listeners.size).toBe(0);
+    // An adapter whose subscribe() throws or returns no function changes nothing.
+    const broken = { ...adapter, list: vi.fn(() => []), subscribe: () => { throw new Error("no"); } };
+    const odd = { ...adapter, list: vi.fn(() => []), subscribe: () => undefined as unknown as () => void };
+    for (const item of [broken, odd]) {
+      const controller = new AbortController();
+      watchTokenList(item, one, controller.signal);
+      controller.abort();
+    }
+  });
+
+  it("costs nothing for an adapter without subscribe()", async () => {
+    const adapter = classAdapter();
+    await listTokens(adapter);
+    const update = vi.fn();
+    watchTokenList(adapter, update, new AbortController().signal);
+    await listTokens(adapter);
+    expect(adapter.list).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+  });
 });

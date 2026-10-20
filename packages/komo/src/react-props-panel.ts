@@ -826,6 +826,7 @@ export function createAdapterTokenControl(
   return row;
 }
 
+/** Theme changes and adapter-reported token-set changes share one refresh: lists, swaps, chips and open pickers. */
 function watchDesignTheme(design: DesignSystem | undefined, root: ShadowRoot, signal: AbortSignal): void {
   let request = 0;
   watchThemes(design, root.ownerDocument, () => {

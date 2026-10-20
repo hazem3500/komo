@@ -64,11 +64,16 @@ export interface TailwindTokensOptions {
   offToken?: string[] | false;
   /**
    * List only tokens whose class has a rule in the page's stylesheets, so the picker
-   * skips classes Tailwind's JIT never generated. When a stylesheet cannot be read
-   * (cross-origin without CORS, still loading, or failed), komo cannot tell, so every
-   * token stays listed. Elements that already use a hidden class still resolve to it.
+   * skips classes Tailwind's JIT never generated. Sheets komo cannot read (cross-origin
+   * without CORS, such as an imported font stylesheet) are assumed not to hold the
+   * utilities and are skipped. Every token stays listed while a <link> stylesheet is
+   * loading or failed, or when no readable sheet has a style rule. `{ strict: true }`
+   * also keeps every token while any sheet is unreadable, for utilities served
+   * cross-origin; `true` is the default object. Elements that already use a hidden
+   * class still resolve to it. In Design mode, a <style> or <link> added, removed,
+   * edited or loaded refreshes the list, including in an open picker.
    */
-  onlyGenerated?: boolean;
+  onlyGenerated?: boolean | { strict?: boolean };
   /** Return false to leave a token out of `list()`; it still resolves on elements. */
   filter?(token: TailwindToken): boolean;
   /**
@@ -112,13 +117,16 @@ const baseClass = (name: string) => (name.includes(":") ? null : name.replace(/^
 const classPattern = /\.((?:\\[\da-f]{1,6} ?|\\[^]|[\w-]|[^\0-\x7f])+)/gi;
 type AnyRule = CSSRule & { selectorText?: string; cssRules?: CSSRuleList; styleSheet?: CSSStyleSheet | null };
 let seen: unknown[] = [];
-let generated: Set<string> | null = null;
+/** The last scan: classes found, style rules seen, and whether a sheet was unreadable or a <link> pending. */
+let scan: [found: Set<string>, rules: number, unreadable: boolean, pending: boolean];
 
-/** Escaped class names with a rule in the document, or null when a stylesheet cannot be read. */
-function generatedClasses(): Set<string> | null {
-  const sheets = [...document.styleSheets, ...(document.adoptedStyleSheets ?? [])];
-  // Re-scan only when a sheet is added, removed or replaced (a <style>'s text changed),
-  // its rule count changes, or a <link> stylesheet loads.
+const documentSheets = () => [...document.styleSheets, ...(document.adoptedStyleSheets ?? [])];
+
+/**
+ * Changes when a sheet is added, removed or replaced (a <style>'s text changed),
+ * its rule count changes, or a <link> stylesheet loads.
+ */
+function sheetKey(sheets = documentSheets()): unknown[] {
   const key: unknown[] = [...document.querySelectorAll<HTMLLinkElement>("link[rel~=stylesheet]:not([disabled])")].map((link) => link.sheet);
   for (const sheet of sheets) {
     let count;
@@ -127,24 +135,69 @@ function generatedClasses(): Set<string> | null {
     } catch {}
     key.push(sheet, count);
   }
-  if (key.length === seen.length && key.every((item, index) => item === seen[index])) return generated;
-  seen = key;
-  const found = new Set<string>();
-  const walk = (rules: CSSRuleList) => {
-    for (const rule of rules as Iterable<AnyRule>) {
-      for (const match of rule.selectorText?.matchAll(classPattern) ?? []) found.add(match[1]);
-      if (rule.cssRules) walk(rule.cssRules); // @media, @supports, @layer, @container, nested rules
-      if (rule.styleSheet) walk(rule.styleSheet.cssRules); // @import
-    }
+  return key;
+}
+
+const sameKey = (a: unknown[], b: unknown[]) => a.length === b.length && a.every((item, index) => item === b[index]);
+
+/** Whether a mutation can change the page's stylesheets: a <style> or <link> added, removed or edited. */
+const isSheet = (node: Node | null) => /^(style|link)$/i.test(node?.nodeName ?? "");
+const touchesSheets = (record: MutationRecord) =>
+  isSheet(record.target) || isSheet(record.target.parentNode) ||
+  [...record.addedNodes, ...record.removedNodes].some((node) => isSheet(node) || !!(node as Element).querySelector?.("style,link"));
+
+/** Calls `onChange` when the stylesheets' key changes, while subscribed; nothing runs between DOM changes. */
+function watchSheets(onChange: () => void): () => void {
+  let last = sheetKey();
+  const check = () => {
+    const key = sheetKey();
+    if (sameKey(key, last)) return;
+    last = key;
+    onChange();
   };
-  try {
-    if (key.includes(null)) throw 0; // a <link> stylesheet is still loading, or failed
-    for (const sheet of sheets) walk(sheet.cssRules); // throws for cross-origin sheets
-    return (generated = found);
-  } catch {
-    // Unknown: komo cannot prove a class is missing, so nothing is hidden.
-    return (generated = null);
+  const observer = new MutationObserver((records) => records.some(touchesSheets) && check());
+  const events = new AbortController();
+  observer.observe(document, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["disabled", "media", "rel", "href"] });
+  // <link> load and error events don't bubble, so they are caught on the way down.
+  for (const type of ["load", "error"]) document.addEventListener(type, check, { capture: true, signal: events.signal });
+  return () => {
+    observer.disconnect();
+    events.abort();
+  };
+}
+
+/**
+ * Escaped class names with a rule in the document, or null when komo cannot tell:
+ * a <link> stylesheet is still loading or failed, no readable sheet has a style rule,
+ * or, with `strict`, any sheet (or @import) is unreadable.
+ */
+function generatedClasses(strict: boolean): Set<string> | null {
+  // Re-scan only when the stylesheets' key changes.
+  const sheets = documentSheets();
+  const key = sheetKey(sheets);
+  if (!sameKey(key, seen)) {
+    seen = key;
+    scan = [new Set(), 0, false, key.includes(null)];
+    const walk = (rules: () => CSSRuleList) => {
+      let list;
+      try {
+        list = rules(); // throws for cross-origin sheets without CORS
+      } catch {
+        return void (scan[2] = true);
+      }
+      for (const rule of list as Iterable<AnyRule>) {
+        if (rule.selectorText != null) {
+          scan[1]++;
+          for (const match of rule.selectorText.matchAll(classPattern)) scan[0].add(match[1]);
+        }
+        if (rule.cssRules) walk(() => rule.cssRules!); // @media, @supports, @layer, @container, nested rules
+        if ("styleSheet" in rule) walk(() => rule.styleSheet!.cssRules); // @import
+      }
+    };
+    for (const sheet of sheets) walk(() => sheet.cssRules);
   }
+  // Unknown: komo cannot prove a class is missing, so nothing is hidden.
+  return scan[3] || !scan[1] || (strict && scan[2]) ? null : scan[0];
 }
 
 /** Pick the theme-specific value: the most specific fully-matching key, else `value`. */
@@ -237,7 +290,7 @@ export function tailwindTokens(table: TailwindTable, options: TailwindTokensOpti
     id: "tailwind",
     list(theme) {
       const state = theme ?? Object.fromEntries((options.themes ?? []).map((axis) => [axis.id, axis.current()]));
-      const present = options.onlyGenerated ? generatedClasses() : null;
+      const present = options.onlyGenerated ? generatedClasses(options.onlyGenerated !== true && !!options.onlyGenerated.strict) : null;
       return entries.filter(({ token, classes }) => (!present || present.has(CSS.escape(classes[0]))) && (!options.filter || options.filter(token))).map(({ token, classes }): DesignToken => ({
         path: token.path,
         type: token.type,
@@ -258,6 +311,8 @@ export function tailwindTokens(table: TailwindTable, options: TailwindTokensOpti
         return previewVariables(changes, (path) => byPath.get(path)?.token, options.scopes, theme);
       },
     } : {}),
+    // Only `onlyGenerated` lists depend on the page, so only they report changes.
+    ...(options.onlyGenerated ? { subscribe: watchSheets } : {}),
     resolve(element) {
       const result: Record<string, TokenUsage> = {};
       const won = winners(readClass(element));
