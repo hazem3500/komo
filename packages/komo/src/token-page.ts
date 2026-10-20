@@ -10,6 +10,21 @@ export interface TokenPageHost {
   root: ShadowRoot;
   design?: DesignSystem;
   onComment(element: Element, proposal?: string): void;
+  /** Design mode's side of pending token edits; the returned callback runs after every change. */
+  link?(tokens: PageTokens): () => void;
+}
+
+/**
+ * Pending token edits as the element view sees them: they count in its footer,
+ * share its chronological Undo through `steps`, and join Reset all and Comment.
+ */
+export interface PageTokens {
+  readonly size: number;
+  readonly steps: readonly object[];
+  undo(): void;
+  reset(): void;
+  proposal(): string | undefined;
+  open(): void;
 }
 
 /** One net token edit: the page's value (`from`), the proposed one (`to`) and what previews it. */
@@ -59,6 +74,8 @@ export function tokenEdits(adapter: TokenAdapter, options: { before?(): boolean;
   return {
     get size() { return edits.size; },
     get canUndo() { return steps.length > 0; },
+    /** One object per undo step, oldest first, so Design mode can interleave them with its own. */
+    get steps(): readonly object[] { return steps; },
     list: () => [...edits.values()],
     get: (path: string, theme?: string) => edits.get(keyOf(path, theme)),
     /** Record an edit as one undo step; an edit back to the page's value removes it. */
@@ -217,12 +234,13 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
   const reset = tool("Reset all", resetIcon, () => edits.resetAll());
   const comment = make("button", "", "Comment");
   comment.type = "button";
+  const proposal = () => tokenProposal(edits.list(), adapter.id);
+  const resetAll = () => { edits.resetAll(); refresh(); };
   comment.addEventListener("click", () => {
-    const proposal = tokenProposal(edits.list(), adapter.id);
-    if (!proposal) return;
-    edits.resetAll();
-    refresh();
-    host.onComment(document.body, proposal);
+    const text = proposal();
+    if (!text) return;
+    resetAll();
+    host.onComment(document.body, text);
   });
   actions.append(undo, reset, comment);
   bar.append(count, compare, status, actions);
@@ -249,6 +267,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     sides.forEach((button, index) => button.setAttribute("aria-pressed", String(!index === isBefore())));
     if (total) panel.dataset.tokenEdits = String(total);
     else delete panel.dataset.tokenEdits;
+    changed?.();
   }
   function refresh() {
     for (const update of rows.values()) update();
@@ -382,6 +401,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     life.abort();
     close();
     edits.stop();
+    changed?.();
     style.remove();
     pages.delete(panel);
   }).observe(panel, { attributes: true, attributeFilter: ["data-before"] });
@@ -390,7 +410,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
 
   search.addEventListener("input", render);
 
-  return {
+  const page = {
     open() {
       const controls = panel.querySelector(".design-inspector__controls");
       if (!controls) return;
@@ -431,5 +451,12 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
       if (!globalThis.matchMedia?.("(pointer:coarse)")?.matches) search.focus({ preventScroll: true });
     },
   };
+  const changed = host.link?.({
+    get size() { return edits.size; },
+    get steps() { return edits.steps; },
+    undo() { edits.undo(); refresh(); },
+    reset: resetAll, proposal, open: page.open,
+  });
+  return page;
 }
 

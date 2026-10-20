@@ -5,9 +5,10 @@ import type { DesignTarget } from "./design-target.js";
 import type { TokenPickerOptions } from "./token-picker.js";
 
 const live = new WeakSet<HTMLElement>();
-const fields = new WeakMap<HTMLElement, { field: Field; set(value: string): void }>();
+const fields = new WeakMap<HTMLElement, { field: Field; declared(): string; seen: string; set(value: string): void; refresh(): void }>();
 
-export function registerCustomField(control: Control, field: Field, context: Pick<PanelContext, "element" | "begin" | "apply" | "commit">) {
+/** Returns `own`, which runs the field's own edits so syncFields leaves what they show. */
+export function registerCustomField(control: Control, field: Field, context: Pick<PanelContext, "element" | "begin" | "apply" | "commit">, show: () => void) {
   let syncDisplay = () => {};
   const display = (value: string) => {
     if (control instanceof HTMLInputElement && field.kind === "length") control.type = "text";
@@ -35,12 +36,42 @@ export function registerCustomField(control: Control, field: Field, context: Pic
     syncDisplay = sync;
     control.addEventListener("input", sync); control.addEventListener("blur", sync); const watch = new MutationObserver(() => box.isConnected ? sync() : watch.disconnect()); watch.observe(context.element, { attributeFilter: ["style", "class"] }); sync(); box.append(style, name);
   }
-  fields.set(control, { field, set(value) {
-    context.begin(control, field.property);
-    context.apply(control, field.property, value);
-    context.commit(control, field.property);
+  const declared = () => context.element.style.getPropertyValue(field.property);
+  const entry = { field, declared, seen: declared(), set(value: string) {
+    own(() => {
+      context.begin(control, field.property);
+      context.apply(control, field.property, value);
+      context.commit(control, field.property);
+    });
     display(value);
-  } });
+  }, refresh() {
+    entry.seen = declared();
+    if (field.kind === "length") display(entry.seen || getComputedStyle(context.element).getPropertyValue(field.property));
+    else show();
+  } };
+  // The field's own edits keep what it shows, e.g. "50%"; syncFields refreshes it only when something else changes it.
+  const own = (run: () => void) => {
+    editing = control;
+    try { run(); } finally {
+      editing = undefined;
+      entry.seen = declared();
+    }
+  };
+  fields.set(control, entry);
+  return own;
+}
+
+let editing: Control | undefined;
+
+/**
+ * Show current values in fields whose declaration changed outside them, as a fresh
+ * render would: a geometry resize, Undo, Reset or Before/After. Fields being edited keep theirs.
+ */
+export function syncFields(container: ParentNode, dirty: (control: Element) => boolean) {
+  for (const control of container.querySelectorAll<Control>(".design-field > [data-property]")) {
+    const entry = fields.get(control);
+    if (entry && control !== editing && !dirty(control) && (control.getRootNode() as Document).activeElement !== control && entry.declared() !== entry.seen) entry.refresh();
+  }
 }
 
 /** The page's own font-family rule for the element when it uses a variable, so an unresolved one can be named. */

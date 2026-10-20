@@ -31,6 +31,8 @@ export interface DesignModeOptions {
 type TextEdit = { kind: "text"; element: DesignTarget };
 /** A token previewed through the app's adapter; its undo comes from `preview()`. */
 type TokenSwap = { kind?: undefined; element: DesignTarget; undo(): void; props?: boolean };
+/** One step of the Tokens view's page-wide edits, in the same chronological history. */
+type TokenStep = { kind: "token"; element?: undefined; step: object };
 
 type Original = StyleOriginal;
 
@@ -151,7 +153,7 @@ export function createDesignMode(options: DesignModeOptions) {
   bar.addEventListener("pointerover", loadTips);
   bar.addEventListener("focusin", loadTips);
   const collapsed = new Set<string>();
-  const history: Array<StyleEdit | TextEdit | TokenSwap> = [];
+  const history: Array<StyleEdit | TextEdit | TokenSwap | TokenStep> = [];
   const styleEdits = createStyleEdits(history);
   let geometry: ReturnType<typeof import("./design-geometry.js")["bindGeometry"]> | undefined;
   if (options.design?.experimentalGeometry) void import("./design-geometry.js").then(module => {
@@ -182,20 +184,25 @@ export function createDesignMode(options: DesignModeOptions) {
     if (!values.size) changed.delete(element);
     renderOutlines();
   }
-  /** The bar shows a change count and its tools only once the selection has changes. Returns the count. */
+  /**
+   * The bar shows a change count and its tools only once the selection has changes.
+   * Pending token edits count too, behind their chip. Returns the selection's own count, for Reset.
+   */
   function syncBar() {
     const element = selected;
-    const total = element
+    const own = element
       ? (changed.get(element)?.size ?? 0) + Number(element instanceof HTMLElement && !!textTools?.hasChanges(element)) + Number(!!reactPanelModule?.hasReactPropChanges(element)) ||
         Number(!!reactPanelModule?.hasDesignTokenEdit(element))
       : 0;
+    const total = own + (element && views?.tokens?.size || 0);
     count.textContent = total ? `${total} change${total > 1 ? "s" : ""}` : "";
     bar.toggleAttribute("data-changes", total > 0 || !undo.disabled);
     compare.hidden = !total && !showingBefore;
-    return total;
+    return own;
   }
   let showingBefore = false;
   let suspendedBefore: boolean | undefined;
+  let fieldsSettling = 0;
   function showBefore(on: boolean, animate = true) {
     geometry?.cancel();
     decorating = false;
@@ -215,6 +222,11 @@ export function createDesignMode(options: DesignModeOptions) {
           else if (values?.has(property)) element.style.setProperty(property, values.get(property)!, original?.priority);
         }
       }, smooth, styleless.has(element));
+    }
+    // Fields read computed values, so they wait out the morph.
+    if (smooth) {
+      clearTimeout(fieldsSettling);
+      fieldsSettling = window.setTimeout(() => { fieldsSettling = 0; updateActions(); }, 330);
     }
     textTools?.showBefore(on, animate);
     if (!on) reactPanelModule?.showDesignBefore(false);
@@ -315,9 +327,9 @@ export function createDesignMode(options: DesignModeOptions) {
     panel.toggleAttribute("data-empty", (comment.hidden = !selected));
     panel.parentElement?.toggleAttribute("data-design-empty", active && !selected);
     const pending = [...previewTargets.keys()].filter(hasChanges);
-    pendingSlot.hidden = !!selected || !pending.length;
+    pendingSlot.hidden = !!selected || !pending.length && !views?.tokens?.size;
     if (views) views.pending.hidden = pendingSlot.hidden;
-    views?.update(pending.length, pending.some(element => element.isConnected && previewTargets.get(element) === page()));
+    views?.update(pending.length, pending.some(element => element.isConnected && previewTargets.get(element) === page()), !!selected);
   }
   function hasChanges(element: DesignTarget) {
     return !!(changed.get(element)?.size || (element instanceof HTMLElement && textTools?.hasChanges(element)) || reactPanelModule?.hasReactPropChanges(element) || reactPanelModule?.hasDesignTokenEdit(element));
@@ -432,6 +444,8 @@ export function createDesignMode(options: DesignModeOptions) {
     editText.disabled = !!textTools?.busy || !selected?.isConnected || !(selected instanceof HTMLElement);
     editText.textContent = textTools?.isEditing(selected instanceof HTMLElement ? selected : null) ? "Done editing" : "Edit text";
     editText.setAttribute("aria-label", textTools?.isEditing(selected instanceof HTMLElement ? selected : null) ? "Finish inline text editing" : "Edit selected text inline");
+    // Resizes, Undo, Reset and Before/After change declarations behind the fields; show them.
+    if (selected && !fieldsSettling) panelModule?.syncFields(controls, styleEdits.isDirty);
     syncEmpty();
   }
   function finishTextEdit(cancel = false) {
@@ -583,6 +597,7 @@ export function createDesignMode(options: DesignModeOptions) {
     changed.clear();
     history.length = 0;
     textTools?.restoreAll();
+    views?.tokens?.reset();
     previewTargets.clear();
     updateActions();
   }
@@ -610,7 +625,8 @@ export function createDesignMode(options: DesignModeOptions) {
       renderControls();
     } else if (edit.kind === "text") {
       if (selected === (textTools?.undo() ?? edit.element)) renderControls();
-    } else {
+    } else if (edit.kind === "token") views?.tokens?.undo();
+    else {
       restore(edit.element, edit.property, edit.before);
       edit.before.bindingUndo?.();
       reactPanelModule?.syncDesignTokenBinding(edit.element, edit.property);
@@ -669,8 +685,10 @@ export function createDesignMode(options: DesignModeOptions) {
     if (textTools?.isEditing(element instanceof HTMLElement ? element : null)) finishTextEdit();
     void exporter().then(({ designProposal }) => {
       if (!active || selected !== element || !element.isConnected) return;
-      const proposal = proposalFor(element, designProposal);
+      // The comment carries everything the count shows, pending token edits included; both are then cleared.
+      const proposal = [proposalFor(element, designProposal), views?.tokens?.proposal()].filter(Boolean).join("\n\n") || undefined;
       resetElement(element);
+      views?.tokens?.reset();
       updateActions();
       options.onComment(element, proposal);
     }, () => { status.textContent = "Comment unavailable · try again"; });
@@ -707,7 +725,9 @@ export function createDesignMode(options: DesignModeOptions) {
       proposals: () => [...previewTargets.keys()].filter(hasChanges).map(element => proposalFor(element, module.designProposal)),
       message: text => { status.textContent = text; },
       mode: options,
+      history, update: updateActions, clear: clearSelection,
     });
+    bar.before(views.chip);
     style.textContent += views.styles;
     undo.innerHTML = views.icons.undo;
     reset.innerHTML = views.icons.reset;
@@ -744,6 +764,7 @@ export function createDesignMode(options: DesignModeOptions) {
       resetAll();
       clearTimeout(closeTimer);
       clearTimeout(flipTimer);
+      clearTimeout(fieldsSettling);
       resized?.disconnect();
       listeners.abort();
       cancelAnimationFrame(frame);

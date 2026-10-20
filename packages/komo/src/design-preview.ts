@@ -5,7 +5,7 @@ export const previewMessage = "Runtime preview · Undo, Reset or reload to resto
 export type StyleOriginal = { value: string; priority: string; computed?: string; restore?(): void; bindingUndo?(): void };
 export type StyleEdit = { kind: "style"; element: DesignTarget; property: string; before: StyleOriginal; after: StyleOriginal };
 
-export function createStyleEdits(history: Array<StyleEdit | { element: DesignTarget; kind?: string }>) {
+export function createStyleEdits(history: Array<StyleEdit | { element?: DesignTarget; kind?: string }>) {
   const starts = new WeakMap<Element, StyleOriginal>();
   const pending = new WeakMap<Element, StyleEdit>();
   return {

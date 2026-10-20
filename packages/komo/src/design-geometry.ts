@@ -10,7 +10,7 @@ export type GeometryChange = {
   property?: string; from?: string; to?: string;
   effects: string[];
 };
-type Entry = { element: DesignTarget; kind?: string; geometry?: GeometryChange[] };
+type Entry = { element?: DesignTarget; kind?: string; property?: string; geometry?: GeometryChange[] };
 type Hooks = {
   signal: AbortSignal;
   options: Pick<import("./design-mode.js").DesignModeOptions, "root" | "bounds">;
@@ -231,7 +231,9 @@ export function bindGeometry(hooks: Hooks) {
   let rejected: Element | null = null;
   let snapping = false;
   const controller = new AbortController();
-  const recorded = (element: DesignTarget) => hooks.history.flatMap(entry => entry.element === element ? entry.geometry ?? [] : []);
+  // A later field edit of the same property supersedes a resize: the style rows carry the net value.
+  const recorded = (element: DesignTarget) => hooks.history.reduce<GeometryChange[]>((list, entry) => entry.element !== element ? list
+    : entry.geometry ? [...list, ...entry.geometry] : entry.property ? list.filter(change => change.property !== entry.property) : list, []);
 
   function finish(cancel = false) {
     const current = gesture;

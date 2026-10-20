@@ -338,6 +338,114 @@ describe("Tokens view in Design mode", () => {
     expect(applied.at(-1)).toEqual([{ path: "space.md", value: "12px" }]);
   });
 
+  // Escape keeps element previews pending (Before while closed, After again on return); token edits do the same, visibly.
+  describe("pending token edits in the element view", () => {
+    const hero = () => document.querySelector<HTMLElement>("#hero")!;
+    const pick = async () => {
+      hero().dispatchEvent(Object.assign(new Event("pointerdown", { bubbles: true, cancelable: true, composed: true }), { button: 0 }));
+      await flush();
+    };
+    // Layout is untouched by the fixture's tokens, so its edit is the element's own.
+    const layout = (value: string) => {
+      const field = $<HTMLSelectElement>('[data-property="display"]');
+      field.dispatchEvent(new Event("focus"));
+      field.value = value;
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+      field.dispatchEvent(new Event("blur"));
+    };
+    const elementBar = () => $(".design-inspector__bar:not(.design-token-bar)");
+    const count = () => elementBar().querySelector(".design-inspector__count")!.textContent;
+    const chip = () => $<HTMLButtonElement>(".design-inspector__token-chip");
+    async function pendingAfterExit() {
+      await openView();
+      (await custom("md", "12px"))();
+      controller.setActive(false);
+      await flush();
+      expect(active).toBeNull();
+      controller.setActive(true);
+      await flush();
+      expect(active).toEqual([{ path: "space.md", value: "12px" }]);
+    }
+
+    it("counts them beside the element's own changes behind a chip that opens the Tokens view", async () => {
+      await pendingAfterExit();
+      expect($(".design-inspector__pending p").textContent).toBe("1 token change has pending runtime previews. Undo, Reset or reload to restore.");
+      await pick();
+      expect(count()).toBe("1 change");
+      expect(chip().hidden).toBe(false);
+      expect(chip().textContent).toBe("Token changes · 1");
+      expect(chip().tagName).toBe("BUTTON");
+      layout("flex");
+      expect(count()).toBe("2 changes");
+      // Reset is the element's own; the token edit stays pending behind the chip.
+      button(elementBar(), "Reset").click();
+      expect(hero().style.display).toBe("");
+      expect(count()).toBe("1 change");
+      chip().click();
+      await flush();
+      expect($(".design-inspector").hasAttribute("data-tokens")).toBe(true);
+      expect($(".design-inspector__target").textContent).toBe("Tokens");
+      expect(rowFor("md").hasAttribute("data-changed")).toBe(true);
+      expect(chip().hidden).toBe(true);
+    });
+
+    it("shares one chronological Undo with element edits", async () => {
+      await pendingAfterExit();
+      await pick();
+      layout("flex");
+      button(elementBar(), "Undo").click();
+      expect(hero().style.display).toBe("");
+      expect(active).toEqual([{ path: "space.md", value: "12px" }]);
+      button(elementBar(), "Undo").click();
+      expect(active).toBeNull();
+      expect(chip().hidden).toBe(true);
+      expect(count()).toBe("");
+      expect(button(elementBar(), "Undo").disabled).toBe(true);
+    });
+
+    it("flips with Before/After, and Reset all previews clears both", async () => {
+      await pendingAfterExit();
+      await pick();
+      layout("flex");
+      button(elementBar(), "Before").click();
+      await flush();
+      expect([active, hero().style.display]).toEqual([null, ""]);
+      // Fields wait out the Before/After morph, then show the page's value.
+      const field = () => $<HTMLSelectElement>('[data-property="display"]').value;
+      expect(field()).toBe("flex");
+      await vi.waitFor(() => expect(field()).not.toBe("flex"));
+      button(elementBar(), "After").click();
+      await flush();
+      expect([active, hero().style.display]).toEqual([[{ path: "space.md", value: "12px" }], "flex"]);
+      await vi.waitFor(() => expect(field()).toBe("flex"));
+      controller.clearSelection();
+      controller.setActive(false);
+      controller.setActive(true);
+      await flush();
+      expect($(".design-inspector__pending p").textContent).toBe("1 element and 1 token change have pending runtime previews. Undo, Reset or reload to restore.");
+      button($(".design-inspector__pending"), "Reset all previews").click();
+      expect([active, hero().style.display]).toEqual([null, ""]);
+      expect($(".design-inspector__pending").hidden).toBe(true);
+      expect(button($(".design-inspector__empty"), "Edit tokens")).toBeTruthy();
+    });
+
+    it("comments the element's changes with the token section, then clears both", async () => {
+      await pendingAfterExit();
+      await pick();
+      layout("flex");
+      button(elementBar(), "Comment").click();
+      await vi.waitFor(() => expect(comments).toHaveLength(1));
+      const [target, body] = comments[0];
+      expect(target).toBe(hero());
+      expect(body).toMatch(/^Proposed style changes \(preview only\)\nTarget: #hero\n- display: .* → flex/);
+      expect(body).toContain("\n\nProposed token changes (preview only)\nToken: space.md 8px → 12px\nToken adapter: fixture");
+      expect(parseDesignComment(body!).filter((block) => "changes" in block).map((block) => (block as DesignSection).title)).toEqual(["Style changes", "Token changes"]);
+      expect([active, hero().style.display]).toEqual([null, ""]);
+      expect(chip().hidden).toBe(true);
+    });
+  });
+
   it("without previewValues, records proposals labelled No live preview", async () => {
     await start(adapter(false));
     await openView();
