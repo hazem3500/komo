@@ -151,3 +151,20 @@ export function footerTips(bar: HTMLElement, root: ShadowRoot, signal: AbortSign
   // The pointer may have left while this chunk loaded.
   if (first.type === "focusin" || bar.matches(":hover")) show(first);
 }
+
+/** Footer feedback belongs to the lazy footer tools, including timer ownership. */
+export function watchDesignStatus(status: HTMLElement, bar: HTMLElement, editing: () => boolean, signal: AbortSignal) {
+  let timer = 0;
+  const observer = new MutationObserver(() => {
+    const text = status.textContent ?? "";
+    status.title = text;
+    bar.toggleAttribute("data-message", !!text);
+    clearTimeout(timer);
+    if (text) timer = window.setTimeout(function clear() {
+      if (editing()) timer = window.setTimeout(clear, 2600);
+      else status.textContent = "";
+    }, 2600);
+  });
+  observer.observe(status, { childList: true, characterData: true, subtree: true });
+  signal.addEventListener("abort", () => { observer.disconnect(); clearTimeout(timer); }, { once: true });
+}

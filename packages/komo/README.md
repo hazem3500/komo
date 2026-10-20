@@ -634,3 +634,20 @@ Upgrade self-hosted deployments with `npm install @hazem3500/komo@latest` then `
 Without `pageRoot`, a sole existing content element with a layout box enables Frame. Script and style elements do not count as content roots. Multiple roots or `display: contents` use Floating; pass a suitable existing app container for Frame.
 
 The `@hazem3500/komo/server` export loads built ESM in Node and includes Worker handler types. Wrangler selects the original TypeScript through the `workerd` condition; keep `nodejs_compat` enabled. Package metadata is available at `@hazem3500/komo/package.json`.
+
+### Experimental page-element move and resize
+
+Both capabilities are **off by default**. Opt in explicitly in the public configuration:
+
+```ts
+initKomo({
+  // ...your existing endpoint/project/repo/branch options
+  design: { experimentalGeometry: true },
+});
+```
+
+This loads geometry tools lazily in Design mode. Select a supported page element to see **Move**, right-edge width, bottom-edge height, and bottom-right width/height handles. Drag a handle, or focus it and press Enter/Space to arm it. Arrows adjust by one local CSS pixel (Shift+arrow: ten); Enter/Space commits, Escape cancels. Losing focus or pointer capture cancels. Shift does **not** lock aspect ratio. Minimum dimensions are 16 CSS pixels, or the border and padding footprint when larger. Each completed gesture is one chronological Undo, including a two-axis resize.
+
+These are reversible runtime CSS proposals, not source or backend edits. Move uses individual CSS `translate`, retaining normal flow, DOM order, existing transforms and the original translation. Resize changes width/height and can reflow siblings. Undo returns to the previous preview; Reset restores the host baseline. Before/After, Browse suspension and Comment transfer use the existing Design proposal lifecycle. Controls disappear while the clean editing gate is active; target the canvas again to show them. The flag does not resize comment pins or the page-preview Frame.
+
+Supported targets are unfragmented normal-flow HTML block/flow-root/inline-block boxes in horizontal writing mode, including positive axis-aligned 2D scale/zoom chains and normal, reflow or explicitly scaled Frames. Scroll during pointer capture is accounted for. SVG, page roots, flex/grid/table or multicolumn chains, fixed/absolute/sticky elements, editable/form/media surfaces, constrained dimensions, aspect ratios, rotation/skew/3D/negative scales, complex individual translations and running animations are unavailable; the selection shows the reason. This is deliberately not a universal layout editor.

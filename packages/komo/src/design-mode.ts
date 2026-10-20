@@ -1,5 +1,5 @@
 import { isDesignTarget, pickDesignTarget, type DesignTarget } from "./design-target.js";
-import { changePreviewStyles, createStyleEdits, inlineStyleSnapshot, removeEmptyStyle, restoreStyle, type StyleEdit, type StyleOriginal } from "./design-preview.js";
+import { previewMessage, changePreviewStyles, createStyleEdits, inlineStyleSnapshot, removeEmptyStyle, restoreStyle, type StyleEdit, type StyleOriginal } from "./design-preview.js";
 import { designModeStyles } from "./design-mode-styles.js";
 import { el, icon } from "./dom.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
@@ -80,7 +80,7 @@ export function createDesignMode(options: DesignModeOptions) {
   const controls = el("div", "design-inspector__controls");
   const bar = el("div", "design-inspector__bar");
   const count = el("span", "design-inspector__count");
-  count.title = "Runtime preview · Undo, Reset or reload to restore";
+  count.title = previewMessage;
   const status = el("p", "design-inspector__status");
   status.setAttribute("role", "status");
   const actions = el("div", "design-inspector__actions");
@@ -151,6 +151,16 @@ export function createDesignMode(options: DesignModeOptions) {
   const collapsed = new Set<string>();
   const history: Array<StyleEdit | TextEdit | TokenSwap> = [];
   const styleEdits = createStyleEdits(history);
+  let geometry: ReturnType<typeof import("./design-geometry.js")["bindGeometry"]> | undefined;
+  if (options.design?.experimentalGeometry) void import("./design-geometry.js").then(module => {
+    if (listeners.signal.aborted) return;
+    geometry = module.bindGeometry({
+      options, signal: listeners.signal, selected: () => selected,
+      enabled: () => active && decorating && !showingBefore && !textTools?.element,
+      remember, track, history, update: updateActions,
+      tokens: () => reactPanelModule,
+    });
+  });
 
   function remember(element: DesignTarget, property: string, value = element.style.getPropertyValue(property), priority = element.style.getPropertyPriority(property)) {
     const token = reactPanelModule?.originalDesignTokenStyle(element, property);
@@ -168,7 +178,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (value === (originals.get(element)?.get(property)?.value ?? "")) values.delete(property);
     else values.set(property, value);
     if (!values.size) changed.delete(element);
-    outlineFor(selected, "selected");
+    renderOutlines();
   }
   /** The bar shows a change count and its tools only once the selection has changes. Returns the count. */
   function syncBar() {
@@ -182,21 +192,10 @@ export function createDesignMode(options: DesignModeOptions) {
     compare.hidden = !total && !showingBefore;
     return total;
   }
-  // Status messages show briefly in the bar, then give way to the change count.
-  let statusTimer = 0;
-  new MutationObserver(() => {
-    const text = status.textContent ?? "";
-    status.title = text;
-    bar.toggleAttribute("data-message", !!text);
-    clearTimeout(statusTimer);
-    if (text) statusTimer = window.setTimeout(function clear() {
-      if (textTools?.element) statusTimer = window.setTimeout(clear, 2600);
-      else status.textContent = "";
-    }, 2600);
-  }).observe(status, { childList: true, characterData: true, subtree: true });
   let showingBefore = false;
   let suspendedBefore: boolean | undefined;
   function showBefore(on: boolean, animate = true) {
+    geometry?.cancel();
     decorating = false;
     renderOutlines();
     if (on === showingBefore) return;
@@ -285,7 +284,7 @@ export function createDesignMode(options: DesignModeOptions) {
       rerender: renderControls,
     } satisfies PanelContext);
     // Any design-system adapter needs the token and props controls, not only registered elements.
-    if (options.design || element.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
+    if (options.design?.tokens || options.design?.themes || options.design?.components || element.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
       reactPanelPromise ??= import("./react-props-panel.js").then((module) => reactPanelModule = module).catch((error: unknown) => {
         reactPanelPromise = null;
         throw error;
@@ -361,6 +360,7 @@ export function createDesignMode(options: DesignModeOptions) {
     marker.hidden = !drawHighlight(marker, rect, element, options.bounds?.(element));
   }
   function renderOutlines(retarget = false) {
+    geometry?.render();
     outlineFor(selected ?? hovered, selected ? "selected" : "hover", retarget);
     outlineFor(selected && hovered !== selected ? hovered : null, "hover", false, prospective);
   }
@@ -526,7 +526,7 @@ export function createDesignMode(options: DesignModeOptions) {
       });
       renderControls();
       setFolded(!selected);
-      outlineFor(selected, "selected");
+      renderOutlines();
       close.focus({ preventScroll: true });
     } else {
       hovered = null;
@@ -574,6 +574,7 @@ export function createDesignMode(options: DesignModeOptions) {
     updateActions();
   }
   function cancelPreview() {
+    geometry?.cancel();
     options.root.dispatchEvent(new Event("komo-preview-cancel"));
   }
   function proposalFor(element: DesignTarget, create: typeof import("./design-export.js")["designProposal"]) {
@@ -590,7 +591,7 @@ export function createDesignMode(options: DesignModeOptions) {
         reactPanelModule?.undoReactProp(selected);
         renderControls();
       }
-      status.textContent = "Runtime preview · Undo, Reset or reload to restore";
+      status.textContent = previewMessage;
     } else if (!edit.kind) {
       edit.undo();
       renderControls();
@@ -602,7 +603,7 @@ export function createDesignMode(options: DesignModeOptions) {
       reactPanelModule?.syncDesignTokenBinding(edit.element, edit.property);
       track(edit.element, edit.property);
       if (selected === edit.element) renderControls();
-      outlineFor(selected ?? hovered, selected ? "selected" : "hover");
+      renderOutlines();
     }
     updateActions();
     (undo.disabled ? close : undo).focus({ preventScroll: true });
@@ -631,7 +632,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (!selected) return;
     resetElement(selected);
     renderControls();
-    outlineFor(selected, "selected");
+    renderOutlines();
     updateActions();
     close.focus({ preventScroll: true });
   });
@@ -681,6 +682,7 @@ export function createDesignMode(options: DesignModeOptions) {
       select(element) { decorating = true; select(element); reveal(element); },
       compareBefore(before) { showBefore(before ?? !showingBefore); },
     });
+    module.watchDesignStatus(status, bar, () => !!textTools?.element, listeners.signal);
     views = module.selectionViews({
       exitKey: options.exitKey,
       review() {
@@ -726,7 +728,6 @@ export function createDesignMode(options: DesignModeOptions) {
       setActive(false);
       resetAll();
       clearTimeout(closeTimer);
-      clearTimeout(statusTimer);
       clearTimeout(flipTimer);
       resized?.disconnect();
       listeners.abort();

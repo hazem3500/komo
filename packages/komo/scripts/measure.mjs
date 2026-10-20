@@ -110,7 +110,8 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 208_500)
 // Raised from 7,000 for double-click inline editing (37 bytes); the caret logic stays in the editor chunk.
 // 7,250: the footer Before/After switch (styles, text, React props, theme), its keys and morph,
 // toolbar-style tooltips and header/footer polish (~870 bytes). The panel chunk has no room either.
-if (report.optionalDesignMode.gzip > 7_250)
+// 7,300: the hook that lazy-loads default-off experimental geometry (its own chunk) (~10 bytes).
+if (report.optionalDesignMode.gzip > 7_300)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).
