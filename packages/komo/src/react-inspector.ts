@@ -68,6 +68,16 @@ export function adaptComponentEditor(identity: ComponentIdentity, editor: Compon
   return component;
 }
 
+/** Resolve only an adapter's renderer-proven instance; registered text owners never migrate. */
+export function currentInspectableElement(element: Element): Element | null {
+  const entry = adapted.get(element);
+  if (!entry || entry.editor.available?.() === false) return null;
+  const next = entry.editor.currentElement?.();
+  if (!next?.isConnected) return null;
+  if (next !== element) adapted.set(next, entry);
+  return next;
+}
+
 function isScalar(value: unknown): value is InspectableScalar {
   return (
     value === undefined ||

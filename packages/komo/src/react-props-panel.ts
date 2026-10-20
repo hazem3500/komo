@@ -3,6 +3,7 @@ import { previewStyle, watchPopup } from "./design-popup.js";
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
 import {
   adaptComponentEditor,
+  currentInspectableElement,
   inspectableAncestor,
   inspectableFor,
   isEditablePropValue,
@@ -66,6 +67,71 @@ export { originalTokenStyle as originalDesignTokenStyle } from "./token-adapter.
 
 const originals = new Map<DesignTarget, Map<string, InspectableScalar>>();
 const edits = new Map<DesignTarget, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();
+/** Move only prop state; DOM styles, tokens and text keep their original ownership. */
+export function retainReactPropTarget(element: DesignTarget): DesignTarget | null {
+  const next = currentInspectableElement(element);
+  if (!isDesignTarget(next)) return null;
+  if (next !== element) {
+    for (const map of [originals, edits, afterProps] as Array<Map<DesignTarget, unknown>>) {
+      if (map.has(element)) { map.set(next, map.get(element)); map.delete(element); }
+    }
+  }
+  return next;
+}
+
+export function retainReactPropSelection(
+  previous: DesignTarget,
+  controls: HTMLElement,
+  context: { root: ShadowRoot; host: HTMLElement },
+  history: ReadonlyArray<{ kind?: string; props?: boolean; element: DesignTarget }>,
+  textTools: import("./inline-text-editor.js").InlineTextTools | null,
+  retain: (element: DesignTarget, panel: HTMLElement | undefined) => void,
+): boolean {
+  if (previous instanceof HTMLElement && (textTools?.element === previous || textTools?.hasChanges(previous))) return false;
+  const element = retainReactPropTarget(previous);
+  if (!element || element === previous || context.host.contains(element)) return false;
+  const panel = controls.querySelector<HTMLElement>(".design-react-group:not(.design-react-discovered)") ?? undefined;
+  const focused = context.root.activeElement;
+  for (const entry of history) if (!entry.kind && entry.props && entry.element === previous) entry.element = element;
+  retain(element, panel);
+  if (focused instanceof HTMLElement && panel?.contains(focused)) focused.focus({ preventScroll: true });
+  return true;
+}
+
+export function attachDesignSystemControls(
+  element: DesignTarget,
+  controls: HTMLElement,
+  panel: typeof import("./design-panel.js"),
+  context: { root: ShadowRoot; design?: DesignSystem },
+  options: {
+    signal: AbortSignal;
+    select(element: DesignTarget): void;
+    refresh(): void;
+    retainedProps?: HTMLElement;
+    updateActions(): void;
+    history: Array<{ element: DesignTarget; undo(): void; props?: boolean } | { kind: string; element: DesignTarget }>;
+    syncStyles(): void;
+    onStyleEdit: Parameters<typeof attachStyleTokenControls>[3];
+    isFieldDirty?: (control: Element) => boolean;
+  },
+): void {
+  const { root, design } = context;
+  const { retainedProps, syncStyles, updateActions } = options;
+  if (!retainedProps && controls.querySelector(".design-react-group, .design-theme-group")) return;
+  const recordUndo = (undo?: () => void, props = false) => {
+    if (undo) options.history.push({ element: props ? retainReactPropTarget(element) ?? element : element, props, undo: () => { undo(); syncStyles(); } });
+    syncStyles();
+    updateActions();
+  };
+  // Switching a theme re-renders the selection, so tokens, values and the outline follow it.
+  attachThemeSwitcher(controls, design, () => options.select(element), root, options.signal);
+  const props = retainedProps ?? createReactPropsPanel(element, undo => recordUndo(undo, true), root, options.select, design, options.refresh);
+  if (props && !retainedProps) controls.prepend(props);
+  attachStyleTokenControls(element, panel.fields, controls, options.onStyleEdit, root, panel.valueFor, panel.toHex, design, recordUndo, options.isFieldDirty);
+  const theme = createDesignThemePanel(element, panel, options.updateActions, root);
+  if (theme) controls.append(theme);
+}
+
 const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
 // React props, inline token chips and shared theme values, in the inspector's compact field style.
@@ -916,6 +982,7 @@ export function syncDesignTokenBinding(element: DesignTarget, property: string):
 }
 
 export function undoReactProp(element: DesignTarget): void {
+  element = retainReactPropTarget(element) ?? element;
   const history = edits.get(element);
   const edit = history?.at(-1);
   const component = inspectableFor(element);
@@ -1090,6 +1157,7 @@ export function attachThemeSwitcher(
 }
 
 export function resetReactProps(element: DesignTarget): void {
+  element = retainReactPropTarget(element) ?? element;
   const baseline = originals.get(element);
   const component = inspectableFor(element);
   if (!baseline?.size || !component) return;
@@ -1129,6 +1197,7 @@ function recordChange(
   control: HTMLInputElement | HTMLSelectElement,
   onEdit: (undo?: () => void) => void,
 ) {
+  element = retainReactPropTarget(element) ?? element;
   const definition = component.definition.props.find((prop) => prop.name === propName);
   if (!definition || !isEditablePropValue(definition, value)) {
     control.setAttribute("aria-invalid", "true");
@@ -1239,11 +1308,18 @@ export function createReactPropsPanel(
         refresh();
       });
     };
-    const unsubscribe = component.subscribe(() => { dirty = true; schedule(); });
+    const unsubscribe = component.subscribe(() => {
+      element = retainReactPropTarget(element) ?? element;
+      dirty = true; schedule();
+    });
     const scope = styleRoot ?? root;
     scope.addEventListener("focusout", () => { queueMicrotask(() => { if (dirty) schedule(); }); }, { signal: events.signal });
     const stop = () => { unsubscribe(); cancelAnimationFrame(frame); events.abort(); };
-    queueMicrotask(() => { if (group.isConnected) watchPopup(group, stop, events.signal); else stop(); });
+    queueMicrotask(() => {
+      // Preview cancellation can retain this panel; its subscription follows DOM lifetime.
+      if (group.isConnected) watchPopup(group, () => { if (!group.isConnected) stop(); }, events.signal);
+      else stop();
+    });
   }
   for (const prop of component.definition.props.filter(prop => prop.kind !== "unsupported")) {
     const styleProperty = (prop as InspectableProp & { styleProperty?: string }).styleProperty;

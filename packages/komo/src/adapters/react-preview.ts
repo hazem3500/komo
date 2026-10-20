@@ -3,7 +3,7 @@
 import type { ComponentEditor, ComponentProperty } from "../design-system.js";
 
 type Props = Record<string, string | number | boolean | undefined>;
-interface Snapshot { fiber: object; root: object; props: Record<string, unknown> }
+interface Snapshot { fiber: object; root: object; props: Record<string, unknown>; element?: Element }
 export interface ReactPreviewRequest {
   schema: ComponentProperty[];
   current(): Snapshot | null;
@@ -86,7 +86,10 @@ function installBridge(): boolean {
       const owned = new Map<string, { before: unknown; present: boolean; value: unknown }>();
       const listeners = new Set<() => void>();
       let pending: Record<string, unknown> | undefined;
-      const read = () => request.current();
+      const read = () => {
+        const current = request.current();
+        return current?.root === snapshot!.root ? current : null;
+      };
       const apply = (root: object) => {
         const current = read();
         if (!current) { active.delete(apply); owned.clear(); pending = undefined; return; }
@@ -106,6 +109,7 @@ function installBridge(): boolean {
       return {
         schema: request.schema,
         available: () => !!read(),
+        currentElement: () => read()?.element ?? null,
         release(names) { for (const name of names) owned.delete(name); },
         subscribe(listener) {
           listeners.add(listener);

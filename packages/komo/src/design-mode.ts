@@ -28,7 +28,7 @@ export interface DesignModeOptions {
 
 type TextEdit = { kind: "text"; element: DesignTarget };
 /** A token previewed through the app's adapter; its undo comes from `preview()`. */
-type TokenSwap = { kind?: undefined; element: DesignTarget; undo(): void };
+type TokenSwap = { kind?: undefined; element: DesignTarget; undo(): void; props?: boolean };
 
 type Original = StyleOriginal;
 
@@ -242,7 +242,7 @@ export function createDesignMode(options: DesignModeOptions) {
     styleEdits.commit(control, selected, property, final);
     updateActions();
   }
-  function renderControls() {
+  function renderControls(retainedProps?: HTMLElement) {
     cancelPreview();
     controls.replaceChildren();
     syncEmpty();
@@ -284,6 +284,7 @@ export function createDesignMode(options: DesignModeOptions) {
       },
       rerender: renderControls,
     } satisfies PanelContext);
+    if (retainedProps) controls.prepend(retainedProps);
     // Any design-system adapter needs the token and props controls, not only registered elements.
     if (options.design || element.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
       reactPanelPromise ??= import("./react-props-panel.js").then((module) => reactPanelModule = module).catch((error: unknown) => {
@@ -291,26 +292,20 @@ export function createDesignMode(options: DesignModeOptions) {
         throw error;
       });
       void reactPanelPromise.then((module) => {
-        if (!active || selected !== element || controls.querySelector(".design-react-group, .design-theme-group")) return;
-        const styleRoot = options.root;
-        // Switching a theme re-renders the selection, so tokens, values and the outline follow it.
-        module.attachThemeSwitcher(controls, options.design, () => select(element), styleRoot, listeners.signal);
-        const recordUndo = (undo?: () => void) => {
-          const sync = () => { for (const property of originals.get(element)?.keys() ?? []) track(element, property); };
-          if (undo) history.push({ element, undo: () => { undo(); sync(); } });
-          sync();
-          updateActions();
-        };
-        const props = module.createReactPropsPanel(element, recordUndo, styleRoot, select, options.design, renderControls);
-        if (props) controls.prepend(props);
-        module.attachStyleTokenControls(element, panelControls.fields, controls, (field, input, before) => {
-          remember(element, field.property, before);
-          track(element, field.property);
-          styleEdits.begin(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
-          commit(input, field.property);
-        }, styleRoot, panelControls.valueFor, panelControls.toHex, options.design, recordUndo, styleEdits.isDirty);
-        const theme = module.createDesignThemePanel(element, panelControls, updateActions, styleRoot);
-        if (theme) controls.append(theme);
+        if (!active || selected !== element) return;
+        module.attachDesignSystemControls(element, controls, panelControls, options, {
+          signal: listeners.signal,
+          select, refresh: renderControls, retainedProps, updateActions,
+          history,
+          isFieldDirty: styleEdits.isDirty,
+          syncStyles() { for (const property of originals.get(element)?.keys() ?? []) track(element, property); },
+          onStyleEdit(field, input, before) {
+            remember(element, field.property, before);
+            track(element, field.property);
+            styleEdits.begin(input, { value: before, priority: element.style.getPropertyPriority(field.property) });
+            commit(input, field.property);
+          },
+        });
       }).catch(() => {});
     }
   }
@@ -368,10 +363,26 @@ export function createDesignMode(options: DesignModeOptions) {
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      if (selected && (!selected.isConnected || selectionPage !== page())) clearSelection();
+      if (selected && (selectionPage !== page() || (!selected.isConnected && !retainSelection()))) clearSelection();
       if (hovered && !hovered.isConnected) hovered = null;
       renderOutlines();
     });
+  }
+  function retainSelection(): boolean {
+    const previous = selected;
+    if (!previous || selectionPage !== page()) return false;
+    const retained = reactPanelModule?.retainReactPropSelection(previous, controls, options, history, textTools, (next, panel) => {
+      selected = next;
+      hovered = next;
+      resized?.disconnect();
+      resized?.observe(next);
+      if (!hasChanges(previous)) previewTargets.delete(previous);
+      previewTargets.set(next, selectionPage);
+      renderControls(panel);
+    });
+    if (!retained) return false;
+    updateActions();
+    return true;
   }
   // Style edits resize the selection; the outline follows it.
   const resized = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleOutline) : null;
@@ -513,7 +524,7 @@ export function createDesignMode(options: DesignModeOptions) {
       suspendedBefore = undefined;
       showBefore(before, false);
     }
-    if (value && selected && (!selected.isConnected || selectionPage !== page())) clearSelection();
+    if (value && selected && (selectionPage !== page() || (!selected.isConnected && !retainSelection()))) clearSelection();
     clearTimeout(closeTimer);
     closeTimer = 0;
     active = value;
@@ -672,7 +683,7 @@ export function createDesignMode(options: DesignModeOptions) {
   window.addEventListener("keydown", escape, { signal: listeners.signal });
   window.addEventListener("scroll", scheduleOutline, { capture: true, passive: true, signal: listeners.signal });
   window.addEventListener("resize", scheduleOutline, { passive: true, signal: listeners.signal });
-  watchHighlight(options.host, () => active ? [selected ?? hovered, hovered] : [], scheduleOutline, listeners.signal, clearSelection);
+  watchHighlight(options.host, () => active ? [selected ?? hovered, hovered] : [], scheduleOutline, listeners.signal, () => { if (!retainSelection()) clearSelection(); });
   const selectionReady = exporter().then(module => {
     if (listeners.signal.aborted) return;
     keyboard = module.designKeyboard({
