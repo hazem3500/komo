@@ -16,13 +16,14 @@ function fixture() {
   const compareBefore = vi.fn();
   let reserved = false;
   const handle = designKeyboard({ host, compare, selected: () => selected, select, compareBefore, reserved: () => reserved });
-  document.addEventListener("keydown", handle, { signal: cleanup.signal });
+  const handled: boolean[] = [];
+  document.addEventListener("keydown", event => { handled.push(handle(event)); }, { signal: cleanup.signal });
   const press = (key: string, target: Element = document.body, init: KeyboardEventInit = {}) => {
     const event = new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true, ...init });
     target.dispatchEvent(event);
     return event;
   };
-  return { root, compare, select, compareBefore, press, selected: () => selected, reserve: () => { reserved = true; } };
+  return { root, compare, select, compareBefore, press, handled, selected: () => selected, reserve: () => { reserved = true; } };
 }
 let cleanup = new AbortController();
 afterEach(() => { cleanup.abort(); cleanup = new AbortController(); document.body.replaceChildren(); });
@@ -97,5 +98,18 @@ it("leaves Escape to the nearest property field", () => {
   field.innerHTML = '<input>';
   f.root.append(field);
   expect(f.press('Escape', field.firstElementChild!).defaultPrevented).toBe(false);
+  expect(f.select).not.toHaveBeenCalled();
+});
+
+it("keeps field Escape out of canvas exit after komo's host isolation has prevented it", () => {
+  const f = fixture();
+  const field = document.createElement('div');
+  field.dataset.fieldProperty = 'color';
+  field.innerHTML = '<input>';
+  f.root.append(field);
+  // Mirrors isolateEscape: window capture prevents every Escape inside komo's host.
+  addEventListener("keydown", event => { if (event.key === "Escape") event.preventDefault(); }, { capture: true, signal: cleanup.signal });
+  f.press('Escape', field.firstElementChild!);
+  expect(f.handled).toEqual([true]);
   expect(f.select).not.toHaveBeenCalled();
 });

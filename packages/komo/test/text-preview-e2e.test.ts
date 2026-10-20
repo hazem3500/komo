@@ -170,7 +170,6 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await proposal.getByRole('button', { name: 'After', exact: true }).click();
     expect((await geometry()).whitespace).toBe('pre-wrap');
     expect(await page.locator('#target').evaluate(node => node === (window as any).textQA.owner && node.querySelector('svg') === (window as any).textQA.icon && node.querySelector('strong')!.firstChild === (window as any).textQA.text)).toBe(true);
-    await page.screenshot({ path: `/private/tmp/komo-keyboard-whitespace-react${version}.png` });
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => getComputedStyle(document.querySelector('#target')!).whiteSpace === 'normal');
     expect(await geometry()).toEqual(baseline);
@@ -435,7 +434,6 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.keyboard.press("ArrowRight");
     expect(await text()).toBe("Original title\nproposal");
     expect(await same()).toBe(true);
-    await page.screenshot({ path: `/private/tmp/komo-keyboard-text-react${version}-${mode}.png` });
     if (mode === "floating") await page.evaluate(() => {
       history.pushState({}, '', '/next');
       dispatchEvent(new PopStateEvent('popstate'));

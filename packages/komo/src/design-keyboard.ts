@@ -16,10 +16,13 @@ export function designKeyboard(options: {
   compareBefore(before?: boolean): void;
 }) {
   return (event: KeyboardEvent): boolean => {
-    if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || options.reserved?.(event)) return false;
+    if (event.isComposing || event.keyCode === 229) return false;
     const key = event.key.toLowerCase();
     const path = event.composedPath();
+    // A field cancels its own preview on Escape. Checked before defaultPrevented:
+    // komo's window-capture isolation already prevents every Escape inside its host.
     if (key === "escape" && path.some(node => node instanceof Element && node.matches("[data-field-property]"))) return true;
+    if (event.defaultPrevented || options.reserved?.(event)) return false;
     const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
     const horizontal = key === "arrowleft" || key === "arrowright";
     const comparison = path.includes(options.compare);
