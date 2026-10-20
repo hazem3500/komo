@@ -51,7 +51,8 @@ import {
   mobileComposerPosition,
   reviewLayout,
 } from "./review-layout.js";
-import { createToolbar, type ToolbarItem } from "./lazy-toolbar.js";
+import { createToolbar, type ToolbarMenuItem } from "./lazy-toolbar.js";
+import { defaultToolbarItems, normalizeToolbarItems, toolbarLayout } from "./toolbar-items.js";
 import { canonicalPage } from "./page.js";
 import { openState } from "./open-state.js";
 import { ApiError, CommentsApi } from "./api.js";
@@ -135,6 +136,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   setAvatarResolver(options.avatar);
   const shortcuts = resolveShortcuts(options.shortcuts);
   const designEnabled = options.features?.designMode !== false;
+  const toolbarItems = normalizeToolbarItems(options.toolbar?.items);
   const tagsEnabled = options.features?.tags !== false;
   const scope = JSON.stringify([
     endpoint.href,
@@ -2423,7 +2425,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       }
     }
     const glyph = (name: keyof typeof icons) => ({ glyph: name });
-    const items: ToolbarItem[] = [
+    const items: ToolbarMenuItem[] = [
       {
         id: "browse",
         label: "Browse website",
@@ -2538,12 +2540,19 @@ export function initComments(options: CommentsOptions): CommentsController {
         showInBar: false,
         onSelect: retryConnection,
       });
+    const menu = options.onboarding
+      ? items.filter((item) => item.id === "account" || item.id === "comments")
+      : items;
+    // Setup keeps its account and project controls whatever the configured order.
+    const bar = toolbarLayout(
+      options.onboarding ? defaultToolbarItems : toolbarItems,
+      (id) => id === "more" || menu.some((item) => item.id === id),
+    );
+    // An empty configuration hides the toolbar; shortcuts keep working.
+    if (!bar.length) toolbar.style.display = "none";
     toolbarRoot.render({
-      items: options.onboarding
-        ? items.filter(
-            (item) => item.id === "account" || item.id === "comments",
-          )
-        : items,
+      items: menu,
+      bar,
       alignEnd:
         expanded && edgeSidebar
           ? false

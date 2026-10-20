@@ -95,6 +95,26 @@ export interface KomoFeatures {
   tags?: boolean;
 }
 
+/** Built-in toolbar controls. */
+export type ToolbarItemId =
+  | "browse"
+  | "comment"
+  | "design"
+  | "comments"
+  | "more"
+  | "account"
+  | "dismiss";
+/** A built-in control, or "|" for a separator. */
+export type ToolbarItem = ToolbarItemId | "|";
+
+export interface KomoToolbar {
+  /**
+   * Order and visibility; omitted ids are hidden. "|" draws a separator.
+   * Defaults to browse, comment, design | comments | more, account | dismiss.
+   */
+  items?: ToolbarItem[];
+}
+
 export interface CommentsOptions {
   /** Used by the hosted setup screen to reuse the sidebar account UI. */
   onboarding?: OnboardingOptions;
@@ -112,6 +132,8 @@ export interface CommentsOptions {
   shortcuts?: KomoShortcuts;
   /** Turn optional features off, e.g. { designMode: false, tags: false }. */
   features?: KomoFeatures;
+  /** Toolbar order, visibility and separators. Hidden controls stay in More. */
+  toolbar?: KomoToolbar;
   /**
    * Sidebar presentation when the review opens. "edge" (default) is a floating,
    * draggable sidebar that parks off and peeks from the viewport edge while
