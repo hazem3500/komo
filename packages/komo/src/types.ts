@@ -187,7 +187,8 @@ export interface CommentsOptions {
    * Frame reflows the page at its available width without adding a scale,
    * preserving native CSS-pixel interactions. The frame acts as the page's
    * viewport: viewport units and fixed body-level portals resolve against it
-   * without moving their DOM.
+   * without moving their DOM. Reviewers can pick another viewport size, shown
+   * at Fit (scaled down to fit) or 100%, remembered per project.
    * `scale: true` opts into shrinking the original viewport instead. Hosts
    * deriving local values from client coordinates must handle that scale;
    * arbitrary canvas, drag, and grid handlers cannot be corrected generically.

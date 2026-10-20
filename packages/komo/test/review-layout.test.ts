@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { frameView } from "../src/frame-size";
 import { mobileComposerPosition, reviewLayout } from "../src/review-layout";
 
 describe("review viewport layout", () => {
@@ -63,10 +64,32 @@ describe("review viewport layout", () => {
     const layout = reviewLayout(1280, 800, true, 800, false, true, false);
     expect(layout.scale).toBe(1);
     expect(layout.left).toBe(24);
-    expect(layout.top).toBe(24);
+    expect(layout.top).toBe(48);
     expect(layout.visibleWidth).toBe(852);
-    expect(layout.height).toBe(752);
+    expect(layout.height).toBe(728);
     expect(layout.left + layout.visibleWidth).toBe(876);
+  });
+});
+
+describe("frame view", () => {
+  const box = { left: 24, top: 48, width: 852, height: 728 };
+  it("uses the box itself as the viewport by default, unscaled", () => {
+    expect(frameView(box, null, false)).toEqual({ width: 852, height: 728, scale: 1, pan: false, left: 24, top: 48 });
+  });
+  it("fits a larger logical viewport, centred, and never upscales a smaller one", () => {
+    const desktop = frameView(box, [1440, 900], false);
+    expect(desktop.scale).toBeCloseTo(852 / 1440);
+    expect(desktop.left).toBe(24);
+    expect(desktop.top).toBeCloseTo(48 + (728 - 900 * desktop.scale) / 2);
+    expect(desktop.pan).toBe(false);
+    const mobile = frameView(box, [390, 844], false);
+    expect(mobile.scale).toBeCloseTo(728 / 844);
+    expect(mobile.left).toBeCloseTo(24 + (852 - 390 * mobile.scale) / 2);
+    expect(frameView(box, [390, 600], false)).toMatchObject({ scale: 1, pan: false, left: 255, top: 112 });
+  });
+  it("keeps CSS pixels at 100% and pans a viewport larger than the box", () => {
+    expect(frameView(box, [1440, 900], true)).toMatchObject({ scale: 1, pan: true, left: 24, top: 48 });
+    expect(frameView(box, [768, 600], true)).toMatchObject({ scale: 1, pan: false });
   });
 });
 

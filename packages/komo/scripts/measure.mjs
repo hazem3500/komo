@@ -120,7 +120,10 @@ await writeFile(
 // All-features 209,300: design change cards name targets for reviewers, keep long paths, URLs
 // and diffs inside the card, and share the source ⓘ popover with Properties (207,582 -> 209,140,
 // all in the on-demand design comment chunk; initial +35).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 209_300)
+// All-features 213,250: Frame size controls (presets, custom size, handles, Fit / 100%, the
+// fitted view and pan clipping) load as their own ~3,100-byte chunk when Frame first opens or a
+// size is remembered; Frame's sizing hooks add ~600 to initial. Main was at ~209,140.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 213_250)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

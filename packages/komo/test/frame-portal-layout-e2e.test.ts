@@ -155,7 +155,7 @@ describe.skipIf(!chrome)("viewport-relative portals in the reflow Frame", () => 
     };
     await page.keyboard.press("l");
     const opened = await framed();
-    expect(opened.box).toEqual({ left: 24, top: 24, width: 852, height: 752 });
+    expect(opened.box).toEqual({ left: 24, top: 48, width: 852, height: 728 });
     await page.screenshot({ path: join(shots, "frame-1280x800.png") });
     console.log(JSON.stringify({ full: full.rects, framed: opened }));
 
