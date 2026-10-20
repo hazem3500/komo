@@ -89,6 +89,7 @@ export function postgresDatabase(connectionString: string, pg: Pg) {
           "002_thread_tags.sql",
           "003_project_webhooks.sql",
           "004_personal_access_tokens.sql",
+          "005_thread_scope.sql",
         ];
         if (
           versions.rows.length > 1 ||

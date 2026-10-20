@@ -278,7 +278,7 @@ export async function manageProject(
     const table = url.searchParams.get("table") ?? "threads";
     const queries: Record<string, string> = {
       threads:
-        "SELECT id,repo,branch,page,anchor,resolved,resolved_by,created_at,updated_at FROM threads WHERE project=? ORDER BY id",
+        "SELECT id,repo,branch,page,anchor,resolved,resolved_by,created_at,updated_at,scope FROM threads WHERE project=? ORDER BY id",
       comments:
         "SELECT c.id,c.thread_id,c.user_id,c.body,c.created_at,c.edited_at FROM comments c JOIN threads t ON t.id=c.thread_id WHERE t.project=? ORDER BY c.id",
       reactions:

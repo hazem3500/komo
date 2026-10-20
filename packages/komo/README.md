@@ -491,6 +491,8 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `anchorTarget(element)` | `(element: Element) => Element \| undefined` | Declared owners and stable semantic cards | Optional persistent ancestor for comment capture. Offsets stay relative to this owner when hover-only children disappear. Owners cannot cross a dialog/popover boundary. Design inspection continues to target the exact element. |
 | `sourceUrl(source, branch)` | `(source: string, branch: string) => string` | GitHub viewer | Custom source or editor link. |
 | `page()` | `() => string` | `location.pathname` | Canonical page identifier. |
+| `persistentRegions` | `string[]` | None | Selectors for layout shown on every page, e.g. `["nav", "[data-sidebar]", "header"]`. Comments made inside them show on every page where their element exists, are labelled **All pages** in the list, and keep their original page for links. Reviewers can switch a comment between **Show on all pages** and **Only on this page** in its **…** menu. |
+| `isPersistent(element)` | `(element: Element) => boolean` | None | Custom test for persistent layout, checked alongside `persistentRegions` with the comment's element. |
 | `navigate(url)` | `(url: URL) => void \| Promise<void>` | `location.assign` | Route to a comment without reloading, e.g. `(url) => router.navigate({ href: url.pathname + url.search + url.hash })`. Rejected or redirected navigation keeps the requested conversation open with destination context; the package never forces a reload or retries your router automatically. Missing elements remain separate from navigation status. |
 | `drawerContainer` | `HTMLElement` | Viewport | Element used to center the drawer before it is dragged. |
 | `autoHideDrawer` | `boolean` | `true` | Set `false` to keep the drawer visible away from the pointer. |
@@ -587,7 +589,7 @@ Branch detection also supports `CF_PAGES_BRANCH`, `WORKERS_CI_BRANCH`, `VERCEL_G
 | `repo` | Required | Repository allowed for the project. |
 | `origins` | Required | Exact allowed origins; self-host supports single-label wildcards. |
 | `allowGuests` | `true` | Enable named guest sessions. |
-| `allowGuestResolve` | `true` | Allow guests to resolve threads. |
+| `allowGuestResolve` | `true` | Allow guests to resolve threads and switch any thread between all pages and its own page. Authors can always switch their own. |
 | `requireOwner` | `true` in generated setups | Block reviewing until Google ownership is claimed. Legacy static projects remain compatible. |
 | `bootstrapHash` | Generated | SHA-256 owner-claim key hash. |
 | `suspended` | `false` | Disable a project. |

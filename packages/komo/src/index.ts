@@ -59,6 +59,7 @@ import type { FrameSizeControls } from "./frame-size.js";
 import { createToolbar, type ToolbarMenuItem } from "./lazy-toolbar.js";
 import { defaultToolbarItems, normalizeToolbarItems, toolbarLayout } from "./toolbar-items.js";
 import { canonicalPage } from "./page.js";
+import { allPages as everyPage, inPersistentRegion, threadOnPage } from "./thread-scope.js";
 import { openState } from "./open-state.js";
 import { ApiError, CommentsApi } from "./api.js";
 import { connectionIssue, type ConnectionIssue } from "./connection-issue.js";
@@ -275,8 +276,11 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (threadRequest && !threadRequest.opened) cancelledLinks.add(threadRequest.id);
     threadRequest = null;
   }
+  // Made on this page, or shown on all pages with its anchor present here.
+  const here = (thread: Thread, resolve: (anchor: Anchor) => unknown = resolveAnchor, current = page()) =>
+    threadOnPage(thread, current, resolve);
   function onThreadPage(thread: Thread) {
-    return thread.page === page() && !(threadRequest?.id === thread.id && (threadRequest.pending || threadRequest.rejected));
+    return here(thread) && !(threadRequest?.id === thread.id && (threadRequest.pending || threadRequest.rejected));
   }
   type DesignController = ReturnType<typeof import("./design-mode.js").createDesignMode>;
   let designController: DesignController | null = null;
@@ -2531,7 +2535,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     commentMode = false;
     clearTimeout(accountOpenTimer);
     accountOpenTimer = 0;
-    if (thread.page !== page() && !retained) {
+    if (!retained && !here(thread)) {
       const url = new URL(thread.page, location.origin);
       url.searchParams.set("comment", thread.id);
       void go(url);
@@ -2573,10 +2577,10 @@ export function initComments(options: CommentsOptions): CommentsController {
     render();
   }
   function filtered() {
+    const anchors = anchorPass(), current = page();
     return threads
       .filter(
         (t) =>
-          (allPages || t.page === page()) &&
           (filter === "all" || t.resolved === (filter === "resolved")) &&
           (!tagFilter || !!t.tags?.includes(tagFilter)) &&
           (!search ||
@@ -2585,7 +2589,8 @@ export function initComments(options: CommentsOptions): CommentsController {
                 .toLowerCase()
                 .includes(search.toLowerCase()),
             ) ||
-            t.page.toLowerCase().includes(search.toLowerCase())),
+            t.page.toLowerCase().includes(search.toLowerCase())) &&
+          (allPages || here(t, anchors.resolve, current)),
       )
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
@@ -2883,17 +2888,21 @@ export function initComments(options: CommentsOptions): CommentsController {
     const route = item.querySelector<HTMLAnchorElement>(".page");
     if (!route) return;
     const url = new URL(thread.page, location.origin).href;
+    // All-pages threads keep their origin page in the detail and as the destination.
+    const everywhere = everyPage(thread);
+    const ownPage = thread.page === page();
     route.href = url;
     route.title = url;
-    route.setAttribute("aria-label", `Open page: ${url}`);
+    route.setAttribute("aria-label", everywhere ? `All pages. Made on ${url}` : `Open page: ${url}`);
     const row = route.closest<HTMLElement>(".card-page-row")!;
-    row.hidden = thread.page === page();
-    row.querySelector(".card-page-url")!.textContent = url;
-    if (route.dataset.url !== url) {
-      route.dataset.url = url;
-      const fallback = readablePageLabel(new URL(url));
+    row.hidden = ownPage && !everywhere;
+    row.querySelector(".card-page-url")!.textContent = everywhere ? `Made on ${url}` : url;
+    const key = everywhere ? "" : url;
+    if (route.dataset.url !== key) {
+      route.dataset.url = key;
+      const fallback = everywhere ? "All pages" : readablePageLabel(new URL(url));
       route.textContent = fallback;
-      if (options.pageLabel) {
+      if (options.pageLabel && !everywhere) {
         let label = pageLabels.get(url);
         if (!label) {
           label = Promise.resolve().then(() => options.pageLabel!(new URL(url)))
@@ -2906,11 +2915,11 @@ export function initComments(options: CommentsOptions): CommentsController {
       }
     }
     const status = item.querySelector<HTMLElement>(".card-status")!;
-    status.textContent = thread.resolved ? "Resolved" : detachedThreads.has(thread.id) ? "Not found on page" : "";
+    status.textContent = thread.resolved ? "Resolved" : detachedThreads.has(thread.id) && ownPage ? "Not found on page" : "";
     status.hidden = !status.textContent;
     item.classList.toggle("resolved", thread.resolved);
     item.classList.toggle("active", selected === thread.id);
-    item.querySelector(".thread-card")!.setAttribute("aria-description", [url, status.textContent].filter(Boolean).join(" · "));
+    item.querySelector(".thread-card")!.setAttribute("aria-description", [everywhere && "All pages", url, status.textContent].filter(Boolean).join(" · "));
   }
   let pinsScrolling = false;
   let pinScrollTimer = 0;
@@ -2929,15 +2938,15 @@ export function initComments(options: CommentsOptions): CommentsController {
     else pins.dataset.size = density;
     const open = threads.find((thread) => thread.id === selected);
     if (open) markRead(open);
+    const anchors = anchorPass();
     const currentPage = page();
     const visible = threads.filter(
       (t) =>
-        t.page === currentPage &&
         !t.resolved &&
-        (!tagFilter || !!t.tags?.includes(tagFilter)),
+        (!tagFilter || !!t.tags?.includes(tagFilter)) &&
+        here(t, anchors.resolve, currentPage),
     );
     if (density === "dot") breathe(visible);
-    const anchors = anchorPass();
     const stacks = pinStacks(visible, (thread) =>
       anchors.resolve(thread.anchor),
     );
@@ -3198,7 +3207,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   let copiedPrompt: "all" | "page" | null = null;
   let copiedPromptTimer = 0;
   async function copyPrompt(scope: "all" | "page") {
-    const prompt = agentPrompt(threads, {
+    // A page prompt includes all-pages threads only where their target exists.
+    const prompt = agentPrompt(scope === "page" ? threads.filter((thread) => here(thread)) : threads, {
       ...options,
       origin: location.origin,
       page: scope === "page" ? page() : undefined,
@@ -4620,11 +4630,15 @@ export function initComments(options: CommentsOptions): CommentsController {
       const tags = draftTags;
       const note = draftText;
       const proposal = draftProposal;
+      // Persistent layout, e.g. an app sidebar, carries its comments to every page.
+      const target = resolveAnchor(anchor);
+      const scope = target && inPersistentRegion(target, options) ? "all" as const : undefined;
       const item: Thread = {
         id: `pending-${crypto.randomUUID()}`,
         page: page(),
         anchor,
         tags,
+        ...(scope && { scope }),
         resolved: false,
         resolvedBy: null,
         createdAt: now,
@@ -4638,11 +4652,14 @@ export function initComments(options: CommentsOptions): CommentsController {
       await saveOptimistic(
         (items) => [...items, item],
         async () => {
-          const result = await api.request<{ id: string; commentId?: string }>(
+          const post = (extra?: object) => api.request<{ id: string; commentId?: string }>(
             "threads",
             "POST",
-            { page: item.page, anchor, body: comment.body, ...(tags.length ? { tags } : {}) },
+            { page: item.page, anchor, body: comment.body, ...(tags.length ? { tags } : {}), ...extra },
           );
+          // An older API refuses the scope field; the comment still saves on this page.
+          const result = await (scope ? post({ scope }).catch((error) =>
+            error instanceof ApiError && error.message === "Unexpected request fields." ? post() : Promise.reject(error)) : post());
           // The initial message ID is returned so queued edits target the persisted comment.
           const saved =
             result.commentId ??
@@ -4852,6 +4869,11 @@ export function initComments(options: CommentsOptions): CommentsController {
           icon: "pointer" as const,
           onSelect: () => { void beginPinMove(thread); },
         }] : []),
+        ...(canScope(thread) ? [{
+          label: everyPage(thread) ? thread.page === page() ? "Only on this page" : "Only on its own page" : "Show on all pages",
+          icon: "expand" as const,
+          onSelect: () => setScope(thread),
+        }] : []),
         ...(designEnabled ? [{
           label: "Open in Design",
           icon: "design" as const,
@@ -4876,7 +4898,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           [
             `Repository: ${options.repo}`,
             `Branch: ${options.branch}`,
-            `Page: ${new URL(thread.page, location.origin).href}`,
+            `Page: ${new URL(thread.page, location.origin).href}${everyPage(thread) ? " (shown on all pages)" : ""}`,
             `Target: ${thread.anchor.selector || "Page position"}`,
             ...(thread.anchor.source
               ? [`Source: ${thread.anchor.source}`]
@@ -5771,7 +5793,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   async function openThreadInDesign(thread: Thread) {
     if (!designEnabled || destroyed) return;
-    if (thread.page !== page()) {
+    if (!here(thread)) {
       const url = new URL(thread.page, location.origin);
       url.searchParams.set("comment", thread.id);
       url.searchParams.set("comment-view", "design");
@@ -5791,7 +5813,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     setDesignMode(true);
     designReturnExpanded = returnExpanded;
     const controller = await ensureDesignController();
-    if (!controller || !designActive || destroyed || selected !== thread.id || thread.page !== page()) return;
+    if (!controller || !designActive || destroyed || selected !== thread.id || !here(thread)) return;
     if (!target.isConnected || resolveAnchor(thread.anchor) !== target) {
       setDesignMode(false);
       notify("Design is unavailable: this comment’s element has changed.");
@@ -5814,6 +5836,22 @@ export function initComments(options: CommentsOptions): CommentsController {
   function canMovePin(thread: Thread) {
     return !!api.user && (api.user.verified || thread.comments[0]?.author.id === api.user.id);
   }
+  // The author, or anyone who may resolve, chooses whether a comment follows persistent layout.
+  const canScope = (thread: Thread) => guestResolve || canMovePin(thread);
+  function setScope(thread: Thread) {
+    if (!api.user && (!guests || !guestName.trim())) return openAccount();
+    const scope = everyPage(thread) ? "page" : "all";
+    run(async () => {
+      await saveOptimistic(
+        changeThread(thread.id, (current) => ({ ...current, scope })),
+        async (id) => {
+          if (!api.user) await api.guest(guestName);
+          await api.request(`threads/${id(thread.id)}`, "PATCH", { scope });
+        },
+      );
+      notify(scope === "all" ? "Shown on all pages" : "Shown only on its own page");
+    });
+  }
   function cancelPinMove() {
     pinMoveRevision++;
     pinMove?.cancel();
@@ -5828,7 +5866,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (destroyed || revision !== pinMoveRevision || session !== sessionRevision || !canMovePin(thread)) return;
     const pin = pins.querySelector<HTMLButtonElement>(`.pin[data-thread="${CSS.escape(thread.id)}"]`);
     const rect = locateAnchor(thread.anchor);
-    if (thread.page !== page() || !rect.attached || !pin) {
+    if (!here(thread) || !rect.attached || !pin) {
       notify("This pin isn’t visible on this page. Open its page before moving it.");
       return;
     }
@@ -5857,7 +5895,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         renderPins();
         positionDialog();
         dialogs.querySelector<HTMLElement>('summary[aria-label="Comment actions"]')?.focus({ preventScroll: true });
-        if (!point || destroyed || thread.page !== page() || !canMovePin(thread)) return;
+        if (!point || destroyed || !here(thread) || !canMovePin(thread)) return;
         const target = componentAt(point.x, point.y);
         if (!target) { notify("Pin unchanged. Choose an element on this page."); return; }
         const anchor = captureAnchor(
@@ -5895,7 +5933,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       ? selected
       : expanded && !draft && !threadPanel() &&
           sidebar.querySelector(`.list [data-thread="${CSS.escape(hotCard)}"]`) && hotCard;
-    const thread = id && threads.find((t) => t.id === id && t.page === page());
+    const thread = id && threads.find((t) => t.id === id);
     const spot = thread && onThreadPage(thread) && locateAnchor(thread.anchor);
     const target = spot && spot.attached && (spot.width && spot.height
       ? { left: spot.x, top: spot.y, right: spot.x + spot.width, bottom: spot.y + spot.height }
@@ -6095,7 +6133,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     hoverOutline.style.opacity = "0";
   });
   function geometry() {
-    if (movingThread && threads.find(thread => thread.id === movingThread)?.page !== page()) cancelPinMove();
+    const moving = movingThread && threads.find(thread => thread.id === movingThread);
+    if (movingThread && !(moving && here(moving))) cancelPinMove();
     if (frame || destroyed || document.hidden) return;
     const currentPage = page();
     if (
@@ -6106,7 +6145,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           !mode &&
           (hidden ||
             !threads.some(
-              (thread) => thread.page === currentPage && !thread.resolved,
+              (thread) => (thread.page === currentPage || everyPage(thread)) && !thread.resolved,
             ))))
     )
       return;

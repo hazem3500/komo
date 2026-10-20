@@ -1,5 +1,5 @@
 import { canonicalPage } from "../src/page.js";
-import type { Anchor } from "../src/types.js";
+import type { Anchor, ThreadScope } from "../src/types.js";
 
 export class HttpError extends Error {
   constructor(
@@ -36,6 +36,11 @@ export function pagePath(value: unknown): string {
     "Invalid page path.",
   );
   return canonicalPage(page);
+}
+/** "all" shows a thread on every page where its anchor exists; "page" is the default. */
+export function threadScope(value: unknown): ThreadScope {
+  check(value === "page" || value === "all", 400, "Invalid thread scope.");
+  return value;
 }
 export function anchorValue(value: unknown): Anchor {
   check(value && typeof value === "object", 400, "Invalid anchor.");

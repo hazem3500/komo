@@ -264,3 +264,41 @@ run(
     expect((await call("/me", "GET", token)).status).toBe(401);
   },
 );
+
+run(
+  "Node PostgreSQL stores all-pages scope additively and toggles it",
+  async () => {
+    const call = async (path: string, method = "GET", body?: unknown, token?: string) => {
+      const response = await worker.fetch(
+        new Request(
+          `http://localhost:8080${path}?project=review&repo=team%2Fsite&branch=pr-scope`,
+          {
+            method,
+            headers: {
+              Origin: "http://localhost:3000",
+              ...(body ? { "Content-Type": "application/json" } : {}),
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: body ? JSON.stringify(body) : undefined,
+          },
+        ) as unknown as Parameters<typeof worker.fetch>[0],
+        env,
+        { waitUntil: () => {} } as unknown as ExecutionContext,
+      );
+      return { status: response.status, data: (await response.json()) as Record<string, any> };
+    };
+    await db.prepare("UPDATE project_quotas SET max_comments=? WHERE project=?").bind(100, "review").run();
+    const reviewer = await call("/auth/guest", "POST", { name: "Scope reviewer" });
+    const anchor = { x: 0, y: 0, width: 0, height: 0, pageX: 0, pageY: 0, viewportWidth: 1200, selector: "nav a", text: "Home" };
+    const everywhere = await call("/threads", "POST", { body: "Nav", page: "/a", anchor, scope: "all" }, reviewer.data.token);
+    const legacy = await call("/threads", "POST", { body: "Body", page: "/a", anchor }, reviewer.data.token);
+    expect([everywhere.status, legacy.status]).toEqual([201, 201]);
+    const scopes = async () =>
+      Object.fromEntries((await call("/threads")).data.threads.map((thread: { id: string; scope?: string }) => [thread.id, thread.scope]));
+    expect(await scopes()).toEqual({ [everywhere.data.id]: "all", [legacy.data.id]: undefined });
+    const toggled = await call(`/threads/${legacy.data.id}`, "PATCH", { scope: "all" }, reviewer.data.token);
+    expect(toggled).toEqual({ status: 200, data: { ok: true, scope: "all" } });
+    expect((await call(`/threads/${everywhere.data.id}`, "PATCH", { scope: "page" }, reviewer.data.token)).status).toBe(200);
+    expect(await scopes()).toEqual({ [everywhere.data.id]: undefined, [legacy.data.id]: "all" });
+  },
+);

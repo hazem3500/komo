@@ -36,6 +36,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { Identity, Thread, Comment } from "../src/types.js";
 import {
   anchorValue,
+  threadScope,
   cliReturnOrigin,
   check,
   HttpError,
@@ -62,6 +63,8 @@ type ThreadRow = {
   created_at: number;
   updated_at: number;
   tags: string;
+  /** Absent before migration 0019; any value but "all" is page-only. */
+  scope?: string | null;
   resolver_name: string | null;
   resolver_verified: number | null;
 };
@@ -198,13 +201,13 @@ async function body(request: Request): Promise<Record<string, unknown>> {
                       : path === "/me"
                         ? ["name", "avatarUrl", "accentColor"]
                         : path === "/threads"
-                          ? ["body", "page", "anchor", "tags"]
+                          ? ["body", "page", "anchor", "tags", "scope"]
                           : path.endsWith("/comments")
                             ? ["body"]
                             : path.includes("/comments/")
                               ? ["body"]
                               : path.startsWith("/threads/")
-                                ? ["anchor", "resolved", "tag", "untag"]
+                                ? ["anchor", "resolved", "tag", "untag", "scope"]
                                 : [];
     check(
       Object.keys(result).every((key) => allowed.includes(key)),
@@ -1301,6 +1304,8 @@ async function route(
       page: pagePath(row.page),
       anchor: JSON.parse(row.anchor),
       tags: parseTags(row.tags),
+      // Omitted for page-only threads, so their payload is unchanged for older clients.
+      ...(row.scope === "all" ? { scope: "all" as const } : {}),
       resolved: !!row.resolved,
       resolvedBy: row.resolved_by
         ? {
@@ -1359,6 +1364,7 @@ async function route(
     const text = string(data.body, 4000, "comment");
     const page = pagePath(data.page);
     const anchor = anchorValue(data.anchor);
+    const scope = data.scope === undefined ? "page" : threadScope(data.scope);
     let tags: string[] = [];
     if (data.tags !== undefined) {
       check(Array.isArray(data.tags), 400, "Invalid tags.");
@@ -1368,9 +1374,14 @@ async function route(
     const id = crypto.randomUUID();
     const firstCommentId = crypto.randomUUID();
     await env.DB.batch([
-      env.DB.prepare(
-        "INSERT INTO threads(id,project,repo,branch,page,anchor,tags,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)"
-      ).bind(id, project, repo, branch, page, JSON.stringify(anchor), JSON.stringify(tags), now, now),
+      // Page-only threads rely on the column default, as before the scope column existed.
+      scope === "all"
+        ? env.DB.prepare(
+            "INSERT INTO threads(id,project,repo,branch,page,anchor,tags,scope,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)"
+          ).bind(id, project, repo, branch, page, JSON.stringify(anchor), JSON.stringify(tags), scope, now, now)
+        : env.DB.prepare(
+            "INSERT INTO threads(id,project,repo,branch,page,anchor,tags,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)"
+          ).bind(id, project, repo, branch, page, JSON.stringify(anchor), JSON.stringify(tags), now, now),
       env.DB.prepare(
         "INSERT INTO comments(id,thread_id,user_id,body,created_at) VALUES(?,?,?,?,?)"
       ).bind(firstCommentId, id, user.id, text, now),
@@ -1442,6 +1453,34 @@ async function route(
           .run();
       }
       return json({ ok: true, tags });
+    }
+    if (data.scope !== undefined) {
+      const scope = threadScope(data.scope);
+      check(
+        Object.keys(data).length === 1,
+        400,
+        "Change where a comment shows on its own."
+      );
+      // The author, or anyone allowed to resolve, may change where a comment shows.
+      if (!user.verified && config.allowGuestResolve === false) {
+        const owner = await env.DB.prepare(
+          "SELECT user_id FROM comments WHERE thread_id=? ORDER BY created_at,id LIMIT 1"
+        )
+          .bind(threadId)
+          .first<{ user_id: string }>();
+        check(
+          owner?.user_id === user.id,
+          403,
+          "Only the author or a signed-in reviewer can change where this comment shows."
+        );
+      }
+      if ((thread.scope === "all" ? "all" : "page") !== scope)
+        await env.DB.prepare(
+          "UPDATE threads SET scope=?,updated_at=? WHERE id=?"
+        )
+          .bind(scope, now, threadId)
+          .run();
+      return json({ ok: true, scope });
     }
     if (data.anchor !== undefined) {
       const owner = await env.DB.prepare(
