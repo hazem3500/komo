@@ -874,7 +874,7 @@ ${morphingMenuStyles}
   right: 12px;
 }
 :host(.review-open) .toolbar .morphing-menu {
-  --mm-surface: #ffffff12;
+  --mm-surface: #1c1c1c;
   --mm-hover: #ffffff10;
 }
 .toolbar .morphing-menu__shell {
@@ -2451,5 +2451,4 @@ ${collapsed} .avatar img { display: none; }
 .new-comment-composer .draft-proposal { margin-right: calc(var(--komo-action) + var(--komo-gutter)); }
 .thread-navigation { margin: 0 var(--komo-inset) 12px; padding: 10px 12px; border: 1px solid #8883; border-radius: 8px; color: #aaa; }
 .account-layer .account-dialog { --komo-inset: 24px; }
-:host(.review-open) .toolbar .morphing-menu { --mm-surface: #1c1c1c; }
 `;
