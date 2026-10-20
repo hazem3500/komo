@@ -133,3 +133,54 @@ Layout: flex item, row
     expect(rows.every(row => !row.apply)).toBe(true);
   });
 });
+
+describe("structural move records", () => {
+  const place = (parent: string, label: string, index: number, position?: "before" | "after" | "inside") => ({ parent, label, index, ...(position ? { position } : {}) });
+  const step = (to: ReturnType<typeof place>): GeometryChange => ({ mode: "structure", layout: "flex item, row", effects: [],
+    move: { label: "Button “Invite”", target: "#invite", from: place("#toolbar", "Toolbar “Views”", 2), to } });
+
+  it("nets moves to the first origin and the last destination, dropping a return to the start", () => {
+    expect(geometryProposal([step(place("#side > nav", "Sidebar", 3, "after")), step({ ...place("#side > nav", "Sidebar", 0, "inside"), component: "SideNav" })])).toBe([
+      "Proposed geometry changes (preview only)",
+      "Layout: flex item, row",
+      "- Move Button “Invite”: from Toolbar “Views” (3rd) → Sidebar (1st)",
+      "From: #toolbar · index 2",
+      "To: #side > nav · index 0 · inside · component SideNav",
+    ].join("\n"));
+    expect(geometryProposal([step(place("#side", "Sidebar", 0, "inside")), step(place("#toolbar", "Toolbar “Views”", 2, "before"))])).toBeUndefined();
+  });
+
+  const body = `Proposed geometry changes (preview only)
+Target: #invite
+Layout: flex item, row
+- Move Button “Invite”: from Toolbar “Views” (3rd) → Sidebar (11th)
+From: #toolbar · index 2
+To: #side > nav · index 10 · inside · component SideNav`;
+
+  it("parses into a DesignEdit move with both places, and tells agents to move the markup", () => {
+    const edit = designEditFromComment(body, "button");
+    expect(edit.target.selector).toBe("#invite");
+    expect(edit.changes).toEqual([{ kind: "move", target: "#invite", label: "Button “Invite”",
+      from: { parent: "#toolbar", index: 2, label: "Toolbar “Views”" },
+      to: { parent: "#side > nav", index: 10, position: "inside", label: "Sidebar", component: "SideNav" } }]);
+    expect(formatDesignEdit(edit)).toContain("move the element's markup");
+    expect(parseDesignEdit(JSON.stringify(edit))).toEqual(edit);
+    // A move line without its places is dropped rather than guessed.
+    expect(designEditFromComment(body.split("\nFrom:")[0], "button")).toBeNull();
+  });
+
+  it("validates move changes in fenced edits", () => {
+    const edit = (change: object) => JSON.stringify({ komo: "design-edit", version: 1, target: { selector: "a" }, changes: [{ kind: "move", ...change }] });
+    const from = { parent: "#a", index: 0 }, to = { parent: "#b", index: 1, position: "after" };
+    expect(parseDesignEdit(edit({ from, to, extra: 1 })).changes[0]).toEqual({ kind: "move", from, to });
+    expect(parseDesignEdit(edit({ from, to: { ...to, position: "over" } }))).toBeNull();
+    expect(parseDesignEdit(edit({ from: { parent: "#a", index: -1 }, to }))).toBeNull();
+    expect(parseDesignEdit(edit({ from, to: { index: 1, position: "after" } }))).toBeNull();
+  });
+
+  it("shows the move as a card row without previewing it", () => {
+    const section = parseDesignComment(body).find(block => "title" in block && block.title === "Geometry changes");
+    const rows = (section as { changes: Array<{ label: string; before: string; after: string; apply?: unknown }> }).changes;
+    expect(rows).toEqual([{ label: "Move Button “Invite”", before: "from Toolbar “Views” (3rd)", after: "Sidebar (11th)" }]);
+  });
+});
