@@ -1010,6 +1010,8 @@ async function route(
         !(await privateAccess(env, project)),
       private: await privateAccess(env, project),
       guestResolve: config.allowGuestResolve !== false,
+      // Signed-in Google accounts can manage personal access tokens here.
+      tokens: true,
     });
   if (url.pathname === "/usage" && request.method === "GET") {
     const user = await authenticate(request, env, project);
