@@ -116,9 +116,9 @@ const baseClass = (name: string) => (name.includes(":") ? null : name.replace(/^
 // list() compares them with CSS.escape(class), the same serialization.
 const classPattern = /\.((?:\\[\da-f]{1,6} ?|\\[^]|[\w-]|[^\0-\x7f])+)/gi;
 type AnyRule = CSSRule & { selectorText?: string; cssRules?: CSSRuleList; styleSheet?: CSSStyleSheet | null };
-let seen: unknown[] = [];
+let seen: unknown[] | undefined;
 /** The last scan: classes found, style rules seen, and whether a sheet was unreadable or a <link> pending. */
-let scan: [found: Set<string>, rules: number, unreadable: boolean, pending: boolean];
+let scan: [found: Set<string>, rules: number, unreadable: boolean, pending: boolean] = [new Set(), 0, false, false];
 
 const documentSheets = () => [...document.styleSheets, ...(document.adoptedStyleSheets ?? [])];
 
@@ -175,7 +175,8 @@ function generatedClasses(strict: boolean): Set<string> | null {
   // Re-scan only when the stylesheets' key changes.
   const sheets = documentSheets();
   const key = sheetKey(sheets);
-  if (!sameKey(key, seen)) {
+  // The first call always scans: a page with no sheets has an empty key too.
+  if (!seen || !sameKey(key, seen)) {
     seen = key;
     scan = [new Set(), 0, false, key.includes(null)];
     const walk = (rules: () => CSSRuleList) => {

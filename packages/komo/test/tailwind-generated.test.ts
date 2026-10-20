@@ -19,6 +19,19 @@ afterEach(() => {
 });
 
 describe("tailwindTokens onlyGenerated", () => {
+  it("lists everything without throwing on a page with no stylesheets, then filters once sheets arrive and stops when they go", async () => {
+    // A fresh module: the first list() call on a page without sheets must still scan.
+    vi.resetModules();
+    const fresh = await import("../src/adapters/tailwind.js");
+    const list = () => (fresh.tailwindTokens({ tokens: [token("p-4"), token("p-9")] }, { onlyGenerated: true }).list({}) as DesignToken[]).map((item) => item.path);
+    expect(document.styleSheets).toHaveLength(0);
+    expect(list()).toEqual(["t.p-4", "t.p-9"]);
+    const sheet = style(".p-4{padding:16px}");
+    expect(list()).toEqual(["t.p-4"]);
+    sheet.remove();
+    expect(list()).toEqual(["t.p-4", "t.p-9"]);
+  });
+
   it("lists only tokens whose canonical class has a rule, and everything without the option", () => {
     style(".p-4{padding:16px}.m-2{margin:8px}");
     const tokens = tailwindSpacing({ prefix: ["p", "m"], steps: [2, 4, 9] });
