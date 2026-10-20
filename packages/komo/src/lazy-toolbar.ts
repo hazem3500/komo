@@ -1,4 +1,4 @@
-import type { MenuItem, MorphingMenuProps } from "./MorphingMenu.js";
+import type { MenuAction, MenuItem, MorphingMenuProps } from "./MorphingMenu.js";
 import { button, el, icon, type icons } from "./dom.js";
 import { shortcutKeys } from "./kbd.js";
 import { badgeText, barLayout, countLabel } from "./toolbar-items.js";
@@ -9,6 +9,7 @@ export type ToolbarIcon =
   | { user: Identity | null };
 export type ToolbarMenuItem = Omit<MenuItem, "icon" | "activeIcon" | "children"> & {
   icon: ToolbarIcon;
+  children?: ReadonlyArray<Omit<MenuAction, "icon" | "activeIcon"> & { icon: ToolbarIcon }>;
 };
 export type ToolbarProps = Omit<MorphingMenuProps, "items"> & {
   items: readonly ToolbarMenuItem[];

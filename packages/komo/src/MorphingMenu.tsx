@@ -41,6 +41,8 @@ export type MenuAction = {
   group?: string;
   shortcut?: Shortcut | null;
   count?: number;
+  /** A choice in a set, such as one of a group's children; read as pressed. */
+  checked?: boolean;
 };
 
 // One level of children keeps the component small and the navigation predictable.
@@ -503,6 +505,7 @@ export function MorphingMenu({
       "data-menu-item": item.id,
       "aria-label": countLabel(item.label, item.count),
       "aria-keyshortcuts": item.shortcut ? shortcutKeys(item.shortcut).aria : undefined,
+      "aria-pressed": item.checked,
       "aria-current": active
         ? hasChildren
           ? ("true" as const)

@@ -82,7 +82,9 @@ Comments are shared across deployments by default. Use `pnpm exec komo init --br
 - Searchable sidebar, draggable dock, and Google or guest profiles.
 
 - Dismiss the toolbar for the current tab with ×; restore it with Shift+K or `controller.open()`. Set `showToolbar: false` to start hidden.
-- Keyboard shortcuts: C to comment, V to browse, D to toggle Design mode, L to view all comments, Shift+K to restore. Remap or disable them with `shortcuts`; see [Choosing shortcuts](#choosing-shortcuts).
+- **More → Hide comments** (H) clears pins, comment cards and the open sidebar or Frame from the page while review stays on. Unsent comments and replies, the open thread and the list's filters and scroll come back with **Show comments**. Comments return only when the reviewer asks: Show comments, or starting a comment, opening the list or a thread. The choice lasts for the current tab (session storage).
+- **More → Pin size** switches pins between Full, Compact (a small initial), Dot (the author's accent, filled until you open its latest comment in this browser) and Auto (dots while browsing, full while commenting or with the sidebar open). Small pins keep a 24px target and expand in place on hover, focus, a nearby pointer or selection. The choice is remembered per project and wins over `pins.size`.
+- Keyboard shortcuts: C to comment, V to browse, D to toggle Design mode, L to view all comments, H to hide or show comments, Shift+K to restore. Remap or disable them with `shortcuts`; see [Choosing shortcuts](#choosing-shortcuts).
 - Copy open feedback with selectors, source paths, page URLs, replies, and geometry into an agent.
 - Hosted Cloudflare storage, or your own Worker/D1 or Node/PostgreSQL service.
 
@@ -465,8 +467,9 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `drawerContainer` | `HTMLElement` | Viewport | Element used to center the drawer before it is dragged. |
 | `autoHideDrawer` | `boolean` | `true` | Set `false` to keep the drawer visible away from the pointer. |
 | `showToolbar` | `boolean` | `true` | Set `false` to keep the toolbar, drawer, and comment pins hidden until `controller.open()` or the restore shortcut. |
-| `shortcuts` | `{ comment?, browse?, design?, comments?, restore? }` | `C`, `V`, `D`, `L`, `Shift+K` | A key with optional `Ctrl`, `Alt`, `Shift`, or `Meta`, such as `"M"` or `"Shift+J"`. Set `false` to disable one. Escape and Tab are reserved. Tooltips and tips show the configured keys. |
+| `shortcuts` | `{ comment?, browse?, design?, comments?, restore?, visibility? }` | `C`, `V`, `D`, `L`, `Shift+K`, `H` | A key with optional `Ctrl`, `Alt`, `Shift`, or `Meta`, such as `"M"` or `"Shift+J"`. Set `false` to disable one. Escape and Tab are reserved. Tooltips, tips and keyboard help show the configured keys. The `visibility` default steps aside when another configured shortcut already uses H. |
 | `toolbar.items` | `ToolbarItem[]` | `browse`, `comment`, `design`, `\|`, `comments`, `\|`, `more`, `account`, `\|`, `dismiss` | Toolbar order and visibility. See [Arranging the toolbar](#arranging-the-toolbar). |
+| `pins` | `{ size?: "full" \| "compact" \| "dot" \| "auto" }` | `{ size: "full" }` | Default pin size. A reviewer's choice in **More → Pin size** wins and is remembered per project. |
 | `features` | `{ designMode?, tags? }` | All `true` | Set a feature to `false` to remove it from the review UI, e.g. `{ designMode: false, tags: false }`. Existing tags stay stored and remain available to the CLI. |
 | `sidebar` | `"background" \| "edge"` | `"edge"` | `"edge"` (Floating) is a draggable sidebar that parks off and peeks from the viewport edge while closed. `"background"` (Frame) reflows the unscaled page beside the review sidebar. Account → Sidebar switches the two; that choice is remembered per project. |
 | `restoreOpen` | `"session" \| "always" \| false` | `"session"` | Reopen the sidebar if it was left open: after a reload in the same tab, across tabs and visits, or never. |
@@ -495,6 +498,7 @@ shortcuts: {
   design: "Shift+D",
   comments: "Shift+L",
   restore: "Shift+K",
+  visibility: "Shift+H",
 }
 ```
 

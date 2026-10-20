@@ -18,7 +18,10 @@ const defaults: Record<ShortcutAction, string> = {
   design: "D",
   restore: "Shift+K",
   comments: "L",
+  visibility: "H",
 };
+// Defaults added after release yield to a host's existing bindings instead of throwing.
+const yielding = new Set<ShortcutAction>(["visibility"]);
 const modifiers = ["Ctrl", "Alt", "Shift", "Meta"] as const;
 const reserved = new Set(["escape", "tab"]);
 
@@ -64,6 +67,10 @@ export function resolveShortcuts(
       throw new Error(`Invalid komo shortcut for ${action}.`);
     const shortcut = parse(action, value);
     const other = seen.get(shortcut.label.toLowerCase());
+    if (other && config[action] === undefined && yielding.has(action)) {
+      resolved[action] = null;
+      continue;
+    }
     if (other)
       throw new Error(
         `komo shortcuts for ${other} and ${action} both use ${shortcut.label}.`,

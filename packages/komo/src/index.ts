@@ -89,9 +89,13 @@ import type {
   Comment,
   CommentsController,
   CommentsOptions,
+  PinSize,
   Thread,
 } from "./types.js";
 export type * from "./types.js";
+
+const pinSizes: readonly PinSize[] = ["full", "compact", "dot", "auto"];
+const pinSizeNames: Record<PinSize, string> = { full: "Full", compact: "Compact", dot: "Dot", auto: "Auto" };
 
 const instances = new WeakMap<
   Document,
@@ -136,6 +140,9 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
   setAvatarResolver(options.avatar);
   const shortcuts = resolveShortcuts(options.shortcuts);
+  const hostPinSize = options.pins?.size ?? "full";
+  if (!pinSizes.includes(hostPinSize))
+    throw new Error(`Invalid komo pins.size: "${hostPinSize}".`);
   const designEnabled = options.features?.designMode !== false;
   const toolbarItems = normalizeToolbarItems(options.toolbar?.items);
   const tagsEnabled = options.features?.tags !== false;
@@ -178,6 +185,41 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     return options.sidebar === "background" ? "background" : "edge";
   })();
+  // A reviewer's pin size wins over the host default, like the sidebar mode.
+  const pinSizeKey = `branch-comments:pin-size:${options.project}:${options.repo}`;
+  let pinSize = hostPinSize;
+  try {
+    const stored = localStorage.getItem(pinSizeKey) as PinSize | null;
+    if (stored && pinSizes.includes(stored)) pinSize = stored;
+  } catch {
+    /* Use the host default when storage is blocked. */
+  }
+  // Dots are filled until this browser has opened the thread's latest comment.
+  const readKey = `branch-comments:read:${options.project}:${options.repo}`;
+  let readAt: Record<string, number> = {};
+  try {
+    const stored = JSON.parse(localStorage.getItem(readKey) ?? "{}");
+    if (stored && typeof stored === "object") readAt = stored;
+  } catch {
+    /* Every thread reads as unread when storage is blocked. */
+  }
+  const unread = (thread: Thread) => {
+    const last = thread.comments.at(-1);
+    return !!last && last.author.id !== api.user?.id && !(readAt[thread.id]! >= last.createdAt);
+  };
+  function markRead(thread: Thread) {
+    const last = thread.comments.at(-1)?.createdAt ?? 0;
+    if (readAt[thread.id]! >= last) return;
+    delete readAt[thread.id];
+    readAt[thread.id] = last;
+    const ids = Object.keys(readAt);
+    for (const id of ids.slice(0, Math.max(0, ids.length - 500))) delete readAt[id];
+    try {
+      localStorage.setItem(readKey, JSON.stringify(readAt));
+    } catch {
+      /* Read state lasts for this page when storage is blocked. */
+    }
+  }
   let compactSidebar = isCompactReview(window.innerWidth, window.innerHeight);
   let edgeSidebar = !compactSidebar && sidebarMode === "edge";
   // Set while Design mode has temporarily framed a floating sidebar, moved it
@@ -728,6 +770,17 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
   } catch {
     /* Keep the dismissal in memory when session storage is blocked. */
+  }
+  // Hide comments keeps review running for this tab: pins, cards and the open
+  // layout step aside while drafts, selection and list state wait in memory.
+  const visibilityKey = `branch-comments:comments-hidden:${options.project}:${options.repo}`;
+  let commentsHidden = false,
+    revealExpanded = false,
+    revealScroll = 0;
+  try {
+    commentsHidden = !options.onboarding && sessionStorage.getItem(visibilityKey) === "1";
+  } catch {
+    /* Comments start shown when session storage is blocked. */
   }
   let searchOpen = false;
   let dockMotion: ReturnType<typeof animate> | undefined;
@@ -1581,6 +1634,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       syncDesignFrame();
     }
     commentMode = value;
+    if (value) revealComments();
     if (expanded && !inFrame()) toggleExpanded(false);
     const restore = value ? (parkedDraft ?? recoveredDrafts.shift()) : null;
     if (restore) {
@@ -2163,16 +2217,18 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (generation === edgeMorphGeneration) finish();
     });
   }
-  function toggleExpanded(value: boolean) {
+  function toggleExpanded(value: boolean, keepOpenState = false) {
     if (!value && threadRequest && !threadRequest.opened) cancelThreadRequest();
     if (value !== expanded) cancelPinMove();
+    // Opening the list is a request to see comments again.
+    if (value) revealComments();
     stopLayoutMotion();
     const opening = value && !expanded;
     expanded = value;
     if (!restoring) polling?.wake(opening);
     delete sidebar.dataset.tipsReady;
     sidebar.toggleAttribute("data-tips-restored", restoring);
-    if (!options.onboarding) openStore.set(value);
+    if (!options.onboarding && !keepOpenState) openStore.set(value);
     if (value) mode = false;
     if (!value) {
       clearTimeout(accountOpenTimer);
@@ -2281,6 +2337,53 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     render();
   }
+  function revealComments() {
+    if (!commentsHidden) return;
+    commentsHidden = false;
+    revealExpanded = false;
+    try {
+      sessionStorage.removeItem(visibilityKey);
+    } catch {
+      /* Comments stay shown for this page. */
+    }
+    live.textContent = "Comments shown";
+    const scroll = revealScroll;
+    revealScroll = 0;
+    if (scroll)
+      requestAnimationFrame(() => {
+        const list = sidebar.querySelector<HTMLElement>(".list");
+        if (list) list.scrollTop = scroll;
+      });
+  }
+  /** Manual only: nothing reveals hidden comments except the reviewer. */
+  function setCommentsHidden(value: boolean) {
+    if (value === commentsHidden || destroyed || options.onboarding || (value && designActive)) return;
+    if (!value) {
+      const reopen = revealExpanded && !expanded;
+      revealComments();
+      if (reopen) toggleExpanded(true);
+      else render();
+      return;
+    }
+    cancelPinMove();
+    commentsHidden = true;
+    try {
+      sessionStorage.setItem(visibilityKey, "1");
+    } catch {
+      /* Keep comments hidden in memory when session storage is blocked. */
+    }
+    live.textContent = "Comments hidden";
+    mode = commentMode = false;
+    clearTimeout(accountOpenTimer);
+    accountOpenTimer = 0;
+    account = false;
+    const reopen = expanded;
+    if (reopen) {
+      revealScroll = sidebar.querySelector<HTMLElement>(".list")?.scrollTop ?? 0;
+      toggleExpanded(false, true);
+    } else render();
+    revealExpanded = reopen;
+  }
   function restoreToolbar() {
     toolbarDismissed = false;
     hidden = false;
@@ -2294,6 +2397,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   function selectThread(thread: Thread, retained = false) {
     if (!retained) cancelThreadRequest();
     cancelPinMove();
+    revealComments();
     // Opening from the list keeps keyboard focus in the sidebar.
     focusBack = !!shadow.activeElement?.matches(":focus-visible") && sidebar.contains(shadow.activeElement);
     commentMode = false;
@@ -2524,14 +2628,25 @@ export function initComments(options: CommentsOptions): CommentsController {
       {
         id: "visibility",
         group: "Comments & view",
-        label: hidden ? "Show comment pins" : "Hide comment pins",
+        label: commentsHidden ? "Show comments" : "Hide comments",
+        shortcut: shortcuts.visibility,
         icon: glyph("comment"),
         showInBar: false,
-        onSelect: () => {
-          hidden = !hidden;
-          renderPins();
-          renderToolbar();
-        },
+        onSelect: () => setCommentsHidden(!commentsHidden),
+      },
+      {
+        id: "pin-size",
+        group: "Comments & view",
+        label: `Pin size: ${pinSizeNames[pinSize]}`,
+        icon: glyph("pointer"),
+        showInBar: false,
+        children: pinSizes.map((size) => ({
+          id: `pin-size-${size}`,
+          label: pinSizeNames[size],
+          icon: glyph("check"),
+          checked: size === pinSize,
+          onSelect: () => setPinSize(size),
+        })),
       },
     ];
     items.push({ id: "shortcuts", group: "Account & help", label: "Keyboard shortcuts", icon: glyph("info"), showInBar: false,
@@ -2578,6 +2693,39 @@ export function initComments(options: CommentsOptions): CommentsController {
     });
   }
 
+  function setPinSize(size: PinSize) {
+    if (size === pinSize || destroyed) return;
+    pinSize = size;
+    try {
+      localStorage.setItem(pinSizeKey, size);
+    } catch {
+      /* Keep the preference in memory when storage is blocked. */
+    }
+    live.textContent = `Pin size: ${pinSizeNames[size]}`;
+    pinSnapshot = "";
+    renderPins();
+    renderToolbar();
+  }
+  // Auto is full while commenting or with the sidebar open, dots while browsing.
+  const pinDensity = () =>
+    pinSize === "auto" ? (mode || commentMode || expanded ? "full" : "dot") : pinSize;
+  // Collapsed pins expand when the pointer comes within 24px. Distance is
+  // measured to the pin's current box, so an expanded pin keeps itself open.
+  let nearPoint: { x: number; y: number } | null = null;
+  let nearFrame = 0;
+  function markNear() {
+    nearFrame = 0;
+    for (const pin of pins.querySelectorAll<HTMLElement>(":scope > .pin")) {
+      const box = pin.getBoundingClientRect();
+      const near =
+        !!nearPoint &&
+        Math.hypot(
+          Math.max(box.left - nearPoint.x, 0, nearPoint.x - box.right),
+          Math.max(box.top - nearPoint.y, 0, nearPoint.y - box.bottom),
+        ) <= 24;
+      pin.toggleAttribute("data-near", near);
+    }
+  }
   let pinSnapshot = "";
   // Threads on this page whose element can no longer be found or is not visible.
   const detachedThreads = new Set<string>();
@@ -2618,14 +2766,20 @@ export function initComments(options: CommentsOptions): CommentsController {
   let pinsScrolling = false;
   let pinScrollTimer = 0;
   function renderPins(force = false) {
-    if (hidden) cancelPinMove();
+    const off = hidden || commentsHidden;
+    if (off) cancelPinMove();
     if (movingThread || (pinsScrolling && !force)) return;
-    if (hidden) {
+    if (off) {
       pinSnapshot = "";
       hidePreview();
       pins.replaceChildren();
       return;
     }
+    const density = pinDensity();
+    if (density === "full") delete pins.dataset.size;
+    else pins.dataset.size = density;
+    const open = threads.find((thread) => thread.id === selected);
+    if (open) markRead(open);
     const currentPage = page();
     const visible = threads.filter(
       (t) =>
@@ -2709,18 +2863,24 @@ export function initComments(options: CommentsOptions): CommentsController {
         });
         pins.append(area);
       }
+      const first = thread.comments[0];
       const pin = button(
-        `Comment ${number}: ${commentText(thread.comments[0]?.body ?? "").slice(0, 100)}`,
+        first
+          ? `Comment ${number} by ${first.author.name}: ${commentText(first.body).trim().split("\n")[0]!.slice(0, 100)}`
+          : `Comment ${number}`,
         () => selectThread(thread),
         `pin${thread.id === selected ? " active" : ""}${thread.id === hotCard ? " hot" : ""}${thread.resolved ? " resolved" : ""}${rect.attached ? "" : " detached"}`,
       );
       pin.textContent = "";
       // The hover card replaces the native tooltip; aria-label stays.
       pin.title = "";
-      if (thread.comments[0]) {
-        const author = thread.comments[0].author;
+      pin.toggleAttribute("data-read", !unread(thread));
+      if (first) {
+        const author = first.author;
         applyAccent(pin, author.accentColor);
-        pin.append(avatar(author));
+        const face = avatar(author);
+        face.dataset.initial = initials(author.name).slice(0, 1);
+        pin.append(face);
         const photo = pin.querySelector("img");
         if (photo) photo.draggable = false;
       }
@@ -2866,6 +3026,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     for (const [id, stack] of stackElements)
       stack.scrollLeft = scrollOffsets.get(id) ?? 0;
+    if (pins.dataset.size && nearPoint) markNear();
     if (draft && draft.width > 0 && draft.height > 0) {
       const rect = locateAnchor(draft);
       const area = el("div", "area");
@@ -5595,7 +5756,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       : edgeSidebar
         ? !expanded
         : account;
-    if (selected || draft || mode || hidden || account) hidePreview(true);
+    if (selected || draft || mode || hidden || commentsHidden || account) hidePreview(true);
+    host.toggleAttribute("data-comments-hidden", commentsHidden);
+    dialogs.style.display = commentsHidden && !account ? "none" : "";
     catcher.hidden = !mode;
     updateHover();
     hints.replaceChildren();
@@ -5666,6 +5829,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     beside = false,
   ) {
     cancelThreadRequest();
+    revealComments();
     draftBeside = beside;
     hidePreview();
     element = commentAnchorTarget(element, surface, options.anchorTarget);
@@ -5717,14 +5881,15 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (frame || destroyed || document.hidden) return;
     const currentPage = page();
     if (
-      !draft &&
-      !selected &&
-      !mode &&
       !activeNotice &&
-      (hidden ||
-        !threads.some(
-          (thread) => thread.page === currentPage && !thread.resolved,
-        ))
+      ((commentsHidden && !account) ||
+        (!draft &&
+          !selected &&
+          !mode &&
+          (hidden ||
+            !threads.some(
+              (thread) => thread.page === currentPage && !thread.resolved,
+            ))))
     )
       return;
     frame = requestAnimationFrame(() => {
@@ -5843,6 +6008,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (event.key === "Escape") {
         if (designActive) return;
         if (event.defaultPrevented && !event.composedPath().includes(host)) return;
+        // Hidden drafts and selection wait for Show comments; Escape belongs to the page.
+        if (commentsHidden && !account) return;
         if (mode || draft || selected || account) {
           event.preventDefault();
           dismiss();
@@ -5871,7 +6038,28 @@ export function initComments(options: CommentsOptions): CommentsController {
       } else if (matchesShortcut(event, shortcuts.comments)) {
         event.preventDefault();
         toggleExpanded(!expanded);
+      } else if (!designActive && matchesShortcut(event, shortcuts.visibility)) {
+        event.preventDefault();
+        setCommentsHidden(!commentsHidden);
       }
+    },
+    { signal: abort.signal },
+  );
+  onPage<PointerEvent>(
+    shadow,
+    "pointermove",
+    (event) => {
+      if (event.pointerType === "touch") return;
+      nearPoint = { x: event.clientX, y: event.clientY };
+      if (pins.dataset.size) nearFrame ||= requestAnimationFrame(markNear);
+    },
+    { passive: true, signal: abort.signal },
+  );
+  html.addEventListener(
+    "pointerleave",
+    () => {
+      nearPoint = null;
+      markNear();
     },
     { signal: abort.signal },
   );
@@ -5891,6 +6079,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (
         event.button === 0 &&
         (selected || draft) &&
+        !commentsHidden &&
         !(draft && isCompactReview(window.innerWidth, window.innerHeight)) &&
         !account &&
         !path.includes(dialogs) &&
@@ -6177,6 +6366,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       clearTimeout(githubTimer);
       cancelAnimationFrame(frame);
       cancelAnimationFrame(hoverFrame);
+      cancelAnimationFrame(nearFrame);
       cancelAnimationFrame(noticeFrame);
       hidePreview();
       observer.disconnect();
@@ -6245,7 +6435,9 @@ export function initComments(options: CommentsOptions): CommentsController {
     void sidebar.offsetWidth;
     sidebar.style.transition = "";
   }
-  restoring = reopen;
+  // Hidden comments keep a remembered open sidebar for Show comments.
+  revealExpanded = reopen && commentsHidden;
+  restoring = reopen && !commentsHidden;
   if (restoring) {
     // Reopen where the reviewer left off: no frame, dock or card motion; one fade.
     toggleExpanded(true);
