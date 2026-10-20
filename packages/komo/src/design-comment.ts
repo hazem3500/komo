@@ -50,6 +50,11 @@ function unquote(value: string): string {
 }
 
 function change(line: string, kind: string): DesignChange | null {
+  // "- Move (translate): Δx 12px, Δy 0px" or "- Resize (size) width: 180px → 224px · …"; the style rows preview them.
+  if (kind === "geometry") {
+    const [, label, before = "", after] = /^- (.+?): (?:(.*) → )?(.*)$/.exec(line) ?? [];
+    return label ? { label, before, after } : null;
+  }
   // Shared theme color.brand (--color-brand): #4f5f42 → #c2410c; preview scope …
   let match = /^Shared theme (\S+) \((--[\w-]+)\): (.*?) → (.*?)(?:; preview scope .*)?$/.exec(line);
   if (match)
@@ -93,7 +98,7 @@ export function parseDesignComment(body: string): DesignBlock[] {
         if (source) section.source = source;
       } else if (line.startsWith("Source: ")) section.source = line.slice(8);
       else {
-        const item = line.includes("→") ? change(line, kind) : null;
+        const item = line.includes("→") || kind === "geometry" ? change(line, kind) : null;
         // Previews can record a property that ended where it started.
         if (item && item.before !== item.after) section.changes.push(item);
       }

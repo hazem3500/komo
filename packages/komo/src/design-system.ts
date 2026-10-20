@@ -254,4 +254,23 @@ export type DesignEditChange =
   /** Change text content. */
   | { kind: "text"; from: string; to: string }
   /** Raw CSS fallback when no token or prop applies. */
-  | { kind: "css"; property: string; from: string; to: string };
+  | { kind: "css"; property: string; from: string; to: string }
+  /**
+   * How an experimental move or resize was previewed. Moves record the delta in
+   * CSS px (`translate`, or `offset` when host styles override translate);
+   * resizes record the property and its values (`size`, `flex-basis` when the
+   * flex basis carries the size, `span` for grid track spans). `effects` lists
+   * side effects such as "sets flex-basis: 240px". The matching `css` changes
+   * carry the exact declarations.
+   */
+  | {
+      kind: "geometry";
+      mode: "translate" | "offset" | "size" | "flex-basis" | "span";
+      layout?: string;
+      dx?: number;
+      dy?: number;
+      property?: string;
+      from?: string;
+      to?: string;
+      effects?: string[];
+    };

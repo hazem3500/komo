@@ -693,6 +693,25 @@ initKomo({
 
 This loads geometry tools lazily in Design mode. Select a supported page element to see **Move**, right-edge width, bottom-edge height, and bottom-right width/height handles. Drag a handle, or focus it and press Enter/Space to arm it. Arrows adjust by one local CSS pixel (Shift+arrow: ten); Enter/Space commits, Escape cancels. Losing focus or pointer capture cancels. Shift does **not** lock aspect ratio. Minimum dimensions are 16 CSS pixels, or the border and padding footprint when larger. Each completed gesture is one chronological Undo, including a two-axis resize.
 
-These are reversible runtime CSS proposals, not source or backend edits. Move uses individual CSS `translate`, retaining normal flow, DOM order, existing transforms and the original translation. Resize changes width/height and can reflow siblings. Undo returns to the previous preview; Reset restores the host baseline. Before/After, Browse suspension and Comment transfer use the existing Design proposal lifecycle. Controls disappear while the clean editing gate is active; target the canvas again to show them. The flag does not resize comment pins or the page-preview Frame.
+These are reversible runtime CSS proposals, not source or backend edits. Nothing is reparented or reordered. Undo returns to the previous preview; Reset restores the host baseline, including the exact original `style` attribute. Before/After, Browse suspension and Comment transfer use the existing Design proposal lifecycle. Controls disappear while the clean editing gate is active; target the canvas again to show them. The flag does not resize comment pins or the page-preview Frame.
 
-Supported targets are unfragmented normal-flow HTML block/flow-root/inline-block boxes in horizontal writing mode, including positive axis-aligned 2D scale/zoom chains and normal, reflow or explicitly scaled Frames. Scroll during pointer capture is accounted for. SVG, page roots, flex/grid/table or multicolumn chains, fixed/absolute/sticky elements, editable/form/media surfaces, constrained dimensions, aspect ratios, rotation/skew/3D/negative scales, complex individual translations and running animations are unavailable; the selection shows the reason. This is deliberately not a universal layout editor.
+How each layout previews:
+
+- **Move** composes with the element's own CSS `translate` (keeping its units, such as `calc(5% + 12px)`), so normal flow, siblings and existing transforms stay put. When a host rule overrides inline `translate` on a `position: relative` box, Move uses `left`/`top` offsets instead (`right` in RTL).
+- **Resize** sets `width`/`height`. On a flex item's main axis it also sets `flex-basis` when the basis isn't `auto`, `flex-grow: 0` when it grows, and `flex-shrink: 0` only when the box would otherwise shrink. Cross-axis and grid sizes override `align-self`/`justify-self: stretch`. Min/max limits clamp the preview and say so.
+- **Grid items** resize within their cell. **Snap to grid tracks** changes `grid-column-end`/`grid-row-end` to numeric `span N` values instead; arrows step one track.
+- **Images, video, canvas, iframes, SVG roots and `aspect-ratio` boxes** resize with their aspect ratio locked.
+
+Side effects show beside the selection and in the proposal, for example `width overrides flex: 1 1 0%` or `sets flex-basis: 240px`. Comment proposals add a `Proposed geometry changes` section after the CSS rows:
+
+```text
+Proposed geometry changes (preview only)
+Target: #save
+Layout: flex item, row
+- Move (translate): Δx 12px, Δy -4px
+- Resize (flex-basis) width: 260px → 240px · width overrides flex: 1 1 0% · sets flex-basis: 240px · sets flex-grow: 0
+```
+
+The CLI reads these lines into `geometry` DesignEdit changes with `mode` (`translate`, `offset`, `size`, `flex-basis` or `span`), the delta or values, `layout` and `effects`.
+
+Supported targets are HTML boxes and SVG roots in normal flow, flex or grid, or relatively, absolutely, fixed or sticky positioned, through positive axis-aligned 2D scale chains and normal, reflow or explicitly scaled Frames. Pointer deltas are converted to local CSS pixels, and scroll during pointer capture is accounted for. Only boxes that can't be previewed are excluded, each with its own reason and a **Select parent** action that picks the nearest movable ancestor: inline text boxes, SVG shapes inside an SVG, `display: contents` or unrendered elements, table cells and rows, boxes split across lines or columns, rotated/skewed/3D/mirrored chains, and geometry animations in progress. This is deliberately not a universal layout editor.
