@@ -27,6 +27,9 @@ const designPanel = (await readdir("dist"))
 const selectMenu = (await readdir("dist"))
   .filter((file) => /^select-menu.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const geometry = (await readdir("dist"))
+  .filter((file) => /^design-geometry.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const tokenPicker = (await readdir("dist"))
   .filter((file) => /^token-picker.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
@@ -72,6 +75,7 @@ const report = {
   optionalSelectMenu: await sizes(new Set(selectMenu)),
   optionalTokenPicker: await sizes(new Set(tokenPicker)),
   optionalTokenPage: await sizes(new Set(tokenPage)),
+  optionalGeometry: await sizes(new Set(geometry)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
   adapterCssVariables: await sizes(new Set(["dist/adapters/css-variables.js"])),
   adapterReactFiber: await sizes(new Set(["dist/adapters/react-fiber.js"])),
@@ -113,7 +117,10 @@ await writeFile(
 // All-features 206,935 -> 207,360 (+425 for the extra chunk boundaries and the wrapper).
 // Budgets are unchanged so the pending toolbar and layout work has room; import animate
 // from ./lazy-motion.js, not "motion", or Motion returns to the mount bundle.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 208_500)
+// All-features 209,300: design change cards name targets for reviewers, keep long paths, URLs
+// and diffs inside the card, and share the source ⓘ popover with Properties (207,582 -> 209,140,
+// all in the on-demand design comment chunk; initial +35).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 209_300)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -121,6 +128,7 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 208_500)
 // 7,250: the footer Before/After switch (styles, text, React props, theme), its keys and morph,
 // toolbar-style tooltips and header/footer polish (~870 bytes). The panel chunk has no room either.
 // 7,300: the hook that lazy-loads default-off experimental geometry (its own chunk) (~10 bytes).
+// Passing select and the geometry proposal section to that chunk adds ~10 bytes (7,093 measured).
 if (report.optionalDesignMode.gzip > 7_300)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
@@ -148,6 +156,12 @@ if (report.optionalTokenPicker.gzip > 4_775)
 // footer chunks, so its own chunk is small. 4,730 measured, plus ~3%.
 if (report.optionalTokenPage.gzip > 4_875)
   throw new Error("komo's Tokens view chunk exceeds its gzip budget.");
+// Experimental move/resize is default off and loads only with design.experimentalGeometry, after
+// Design mode opens; nothing else imports it. It was 3,375 gzip for normal-flow blocks only. Flex and
+// grid items (flex-basis/grow/shrink, stretch detection, numeric track spans), positioned and
+// aspect-locked boxes, per-element reasons with Select parent, and side-effect proposals measure 6,725.
+if (report.optionalGeometry.gzip > 7_000)
+  throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.

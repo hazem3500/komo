@@ -311,19 +311,19 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
       const group = document.createElement("details");
       group.className = "design-group design-react-group design-react-discovered";
       group.open = true;
+      // The name is the heading; komo adds the source behind an info button beside it.
       const summary = document.createElement("summary");
-      summary.textContent = "Discovered props";
-      const source = document.createElement("small");
-      source.className = "design-react-source";
-      source.textContent = `${identity.name} · read-only${found.location ? ` · rendered at ${found.location}` : ""}`;
-      source.title = options.edit ? "Runtime editing needs the React preview bridge loaded before a supported development renderer, or a component editor adapter." : "Enable a component editor adapter or React runtime previews to edit these props.";
-      group.append(summary, source);
-      if (!found.props.length) {
-        const none = document.createElement("small");
-        none.className = "design-react-source";
-        none.textContent = "No props.";
-        group.append(none);
-      }
+      const name = document.createElement("span");
+      name.className = "design-react-name";
+      name.textContent = name.title = identity.name;
+      const status = document.createElement("small");
+      status.className = "design-react-status";
+      status.textContent = "Read-only";
+      status.title = options.edit ? "Runtime editing needs the React preview bridge loaded before a supported development renderer, or a component editor adapter." : "Enable a component editor adapter or React runtime previews to edit these props.";
+      const empty = !found.props.length && !found.advanced.length && !found.hidden;
+      summary.append(name, ...(empty ? [] : [status]));
+      group.toggleAttribute("data-empty", empty);
+      group.append(summary);
       for (const [name, value] of found.props) group.append(row(name, value));
       if (found.advanced.length) {
         const advanced = document.createElement("details");

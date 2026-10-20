@@ -1,4 +1,6 @@
 import { customPickerValue } from "./custom-field.js";
+import { el } from "./dom.js";
+import { sourceInfo, sourceInfoStyles, type SourceHref } from "./source-info.js";
 import { previewStyle, watchPopup } from "./design-popup.js";
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
 import {
@@ -105,11 +107,11 @@ export function attachDesignSystemControls(
   element: DesignTarget,
   controls: HTMLElement,
   panel: typeof import("./design-panel.js"),
-  context: { root: ShadowRoot; design?: DesignSystem },
+  context: { root: ShadowRoot; design?: DesignSystem; sourceHref?: SourceHref },
   options: {
     signal: AbortSignal;
     select(element: DesignTarget): void;
-    refresh(): void;
+    refresh(retainedProps?: HTMLElement): void;
     retainedProps?: HTMLElement;
     updateActions(): void;
     history: Array<{ element: DesignTarget; undo(): void; props?: boolean } | { kind: string; element: DesignTarget }>;
@@ -128,7 +130,7 @@ export function attachDesignSystemControls(
   };
   // Switching a theme re-renders the selection, so tokens, values and the outline follow it.
   attachThemeSwitcher(controls, design, () => options.select(element), root, options.signal);
-  const props = retainedProps ?? createReactPropsPanel(element, undo => recordUndo(undo, true), root, options.select, design, options.refresh);
+  const props = retainedProps ?? createReactPropsPanel(element, undo => recordUndo(undo, true), root, options.select, design, options.refresh, context.sourceHref);
   if (props && !retainedProps) controls.prepend(props);
   attachStyleTokenControls(element, panel.fields, controls, options.onStyleEdit, root, panel.valueFor, panel.toHex, design, recordUndo, options.isFieldDirty);
   const theme = createDesignThemePanel(element, panel, options.updateActions, root);
@@ -138,7 +140,7 @@ export function attachDesignSystemControls(
 const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
 // React props, inline token chips and shared theme values, in the inspector's compact field style.
-const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-inside{padding:10px 12px}.design-react-inside button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-react-inside button:hover{text-decoration:underline}.design-react-field.design-field{display:grid;grid-template-columns:76px minmax(0,1fr);gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 8px;border:0;border-radius:6px;background-color:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field.design-field>select{padding-right:20px}.design-react-field input[type=checkbox]{justify-self:end;width:14px;height:14px;accent-color:#bda6ef}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 6px center/8px no-repeat;color:#e9e6e1;padding:0 18px 0 6px;font:inherit;font-size:10px;cursor:pointer}.design-react-field .design-token-binding[data-mode=token] select{background-color:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-token-off{position:absolute;top:8px;right:24px;display:grid;place-items:center;width:12px;height:12px}.design-token-off::before{content:'';width:4px;height:4px;border-radius:50%;background:#e7c27d;opacity:.7}.design-token-off[hidden]{display:none}.design-field:has(>.design-token-binding>.design-token-off:not([hidden]))>input[data-property]{padding-right:38px}.design-theme-switch{padding:6px 12px 8px}.design-theme-switch .design-react-field>span{text-transform:capitalize}.design-theme-options{display:flex;min-width:0;padding:2px;border-radius:6px;background:#ffffff0a}.design-theme-options button{flex:1;min-width:0;height:24px;padding:0 6px;border:0;border-radius:4px;background:none;color:#898680;font:inherit;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.design-theme-options button:hover{color:#f1efeb}.design-theme-options button[aria-pressed=true]{background:#ffffff1a;color:#f1efeb}.design-theme-options button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}@media (max-width:520px){.design-theme-options button{height:30px}.design-react-field.design-field>:is(input,select){height:34px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{top:7px}.design-token-off{top:11px}}.design-react-row{display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:4px}.design-react-row>.design-react-field{flex:1;min-width:0;grid-template-columns:minmax(88px,.8fr) minmax(0,1fr);min-height:32px;gap:0 10px;margin-top:6px}.design-react-row .design-react-field>:is(input,select){height:32px}.design-react-row .design-react-field>span{white-space:normal;overflow-wrap:anywhere;line-height:1.4}.design-react-row>.design-theme-reset{flex:none;width:28px;height:28px;margin-top:6px}.design-react-row>.design-theme-reset[hidden]{display:none}.design-react-preview{font-size:10px;color:#8e8799}.design-react-group>.design-react-source:first-of-type{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}.design-react-advanced{margin-top:10px}.design-react-advanced>summary{color:#898680;font-size:11px;cursor:pointer}.design-react-field input[readonly]{color:#aaa;background:#ffffff06;cursor:text}.design-react-row .design-react-field>input[type=checkbox]{width:16px;height:16px;margin:8px 0}.design-react-row .design-react-field:has(input[type=checkbox]){cursor:pointer}@media(max-width:520px){.design-react-row .design-react-field>:is(input,select){height:36px}.design-react-row>.design-theme-reset{width:32px;height:32px}}.design-theme-switch{position:relative;flex:none;padding:0}.design-theme-switch>summary{display:flex;align-items:center;gap:5px;max-width:90px;min-height:28px;padding:0 8px;border-radius:7px;background:#ffffff08;color:#b7b1c2;font-size:11px;list-style:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.design-theme-switch>summary::-webkit-details-marker{display:none}.design-theme-switch>summary::after{content:"⌄";color:#77736f}.design-theme-switch[open]>summary,.design-theme-switch>summary:hover{background:#ffffff14;color:#f1efeb}.design-theme-popup{position:absolute;z-index:12;top:calc(100% + 6px);right:0;box-sizing:border-box;width:min(280px,calc(100vw - 48px));max-height:50dvh;overflow:auto;padding:10px 12px;border:1px solid #ffffff1a;border-radius:10px;background:#191819;box-shadow:0 12px 40px #0008}.design-theme-popup .design-react-field{grid-template-columns:68px minmax(0,1fr)}.design-theme-popup .design-react-field+ .design-react-field{margin-top:8px}`;
+const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-inside{padding:10px 12px}.design-react-inside button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-react-inside button:hover{text-decoration:underline}.design-react-field.design-field{display:grid;grid-template-columns:88px minmax(0,1fr);align-items:center;gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;justify-self:start;width:auto;min-width:72px;max-width:100%;field-sizing:content;height:28px;padding:0 8px;border:0;border-radius:6px;background-color:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field.design-field>select{padding-right:20px}.design-react-field.design-field>input[type=text]{min-width:120px}.design-react-field.design-field>input[type=number]{width:80px;field-sizing:fixed}.design-react-field.design-field>.design-react-switch{position:relative;appearance:none;width:28px;min-width:0;height:16px;margin:0;padding:0;border-radius:8px;background:#ffffff24;cursor:pointer;transition:background-color .15s}.design-react-switch::before{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#d9d6d1;transition:translate .15s var(--ease-smooth-out,ease)}.design-react-field.design-field>.design-react-switch:checked{background:#bda6ef}.design-react-switch:checked::before{translate:12px;background:#1b1a1c}.design-react-switch[data-unset]::before{translate:6px;opacity:.45}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 6px center/8px no-repeat;color:#e9e6e1;padding:0 18px 0 6px;font:inherit;font-size:10px;cursor:pointer}.design-react-field .design-token-binding[data-mode=token] select{background-color:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-token-off{position:absolute;top:8px;right:24px;display:grid;place-items:center;width:12px;height:12px}.design-token-off::before{content:'';width:4px;height:4px;border-radius:50%;background:#e7c27d;opacity:.7}.design-token-off[hidden]{display:none}.design-field:has(>.design-token-binding>.design-token-off:not([hidden]))>input[data-property]{padding-right:38px}.design-theme-switch{padding:6px 12px 8px}.design-theme-switch .design-react-field>span{text-transform:capitalize}.design-theme-options{display:flex;min-width:0;padding:2px;border-radius:6px;background:#ffffff0a}.design-theme-options button{flex:1;min-width:0;height:24px;padding:0 6px;border:0;border-radius:4px;background:none;color:#898680;font:inherit;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.design-theme-options button:hover{color:#f1efeb}.design-theme-options button[aria-pressed=true]{background:#ffffff1a;color:#f1efeb}.design-theme-options button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}@media (max-width:520px){.design-theme-options button{height:30px}.design-react-field.design-field>:is(input,select){height:34px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{top:7px}.design-token-off{top:11px}}.design-react-row{display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:4px}.design-react-row>.design-react-field{min-width:0;margin-top:4px}.design-react-row>.design-theme-reset{flex:none;width:28px;height:28px;margin-top:4px}.design-react-row>.design-theme-reset[hidden]{display:none}.design-react-group{position:relative}.design-react-group>summary{padding-right:32px}.design-react-group[data-empty]{padding-bottom:0}.design-react-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-status{flex:none;margin-left:4px;padding:1px 5px;border-radius:4px;background:#ffffff0f;color:#898680;font-size:10px;font-weight:500}.design-react-group>.komo-source{position:absolute;z-index:3;top:6px;right:8px}.design-react-switch:focus-visible{outline:1px solid #bda6ef;outline-offset:1px}.design-react-advanced{margin-top:10px}.design-react-advanced>summary{color:#898680;font-size:11px;cursor:pointer}.design-react-field.design-field>input[readonly]{width:100%;min-width:0;padding:0;background:none;color:#c9c5bf;cursor:text}@media(max-width:520px){.design-react-row .design-react-field>:is(input,select){height:36px}.design-react-row>.design-theme-reset{width:32px;height:32px}.design-react-group>.komo-source{top:2px}}.design-theme-switch{position:relative;flex:none;padding:0}.design-theme-switch>summary{display:flex;align-items:center;gap:5px;max-width:90px;min-height:28px;padding:0 8px;border-radius:7px;background:#ffffff08;color:#b7b1c2;font-size:11px;list-style:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.design-theme-switch>summary::-webkit-details-marker{display:none}.design-theme-switch>summary::after{content:"⌄";color:#77736f}.design-theme-switch[open]>summary,.design-theme-switch>summary:hover{background:#ffffff14;color:#f1efeb}.design-theme-popup{position:absolute;z-index:12;top:calc(100% + 6px);right:0;box-sizing:border-box;width:min(280px,calc(100vw - 48px));max-height:50dvh;overflow:auto;padding:10px 12px;border:1px solid #ffffff1a;border-radius:10px;background:#191819;box-shadow:0 12px 40px #0008}.design-theme-popup .design-react-field{grid-template-columns:68px minmax(0,1fr)}.design-theme-popup .design-react-field+ .design-react-field{margin-top:8px}`;
 // The token picker's "Matches … · Use token" suggestion under an off-token field.
 const matchStyles = `.design-token-match{grid-column:1/-1;display:flex;align-items:center;gap:6px;min-width:0;margin-top:-2px;padding:0 4px;color:#77736f;font-size:10px}.design-token-match[hidden]{display:none}.design-token-match>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-token-match button{flex:none;padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-token-match button:hover{text-decoration:underline}.design-token-match button:focus-visible{outline:1px solid #bda6ef;outline-offset:2px;border-radius:2px}@media (pointer:coarse){.design-token-match button{min-height:32px}}`;
 
@@ -345,7 +347,7 @@ export function resetDesignTokenEdits(element: DesignTarget): void {
 function ensurePanelStyles(styleRoot?: ShadowRoot): void {
   if (!styleRoot || styledRoots.has(styleRoot)) return;
   const style = document.createElement("style");
-  style.textContent = panelStyles + matchStyles;
+  style.textContent = panelStyles + matchStyles + sourceInfoStyles;
   styleRoot.append(style);
   styledRoots.add(styleRoot);
 }
@@ -1152,6 +1154,30 @@ export function resetReactProps(element: DesignTarget): void {
   edits.delete(element);
 }
 
+/** Unset (undefined), an empty string and false each read differently. */
+function show(control: HTMLInputElement | HTMLSelectElement, value: InspectableScalar): void {
+  control.title = value === undefined ? "unset" : value === "" ? "Empty string" : "";
+  if (control instanceof HTMLInputElement && control.type === "checkbox") {
+    control.checked = value === true;
+    control.toggleAttribute("data-unset", value === undefined);
+    return;
+  }
+  control.value = value === undefined ? "" : String(value);
+  if (control instanceof HTMLInputElement) control.placeholder = value === undefined ? "unset" : '""';
+}
+
+/** The component name as the section heading, with its source behind the shared ⓘ. */
+function componentHeading(group: HTMLElement, name: string, source: string, sourceHref?: SourceHref, summary?: HTMLElement): void {
+  if (!summary) {
+    summary = el("summary");
+    const title = el("span", "design-react-name", name);
+    title.title = name;
+    summary.append(title);
+    group.append(summary);
+  }
+  if (source) summary.after(sourceInfo(name, source, sourceHref));
+}
+
 /** Props belong to the registered root; a descendant only points back to it. */
 function insideComponent(
   element: DesignTarget,
@@ -1225,7 +1251,8 @@ export function createReactPropsPanel(
   styleRoot?: ShadowRoot,
   select?: (root: DesignTarget) => void,
   design?: DesignSystem,
-  refresh?: () => void,
+  refresh?: (retainedProps?: HTMLElement) => void,
+  sourceHref?: SourceHref,
 ): HTMLElement | null {
   let component = inspectableFor(element);
   if (!component) {
@@ -1252,7 +1279,11 @@ export function createReactPropsPanel(
     if (!component) {
       let discovered: HTMLElement | null = null;
       try { discovered = (found && design?.components?.panel?.(found)) || null; } catch { /* A panel that throws shows nothing. */ }
-      if (discovered) ensurePanelStyles(styleRoot);
+      if (discovered) {
+        ensurePanelStyles(styleRoot);
+        const summary = discovered.querySelector("summary");
+        if (summary && found) componentHeading(discovered, found.name, found.source ?? "", sourceHref, summary);
+      }
       return discovered ?? insideComponent(element, select, styleRoot);
     }
   }
@@ -1260,18 +1291,7 @@ export function createReactPropsPanel(
   const group = document.createElement("details");
   group.className = "design-group design-react-group";
   group.open = true;
-  const summary = document.createElement("summary");
-  summary.textContent = "Properties";
-  group.append(summary);
-  const source = document.createElement("small");
-  source.className = "design-react-source";
-  source.textContent = `${component.definition.name}${componentSource(component) ? ` · ${componentSource(component)}` : ""}`;
-  source.title = source.textContent;
-  group.append(source);
-  const hint = document.createElement("small");
-  hint.className = "design-react-source design-react-preview";
-  hint.textContent = "Runtime preview · Undo or Reset to restore";
-  group.append(hint);
+  componentHeading(group, component.definition.name, componentSource(component), sourceHref);
 
   const editable = component;
   const synchronizers: Array<() => void> = [];
@@ -1290,7 +1310,8 @@ export function createReactPropsPanel(
         synchronizers.forEach(sync => sync());
         if (focused?.closest(".design-inspector,.komo-tokens,.komo-select") || root.querySelector(".komo-tokens,.komo-select")) return;
         dirty = false;
-        refresh();
+        // A host commit re-reads the style fields; this panel and its controls stay the same nodes.
+        refresh(element.isConnected ? group : undefined);
       });
     };
     const unsubscribe = component.subscribe(() => {
@@ -1328,26 +1349,24 @@ export function createReactPropsPanel(
         unset.textContent = "unset";
         select.prepend(unset);
       }
-      select.value = value === undefined ? "" : String(value);
       control = select;
     } else {
       const input = document.createElement("input");
       if (prop.kind === "boolean") {
         input.type = "checkbox";
-        input.checked = value === true;
-        input.indeterminate = value === undefined;
+        input.setAttribute("role", "switch");
+        input.className = "design-react-switch";
       } else if (prop.kind === "number") {
         input.type = "number";
         input.step = "any";
-        input.value = typeof value === "number" ? String(value) : "";
       } else {
         input.type = "text";
         input.maxLength = 500;
         input.autocomplete = "off";
-        input.value = typeof value === "string" ? value : "";
       }
       control = input;
     }
+    show(control, value);
     control.setAttribute("aria-label", `${component.definition.name} ${prop.name}`);
     if (prop.kind === "unsupported") {
       control = document.createElement("input");
@@ -1384,9 +1403,7 @@ export function createReactPropsPanel(
     const syncReset = () => { reset.hidden = !originals.get(element)?.has(prop.name); };
     synchronizers.push(() => {
       if (control === (control.getRootNode() as ShadowRoot | Document).activeElement || control.getAttribute("aria-expanded") === "true") return;
-      const latest = editable.props[prop.name];
-      if (control instanceof HTMLInputElement && control.type === "checkbox") control.checked = latest === true;
-      else control.value = latest == null ? "" : String(latest);
+      show(control, editable.props[prop.name]);
       syncReset();
     });
     control.addEventListener("change", syncReset);
@@ -1394,9 +1411,7 @@ export function createReactPropsPanel(
       const baseline = originals.get(element);
       if (!baseline?.has(prop.name)) return;
       recordChange(element, editable, prop.name, baseline.get(prop.name), control, onEdit);
-      const value = editable.props[prop.name];
-      if (control instanceof HTMLInputElement && control.type === "checkbox") control.checked = value === true;
-      else control.value = value === undefined ? "" : String(value);
+      show(control, editable.props[prop.name]);
       syncReset();
       control.focus();
     });
@@ -1446,5 +1461,6 @@ export function createReactPropsPanel(
     }
     group.append(wrapper);
   }
+  group.toggleAttribute("data-empty", !group.querySelector(".design-react-row"));
   return group;
 }

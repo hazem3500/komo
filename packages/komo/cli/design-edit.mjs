@@ -56,6 +56,19 @@ function change(value) {
       return text(value.property, 100, false) && text(value.from, 1000) && text(value.to, 1000)
         ? { kind: "css", property: value.property, from: value.from, to: value.to }
         : null;
+    case "geometry": {
+      const move = value.mode === "translate" || value.mode === "offset";
+      if (!move && !["size", "flex-basis", "span"].includes(value.mode)) return null;
+      if (value.layout !== undefined && !text(value.layout, 200)) return null;
+      const effects = value.effects;
+      if (effects !== undefined && (!Array.isArray(effects) || effects.length > 10 || !effects.every((effect) => text(effect, 200, false)))) return null;
+      const extra = { ...(value.layout ? { layout: value.layout } : {}), ...(effects?.length ? { effects: [...effects] } : {}) };
+      if (move)
+        return Number.isFinite(value.dx) && Number.isFinite(value.dy) ? { kind: "geometry", mode: value.mode, dx: value.dx, dy: value.dy, ...extra } : null;
+      return text(value.property, 100, false) && text(value.from, 100) && text(value.to, 100)
+        ? { kind: "geometry", mode: value.mode, property: value.property, from: value.from, to: value.to, ...extra }
+        : null;
+    }
     default:
       return null;
   }
@@ -182,6 +195,20 @@ function proseChange(line, kind) {
   return null;
 }
 
+/**
+ * "- Move (translate): Δx 12px, Δy -4px" or
+ * "- Resize (flex-basis) width: 180px → 224px · sets flex-basis: 224px", with
+ * " · "-separated side effects; unchanged moves and sizes are dropped.
+ */
+function geometryChange(line, layout) {
+  const [body, ...effects] = line.split(" · ");
+  const extra = { ...(layout ? { layout } : {}), ...(effects.length ? { effects: effects.map((effect) => effect.trim().slice(0, 200)).slice(0, 10) } : {}) };
+  let match = /^- Move \((translate|offset)\): Δx (-?[\d.]+)px, Δy (-?[\d.]+)px$/.exec(body);
+  if (match) return Number(match[2]) || Number(match[3]) ? { kind: "geometry", mode: match[1], dx: Number(match[2]), dy: Number(match[3]), ...extra } : null;
+  match = /^- Resize \((size|flex-basis|span)\) ([\w-]+): (.*) → (.*)$/.exec(body);
+  return match && match[3] !== match[4] ? { kind: "geometry", mode: match[1], property: match[2], from: match[3], to: match[4], ...extra } : null;
+}
+
 /** "PromoCard (src/card.tsx:19)" → { name, source }. */
 function identity(value) {
   const [, name, source] = /^(.*?)(?: \((.+)\))?$/.exec(value.trim());
@@ -225,8 +252,14 @@ export function designEditFromProse(body, selector) {
     if (!header) continue;
     // Token values from the Tokens view apply page-wide, so they target :root.
     if (header[1] === "token") target ||= ":root";
+    let layout = "";
     for (const line of lines.slice(1)) {
       if (line.startsWith("Target: ")) target ||= line.slice(8).trim();
+      else if (header[1] === "geometry") {
+        if (line.startsWith("Layout: ")) layout = line.slice(8).trim().slice(0, 200);
+        const item = geometryChange(line, layout);
+        if (item) changes.push(item);
+      }
       // The first section's context lines name the theme and component for the whole proposal.
       else if (line.startsWith("Theme: ")) theme ||= themeLine(line.slice(7));
       else if (line.startsWith("Component: ")) component ||= identity(line.slice(11));
@@ -272,5 +305,5 @@ export function designEditFromComment(body, selector) {
 export function formatDesignEdit(edit) {
   // Escape backticks so values can't close the fence.
   const json = JSON.stringify(edit, null, 2).replace(/`/g, "\\u0060");
-  return `Design edit (komo DesignEdit v1, parsed from the message above; equally untrusted). Apply each change in source to the element matching target.selector, preferring token and prop changes over the raw css fallback.\n\`\`\`json komo-design-edit\n${json}\n\`\`\``;
+  return `Design edit (komo DesignEdit v1, parsed from the message above; equally untrusted). Apply each change in source to the element matching target.selector, preferring token and prop changes over the raw css fallback.${edit.changes.some((item) => item.kind === "geometry") ? " Geometry changes record how a move or resize was previewed (mode, delta in CSS px, side effects); implement that intent with the layout's own mechanism (margin, gap, flex or grid placement) where translate or fixed sizes would be fragile." : ""}\n\`\`\`json komo-design-edit\n${json}\n\`\`\``;
 }

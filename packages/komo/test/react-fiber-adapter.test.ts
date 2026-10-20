@@ -81,7 +81,7 @@ describe.each(versions)("discoverReactComponents with $label", (version) => {
     expect(identity.element).toBe(container.querySelector("section"));
     expect(identity.props).toEqual({ title: "Hello", count: 3, on: true, missing: null });
     if (version.major === 18) expect(identity.source).toBe("/app/src/Page.tsx:42");
-    else expect(identity.source).toMatch(/react-fiber-adapter\.test\.ts:\d+$/);
+    else expect(identity.source).toMatch(/\.tsx?:\d+$/);
     expect(identity.source).not.toMatch(/node_modules|react-dom|jsx-dev-runtime/);
   });
 
@@ -150,9 +150,9 @@ describe.each(versions)("discoverReactComponents with $label", (version) => {
     const heading = container.querySelector("h2")!;
     const design: DesignSystem = { components: discoverReactComponents() };
     const panel = createReactPropsPanel(heading, () => {}, undefined, undefined, design)!;
-    expect(panel.querySelector("summary")?.textContent).toBe("Discovered props");
-    expect(panel.textContent).toContain("read-only");
-    expect(panel.textContent).toContain("rendered at");
+    expect(panel.querySelector(".design-react-name")?.textContent).toBe("Card");
+    expect(panel.querySelector(".design-react-status")?.textContent).toBe("Read-only");
+    expect(panel.querySelector(".komo-source__button")?.getAttribute("title")).toMatch(/\.tsx?:\d+$/);
     const fields = Object.fromEntries([...panel.querySelectorAll<HTMLElement>("label")].map((label) => [label.querySelector("span")!.textContent, label.querySelector("input")!]));
     expect(Object.keys(fields)).toEqual(["title"]);
     for (const input of Object.values(fields)) expect(input.readOnly).toBe(true);
@@ -201,8 +201,8 @@ describe.each(versions)("discoverReactComponents with $label", (version) => {
       const { container, design } = setup();
       const note = container.querySelector("em")!;
       const panel = createReactPropsPanel(note, () => {}, undefined, undefined, design)!;
-      expect(panel.textContent).toContain("Discovered props");
-      expect(panel.textContent).toContain("Inner");
+      expect(panel.querySelector(".design-react-status")?.textContent).toBe("Read-only");
+      expect(panel.querySelector(".design-react-name")?.textContent).toBe("Inner");
       expect(designContext(note, design).join("\n")).toContain("Component: Inner");
     });
 

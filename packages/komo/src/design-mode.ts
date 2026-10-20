@@ -24,6 +24,8 @@ export interface DesignModeOptions {
   design?: DesignSystem;
   page?(): string;
   bounds?(element: Element): { left: number; top: number; right: number; bottom: number } | undefined;
+  /** Link for a component's repository-relative source, e.g. through `sourceUrl`. */
+  sourceHref?(path: string, line?: number): string | undefined;
 }
 
 type TextEdit = { kind: "text"; element: DesignTarget };
@@ -157,7 +159,7 @@ export function createDesignMode(options: DesignModeOptions) {
     geometry = module.bindGeometry({
       options, signal: listeners.signal, selected: () => selected,
       enabled: () => active && decorating && !showingBefore && !textTools?.element,
-      remember, track, history, update: updateActions,
+      remember, track, history, update: updateActions, select,
       tokens: () => reactPanelModule,
     });
   });
@@ -591,7 +593,7 @@ export function createDesignMode(options: DesignModeOptions) {
   function proposalFor(element: DesignTarget, create: typeof import("./design-export.js")["designProposal"]) {
     return create(element, changed.get(element), property => originals.get(element)?.get(property)?.computed,
       reactPanelModule?.tokenBoundProperties(element),
-      [(element instanceof HTMLElement ? textTools?.proposal(element) : undefined), reactPanelModule?.proposedDesignChanges(element)],
+      [(element instanceof HTMLElement ? textTools?.proposal(element) : undefined), reactPanelModule?.proposedDesignChanges(element), geometry?.proposal(element)],
       reactPanelModule?.designContext(element, options.design));
   }
   undo.addEventListener("click", () => {

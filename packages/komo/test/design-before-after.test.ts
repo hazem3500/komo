@@ -282,7 +282,8 @@ describe("Before/After target resolution", () => {
     // Older proposals stored a class-only path that matches every link.
     const { shadow, toggle } = await mount([thread(anchor, proposal("div.flex.w-full > a.flex.w-full"))]);
     await open(shadow);
-    expect(shadow.querySelector(".design-card-target")?.textContent).toBe("a.flex.w-full");
+    // Reviewers see the link by role and name; the class-only selector stays in the record.
+    expect(shadow.querySelector(".design-card-target")?.textContent).toBe("Link “Timer”");
     toggle("After");
     expect(timer.style.width).toBe("166px");
     for (const other of ["Overview", "Reports", "Projects"]) expect(link(other).style.width).toBe("");

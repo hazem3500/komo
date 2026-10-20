@@ -4068,6 +4068,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           key: comment.id,
           resolve: (selector) => onThreadPage(thread) ? designTarget(thread.anchor)(selector) : null,
           note: appendMessageLinks,
+          sourceHref: sourceLink,
           // The element can grow under the dialog; place it again once the change settles.
           onSwitch: () => positionDialog(),
         });
@@ -4380,6 +4381,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         const anchor = draft;
         return Promise.resolve(renderDraftProposal(card, proposal, target, {
           design: options.design,
+          sourceHref: sourceLink,
           onUpdate(body) { if (draft === anchor && draftProposal) draftProposal = body; },
         })).then(positionDialog);
       });
@@ -4683,10 +4685,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           }),
       });
       const source = thread.anchor.source;
-      const sourceHref = source
-        ? (options.sourceUrl?.(source, options.branch) ??
-          `https://github.com/${options.repo}/blob/${encodeURIComponent(options.branch)}/${source.split("/").map(encodeURIComponent).join("/")}`)
-        : "";
+      const sourceHref = source ? sourceLink(source) : "";
       const more = actionMenu("Comment actions", [
         ...messageActions(thread.comments[0], thread),
         ...(canMovePin(thread) ? [{
@@ -5523,6 +5522,10 @@ export function initComments(options: CommentsOptions): CommentsController {
       )
     );
   }
+  function sourceLink(source: string, line?: number) {
+    return options.sourceUrl?.(source, options.branch) ??
+      `https://github.com/${options.repo}/blob/${encodeURIComponent(options.branch)}/${source.split("/").map(encodeURIComponent).join("/")}${line ? `#L${line}` : ""}`;
+  }
   function ensureDesignController() {
     if (designController) return Promise.resolve(designController);
     if (!designControllerPromise) {
@@ -5535,6 +5538,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             exitKey: shortcuts.design?.label,
             reservedKey: event => Object.values(shortcuts).some(shortcut => matchesShortcut(event, shortcut)),
             design: options.design,
+            sourceHref: sourceLink,
             page,
             bounds: element => framed && surface.contains(element) ? surface.getBoundingClientRect() : undefined,
             flip() {

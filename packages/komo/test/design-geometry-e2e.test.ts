@@ -191,7 +191,7 @@ describe.skipIf(!chrome)('geometry ownership and guards', () => {
       const baseline = await page.locator('#target').getAttribute('style');
       await page.keyboard.press('d'); await page.locator('#target').click();
       await page.locator('.design-geometry p').waitFor();
-      expect(await page.locator('.design-geometry p').textContent()).toContain('unavailable');
+      expect(await page.locator('.design-geometry p').textContent()).toBe("Rotated, skewed, 3D or mirrored boxes can't be previewed.");
       expect(await page.getByRole('button', { name: 'Move', exact: true }).isVisible()).toBe(false);
       expect(await page.locator('#target').getAttribute('style')).toBe(baseline);
     } finally { await page.close(); }

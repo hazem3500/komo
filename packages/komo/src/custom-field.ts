@@ -1,4 +1,4 @@
-import { primaryFamily } from "./css-value-parts.js";
+import { fontView } from "./css-value-parts.js";
 import { inlineStyleSnapshot, validStyleValue } from "./design-preview.js";
 import type { Control, Field, PanelContext } from "./design-panel.js";
 import type { DesignTarget } from "./design-target.js";
@@ -21,12 +21,18 @@ export function registerCustomField(control: Control, field: Field, context: Pic
   if (field.property === "font-family") {
     const box = control.parentElement!;
     const style = document.createElement("style");
-    style.textContent = '.komo-font-name{position:absolute;inset:0 28px 0 var(--lead,8px);display:flex;align-items:center;gap:6px;pointer-events:none;overflow:hidden;white-space:nowrap}.komo-font-name span{overflow:hidden;text-overflow:ellipsis}.design-field:has(.komo-font-name)>input:not(:focus){color:transparent}.design-field:has(>input:focus)>.komo-font-name,.design-field[data-token-mode=token]>.komo-font-name,.design-field[data-token-mode=connected]>.komo-font-name{display:none}';
-    const name = document.createElement("span"), aa = document.createElement("b"), text = document.createElement("span");
-    name.className = "komo-font-name"; name.setAttribute("aria-hidden", "true"); aa.textContent = "Aa"; name.append(aa, text);
-    const sync = () => { const value = context.element.style.fontFamily || getComputedStyle(context.element).fontFamily; text.textContent = primaryFamily(value); aa.style.fontFamily = value; control.title = value; };
+    style.textContent = '.komo-font-name{position:absolute;inset:0 28px 0 var(--lead,8px);display:flex;align-items:center;gap:6px;pointer-events:none;overflow:hidden;white-space:nowrap}.komo-font-name span{overflow:hidden;color:#f1efeb;text-overflow:ellipsis}.komo-font-name small{flex:none;color:#898680;font-size:10px}.komo-font-name[data-unresolved] span{color:#e7c27d}.design-field:has(.komo-font-name)>input:not(:focus){color:transparent}.design-field:has(>input:focus)>.komo-font-name,.design-field[data-token-mode=token]>.komo-font-name,.design-field[data-token-mode=connected]>.komo-font-name{display:none}';
+    const name = document.createElement("span"), aa = document.createElement("b"), text = document.createElement("span"), note = document.createElement("small");
+    name.className = "komo-font-name"; name.setAttribute("aria-hidden", "true"); aa.textContent = "Aa"; name.append(aa, text, note);
+    const sync = () => {
+      const element = context.element, computed = getComputedStyle(element);
+      const view = fontView(element.style.getPropertyValue("font-family") || declaredFamily(element), computed.fontFamily, variable => computed.getPropertyValue(variable));
+      text.textContent = view.label; note.textContent = view.note; control.title = view.title;
+      name.toggleAttribute("data-unresolved", view.label.endsWith(" unresolved"));
+      aa.style.fontFamily = text.style.fontFamily = computed.fontFamily;
+    };
     syncDisplay = sync;
-    control.addEventListener("input", sync); control.addEventListener("blur", sync); sync(); box.append(style, name);
+    control.addEventListener("input", sync); control.addEventListener("blur", sync); const watch = new MutationObserver(() => box.isConnected ? sync() : watch.disconnect()); watch.observe(context.element, { attributeFilter: ["style", "class"] }); sync(); box.append(style, name);
   }
   fields.set(control, { field, set(value) {
     context.begin(control, field.property);
@@ -34,6 +40,21 @@ export function registerCustomField(control: Control, field: Field, context: Pic
     context.commit(control, field.property);
     display(value);
   } });
+}
+
+/** The page's own font-family rule for the element when it uses a variable, so an unresolved one can be named. */
+function declaredFamily(element: Element): string {
+  let found = "";
+  const visit = (rules: CSSRuleList) => {
+    for (const rule of rules) {
+      if (rule instanceof CSSStyleRule) {
+        const value = rule.style.getPropertyValue("font-family");
+        try { if (value.includes("var(") && element.matches(rule.selectorText)) found = value; } catch { /* An unsupported selector matches nothing. */ }
+      } else if ("cssRules" in rule) visit((rule as CSSGroupingRule).cssRules);
+    }
+  };
+  for (const sheet of element.ownerDocument.styleSheets) try { visit(sheet.cssRules); } catch { /* Cross-origin sheets stay unread. */ }
+  return found;
 }
 
 export function customPickerValue(element: DesignTarget, property: string, input?: HTMLElement | null): TokenPickerOptions["custom"] {

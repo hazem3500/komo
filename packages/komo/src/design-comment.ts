@@ -4,6 +4,7 @@ import { ownsKeyboard } from "./design-keyboard.js";
 import { isDesignTarget } from "./design-target.js";
 import { inlineStyleSnapshot, removeEmptyStyle } from "./design-preview.js";
 import { previewText } from "./text-preview.js";
+import { sourceInfo, sourceInfoStyles, type SourceHref } from "./source-info.js";
 import { listTokens, originalTokenUsage, previewToken, refreshTokenBaseline, themeState, watchThemes } from "./token-adapter.js";
 import type { DesignSystem, DesignToken, TokenAdapter } from "./design-system.js";
 
@@ -50,6 +51,11 @@ function unquote(value: string): string {
 }
 
 function change(line: string, kind: string): DesignChange | null {
+  // "- Move (translate): Δx 12px, Δy 0px" or "- Resize (size) width: 180px → 224px · …"; the style rows preview them.
+  if (kind === "geometry") {
+    const [, label, before = "", after] = /^- (.+?): (?:(.*) → )?(.*)$/.exec(line) ?? [];
+    return label ? { label, before, after } : null;
+  }
   // Shared theme color.brand (--color-brand): #4f5f42 → #c2410c; preview scope …
   let match = /^Shared theme (\S+) \((--[\w-]+)\): (.*?) → (.*?)(?:; preview scope .*)?$/.exec(line);
   if (match)
@@ -93,7 +99,7 @@ export function parseDesignComment(body: string): DesignBlock[] {
         if (source) section.source = source;
       } else if (line.startsWith("Source: ")) section.source = line.slice(8);
       else {
-        const item = line.includes("→") ? change(line, kind) : null;
+        const item = line.includes("→") || kind === "geometry" ? change(line, kind) : null;
         // Previews can record a property that ended where it started.
         if (item && item.before !== item.after) section.changes.push(item);
       }
@@ -120,6 +126,26 @@ export function summarizeDesignComment(body: string): string {
 /** The last step of a generated selector, without :nth-of-type noise. */
 export function shortTarget(selector: string): string {
   return (selector.split(">").at(-1) ?? selector).trim().replace(/:nth-of-type\(\d+\)/g, "") || selector;
+}
+
+const ROLES: Record<string, string> = {
+  h: "Heading", a: "Link", button: "Button", img: "Image", p: "Paragraph", li: "List item", input: "Field", textarea: "Field",
+};
+
+/**
+ * What a reviewer calls the target: the component name, else its role and
+ * accessible name or short text ("Heading “Plan”"), else the bare tag.
+ * Selectors and class chains stay in the recorded proposal.
+ */
+export function targetLabel(section: Pick<DesignSection, "component" | "target" | "changes">, element: Element | null): string {
+  if (section.component) return section.component;
+  const tag = element?.localName ?? /(?:^|[\s>])([a-z][\w-]*)[^\s>]*$/i.exec(section.target ?? "")?.[1]?.toLowerCase() ?? "";
+  const role = element?.getAttribute("role");
+  const kind = role ? `${role[0].toUpperCase()}${role.slice(1)}` : ROLES[/^h[1-6]$/.test(tag) ? "h" : tag];
+  const text = (section.changes.find(item => item.apply?.kind === "text")?.before ?? element?.getAttribute("aria-label") ?? element?.getAttribute("alt") ?? element?.textContent ?? "")
+    .replace(/\s+/g, " ").trim();
+  const name = text.length > 28 ? `${text.slice(0, 27)}…` : text;
+  return [kind, name && `“${name}”`].filter(Boolean).join(" ") || tag || "Element";
 }
 
 const COLOR = /^(#[0-9a-f]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|oklch\([^)]*\))$/i;
@@ -293,18 +319,18 @@ export function resetDesignPreviews(keep: ReadonlySet<string> = new Set()) {
 }
 
 const css = `
-.design-comment { display: grid; gap: 8px; margin: 2px 0 6px; }
-.design-note { margin: 0; white-space: pre-wrap; }
-.design-card { border-radius: 10px; background: #ffffff08; box-shadow: inset 0 0 0 1px #ffffff0d; overflow: hidden; font-size: 12px; }
-.design-card-head { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 7px 8px 7px 12px; }
-.design-card-label { display: grid; min-width: 0; gap: 1px; }
-.design-card-title { font-weight: 600; color: #eee; white-space: nowrap; }
-.design-card-target { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8a8a8a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; }
-.design-toggle { margin-left: auto; display: inline-flex; padding: 2px; border-radius: 7px; background: #ffffff0a; flex: none; }
+.design-comment { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; margin: 2px 0 6px; }
+.design-note { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.design-card { min-width: 0; border-radius: 10px; background: #ffffff08; box-shadow: inset 0 0 0 1px #ffffff0d; font-size: 12px; }
+.design-card-head { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 40px; padding: 7px 8px 7px 12px; }
+.design-card-label { display: grid; flex: 1; min-width: 0; gap: 1px; }
+.design-card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #eee; }
+.design-card-target { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8a8a8a; font-size: 11px; }
+.design-toggle { display: inline-flex; padding: 2px; border-radius: 7px; background: #ffffff0a; flex: none; }
 .design-toggle button { border: 0; padding: 0 8px; height: 22px; border-radius: 5px; font: inherit; font-size: 11px; color: #9a9a9a; background: none; cursor: pointer; }
 .design-toggle button[aria-pressed="true"] { color: #fff; background: #ffffff1a; }
 .design-toggle button:disabled { opacity: .45; cursor: not-allowed; }
-.design-rows { display: grid; border-top: 1px solid #ffffff0a; }
+.design-rows { display: grid; grid-template-columns: minmax(0, 1fr); border-top: 1px solid #ffffff0a; }
 .design-row { display: grid; grid-template-columns: minmax(64px, 30%) minmax(0, 1fr); gap: 10px; align-items: center; padding: 6px 12px; }
 .design-row + .design-row { border-top: 1px solid #ffffff06; }
 .design-row[hidden] { display: none; }
@@ -314,15 +340,16 @@ const css = `
 .design-diff del { color: #f6a19a; background: #f28b8224; text-decoration-color: #f6a19a99; }
 .design-diff ins { color: #b9e6ad; background: #8fd69424; text-decoration: none; }
 .design-prop { color: #9a9a9a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.design-values { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; color: #eee; }
+.design-values { display: flex; align-items: center; gap: 4px 6px; min-width: 0; color: #eee; }
 .design-before { color: #858585; text-decoration: line-through; text-decoration-color: #85858599; }
 .design-arrow { color: #666; }
-.design-value { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.design-value { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 5px; min-width: 0; }
+.design-value-text, .design-token { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .design-swatch { width: 12px; height: 12px; flex: none; border-radius: 3px; box-shadow: inset 0 0 0 1px #ffffff26; }
-.design-token { padding: 1px 6px; border-radius: 5px; color: var(--accent, #bda6ef); background: color-mix(in srgb, var(--accent, #bda6ef) 14%, transparent); }
+.design-token { max-width: 100%; padding: 1px 6px; border-radius: 5px; color: var(--accent, #bda6ef); background: color-mix(in srgb, var(--accent, #bda6ef) 14%, transparent); }
 .design-more { border: 0; width: 100%; padding: 7px 12px; text-align: left; font: inherit; font-size: 11px; color: #9a9a9a; background: none; border-top: 1px solid #ffffff06; cursor: pointer; }
 .design-more:hover, .design-toggle button:hover { color: #fff; }
-.design-source { padding: 0 12px 8px; color: #777; font-size: 11px; }
+.design-source { margin: 0; padding: 0 12px 8px; color: #777; font-size: 11px; overflow-wrap: anywhere; }
 [data-compact] { gap: 6px; margin: 11px 0 0; }
 [data-compact] .design-card-head, [data-compact] .design-row, [data-compact] > .design-source { min-height: 0; padding: 4px 10px; }
 [data-compact]:hover > .design-source { color: #eee; text-decoration: underline; }
@@ -342,9 +369,12 @@ function diff(before: string, after: string): HTMLElement {
   while (start < before.length && start < after.length && before[start] === after[start]) start++;
   let end = 0;
   while (end < before.length - start && end < after.length - start && before[before.length - 1 - end] === after[after.length - 1 - end]) end++;
-  // Widen to whole words so "page" → "pages" reads as a word swap, not a stray "s".
-  while (start > 0 && !/\s/.test(before[start - 1])) start--;
-  while (end > 0 && !/\s/.test(before[before.length - end])) end--;
+  // Widen to whole words so "page" → "pages" reads as a word swap, not a stray "s";
+  // added or removed punctuation alone ("Plan" → "Plan!!") stays a plain insertion.
+  if (/[\p{L}\p{N}]/u.test(before.slice(start, before.length - end) + after.slice(start, after.length - end))) {
+    while (start > 0 && !/\s/.test(before[start - 1])) start--;
+    while (end > 0 && !/\s/.test(before[before.length - end])) end--;
+  }
   const prefix = before.slice(0, start);
   const suffix = before.slice(before.length - end);
   const line = document.createElement("p");
@@ -364,7 +394,7 @@ function value(text: string, token?: string): HTMLElement {
   wrap.className = "design-value";
   const variable = /^var\((--[\w-]+)\)$/.exec(text);
   if (token && variable) {
-    wrap.append(Object.assign(document.createElement("span"), { className: "design-token", textContent: token }));
+    wrap.append(Object.assign(document.createElement("span"), { className: "design-token", textContent: token, title: token }));
     return wrap;
   }
   if (COLOR.test(text)) {
@@ -373,7 +403,7 @@ function value(text: string, token?: string): HTMLElement {
     swatch.style.background = text;
     wrap.append(swatch);
   }
-  wrap.append(text);
+  wrap.append(Object.assign(document.createElement("span"), { className: "design-value-text", textContent: text, title: text }));
   return wrap;
 }
 
@@ -390,6 +420,8 @@ export interface DesignCommentOptions {
   onSwitch?(): void;
   /** Current semantic values for an unsaved draft; saved comments keep their recorded values. */
   tokens?: DraftTokens;
+  /** Link for a recorded source path, shown behind the card's ⓘ. */
+  sourceHref?: SourceHref;
 }
 
 /** Replace `container`'s content with a change card for each proposal. */
@@ -398,7 +430,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   const sections = blocks.filter((block): block is DesignSection => "changes" in block);
   const root = document.createElement("div");
   root.className = "design-comment";
-  root.append(Object.assign(document.createElement("style"), { textContent: css }));
+  root.append(Object.assign(document.createElement("style"), { textContent: css + sourceInfoStyles }));
   const unavailable = document.createElement("p");
   unavailable.className = "design-source";
   unavailable.setAttribute("role", "status");
@@ -436,13 +468,11 @@ export function renderDesignComment(container: HTMLElement, body: string, option
     const label = document.createElement("div");
     label.className = "design-card-label";
     label.append(Object.assign(document.createElement("span"), { className: "design-card-title", textContent: block.title }));
-    const where = block.target ? shortTarget(block.target) : block.component;
-    if (where) {
-      const target = Object.assign(document.createElement("span"), { className: "design-card-target", textContent: where });
-      if (block.target) target.title = block.target;
-      label.append(target);
-    }
+    const component = block.component ?? sections.find(section => section.target === block.target && section.component)?.component;
+    const where = block.target || component ? targetLabel({ ...block, component }, options.resolve(block.target)) : "";
+    if (where) label.append(Object.assign(document.createElement("span"), { className: "design-card-target", textContent: where, title: where }));
     head.append(label);
+    if (block.source && !compact) head.append(sourceInfo(block.component || where || "Change", block.source, options.sourceHref));
     // One Before/After switch for the whole comment, shown on its first previewable card.
     if (previewable && !toggles.length && block.changes.some((item) => item.apply)) {
       const toggle = document.createElement("div");
@@ -511,7 +541,6 @@ export function renderDesignComment(container: HTMLElement, body: string, option
       });
       card.append(more);
     }
-    if (block.source && !compact) card.append(Object.assign(document.createElement("div"), { className: "design-source", textContent: block.source }));
     root.append(card);
   }
   if (extra) root.append(Object.assign(document.createElement("span"), { className: "design-source", textContent: `+${extra} more` }));
@@ -557,6 +586,7 @@ let draftRuntime: {
 
 interface DraftOptions {
   design?: DesignSystem;
+  sourceHref?: SourceHref;
   onUpdate?(body: string): void;
 }
 
@@ -597,7 +627,7 @@ export function renderDraftProposal(container: HTMLElement, body: string, resolv
     if (draftRuntime && draftRuntime.options.design === design && (body === draftRuntime.source || body === draftRuntime.body)) {
       draftRuntime.container = container;
       draftRuntime.options = options;
-      renderDesignComment(container, draftRuntime.body, { key: "draft", resolve: draftRuntime.resolve, tokens: draftRuntime.context, note: (element, text) => element.append(text) });
+      renderDesignComment(container, draftRuntime.body, { key: "draft", resolve: draftRuntime.resolve, tokens: draftRuntime.context, sourceHref: options.sourceHref, note: (element, text) => element.append(text) });
       return;
     }
     draftRuntime?.events.abort();
@@ -629,7 +659,7 @@ export function renderDraftProposal(container: HTMLElement, body: string, resolv
         }
         if (after) apply("draft", sections, runtime.resolve, false, runtime.context);
         const focused = runtime.container.querySelector<HTMLButtonElement>(".design-toggle button:focus")?.textContent;
-        renderDesignComment(runtime.container, runtime.body, { key: "draft", resolve: runtime.resolve, tokens: runtime.context, note: (element, text) => element.append(text) });
+        renderDesignComment(runtime.container, runtime.body, { key: "draft", resolve: runtime.resolve, tokens: runtime.context, sourceHref: runtime.options.sourceHref, note: (element, text) => element.append(text) });
         if (focused) [...runtime.container.querySelectorAll<HTMLButtonElement>(".design-toggle button")].find(button => button.textContent === focused)?.focus({ preventScroll: true });
       },
     };
@@ -644,5 +674,5 @@ export function renderDraftProposal(container: HTMLElement, body: string, resolv
     draftBody = body;
     apply("draft", parseDesignComment(body).filter((block): block is DesignSection => "changes" in block), resolve);
   }
-  renderDesignComment(container, body, { key: "draft", resolve, note: (element, text) => element.append(text) });
+  renderDesignComment(container, body, { key: "draft", resolve, sourceHref: options.sourceHref, note: (element, text) => element.append(text) });
 }
