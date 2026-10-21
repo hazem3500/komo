@@ -3,6 +3,7 @@ import { elementLabel } from './element-label.js';
 import { changePreviewStyles, inlineStyleSnapshot } from './design-preview.js';
 import { STILL } from './host-motion.js';
 import type { DesignTarget } from './design-target.js';
+import { clientPoint, isHTMLElement, isSVGElement, onFrame, pageDocument, screenRect } from './frame-target.js';
 
 /** Where a box sits: its parent (selector, label, component) and its index among the parent's element children. */
 export type Place = { parent: string; label: string; index: number; component?: string; position?: 'before' | 'after' | 'inside' };
@@ -57,8 +58,8 @@ function sibling(node: Element, later: boolean, skip?: Element) {
 const after = (rect: DOMRect, x: number, y: number) => rect.top < y && rect.bottom > y ? rect.left + rect.width / 2 > x : rect.top + rect.height / 2 > y;
 /** Does the parent lay this child out beside its siblings (a row), rather than above and below them? */
 function row(node: Element) {
-  const parent = node.parentElement!, rect = node.getBoundingClientRect();
-  const near = kids(parent, node).map(child => child.getBoundingClientRect());
+  const parent = node.parentElement!, rect = screenRect(node);
+  const near = kids(parent, node).map(child => screenRect(child));
   if (!near.length) { const css = getComputedStyle(parent); return /flex/.test(css.display) && css.flexDirection.startsWith('row'); }
   return near.some(other => other.top < rect.bottom - 1 && other.bottom > rect.top + 1);
 }
@@ -67,11 +68,12 @@ function row(node: Element) {
 export function moveReason(element: Element | null, box: Element | null = element): string | null {
   const parent = element?.parentElement;
   if (!element?.isConnected || !parent) return 'Select an element on the page.';
-  if (element === document.body || parent === document.body || parent === document.documentElement) return "The page and app roots can't be moved.";
-  if (element instanceof SVGElement && element.ownerSVGElement) return "SVG shapes can't be moved. Select the SVG root.";
+  const page = element.ownerDocument;
+  if (element === page.body || parent === page.body || parent === page.documentElement) return "The page and app roots can't be moved.";
+  if (isSVGElement(element) && (element as SVGElement).ownerSVGElement) return "SVG shapes can't be moved. Select the SVG root.";
   if (element.matches('thead,tbody,tfoot,caption,colgroup,col')) return "Table sections can't be moved. Select the table.";
-  for (let node: Element | null = element; node && node !== document.body; node = node.parentElement)
-    if ((display(node) === 'inline' && !(node instanceof SVGSVGElement) && !node.matches('img,video,canvas,iframe,embed,object,input,select,textarea,button')) || (node === parent && node.matches(RUN)))
+  for (let node: Element | null = element; node && node !== page.body; node = node.parentElement)
+    if ((display(node) === 'inline' && node.localName !== 'svg' && !node.matches('img,video,canvas,iframe,embed,object,input,select,textarea,button')) || (node === parent && node.matches(RUN)))
       return "Inline text runs can't be moved. Select the paragraph or the block around them.";
   if (!box || /^(none|contents)$/.test(display(box)) || !box.getClientRects().length) return 'This element has no box to move.';
   return null;
@@ -82,13 +84,15 @@ function accepts(parent: Element, element: Element, host: HTMLElement) {
   if (parent === element || element.contains(parent) || clone(parent) || parent.closest(`[${CLONE}]`) || host.contains(parent)) return false;
   if (element.matches('tr')) return parent === element.parentElement;
   if (element.matches('td,th')) return parent.matches('tr') && parent.closest('table') === element.closest('table');
-  return parent instanceof HTMLElement && parent !== document.body && parent !== document.documentElement && !parent.matches(LEAF) && !/^(inline|contents|none)$/.test(display(parent));
+  return isHTMLElement(parent) && parent !== parent.ownerDocument.body && parent !== parent.ownerDocument.documentElement && !parent.matches(LEAF) && !/^(inline|contents|none)$/.test(display(parent));
 }
 
 export function bindMove(hooks: MoveHooks) {
   const known = new Set<Entry>();
-  const sheet = new CSSStyleSheet();
-  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  // The page's own realm makes the sheet: a viewport iframe's document can't adopt this window's.
+  const page = pageDocument();
+  const sheet = new (page.defaultView ?? window).CSSStyleSheet();
+  page.adoptedStyleSheets = [...page.adoptedStyleSheets, sheet];
   let rule = '';
   let press: { x: number; y: number; id: number } | undefined;
   let dragging = false, drop: Drop | null = null, frame = 0;
@@ -144,8 +148,8 @@ export function bindMove(hooks: MoveHooks) {
       if (element.style.getPropertyValue('display') !== 'none') element.style.setProperty('display', 'none', entry.priority);
       if (!place.parent.isConnected || (place.before && place.before.parentNode !== place.parent)) {
         detach();
-        place.parent = document.querySelector(place.selectors[0]) ?? place.parent;
-        const before = place.selectors[1] ? document.querySelector(place.selectors[1]) : null;
+        place.parent = page.querySelector(place.selectors[0]) ?? place.parent;
+        const before = place.selectors[1] ? page.querySelector(place.selectors[1]) : null;
         place.before = before?.parentNode === place.parent ? before : null;
       }
       if (!place.parent.isConnected) { entry.clone?.remove(); continue; }
@@ -166,7 +170,7 @@ export function bindMove(hooks: MoveHooks) {
   const observer = new MutationObserver(() => {
     if (known.size && !frame) frame = requestAnimationFrame(() => { frame = 0; sync(); });
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['style', 'class'] });
+  observer.observe(page.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['style', 'class'] });
 
   /** Preview the element at `target`; returns the announcement, or null when nothing would change. */
   function commit(element: DesignTarget, target: Drop) {
@@ -211,16 +215,16 @@ export function bindMove(hooks: MoveHooks) {
   /** The nearest valid drop at a screen point: between siblings along their flow, or into a container. */
   function dropAt(x: number, y: number, element: Element): Drop | null {
     let node = hooks.targetAt(x, y);
-    while (node && node !== document.body && (!node.parentElement || !accepts(node.parentElement, element, hooks.host) || /^(inline|contents)$/.test(display(node))))
+    while (node && node !== node.ownerDocument.body && (!node.parentElement || !accepts(node.parentElement, element, hooks.host) || /^(inline|contents)$/.test(display(node))))
       node = node.parentElement;
-    if (!node || node === document.body || element.contains(node)) return null;
-    const rect = node.getBoundingClientRect(), across = row(node);
+    if (!node || node === node.ownerDocument.body || element.contains(node)) return null;
+    const rect = screenRect(node), across = row(node);
     const [start, size, at] = across ? [rect.left, rect.width, x] : [rect.top, rect.height, y];
     const band = Math.min(12, size / 4);
     // Boxes holding their own text are leaves; only structural containers take a drop inside.
     const holds = [...node.childNodes].some(child => child.nodeType === Node.TEXT_NODE && child.textContent!.trim());
     if (!holds && accepts(node, element, hooks.host) && at > start + band && at < start + size - band) {
-      const before = kids(node, element).find(child => after(child.getBoundingClientRect(), x, y)) ?? null;
+      const before = kids(node, element).find(child => after(screenRect(child), x, y)) ?? null;
       return { parent: node, before, position: 'inside', ref: null };
     }
     const later = at >= start + size / 2;
@@ -254,11 +258,11 @@ export function bindMove(hooks: MoveHooks) {
     const set = (node: HTMLElement, left: number, top: number, width: number, height: number) =>
       Object.assign(node.style, { left: px(left), top: px(top), width: px(width), height: px(height) });
     box.hidden = target.position !== 'inside';
-    const area = target.parent.getBoundingClientRect();
+    const area = screenRect(target.parent);
     set(box, area.left, area.top, area.width, area.height);
     const list = kids(target.parent, element);
     const index = indexIn(target.parent, target.before, element);
-    const [prev, next] = [list[index - 1], list[index]].map(node => node?.getBoundingClientRect());
+    const [prev, next] = [list[index - 1], list[index]].map(node => node && screenRect(node));
     const near = list[index] ?? list[index - 1];
     line.hidden = !near;
     if (near) {
@@ -274,54 +278,59 @@ export function bindMove(hooks: MoveHooks) {
     press = undefined;
     drop = null;
     if (dragging) { dragging = false; hooks.drag(null); }
-    feedback(null, document.body, 0, 0);
+    feedback(null, page.body, 0, 0);
     sync();
   }
 
   const options = { capture: true, signal: hooks.signal };
-  window.addEventListener('pointerdown', event => {
+  const down = (event: PointerEvent) => {
     const element = hooks.selected();
     if (event.button || event.metaKey || event.ctrlKey || !hooks.enabled() || !element || event.composedPath().includes(hooks.host) || moveReason(element, shown(element))) return;
-    const rect = shown(element).getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
+    const rect = screenRect(shown(element)), at = clientPoint(event);
+    if (at.x < rect.left || at.x > rect.right || at.y < rect.top || at.y > rect.bottom) return;
     // Hold Design mode's selection until the press turns out to be a click.
     event.preventDefault();
     event.stopImmediatePropagation();
-    press = { x: event.clientX, y: event.clientY, id: event.pointerId };
-  }, options);
-  window.addEventListener('pointermove', event => {
+    press = { ...at, id: event.pointerId };
+  };
+  const move = (event: PointerEvent) => {
     const element = hooks.selected();
     if (!press || event.pointerId !== press.id || !element) return;
-    const dx = event.clientX - press.x, dy = event.clientY - press.y;
+    const at = clientPoint(event), dx = at.x - press.x, dy = at.y - press.y;
     if (!dragging && Math.hypot(dx, dy) < 4) return;
     event.stopImmediatePropagation();
     if (!dragging) { dragging = true; sync(); }
     hooks.drag([dx, dy]);
-    drop = dropAt(event.clientX, event.clientY, element);
-    feedback(drop, element, event.clientX, event.clientY);
-  }, options);
-  window.addEventListener('pointerup', event => {
+    drop = dropAt(at.x, at.y, element);
+    feedback(drop, element, at.x, at.y);
+  };
+  const up = (event: PointerEvent) => {
     const element = hooks.selected();
     if (!press || event.pointerId !== press.id) return;
-    const was = dragging, target = drop;
+    const was = dragging, target = drop, at = clientPoint(event);
     end();
-    if (!was) { if (element && shown(element) === element) hooks.pick(event.clientX, event.clientY); return; }
+    if (!was) { if (element && shown(element) === element) hooks.pick(at.x, at.y); return; }
     event.stopImmediatePropagation();
     const said = element && target && commit(element, target);
     if (said) hooks.announce(said);
-  }, options);
-  window.addEventListener('pointercancel', () => press && end(), options);
-  window.addEventListener('keydown', event => {
+  };
+  const cancel = () => press && end();
+  const escape = (event: KeyboardEvent) => {
     if (!dragging || event.key !== 'Escape') return;
     event.preventDefault();
     event.stopImmediatePropagation();
     end();
-  }, options);
+  };
+  // This window, and Frame's viewport iframe when it shows the page.
+  for (const [type, listener] of [['pointerdown', down], ['pointermove', move], ['pointerup', up], ['pointercancel', cancel], ['keydown', escape]] as const) {
+    window.addEventListener(type, listener as EventListener, options);
+    onFrame(type, listener, options, 'window');
+  }
   hooks.signal.addEventListener('abort', () => {
     observer.disconnect();
     cancelAnimationFrame(frame);
     detach();
-    document.adoptedStyleSheets = document.adoptedStyleSheets.filter(item => item !== sheet);
+    page.adoptedStyleSheets = page.adoptedStyleSheets.filter(item => item !== sheet);
   }, { once: true });
 
   return {

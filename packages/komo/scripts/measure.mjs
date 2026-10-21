@@ -190,7 +190,16 @@ await writeFile(
 // change and a move's origin in the selection colour (+2,194 measured on main 9652312: 232,968 -> 235,162). All in the
 // on-demand design comment chunk; initial +94 for the host's blocked reasons and the scrolling card.
 // 233,800 -> 236,050: both of the above together (235,806 measured).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 236_050)
+// 233,000 -> 233,200: geometry inside Frame's viewport iframe and frame.defaultMode (#167) on top of the
+// stage pan; 233,066 measured locally with both, plus ~100 for CI's measurement.
+// 233,200 -> 233,350: one-line Viewport / In place tooltips on the mode switch (233,231 measured on main
+// 418bc33 with this branch), plus ~100 for CI's measurement.
+// -> 233,400: #167 with #171 combined, 233,291 measured on main b9686c1, plus ~100 for CI's measurement.
+// 233,800 -> 234,000: Design mode keys (#170) and #167 with #171 together, 233,888 measured on main
+// 1a9efe3, plus ~100 for CI's measurement.
+// 236,050 -> 236,200: design proposals (#172), Design mode keys (#170) and #167 with #171 together,
+// 236,061 measured on main bc089fe, plus ~100 for CI's measurement.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 236_200)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -274,7 +283,9 @@ if (report.optionalTokenPage.gzip > 5_150)
 // only near the pointer or with focus and stepping back for the panel, fields and previews, overlay
 // peek/toggle with the visibility key and an eye button, and the first-use move hint (12,191 -> 13,483), plus ~3%.
 // 14,200: komo previews hold host motion and a lasting animation shows as a dot by the Layout title (+302: 13,736 -> 14,038 measured).
-if (report.optionalGeometry.gzip > 14_200)
+// 14,400: geometry also runs inside Frame's viewport iframe: page rects map through the frame, its keys,
+// scrolling and pointer reach the overlay, and moves adopt a sheet from the frame's realm (~+130 on top).
+if (report.optionalGeometry.gzip > 14_400)
   throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
 // API tokens load only when "API tokens" is opened in the Account panel; nothing else imports
 // the chunk. 5,671 measured, plus ~3%.

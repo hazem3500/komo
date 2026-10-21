@@ -227,6 +227,12 @@ export interface CommentsOptions {
     scale?: boolean;
     include?(element: HTMLElement): boolean;
     mode?: "iframe" | "transform";
+    /**
+     * With mode "iframe", where Frame starts until the reviewer picks Viewport or In
+     * place: "iframe" (the default) or "transform", which opens In place, so a second
+     * copy of the app loads only when the reviewer asks for Viewport.
+     */
+    defaultMode?: "iframe" | "transform";
     iframeUrl?(location: Location): string;
   };
   /**

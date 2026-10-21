@@ -745,11 +745,11 @@ export function initComments(options: CommentsOptions): CommentsController {
   // The last layout used the iframe, so this page was left untouched beneath it.
   let laidViewport = false;
   let viewportFailed = "";
-  let storedInPlace = false;
+  let storedInPlace = options.frame?.defaultMode === "transform";
   try {
     // Versioned like frame-size.ts's record; older entries mean the default.
     const stored = JSON.parse(localStorage.getItem(frameSizeKey) ?? "{}");
-    storedInPlace = stored.v === 2 && stored.inPlace === true;
+    storedInPlace = stored.v === 2 && typeof stored.inPlace === "boolean" ? stored.inPlace : options.frame?.defaultMode === "transform";
   } catch {
     /* Storage is blocked: viewport mode is the default. */
   }
@@ -836,7 +836,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         appliedViewport = "";
         scalePage();
         geometry();
-      }, frameView, viewportEnabled, {
+      }, frameView, viewportEnabled && (options.frame?.defaultMode === "transform" ? "transform" : "iframe"), {
         pan: schedulePan,
         // Switching to 100% keeps the open comment's target in view.
         anchor() {

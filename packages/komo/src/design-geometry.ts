@@ -1,3 +1,4 @@
+import { clientPoint, isElement, isHTMLElement, isSVGElement, onFrame, screenRect } from './frame-target.js';
 import { previewMessage, changePreviewStyles, inlineStyleSnapshot } from './design-preview.js';
 import { STILL } from './host-motion.js';
 import type { DesignTarget } from './design-target.js';
@@ -46,7 +47,7 @@ const FORM = 'input,select,textarea,button';
 const BASE = ['flex', 'flex-grow', 'flex-shrink', 'flex-basis', 'max-width', 'max-height', 'min-width', 'min-height'];
 
 const up = (node: Element) => node.parentElement ?? ((node.getRootNode() as ShadowRoot).host as Element | undefined) ?? null;
-const svgRoot = (element: Element) => element instanceof SVGSVGElement && !element.ownerSVGElement;
+const svgRoot = (element: Element) => element.localName === 'svg' && isSVGElement(element) && !(element as SVGSVGElement).ownerSVGElement;
 
 /** The parent whose layout places this box; `display: contents` wrappers are skipped. */
 function boxParent(element: Element) {
@@ -62,9 +63,10 @@ const SETTLE = 400;
 /** Why a box can't be previewed, or null. Each reason names the element's own problem. */
 export function geometryReason(element: Element | null): string | null {
   if (!element?.isConnected) return 'Select an element on the page.';
-  if (element === document.body || element === document.documentElement) return "The page root can't be moved or resized.";
-  if (element instanceof SVGElement && !svgRoot(element)) return "SVG shapes can't be moved or resized. Select the SVG root.";
-  if (!(element instanceof HTMLElement) && !svgRoot(element)) return 'Only HTML boxes and SVG roots can be moved or resized.';
+  const page = element.ownerDocument;
+  if (element === page.body || element === page.documentElement) return "The page root can't be moved or resized.";
+  if (isSVGElement(element) && !svgRoot(element)) return "SVG shapes can't be moved or resized. Select the SVG root.";
+  if (!isHTMLElement(element) && !svgRoot(element)) return 'Only HTML boxes and SVG roots can be moved or resized.';
   const css = getComputedStyle(element);
   const display = css.display;
   if (display === 'none') return 'display: none has no box';
@@ -73,10 +75,10 @@ export function geometryReason(element: Element | null): string | null {
   if (display.startsWith('table-')) return 'Table cells and rows size with their table. Select the table.';
   if (/ruby|math/.test(display)) return `display: ${display} boxes can't be moved or resized.`;
   const rects = element.getClientRects().length;
-  const box = element.getBoundingClientRect();
+  const box = screenRect(element);
   if (!rects || !box.width || !box.height) return 'This element has no rendered box.';
   if (rects > 1) return "Boxes split across lines or columns can't be previewed.";
-  for (let node: Element | null = element; node && node !== document.documentElement; node = up(node)) {
+  for (let node: Element | null = element; node && node !== page.documentElement; node = up(node)) {
     const style = getComputedStyle(node);
     const transform = style.transform && style.transform !== 'none' ? new DOMMatrix(style.transform) : null;
     const scale = !style.scale || style.scale === 'none' ? [1] : style.scale.split(/\s+/).map(Number);
@@ -93,7 +95,7 @@ export function geometryReason(element: Element | null): string | null {
 
 /** The nearest ancestor that can be moved and resized, for "Select parent". */
 export function eligibleAncestor(element: Element) {
-  for (let node = up(element); node && node !== document.body && node !== document.documentElement; node = up(node))
+  for (let node = up(element); node && node !== element.ownerDocument.body && node !== element.ownerDocument.documentElement; node = up(node))
     if (!geometryReason(node)) return node;
   return null;
 }
@@ -129,7 +131,7 @@ function tracks(container: Element, style: CSSStyleDeclaration, horizontal: bool
   const starts: number[] = [], ends: number[] = [];
   let at = 0;
   for (const size of sizes) { starts.push(at); ends.push(at + size); at += size + gap; }
-  const rect = container.getBoundingClientRect();
+  const rect = screenRect(container);
   const scale = (horizontal ? rect.width / (container as HTMLElement).offsetWidth : rect.height / (container as HTMLElement).offsetHeight) || 1;
   const origin = (horizontal ? rect.left : rect.top) + scale * sum(style, horizontal ? ['padding-left', 'border-left-width'] : ['padding-top', 'border-top-width']);
   return { starts, ends, gap, scale, origin, size: sizes.at(-1) ?? 0 };
@@ -209,14 +211,14 @@ function snapLines(element: Element, { parent, kind, row }: Layout, sx: number, 
   const x: Line[] = [], y: Line[] = [];
   if (!parent) return { x, y };
   const flow = kind === 'flow' || (kind === 'flex' && !row), across = kind !== 'flex' || !row;
-  const box = parent.getBoundingClientRect(), style = getComputedStyle(parent);
+  const box = screenRect(parent), style = getComputedStyle(parent);
   const left = box.left + sx * sum(style, ['padding-left', 'border-left-width']), right = box.right - sx * sum(style, ['padding-right', 'border-right-width']);
   const top = box.top + sy * sum(style, ['padding-top', 'border-top-width']), bottom = box.bottom - sy * sum(style, ['padding-bottom', 'border-bottom-width']);
   for (const at of [left, right, (left + right) / 2]) x.push({ at, from: box.top, to: box.bottom });
   // A parent stacking its children grows with them, so only its top edge holds still.
   for (const at of flow ? [top] : [top, bottom, (top + bottom) / 2]) y.push({ at, from: box.left, to: box.right });
   for (const child of [...parent.children].slice(0, 60)) {
-    const rect = child.getBoundingClientRect();
+    const rect = screenRect(child);
     if (child === element || (!rect.width && !rect.height)) continue;
     if (across) x.push({ at: rect.left, from: rect.top, to: rect.bottom }, { at: rect.right, from: rect.top, to: rect.bottom });
     if (!flow) y.push({ at: rect.top, from: rect.left, to: rect.right }, { at: rect.bottom, from: rect.left, to: rect.right });
@@ -405,11 +407,11 @@ export function bindGeometry(hooks: Hooks) {
     if (!hooks.enabled() || !element || geometryReason(element) || element === rejected) return;
     const info = boxInfo(element), { css, width, height, borderWidth, borderHeight, border, replaced, aspect, ratio } = info;
     if (!info.axes[kind === 2 ? 1 : 0] || !info.axes[kind === 1 ? 0 : 1]) return;
-    const rect = element.getBoundingClientRect();
+    const rect = screenRect(element);
     const layout = layoutOf(element);
     const snap = snapping && layout.kind === 'grid';
     const stretch: Gesture['stretch'] = {};
-    const parentStyle = layout.parentStyle, box = layout.parent?.getBoundingClientRect();
+    const parentStyle = layout.parentStyle, box = layout.parent && screenRect(layout.parent);
     const resolve = (self: string, items: string) => ['stretch', 'normal'].includes(self === 'auto' ? items : self) && !replaced && !aspect;
     const fills = (horizontal: boolean, extent: number) => Math.abs((horizontal ? rect.width + sum(css, ['margin-left', 'margin-right']) * rect.width / borderWidth : rect.height + sum(css, ['margin-top', 'margin-bottom']) * rect.height / borderHeight) - extent) < 1.5;
     let grid: Gesture['grid'];
@@ -526,7 +528,7 @@ export function bindGeometry(hooks: Hooks) {
       finish(true);
       return;
     }
-    let rect = element.getBoundingClientRect();
+    let rect = screenRect(element);
     // Layout decides which edge moves; snap whichever did, then measure again.
     const edges = (horizontal: boolean): Array<[number, number]> => horizontal
       ? [[rect.left, rect.left - start.left], [rect.right, rect.right - start.right]]
@@ -545,7 +547,7 @@ export function bindGeometry(hooks: Hooks) {
     const cx = correction(true), cy = correction(false);
     if (cx || cy) {
       run(dx + cx * current.ex, dy + cy * current.ey);
-      rect = element.getBoundingClientRect();
+      rect = screenRect(element);
     }
     guides.forEach((guide, index) => {
       const horizontal = !index;
@@ -610,7 +612,7 @@ export function bindGeometry(hooks: Hooks) {
     if (heading && eye.parentElement !== heading) heading.querySelector('.design-inspector__fold')?.before(eye);
     text.hidden = !text.textContent;
     note.hidden = text.hidden && parent.hidden && snap.hidden;
-    const rect = box.getBoundingClientRect();
+    const rect = screenRect(box);
     const bounds = hooks.options.bounds?.(box) ?? { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
     if (((reason || waiting) && still) || !visible || rect.right <= bounds.left || rect.left >= bounds.right || rect.bottom <= bounds.top || rect.top >= bounds.bottom) return;
     surface.setAttribute('data-on', '');
@@ -682,10 +684,10 @@ export function bindGeometry(hooks: Hooks) {
   // Capture before Design mode's document handler. On the canvas, M focuses the selection; there,
   // Alt + arrows move it between elements and Ctrl or ⌘ + arrows resize it from the bottom-right
   // (Shift for 10px), and Escape returns to the canvas. On the canvas, arrows keep selecting.
-  window.addEventListener('keydown', event => {
+  const keydown = (event: KeyboardEvent) => {
     const arrow = ARROWS[event.key], path = event.composedPath(), focused = path[0] === frame;
     const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
-    const typing = path.some(node => node instanceof Element && node.matches('input,textarea,select,[contenteditable]:not([contenteditable=false])'));
+    const typing = path.some(node => isElement(node) && node.matches('input,textarea,select,[contenteditable]:not([contenteditable=false])'));
     // In Design mode the comments visibility key hides the overlays: a tap toggles, a hold peeks.
     const key = visibility;
     if (key && !typing && hooks.options.host.classList.contains('design-active') && event.key.toLowerCase() === key.key
@@ -714,17 +716,21 @@ export function bindGeometry(hooks: Hooks) {
     // Snapping steps one track; otherwise one local CSS pixel, or ten with Shift.
     const step = gesture.snap ? (line!.size + line!.gap) * line!.scale : (event.shiftKey ? 10 : 1) * (kind === 1 ? gesture.sx : gesture.sy);
     apply(gesture.dx + arrow[0] * step, gesture.dy + arrow[1] * step);
-  }, { capture: true, signal: controller.signal });
+  };
+  window.addEventListener('keydown', keydown, { capture: true, signal: controller.signal });
+  onFrame('keydown', keydown, { capture: true, signal: controller.signal }, 'window');
   // macOS sends no arrow keyup while ⌘ is held, so releasing the modifier also commits.
-  window.addEventListener('keyup', event => {
+  const keyup = (event: KeyboardEvent) => {
     // Releasing the letter or any of the combo's modifiers ends a hold; macOS sends no letter keyup while ⌘ is down.
     if (held && visibility && (event.key.toLowerCase() === visibility.key || (({ Shift: visibility.shift, Alt: visibility.alt, Control: visibility.ctrl, Meta: visibility.meta }) as Record<string, boolean>)[event.key]))
       release(event.timeStamp);
     if (gesture?.keyboard && /^(Arrow|Control|Meta)/.test(event.key)) finish();
-  }, { capture: true, signal: controller.signal });
-  window.addEventListener('scroll', () => {
+  };
+  window.addEventListener('keyup', keyup, { capture: true, signal: controller.signal });
+  onFrame('keyup', keyup, { capture: true, signal: controller.signal }, 'window');
+  const scrolled = () => {
     if (gesture?.pointer !== undefined) {
-      const rect = gesture.element.getBoundingClientRect();
+      const rect = screenRect(gesture.element);
       const shiftX = rect.left - gesture.rect.left, shiftY = rect.top - gesture.rect.top;
       gesture.x += shiftX; gesture.y += shiftY;
       for (const key of ['left', 'right'] as const) gesture.start[key] += shiftX;
@@ -734,9 +740,13 @@ export function bindGeometry(hooks: Hooks) {
       apply(gesture.dx - shiftX, gesture.dy - shiftY);
     }
     render();
-  }, { capture: true, passive: true, signal: controller.signal });
-  window.addEventListener('pointermove', event => { point = { x: event.clientX, y: event.clientY }; over = event.composedPath(); later(); }, { capture: true, passive: true, signal: controller.signal });
-  for (const type of ['focusin', 'focusout']) window.addEventListener(type, later, { capture: true, signal: controller.signal });
+  };
+  const moved = (event: PointerEvent) => { point = clientPoint(event); over = event.composedPath(); later(); };
+  for (const [type, listener] of [['scroll', scrolled], ['pointermove', moved], ['focusin', later], ['focusout', later]] as const) {
+    const options = { capture: true, passive: type !== 'focusin' && type !== 'focusout', signal: controller.signal };
+    window.addEventListener(type, listener as EventListener, options);
+    onFrame(type, listener, options, 'window');
+  }
   // Focus leaving mid-hold never delivers the keyup, so it ends the peek too.
   window.addEventListener('blur', () => release(Infinity), { signal: controller.signal });
   document.addEventListener('visibilitychange', () => { if (document.hidden) release(Infinity); }, { signal: controller.signal });
