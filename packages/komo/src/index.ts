@@ -4230,6 +4230,9 @@ export function initComments(options: CommentsOptions): CommentsController {
           tip: tipFor,
           // The element can grow under the dialog; place it again once the change settles.
           onSwitch: () => positionDialog(),
+          // After never mixes with this reviewer's own Design mode previews.
+          blocked: () => !onThreadPage(thread) ? "Proposed on another page"
+            : designActive && shadow.querySelector<HTMLElement>(".design-inspector__compare")?.hidden === false ? "Send or reset your Design mode edits first" : undefined,
         });
       if (designModule) show(designModule);
       else void loadDesignComments().then(show);
@@ -6351,6 +6354,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   function checkPage() {
     if (destroyed || page() === lastPage) return;
     lastPage = page();
+    // A proposal previewed on the last route never stays behind on this one.
+    designModule?.resetDesignPreviews();
     designController?.clearSelection();
     designController?.setReturnAction(null);
     parkedDraft = null;
