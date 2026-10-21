@@ -262,7 +262,8 @@ if (report.optionalFrameViewport.gzip > 2_300)
 // In-row field controls (icon segments for text alignment and border style, weight samples,
 // unit suffixes) are fetched with the panel, like the select menu. 1,834 measured, plus ~3%.
 // 2,100: the font size row keeps its value beside a bound token's chip and trims its popup to the token list (1,834 -> 2,024), plus ~3%.
-if (report.optionalFieldControls.gzip > 2_100)
+// 2,400: every single-value numeric field (line height, letter spacing, gap, border width, and padding, margin and radius with one value) gets that row, with a chip sized to its token's name (2,024 -> 2,358), plus ~2%.
+if (report.optionalFieldControls.gzip > 2_400)
   throw new Error("komo's field controls chunk exceeds its gzip budget.");
 if (report.optionalLiveColors.gzip > 725)
   throw new Error("komo's live color field chunk exceeds its gzip budget.");

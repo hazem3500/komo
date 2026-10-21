@@ -20,6 +20,7 @@ main{min-height:100vh;box-sizing:border-box;padding:40px}
 #card{width:240px;padding:12px 16px;border:1px solid #888;border-radius:10px;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.25),inset 0 1px 0 #ffffff80;font-size:15px;line-height:1.4}
 [data-mode=dark] #card{background:#222}
 .radius-small{border-radius:8px}
+.size-tiny{width:8px}
 </style><main><p id="card">Example card text</p></main><script type="module" src="/entry.js"></script>`;
 
 const entry = (src: (path: string) => string) => `
@@ -31,6 +32,7 @@ const entry = (src: (path: string) => string) => `
     {path:'radius.small',type:'dimension',class:'radius-small',properties:['border-radius'],value:'8px',label:'Small'},
     {path:'shadow.soft',type:'shadow',class:'shadow-soft',properties:['box-shadow'],value:'0px 2px 4px #00000040',label:'Soft'},
     {path:'space.small',type:'dimension',class:'space-small',properties:['padding'],value:'8px',label:'Small'},
+    {path:'size.tiny',type:'dimension',class:'size-tiny',properties:['width'],value:'8px',label:'Tiny'},
     {path:'text.body',type:'dimension',class:'text-body',properties:['font-size'],value:'14px',label:'Body'},
     {path:'font.body',type:'fontFamily',class:'font-body',properties:['font-family'],value:'Georgia, serif',label:'Body'},
   ]});
@@ -139,44 +141,44 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("compact typed C
   it("scrubs, nudges and switches units live, keeps the visit as one history entry, and Escape restores", async () => {
     const { tab, errors } = await open(mode);
     const original = await style(tab);
-    const popup = await custom(tab, "border-radius");
+    const popup = await custom(tab, "width");
     expect(await tab.getByRole("button", { name: "Apply custom", exact: true }).count()).toBe(0);
     // The popup's own field: the inspector's field has the same name.
-    const value = tab.locator(".komo-tokens").getByRole("textbox", { name: "Corner radius", exact: true });
+    const value = tab.locator(".komo-tokens").getByRole("textbox", { name: "Width", exact: true });
     const label = popup.locator(".komo-typed__field > span").first();
     const at = (await label.boundingBox())!;
     await tab.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
     await tab.mouse.down();
     for (const dx of [6, 12, 20]) await tab.mouse.move(at.x + at.width / 2 + dx, at.y + at.height / 2);
-    expect(await card(tab).evaluate(node => node.style.borderRadius)).toBe("20px");
+    expect(await card(tab).evaluate(node => node.style.width)).toBe("250px");
     expect(await undo(tab).isDisabled()).toBe(true);
     await tab.mouse.up();
     expect(await undo(tab).isDisabled()).toBe(false);
     await value.press("ArrowUp");
     await value.press("Shift+ArrowUp");
-    expect(await value.inputValue()).toBe("31");
-    await popup.getByRole("combobox", { name: "Corner radius unit", exact: true }).selectOption("rem");
-    expect(await card(tab).evaluate(node => node.style.borderRadius)).toBe("31rem");
-    await close(tab, "border-radius");
+    expect(await value.inputValue()).toBe("261");
+    await popup.getByRole("combobox", { name: "Width unit", exact: true }).selectOption("rem");
+    expect(await card(tab).evaluate(node => node.style.width)).toBe("261rem");
+    await close(tab, "width");
     expect(await entries(tab)).toBe(1);
     expect(await style(tab)).toBe(original);
 
-    await custom(tab, "border-radius");
+    await custom(tab, "width");
     await value.fill("4");
     await value.press("Enter");
     await value.press("ArrowDown");
-    expect(await card(tab).evaluate(node => node.style.borderRadius)).toBe("3px");
+    expect(await card(tab).evaluate(node => node.style.width)).toBe("3px");
     await tab.keyboard.press("Escape");
     await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
     expect(await style(tab)).toBe(original);
     expect(await undo(tab).isDisabled()).toBe(true);
     // Typing a value equal to a token keeps the literal: the field stays custom.
-    await custom(tab, "border-radius");
+    await custom(tab, "width");
     await value.fill("8");
     await value.press("Enter");
-    await close(tab, "border-radius");
-    expect(await tab.locator('[data-field-property="border-radius"]').getAttribute("data-token-mode")).toBe("custom");
-    expect(await card(tab).evaluate(node => [node.className, node.style.borderRadius])).toEqual(["", "8px"]);
+    await close(tab, "width");
+    expect(await tab.locator('[data-field-property="width"]').getAttribute("data-token-mode")).toBe("custom");
+    expect(await card(tab).evaluate(node => [node.className, node.style.width])).toEqual(["", "8px"]);
     expect(await entries(tab)).toBe(1);
     expect(errors).toEqual([]);
     await tab.close();
@@ -225,7 +227,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("compact typed C
   it.each([{ width: 1280, height: 800 }, { width: 390, height: 844 }])("sizes every editor to its content, keeps each control reachable and Tab inside, at $width px", async viewport => {
     const { tab, errors } = await open(mode, viewport);
     // Font size edits its value in the row; its popup is the token list (font-size-row-e2e).
-    for (const property of ["box-shadow", "padding", "border-radius", "font-family"]) {
+    for (const property of ["box-shadow", "padding", "width", "font-family"]) {
       const popup = await custom(tab, property);
       const box = (await popup.boundingBox())!, field = (await tab.locator(`[data-field-property="${property}"]`).boundingBox())!;
       // One width for every Custom editor, colors included.

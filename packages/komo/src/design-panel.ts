@@ -173,7 +173,8 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
     if (field.glyph.length > 1) glyph.innerHTML = `<svg viewBox="0 0 12 12"><path d="${field.glyph}"/></svg>`;
     else glyph.textContent = field.glyph;
     // The icon and the field's name both scrub; a click on the name still focuses the field.
-    label.style.cursor = "ew-resize";
+    // Like the icon: a touch drag on the name scrubs instead of scrolling the panel.
+    label.style.cssText += ";cursor:ew-resize;user-select:none;touch-action:none";
     for (const handle of [glyph, label]) handle.addEventListener("pointerdown", (event) => {
       if (event.button) return;
       event.preventDefault();

@@ -34,7 +34,7 @@ beforeAll(async () => {
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
     if (path === "/") {
       response.setHeader("content-type", "text/html");
-      response.end(`<style>body{margin:0;font:14px system-ui}main{min-height:100vh;box-sizing:border-box;padding:60px}#card{width:240px;padding:16px;border:1px solid #888;border-radius:10px;color:#2b6061}</style><main><p id="card">Example card text</p></main><script type="module" src="/entry.js"></script>`);
+      response.end(`<style>body{margin:0;font:14px system-ui}main{min-height:100vh;box-sizing:border-box;padding:60px}#card{width:240px;padding:16px;border:1px solid #888;border-radius:10px 12px;color:#2b6061}</style><main><p id="card">Example card text</p></main><script type="module" src="/entry.js"></script>`);
       return;
     }
     try {
@@ -121,7 +121,7 @@ describe.skipIf(!chrome).each([{ width: 1280, height: 860 }, { width: 390, heigh
     await tab.keyboard.press("Escape");
     await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
 
-    // A unit select inside the Custom popup.
+    // A unit select inside the Custom popup: two radii keep the per-corner editor.
     const radius = tab.locator('[data-field-property="border-radius"]');
     await radius.scrollIntoViewIfNeeded();
     await settle(tab);
