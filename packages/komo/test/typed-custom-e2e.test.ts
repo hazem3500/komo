@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find((path): path is string => !!path && existsSync(path));
 let directory: string, origin: string, server: Server, browser: Browser;
 const evidence = process.env.KOMO_TYPED_EVIDENCE;
@@ -53,7 +54,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     page.setDefaultTimeout(5000);
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d"); await page.locator("#target").click();
+    await openDesign(page); await page.locator("#target").click();
     const target = page.locator("#target"), undo = page.locator('.design-inspector__actions [aria-label="Undo"]');
     const original = await target.getAttribute("style");
     let opened = "";
@@ -120,7 +121,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.getByRole("button", { name: "After", exact: true }).click();
     expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
     await page.keyboard.press("v"); expect(await target.getAttribute("style")).toBe(original);
-    await page.keyboard.press("d");
+    await openDesign(page);
     expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
     // Layout is a keyword field: its own listbox applies; its token chip lists tokens only.
     await page.locator('[data-field-property="display"] > select').click();
@@ -166,7 +167,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await expect.poll(() => target.evaluate(node => node.style.boxShadow)).not.toBe("");
     await page.keyboard.press("Escape");
     await expect.poll(() => target.getAttribute("style")).toBe(original);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await open("width");
     await number.fill("1");
     await page.locator('.komo-custom select[aria-label="Width unit"]').selectOption("rem");
@@ -181,7 +182,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
     await page.goto(`${origin}/?mode=${mode}&inline`); await page.waitForFunction(() => !!(window as any).komo);
     const target = page.locator("#target"), original = await target.getAttribute("style");
-    await page.keyboard.press("d"); await target.click();
+    await openDesign(page); await target.click();
     const open = async () => {
       await page.locator('[data-field-property="width"] select[data-picker]').click();
       await page.locator(".komo-tokens").waitFor(); if (await page.locator(".komo-tokens__more").isVisible()) await page.locator(".komo-tokens__more").click();
@@ -200,7 +201,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(5000);
     await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d"); await page.locator("#target").click();
+    await openDesign(page); await page.locator("#target").click();
     await page.locator('[data-field-property="width"] select[data-picker]').click();
     await page.locator(".komo-tokens").waitFor(); if (await page.locator(".komo-tokens__more").isVisible()) await page.locator(".komo-tokens__more").click();
     const unit = page.locator('.komo-custom select[aria-label="Width unit"]');

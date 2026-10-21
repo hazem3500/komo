@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -86,7 +87,7 @@ async function open(query = "", viewport = { width: 1280, height: 900 }) {
   page.setDefaultTimeout(5000);
   await page.goto(`${origin}/?${query}`);
   await page.waitForFunction(() => !!(window as any).komo);
-  await page.keyboard.press("d");
+  await openDesign(page);
   return { page, errors };
 }
 async function pick(page: Page, id: string) {
@@ -176,7 +177,7 @@ describe.skipIf(!chrome)("geometry polish", () => {
       expect((await overlay(page)).color).toBe("rgb(229, 53, 155)");
       await page.goto(`${origin}/?color=rgb(255,100,0)`);
       await page.waitForFunction(() => !!(window as any).komo);
-      await page.keyboard.press("d");
+      await openDesign(page);
       await pick(page, "card");
       await page.locator("#card").hover();
       const { color, squares } = await overlay(page);

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // The header theme control in real Chrome, in the Design panel and the Tokens view: one
 // light/dark axis is a sun/moon switch, two other options a two-segment switch, more
@@ -82,7 +83,7 @@ async function open(themes: string, layout = "floating", viewport = { width: 128
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(`${origin}/?themes=${themes}&layout=${layout}`);
   await page.waitForFunction(() => !!(window as any).komo);
-  await page.keyboard.press("d");
+  await openDesign(page);
   await page.getByRole("button", { name: "Edit tokens", exact: true }).waitFor();
   return { page, errors };
 }

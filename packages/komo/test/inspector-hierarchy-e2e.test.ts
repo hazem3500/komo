@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // KOMO_SCREENSHOTS=<label> writes inspector screenshots to <os tmpdir>/komo-inspector-hierarchy/<label>.
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
@@ -138,7 +139,7 @@ async function open(mode: string, query: string, viewport = { width: 1280, heigh
   await page.waitForFunction(() => !!(window as any).komo);
   const target = page.locator("#app > *").first();
   await target.waitFor();
-  await page.keyboard.press("d");
+  await openDesign(page);
   await target.click();
   await page.locator(".design-inspector .design-group").first().waitFor();
   return page;
@@ -149,8 +150,7 @@ async function composer(mode: string, query: string, viewport = { width: 1280, h
   page.setDefaultTimeout(5000);
   await page.goto(`${origin}/card?mode=${mode}&${query}`);
   await page.waitForFunction(() => !!(window as any).komo);
-  await page.keyboard.press("d");
-  await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+  await openDesign(page);
   await page.locator("#target").click({ position: { x: 5, y: 5 } });
   await page.getByRole("button", { name: "Edit selected text inline", exact: true }).click();
   await page.locator('#target[contenteditable="true"]').waitFor();

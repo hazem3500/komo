@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Frame, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -245,8 +246,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     for (const zoom of ["Fit", "100%"]) {
       await page.getByRole("button", { name: zoom, exact: true }).click();
       await page.waitForTimeout(200);
-      await page.keyboard.press("d");
-      await page.waitForSelector('.design-inspector[aria-hidden="false"]');
+      await openDesign(page);
       const card = await framed(page, "card-2");
       await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2);
       await page.waitForTimeout(150);
@@ -269,7 +269,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
       await page.waitForTimeout(200);
     }
     // The Tokens view previews page-wide inside the frame, not on this page.
-    await page.keyboard.press("d");
+    await openDesign(page);
     // Re-entry brings the last selection back; a press on the backdrop around the frame deselects.
     await expect.poll(() => page.locator(".design-inspector__target").textContent()).toContain("div#card-2");
     await page.getByRole("button", { name: "Fit", exact: true }).click();
@@ -345,8 +345,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     for (const zoom of ["Fit", "100%"]) {
       await page.getByRole("button", { name: zoom, exact: true }).click();
       await page.waitForTimeout(200);
-      await page.keyboard.press("d");
-      await page.waitForSelector('.design-inspector[aria-hidden="false"]');
+      await openDesign(page);
       const card = await framed(page, "card-2");
       await page.mouse.click(card.x + card.width / 2, card.y + card.height / 2);
       await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2 + 4);

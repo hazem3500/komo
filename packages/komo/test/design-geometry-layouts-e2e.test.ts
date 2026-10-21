@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -90,7 +91,7 @@ async function open(mode: string) {
   page.setDefaultTimeout(5000);
   await page.goto(`${origin}/?${mode}`);
   await page.waitForFunction(() => !!(window as any).komo);
-  await page.keyboard.press("d");
+  await openDesign(page);
   return { page, errors };
 }
 
@@ -186,7 +187,7 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
       }
       await page.keyboard.press("d");
       for (const [id, attribute] of Object.entries(attributes)) expect(await page.locator(`#${id}`).getAttribute("style"), `${id} suspended`).toBe(attribute);
-      await page.keyboard.press("d");
+      await openDesign(page);
       expect(await page.locator("#cell").getAttribute("style")).not.toBe(attributes.cell);
       await page.evaluate(() => (window as any).komo.destroy());
       for (const [id, attribute] of Object.entries(attributes)) expect(await page.locator(`#${id}`).getAttribute("style"), `${id} destroy`).toBe(attribute);
@@ -271,7 +272,7 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
         await drag(page, name, dx, dy);
       }
       await page.locator(".design-inspector__close").click();
-      await page.keyboard.press("d");
+      await openDesign(page);
       await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy changes", exact: true }).click();
       const text = await page.evaluate(() => navigator.clipboard.readText());
       expect(text).toMatch(/Proposed geometry changes \(preview only\)\nTarget: #badge\nLayout: position: relative\n- Resize \(size\) width: [\d.]+px → [\d.]+px/);

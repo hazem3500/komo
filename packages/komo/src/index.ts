@@ -6014,8 +6014,9 @@ export function initComments(options: CommentsOptions): CommentsController {
             },
           });
           // The inspector opens once its controls and selection keys have loaded, so an
-          // Enter or Space pressed on the open inspector is never dropped.
-          return controller.ready.then(() => {
+          // Enter or Space pressed on the open inspector is never dropped. A slow network
+          // delays it by 2s at most; the controls then fill in as they arrive.
+          return Promise.race([controller.ready, new Promise(resolve => setTimeout(resolve, 2e3))]).then(() => {
             if (destroyed) {
               controller.destroy();
               return null;

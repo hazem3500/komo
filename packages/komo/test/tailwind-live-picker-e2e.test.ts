@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // An open token picker follows the page's stylesheets in real Chrome: a utility whose
 // rule arrives in a late <style> (as a dev server's CSS update does) joins the open list.
@@ -67,7 +68,7 @@ describe.skipIf(!chrome)("onlyGenerated Tailwind picker in Chrome", () => {
     await page.waitForFunction(() => !!(window as any).komo);
     const target = page.locator("#target");
     const color = () => target.evaluate(node => getComputedStyle(node).color);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await target.click();
     const trigger = page.locator('[data-field-property="color"] select[data-picker]');
     await trigger.waitFor();

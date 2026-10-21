@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // The pending changes card in real Chrome, on a light and a dark page: nothing pending, one
 // change, then several elements plus a token. Rows outline and select their element, Discard all
@@ -112,7 +113,7 @@ describe.skipIf(!chrome).each(["light", "dark"])("pending changes card on a %s p
     };
 
     // Nothing pending: the empty state only.
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.locator(".design-inspector__empty").waitFor();
     expect(await card.isHidden()).toBe(true);
     await shot("pending-card-0");
@@ -140,7 +141,7 @@ describe.skipIf(!chrome).each(["light", "dark"])("pending changes card on a %s p
     await page.locator(".komo-color").waitFor({ state: "detached" });
     // Leaving and re-entering Design mode keeps every preview pending and shows the card.
     await page.keyboard.press("Escape");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await card.waitFor();
     expect(await heading.textContent()).toBe("4 unsaved changes");
     expect(await rows.evaluateAll(nodes => nodes.map(node => [node.getAttribute("aria-label"), (node as HTMLElement).dataset.kind])))
