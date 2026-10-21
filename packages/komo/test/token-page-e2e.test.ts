@@ -95,10 +95,11 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
         await page.locator(".komo-color").waitFor({ state: "detached" });
       }
     };
+    // The Tokens header shows one light/dark switch: one click flips it.
     const theme = async (label: string) => {
-      const switcher = page.locator(".design-theme-switch");
-      if ((await switcher.getAttribute("open")) === null) await switcher.locator("summary").click();
-      await switcher.getByRole("button", { name: label, exact: true }).click();
+      const toggle = page.locator(".design-inspector__heading .design-theme-toggle");
+      await toggle.click();
+      await expect.poll(() => toggle.getAttribute("aria-label")).toBe(`Theme: ${label}`);
     };
 
     await page.keyboard.press("d");

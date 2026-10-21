@@ -40,6 +40,7 @@ const baselines = new WeakMap<Element, Map<string, {
 }>>();
 let suspendedCustoms = new Map<Element, Map<string, ReturnType<typeof inlineStyleSnapshot>>>();
 const lists = new WeakMap<TokenAdapter, Map<string, Promise<DesignToken[]>>>();
+const reported = new WeakMap<TokenAdapter, Map<string, Promise<DesignToken[]>> | undefined>();
 let showingBefore = false;
 
 function removeCustom(element: Element, property: string) {
@@ -171,8 +172,8 @@ export function watchThemes(design: DesignSystem | undefined, document: Document
 
 /**
  * Run `update` after an adapter with `subscribe()` reports a new token set, until
- * `signal` aborts. Each report drops the adapter's cached lists. Adapters without
- * `subscribe()` cost nothing.
+ * `signal` aborts. Each report drops the adapter's cached lists and updates only when a list
+ * changed. Adapters without `subscribe()` cost nothing.
  */
 export function watchTokenList(adapter: TokenAdapter | undefined, update: () => void, signal: AbortSignal): void {
   if (!adapter?.subscribe || signal.aborted) return;
@@ -180,8 +181,15 @@ export function watchTokenList(adapter: TokenAdapter | undefined, update: () => 
   lists.delete(adapter);
   try {
     const stop = adapter.subscribe(() => {
+      // Only a list that changed refreshes, so a report caused by komo's own previews keeps open
+      // popups and rows. Every watcher of one report compares with the lists from before it.
+      const before = reported.get(adapter) ?? lists.get(adapter);
+      reported.set(adapter, before);
+      queueMicrotask(() => reported.delete(adapter));
       lists.delete(adapter);
-      update();
+      void Promise.all([...before ?? []].map(([key, list]) => Promise.all([list, listTokens(adapter, Object.fromEntries(JSON.parse(key)))])
+        .then(([old, next]) => JSON.stringify(old) === JSON.stringify(next))))
+        .then(same => same.length && same.every(Boolean) || update(), update);
     });
     signal.addEventListener("abort", () => { try { stop(); } catch { /* Ignore a failing unsubscribe. */ } }, { once: true });
   } catch { /* An adapter whose subscribe() throws keeps its cached lists. */ }

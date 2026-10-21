@@ -128,13 +128,11 @@ describe.skipIf(!chrome).each([18, 19] as const)("react-fiber adapter in the dem
     await page.waitForFunction(() => document.querySelector(".team-badge strong")?.textContent === "Design systems");
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     await page.waitForFunction(() => document.querySelector(".team-badge strong")?.textContent === "Runtime preview");
-    await page.locator('.design-theme-switch > summary').click();
-    await page.locator(".design-theme-options").getByRole("button", { name: "Dark", exact: true }).click();
+    // A light/dark pair is one click, and focus stays on the switch through the re-render.
+    await page.getByRole("switch", { name: "Theme: Light", exact: true }).click();
     await page.waitForFunction(() => document.documentElement.dataset.mode === "dark");
-    await page.keyboard.press("Escape");
     expect(await page.locator(".design-inspector").getAttribute("aria-hidden")).toBe("false");
-    expect(await page.locator(".design-theme-switch").getAttribute("open")).toBeNull();
-    expect(await page.locator('.design-theme-switch > summary').evaluate(node => node.getRootNode() instanceof ShadowRoot && (node.getRootNode() as ShadowRoot).activeElement === node)).toBe(true);
+    expect(await page.locator(".design-theme-toggle").evaluate(node => node.getRootNode() instanceof ShadowRoot && (node.getRootNode() as ShadowRoot).activeElement === node && node.getAttribute("aria-label") === "Theme: Dark")).toBe(true);
     if (frame) expect(await page.locator("#root").evaluate(node => node.getBoundingClientRect().width)).toBeCloseTo(852);
     await page.getByRole("button", { name: "Reset", exact: true }).click();
     await page.getByRole("button", { name: "Exit design mode", exact: true }).click();

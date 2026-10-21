@@ -140,7 +140,7 @@ export function attachDesignSystemControls(
 const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
 // React props, inline token chips and shared theme values, in the inspector's compact field style.
-const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-inside{padding:10px 12px}.design-react-inside button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-react-inside button:hover{text-decoration:underline}.design-react-field.design-field{display:grid;grid-template-columns:88px minmax(0,1fr);align-items:center;gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;justify-self:start;width:auto;min-width:72px;max-width:100%;field-sizing:content;height:28px;padding:0 8px;border:0;border-radius:6px;background-color:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field.design-field>select{padding-right:20px}.design-react-field.design-field>input[type=text]{min-width:120px}.design-react-field.design-field>input[type=number]{width:80px;field-sizing:fixed}.design-react-field.design-field>.design-react-switch{position:relative;appearance:none;width:28px;min-width:0;height:16px;margin:0;padding:0;border-radius:8px;background:#ffffff24;cursor:pointer;transition:background-color .15s}.design-react-switch::before{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#d9d6d1;transition:translate .15s var(--ease-smooth-out,ease)}.design-react-field.design-field>.design-react-switch:checked{background:#bda6ef}.design-react-switch:checked::before{translate:12px;background:#1b1a1c}.design-react-switch[data-unset]::before{translate:6px;opacity:.45}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 6px center/8px no-repeat;color:#e9e6e1;padding:0 18px 0 6px;font:inherit;font-size:10px;cursor:pointer}.design-react-field .design-token-binding[data-mode=token] select{background-color:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-token-off{position:absolute;top:8px;right:24px;display:grid;place-items:center;width:12px;height:12px}.design-token-off::before{content:'';width:4px;height:4px;border-radius:50%;background:#e7c27d;opacity:.7}.design-token-off[hidden]{display:none}.design-field:has(>.design-token-binding>.design-token-off:not([hidden]))>input[data-property]{padding-right:38px}.design-theme-switch{padding:6px 12px 8px}.design-theme-switch .design-react-field>span{text-transform:capitalize}.design-theme-options{display:flex;min-width:0;padding:2px;border-radius:6px;background:#ffffff0a}.design-theme-options button{flex:1;min-width:0;height:24px;padding:0 6px;border:0;border-radius:4px;background:none;color:#898680;font:inherit;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.design-theme-options button:hover{color:#f1efeb}.design-theme-options button[aria-pressed=true]{background:#ffffff1a;color:#f1efeb}.design-theme-options button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}@media (max-width:520px){.design-theme-options button{height:30px}.design-react-field.design-field>:is(input,select){height:34px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{top:7px}.design-token-off{top:11px}}.design-react-row{display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:4px}.design-react-row>.design-react-field{min-width:0;margin-top:4px}.design-react-row>.design-theme-reset{flex:none;width:28px;height:28px;margin-top:4px}.design-react-row>.design-theme-reset[hidden]{display:none}.design-react-group{position:relative}.design-react-group>summary{padding-right:32px}.design-react-group[data-empty]{padding-bottom:0}.design-react-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-status{flex:none;margin-left:4px;padding:1px 5px;border-radius:4px;background:#ffffff0f;color:#898680;font-size:10px;font-weight:500}.design-react-group>.komo-source{position:absolute;z-index:3;top:6px;right:8px}.design-react-switch:focus-visible{outline:1px solid #bda6ef;outline-offset:1px}.design-react-advanced{margin-top:10px}.design-react-advanced>summary{color:#898680;font-size:11px;cursor:pointer}.design-react-field.design-field>input[readonly]{width:100%;min-width:0;padding:0;background:none;color:#c9c5bf;cursor:text}@media(max-width:520px){.design-react-row .design-react-field>:is(input,select){height:36px}.design-react-row>.design-theme-reset{width:32px;height:32px}.design-react-group>.komo-source{top:2px}}.design-theme-switch{position:relative;flex:none;padding:0}.design-theme-switch>summary{display:flex;align-items:center;gap:5px;max-width:90px;min-height:28px;padding:0 8px;border-radius:7px;background:#ffffff08;color:#b7b1c2;font-size:11px;list-style:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.design-theme-switch>summary::-webkit-details-marker{display:none}.design-theme-switch>summary::after{content:"⌄";color:#77736f}.design-theme-switch[open]>summary,.design-theme-switch>summary:hover{background:#ffffff14;color:#f1efeb}.design-theme-popup{position:absolute;z-index:12;top:calc(100% + 6px);right:0;box-sizing:border-box;width:min(280px,calc(100vw - 48px));max-height:50dvh;overflow:auto;padding:10px 12px;border:1px solid #ffffff1a;border-radius:10px;background:#191819;box-shadow:0 12px 40px #0008}.design-theme-popup .design-react-field{grid-template-columns:68px minmax(0,1fr)}.design-theme-popup .design-react-field+ .design-react-field{margin-top:8px}`;
+const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-inside{padding:10px 12px}.design-react-inside button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-react-inside button:hover{text-decoration:underline}.design-react-field.design-field{display:grid;grid-template-columns:clamp(56px,24%,80px) minmax(0,1fr);align-items:center;gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 8px;border:0;border-radius:6px;background-color:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field.design-field>select{padding-right:20px}.design-react-field.design-field>.design-react-switch{position:relative;justify-self:start;appearance:none;width:28px;min-width:0;height:16px;margin:0;padding:0;border-radius:8px;background:#ffffff24;cursor:pointer;transition:background-color .15s}.design-react-switch::before{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#d9d6d1;transition:translate .15s var(--ease-smooth-out,ease)}.design-react-field.design-field>.design-react-switch:checked{background:#bda6ef}.design-react-switch:checked::before{translate:12px;background:#1b1a1c}.design-react-switch[data-unset]::before{translate:6px;opacity:.45}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field.design-field>.design-token-binding{display:grid}.design-react-field.design-field>.design-token-binding select{position:static;width:auto;height:24px;padding:0 18px 0 6px;box-shadow:none;opacity:1}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 6px center/8px no-repeat;color:#e9e6e1;padding:0 18px 0 6px;font:inherit;font-size:10px;cursor:pointer}.design-react-field .design-token-binding[data-mode=token] select{background-color:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-token-off{position:absolute;top:8px;right:24px;display:grid;place-items:center;width:12px;height:12px}.design-token-off::before{content:'';width:4px;height:4px;border-radius:50%;background:#e7c27d;opacity:.7}.design-token-off[hidden]{display:none}.design-field:has(>.design-token-binding>.design-token-off:not([hidden]))>input[data-property]{padding-right:38px}.design-theme-switch{padding:6px 12px 8px}.design-theme-switch .design-react-field>span{text-transform:capitalize}.design-theme-options{display:flex;min-width:0;padding:2px;border-radius:6px;background:#ffffff0a}.design-theme-options button{flex:1;min-width:0;height:24px;padding:0 6px;border:0;border-radius:4px;background:none;color:#898680;font:inherit;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.design-theme-options button:hover{color:#f1efeb}.design-theme-options button[aria-pressed=true]{background:#ffffff1a;color:#f1efeb}.design-theme-options button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}@media (max-width:520px){.design-theme-options button{height:30px}.design-react-field.design-field>:is(input,select){height:34px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{top:7px}.design-token-off{top:11px}}.design-react-row{display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:4px}.design-react-row>.design-react-field{min-width:0;margin-top:4px}.design-react-row>.design-theme-reset{flex:none;width:28px;height:28px;margin-top:4px}.design-react-row>.design-theme-reset[hidden]{display:none}.design-react-group{position:relative}.design-react-group>summary{padding-right:32px}.design-react-group[data-empty]{padding-bottom:0}.design-react-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-status{flex:none;margin-left:4px;padding:1px 5px;border-radius:4px;background:#ffffff0f;color:#898680;font-size:10px;font-weight:500}.design-react-group>.komo-source{position:absolute;z-index:3;top:6px;right:8px}.design-react-switch:focus-visible{outline:1px solid #bda6ef;outline-offset:1px}.design-react-advanced{margin-top:10px}.design-react-advanced>summary{color:#898680;font-size:11px;cursor:pointer}.design-react-field.design-field>input[readonly]{width:100%;min-width:0;padding:0;background:none;color:#c9c5bf;cursor:text}@media(max-width:520px){.design-react-row .design-react-field>:is(input,select){height:36px}.design-react-row>.design-theme-reset{width:32px;height:32px}.design-react-group>.komo-source{top:2px}}.design-theme-switch{position:relative;flex:none;padding:0}.design-theme-switch>summary{display:flex;align-items:center;gap:5px;max-width:90px;min-height:28px;padding:0 8px;border-radius:7px;background:#ffffff08;color:#b7b1c2;font-size:11px;list-style:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.design-theme-switch>summary::-webkit-details-marker{display:none}.design-theme-switch>summary::after{content:"⌄";color:#77736f}.design-theme-switch[open]>summary,.design-theme-switch>summary:hover{background:#ffffff14;color:#f1efeb}.design-theme-popup{position:absolute;z-index:12;top:calc(100% + 6px);right:0;box-sizing:border-box;width:min(280px,calc(100vw - 48px));max-height:50dvh;overflow:auto;padding:10px 12px;border:1px solid #ffffff1a;border-radius:10px;background:#191819;box-shadow:0 12px 40px #0008}.design-theme-popup .design-react-field{grid-template-columns:68px minmax(0,1fr)}.design-theme-popup .design-react-field+ .design-react-field{margin-top:8px}.design-theme-toggle{flex:none;display:flex;align-items:center;min-width:28px;height:28px;padding:0;border:0;border-radius:7px;background:none;color:#909090;font:inherit;font-size:11px}.design-theme-toggle:hover{background:#161616;color:#eee}.design-theme-toggle>svg{width:16px;height:16px;margin:auto;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-theme-toggle:has(span){padding:2px;background:#ffffff0a}.design-theme-toggle span{max-width:72px;padding:0 6px;border-radius:5px;line-height:24px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-theme-toggle[data-on="0"] span:first-child,.design-theme-toggle[data-on="1"] span:last-child{background:#ffffff1a;color:#f1efeb}`;
 // The token picker's "Matches … · Use token" suggestion under an off-token field.
 const matchStyles = `.design-token-match{grid-column:1/-1;display:flex;align-items:center;gap:6px;min-width:0;margin-top:-2px;padding:0 4px;color:#77736f;font-size:10px}.design-token-match[hidden]{display:none}.design-token-match>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-token-match button{flex:none;padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-token-match button:hover{text-decoration:underline}.design-token-match button:focus-visible{outline:1px solid #bda6ef;outline-offset:2px;border-radius:2px}@media (pointer:coarse){.design-token-match button{min-height:32px}}`;
 
@@ -1011,8 +1011,9 @@ export function resetPreviews(): void {
 const themeOriginals = new Map<ThemeAxis, string>();
 /** The axis whose control had focus, so a re-render can hand focus back to it. */
 let themeFocus: ThemeAxis | undefined;
-const themeClosers = new WeakMap<HTMLDetailsElement, () => void>();
+const themeClosers = new WeakMap<HTMLElement, () => void>();
 const themeWatched = new WeakSet<AbortSignal>();
+const themeControl = ".design-theme-switch,.design-theme-toggle";
 
 function currentTheme(axis: ThemeAxis): string | undefined {
   try { return String(axis.current()); } catch { return undefined; }
@@ -1023,18 +1024,49 @@ export function restoreThemes(container?: HTMLElement): void {
   for (const [axis, id] of themeOriginals)
     try { if (currentTheme(axis) !== id) axis.apply(id); } catch { /* An adapter that throws keeps its state. */ }
   themeOriginals.clear();
-  const menu = container?.querySelector<HTMLDetailsElement>(".design-theme-switch");
-  if (menu) { themeClosers.get(menu)?.(); menu.remove(); }
+  const control = container?.querySelector<HTMLElement>(themeControl);
+  if (control) { themeClosers.get(control)?.(); control.remove(); }
 }
 
 const titled = (label: string | undefined, id: string) => label || id.charAt(0).toUpperCase() + id.slice(1);
+const sun = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.75"/><path d="M8 1.75v1.5m0 9.5v1.5M1.75 8h1.5m9.5 0h1.5M3.6 3.6l1 1m6.8 6.8 1 1m-8.8 0 1-1m6.8-6.8 1-1"/></svg>';
+const moon = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.25 9.6A5.5 5.5 0 1 1 6.4 2.75a4.4 4.4 0 0 0 6.85 6.85Z"/></svg>';
+
+/** The header's komo tooltip, below the control: after a short hover, or at once on keyboard focus. */
+function headerTip(control: HTMLElement, root: ShadowRoot | undefined, signal: AbortSignal): () => void {
+  const tip = el("div", "morphing-menu__tooltip sidebar-tooltip");
+  tip.setAttribute("aria-hidden", "true");
+  let timer = 0;
+  const hide = () => { clearTimeout(timer); delete tip.dataset.open; };
+  const place = () => {
+    if (!control.isConnected) return hide();
+    tip.textContent = control.dataset.tip ?? "";
+    const box = control.getBoundingClientRect(), half = tip.offsetWidth / 2;
+    tip.style.left = `${Math.max(8 + half, Math.min(innerWidth - 8 - half, box.left + box.width / 2))}px`;
+    tip.style.top = `${box.bottom + 8}px`;
+    tip.dataset.open = "";
+  };
+  const show = (event: Event) => {
+    if (event.type === "focusin" && !control.matches(":focus-visible")) return;
+    clearTimeout(timer);
+    timer = window.setTimeout(place, event.type === "focusin" ? 0 : 400);
+  };
+  (root ?? control.ownerDocument.body).append(tip);
+  control.addEventListener("pointerenter", show, { signal });
+  control.addEventListener("focusin", show, { signal });
+  for (const type of ["pointerleave", "pointerdown", "focusout"]) control.addEventListener(type, hide, { signal });
+  signal.addEventListener("abort", () => { hide(); tip.remove(); });
+  return () => { if (tip.dataset.open !== undefined) place(); };
+}
 
 /**
- * A compact header menu with one row per theme axis: a segmented control for two or
- * three options, a select for more. Theme is context, not an edit, so switching
- * isn't counted, undone, reset or flipped by Before/After; Design mode restores
- * each axis's original option when it closes. `onSwitch` re-renders the panel,
- * so token lists, chips and values follow the new theme.
+ * The header's theme control. One axis with exactly two options is a one-click switch:
+ * a sun or moon for light/dark, otherwise both labels as two segments. Anything more is
+ * a compact menu with one row per axis: a segmented control for two or three options, a
+ * select for more. No axis with a choice means no control. Theme is context, not an
+ * edit, so switching isn't counted, undone, reset or flipped by Before/After; Design
+ * mode restores each axis's original option when it closes. `onSwitch` re-renders the
+ * panel, so token lists, chips and values follow the new theme.
  */
 export function attachThemeSwitcher(
   container: HTMLElement,
@@ -1048,108 +1080,130 @@ export function attachThemeSwitcher(
     watchDesignTheme(design, styleRoot, signal);
   }
   const heading = container.closest(".design-inspector")?.querySelector(".design-inspector__heading");
-  const previous = (heading ?? container).querySelector<HTMLDetailsElement>(".design-theme-switch");
-  const wasOpen = previous?.open ?? false;
+  const previous = (heading ?? container).querySelector<HTMLElement>(themeControl);
+  const wasOpen = previous instanceof HTMLDetailsElement && previous.open;
   if (previous) themeClosers.get(previous)?.();
   previous?.remove();
-  const group = document.createElement("details");
-  group.className = "design-theme-switch";
-  const trigger = document.createElement("summary");
-  trigger.setAttribute("aria-label", "Preview theme");
-  const popup = document.createElement("div");
-  popup.className = "design-theme-popup";
-  popup.setAttribute("role", "group");
-  popup.setAttribute("aria-label", "Theme preview options");
-  group.append(trigger, popup);
-  const currentLabels: string[] = [];
-  const refreshers: Array<() => string> = [];
   const themes = design?.themes;
-  let focus: HTMLElement | undefined;
-  for (const axis of Array.isArray(themes) ? themes : []) {
+  const axes = (Array.isArray(themes) ? themes : []).flatMap(axis => {
     const current = currentTheme(axis);
     const options = Array.isArray(axis?.options) ? axis.options.filter((option) => typeof option?.id === "string") : [];
-    if (current === undefined || options.length < 2) continue;
-    const label = titled(axis.label, String(axis.id));
-    const choose = (id: string) => {
-      const before = currentTheme(axis);
-      if (id === before) return;
-      if (!themeOriginals.has(axis)) themeOriginals.set(axis, before ?? current);
-      themeFocus = axis;
-      try { axis.apply(id); } catch { /* The page keeps whatever the adapter managed to apply. */ }
-      onSwitch();
-    };
-    const row = document.createElement(options.length > 3 ? "label" : "div");
-    row.className = "design-field design-react-field";
-    const caption = document.createElement("span");
-    caption.textContent = label;
-    let control: HTMLElement;
-    if (options.length > 3) {
-      const select = document.createElement("select");
-      for (const option of options) select.append(new Option(titled(option.label, option.id), option.id));
-      select.value = current;
-      select.setAttribute("aria-label", `${label} theme`);
-      select.addEventListener("change", () => choose(select.value));
-      control = select;
-    } else {
-      control = document.createElement("div");
-      control.className = "design-theme-options";
-      control.setAttribute("role", "group");
-      control.setAttribute("aria-label", `${label} theme`);
-      for (const option of options) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = titled(option.label, option.id);
-        button.setAttribute("aria-pressed", String(option.id === current));
-        button.addEventListener("click", () => choose(option.id));
-        control.append(button);
-      }
-    }
-    if (themeFocus === axis) focus = control.querySelector<HTMLElement>("[aria-pressed=true]") ?? control;
-    refreshers.push(() => {
-      const value = currentTheme(axis) ?? current;
-      if (control instanceof HTMLSelectElement) control.value = value;
-      else control.querySelectorAll("button").forEach((button, index) => button.setAttribute("aria-pressed", String(options[index].id === value)));
-      return `${label}: ${titled(options.find(option => option.id === value)?.label, value)}`;
-    });
-    row.append(caption, control);
-    popup.append(row);
-  }
+    return current === undefined || options.length < 2 ? [] : [{ axis, current, options, names: options.map(option => titled(option.label, option.id)) }];
+  });
+  const focusAxis = themeFocus;
   themeFocus = undefined;
-  if (!popup.childElementCount) return;
-  const sync = () => {
-    currentLabels.splice(0, currentLabels.length, ...refreshers.map(refresh => refresh()));
-    trigger.textContent = currentLabels[0].split(": ").slice(1).join(": ") + (currentLabels.length > 1 ? ` +${currentLabels.length - 1}` : "");
-    trigger.title = `Preview theme · ${currentLabels.join(" · ")}`;
+  if (!axes.length) return;
+  const choose = (axis: ThemeAxis, fallback: string, id: string) => {
+    const before = currentTheme(axis);
+    if (id === before) return;
+    if (!themeOriginals.has(axis)) themeOriginals.set(axis, before ?? fallback);
+    themeFocus = axis;
+    try { axis.apply(id); } catch { /* The page keeps whatever the adapter managed to apply. */ }
+    onSwitch();
+    sync();
   };
-  sync();
-  group.open = wasOpen || !!focus;
   const events = new AbortController();
   const popupSignal = events.signal;
-  const close = () => { group.open = false; };
-  themeClosers.set(group, () => { close(); events.abort(); });
-  group.addEventListener("keydown", event => {
-    if (event.key === "ArrowDown" && event.target === trigger) {
-      event.preventDefault();
-      group.open = true;
-      popup.querySelector<HTMLElement>("button,select")?.focus();
+  let control: HTMLElement;
+  let sync: () => void;
+  let focus: HTMLElement | undefined;
+  let close = () => {};
+  if (axes.length === 1 && axes[0].options.length === 2) {
+    const { axis, current, options, names } = axes[0];
+    const kinds = options.map(option => [option.id, option.label].map(name => String(name ?? "").toLowerCase()).find(name => name === "light" || name === "dark"));
+    const icons = kinds.includes("light") && kinds.includes("dark");
+    const toggle = control = el("button", "design-theme-toggle");
+    toggle.type = "button";
+    toggle.setAttribute("role", "switch");
+    if (!icons) toggle.append(...names.map(name => el("span", "", name)));
+    const retip = headerTip(toggle, styleRoot, popupSignal);
+    let index = 0;
+    sync = () => {
+      index = Math.max(0, options.findIndex(option => option.id === (currentTheme(axis) ?? current)));
+      toggle.setAttribute("aria-checked", String(index === 1));
+      toggle.setAttribute("aria-label", `Theme: ${names[index]}`);
+      toggle.dataset.tip = `Switch to ${names[1 - index]}`;
+      if (icons) toggle.innerHTML = kinds[index] === "dark" ? moon : sun;
+      else toggle.dataset.on = String(index);
+      retip();
+    };
+    toggle.addEventListener("click", () => choose(axis, current, options[1 - index].id));
+    if (focusAxis === axis) focus = toggle;
+  } else {
+    const group = control = el("details", "design-theme-switch");
+    const trigger = el("summary");
+    trigger.setAttribute("aria-label", "Preview theme");
+    const popup = el("div", "design-theme-popup");
+    popup.setAttribute("role", "group");
+    popup.setAttribute("aria-label", "Theme preview options");
+    group.append(trigger, popup);
+    const refreshers: Array<() => string> = [];
+    for (const { axis, current, options, names } of axes) {
+      const label = titled(axis.label, String(axis.id));
+      const row = el(options.length > 3 ? "label" : "div", "design-field design-react-field");
+      let field: HTMLElement;
+      if (options.length > 3) {
+        const select = field = el("select");
+        options.forEach((option, index) => select.append(new Option(names[index], option.id)));
+        select.value = current;
+        select.addEventListener("change", () => choose(axis, current, select.value));
+      } else {
+        field = el("div", "design-theme-options");
+        field.setAttribute("role", "group");
+        options.forEach((option, index) => {
+          const button = el("button", "", names[index]);
+          button.type = "button";
+          button.setAttribute("aria-pressed", String(option.id === current));
+          button.addEventListener("click", () => choose(axis, current, option.id));
+          field.append(button);
+        });
+      }
+      field.setAttribute("aria-label", `${label} theme`);
+      if (focusAxis === axis) focus = field.querySelector<HTMLElement>("[aria-pressed=true]") ?? field;
+      refreshers.push(() => {
+        const value = currentTheme(axis) ?? current;
+        if (field instanceof HTMLSelectElement) field.value = value;
+        else field.querySelectorAll("button").forEach((button, index) => button.setAttribute("aria-pressed", String(options[index].id === value)));
+        const index = options.findIndex(option => option.id === value);
+        return `${label}: ${index < 0 ? titled(undefined, value) : names[index]}`;
+      });
+      row.append(el("span", "", label), field);
+      popup.append(row);
     }
-  });
-  group.addEventListener("focusout", event => {
-    if (event.relatedTarget instanceof Node && !group.contains(event.relatedTarget)) close();
-  });
+    sync = () => {
+      const labels = refreshers.map(refresh => refresh());
+      trigger.textContent = labels[0].split(": ").slice(1).join(": ") + (labels.length > 1 ? ` +${labels.length - 1}` : "");
+      trigger.title = `Preview theme · ${labels.join(" · ")}`;
+    };
+    group.open = wasOpen || !!focus;
+    close = () => { group.open = false; };
+    group.addEventListener("keydown", event => {
+      if (event.key === "ArrowDown" && event.target === trigger) {
+        event.preventDefault();
+        group.open = true;
+        popup.querySelector<HTMLElement>("button,select")?.focus();
+      }
+    });
+    group.addEventListener("focusout", event => {
+      if (event.relatedTarget instanceof Node && !group.contains(event.relatedTarget)) close();
+    });
+    group.ownerDocument.defaultView?.addEventListener("keydown", event => {
+      if (!group.open || event.key !== "Escape" || !event.composedPath().includes(group)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      close();
+      trigger.focus();
+    }, { capture: true, signal: popupSignal });
+  }
+  sync();
+  themeClosers.set(control, () => { close(); events.abort(); });
   ensurePanelStyles(styleRoot);
-  if (heading) heading.insertBefore(group, heading.querySelector(".design-inspector__close"));
-  else container.prepend(group);
-  group.getRootNode().addEventListener("komo-theme-change", sync, { signal: popupSignal });
-  group.getRootNode().addEventListener("pointerdown", event => { if (!event.composedPath().includes(group)) close(); }, { capture: true, signal: popupSignal });
-  group.ownerDocument.defaultView?.addEventListener("keydown", event => {
-    if (!group.open || event.key !== "Escape" || !event.composedPath().includes(group)) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    close();
-    trigger.focus();
-  }, { capture: true, signal: popupSignal });
-  watchPopup(trigger, () => { close(); if (!trigger.isConnected) events.abort(); }, popupSignal);
+  if (heading) heading.insertBefore(control, heading.querySelector(".design-inspector__close"));
+  else container.prepend(control);
+  const root = control.getRootNode();
+  root.addEventListener("komo-theme-change", sync, { signal: popupSignal });
+  root.addEventListener("pointerdown", event => { if (!event.composedPath().includes(control)) close(); }, { capture: true, signal: popupSignal });
+  watchPopup(control, () => { close(); if (!control.isConnected) events.abort(); }, popupSignal);
   focus?.focus({ preventScroll: true });
 }
 
@@ -1392,13 +1446,35 @@ export function createReactPropsPanel(
         let next: InspectableScalar = raw as string;
         if (prop.kind === "number")
           next = String(raw).trim() === "" ? undefined : Number(raw);
-        else if (prop.kind === "enum") {
-          const matched = (prop.values ?? []).find((item) => String(item) === raw);
-          next = raw === "" && !prop.required ? undefined : matched;
-        } else if (prop.kind === "boolean") next = raw === true;
+        else if (prop.kind === "enum") next = choice(String(raw));
+        else if (prop.kind === "boolean") next = raw === true;
         recordChange(element, editable, prop.name, next, control, onEdit);
       };
+      const choice = (raw: string): InspectableScalar => raw === "" && !prop.required ? undefined : (prop.values ?? []).find((item) => String(item) === raw);
       control.addEventListener("change", apply);
+      // The styled list previews the option under the pointer or keyboard through the
+      // component's own setProps, outside history; anything but a commit puts back the
+      // value the list opened with, unless Undo, Reset or the host changed it meanwhile.
+      // A prop the inspector never committed is handed back to its renderer, so an
+      // absent or null host value returns exactly.
+      let preview: { opening: InspectableScalar; shown?: InspectableScalar } | undefined;
+      if (prop.kind === "enum") control.addEventListener("komo-preview", (event) => {
+        element = retainReactPropTarget(element) ?? element;
+        const raw = (event as CustomEvent<string | null>).detail;
+        const props = editable.props;
+        const now = props[prop.name];
+        try {
+          if (raw !== null) {
+            preview ??= { opening: now };
+            preview.shown = choice(raw);
+            editable.setProps({ ...props, [prop.name]: preview.shown });
+          } else if (preview && (Object.is(now, preview.shown) || Object.is(now, preview.opening))) {
+            editable.setProps({ ...props, [prop.name]: preview.opening });
+            if (!originals.get(element)?.has(prop.name)) editable.releaseProps?.([prop.name]);
+          }
+        } catch { /* The component keeps whatever it rendered. */ }
+        if (raw === null) preview = undefined;
+      });
     }
     caption.title = prop.name;
     row.append(caption, control);

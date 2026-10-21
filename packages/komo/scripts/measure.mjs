@@ -144,7 +144,10 @@ await writeFile(
 // loads); the frame-size chunk +630 (Available space, the zoom readout, the "Layout follows your
 // browser window" note and its tooltip). Measured locally: main 219,704 -> 220,715.
 // 221,100: the pending-token chip and Layout field sync (#139) landed alongside (+~300).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 221_100)
+// 221,250: a subscribed adapter refreshes only when its list changed, so the color popup stays open (+~125).
+// 221,400: shortcut help lists the experimental geometry move and resize keys, and the change cards'
+// reviewer label is shared with geometry as its own small module (+~113; initial +1).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 221_400)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -153,7 +156,9 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 221_100)
 // toolbar-style tooltips and header/footer polish (~870 bytes). The panel chunk has no room either.
 // 7,300: the hook that lazy-loads default-off experimental geometry (its own chunk) (~10 bytes).
 // Passing select and the geometry proposal section to that chunk adds ~10 bytes (7,093 measured).
-if (report.optionalDesignMode.gzip > 7_300)
+// 7,350: geometry's structural move needs Design mode's click selection and Before state, and the
+// hidden original's display stays out of proposals and Copy CSS (7,234 -> 7,320 measured).
+if (report.optionalDesignMode.gzip > 7_350)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).
@@ -183,7 +188,8 @@ if (report.optionalTokenPicker.gzip > 5_275)
 // The Tokens view (every token with nothing selected, per-theme edits, its footer and page
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and
 // footer chunks, so its own chunk is small. 4,730 measured, plus ~3%.
-if (report.optionalTokenPage.gzip > 4_875)
+// 4,950: rows update in place when the listed tokens keep their order, so an open popup stays open (4,814 -> 4,895).
+if (report.optionalTokenPage.gzip > 4_950)
   throw new Error("komo's Tokens view chunk exceeds its gzip budget.");
 // Experimental move/resize is default off and loads only with design.experimentalGeometry, after
 // Design mode opens; nothing else imports it. It was 3,375 gzip for normal-flow blocks only. Flex and
@@ -193,7 +199,11 @@ if (report.optionalTokenPage.gzip > 4_875)
 // for thin padding and tiny boxes), a W × H readout, resize snapping to parent and sibling edges with
 // guides, Ctrl/⌘+arrow resize with a live region, and notes moved into the panel. Free-form Move and
 // its translate/offset fallback left the chunk (6,725 -> 8,141 measured), plus ~3%.
-if (report.optionalGeometry.gzip > 8_400)
+// 12,500: structural move between elements (src/design-move.ts, bundled into this chunk): body drag
+// with a click threshold, nearest-valid drop targets per flow with an insertion line, container
+// outline and label chip, inert computed-style stand-ins that follow renderer commits, Alt+arrow
+// moves on the focused selection, limits, and the move proposal lines (8,141 -> 12,137), plus ~3%.
+if (report.optionalGeometry.gzip > 12_500)
   throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
 // API tokens load only when "API tokens" is opened in the Account panel; nothing else imports
 // the chunk. 5,671 measured, plus ~3%.

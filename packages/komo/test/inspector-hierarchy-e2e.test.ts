@@ -214,7 +214,16 @@ describe.skipIf(!chrome).each(modes)("inspector hierarchy in %s", mode => {
     const button = page.locator("#app button");
     const variant = page.locator('[aria-label="Button variant"]');
     expect(await variant.evaluate(node => node.localName)).toBe("select");
-    expect((await variant.boundingBox())!.width).toBeLessThan(140);
+    // A compact label column; controls fill the rest and end at one edge, before Reset's reserved slot.
+    const columns = await group.locator(".design-react-row").evaluateAll(rows => rows.map(row => {
+      const field = row.querySelector(".design-react-field")!, control = field.querySelector(":scope > :is(input:not([type=checkbox]), select)");
+      return { label: field.querySelector(":scope > span")!.getBoundingClientRect().width, right: control && Math.round(control.getBoundingClientRect().right), row: Math.round(row.getBoundingClientRect().right) };
+    }));
+    expect(Math.max(...columns.map(column => column.label))).toBeLessThanOrEqual(80);
+    const edges = new Set(columns.flatMap(column => column.right === null ? [] : [column.right]));
+    expect(edges.size).toBe(1);
+    expect(columns[0].row - [...edges][0]).toBeGreaterThanOrEqual(28);
+    expect((await variant.boundingBox())!.width).toBeGreaterThan(140);
     await variant.selectOption("ghost");
     await expect.poll(() => button.getAttribute("class")).toContain("button-ghost");
     const disabled = page.getByRole("switch", { name: "Button disabled", exact: true });

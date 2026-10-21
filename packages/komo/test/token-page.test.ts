@@ -333,15 +333,20 @@ describe("Tokens view in Design mode", () => {
     await start(adapter(), [axis]);
     await openView();
     (await custom("Gray 900", "#000000"))();
-    button($(".design-theme-switch"), "Dark").click();
+    // A light/dark pair is one switch in the Tokens header, as in the Design panel.
+    const toggle = $(".design-inspector__heading .design-theme-toggle") as HTMLButtonElement;
+    expect(toggle.getAttribute("aria-label")).toBe("Theme: Light");
+    expect(toggle.dataset.tip).toBe("Switch to Dark");
+    toggle.click();
     await vi.waitFor(() => expect(rowFor("Primary").querySelector("i")?.textContent).toBe("#e6e6e6"));
+    expect(toggle.getAttribute("aria-label")).toBe("Theme: Dark");
     expect(rowFor("Gray 900").hasAttribute("data-changed")).toBe(false);
     (await custom("Primary", "#f5f5f5"))();
     expect(active).toEqual([
       { path: "color.gray.900", value: "#000000", theme: "light" },
       { path: "color.text.primary", value: "#f5f5f5", theme: "dark" },
     ]);
-    button($(".design-theme-switch"), "Light").click();
+    toggle.click();
     await vi.waitFor(() => expect(rowFor("Gray 900").hasAttribute("data-changed")).toBe(true));
     expect(rowFor("Primary").hasAttribute("data-changed")).toBe(false);
     button(bar(), "Comment").click();

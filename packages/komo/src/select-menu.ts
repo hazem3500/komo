@@ -133,8 +133,13 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
     if (!(index >= 0)) return;
     if (index !== active && preview) {
       restorePreview();
-      if (element && property && !items[index].option.selected) {
-        undoPreview = previewStyle(element, property, items[index].option.value);
+      const { value, selected } = items[index].option;
+      // A style select previews on the element; any other (a component prop) hears komo-preview,
+      // its value while an option is active and null once it is not.
+      if (!selected && element && property) undoPreview = previewStyle(element, property, value);
+      else if (!selected) {
+        select.dispatchEvent(new CustomEvent("komo-preview", { detail: value }));
+        undoPreview = () => select.dispatchEvent(new CustomEvent("komo-preview", { detail: null }));
       }
     }
     items[active]?.node.removeAttribute("data-active");
@@ -208,6 +213,13 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
   watchPopup(select, close, signal);
   select.addEventListener("blur", close, { signal });
   list.addEventListener("mousedown", (event) => event.preventDefault(), { signal });
+  // Leaving the list puts the opening value back; arrow keys then start from the first option.
+  list.addEventListener("pointerleave", () => {
+    restorePreview();
+    items[active]?.node.removeAttribute("data-active");
+    select.removeAttribute("aria-activedescendant");
+    active = -1;
+  }, { signal });
   list.addEventListener("pointermove", (event) => {
     const node = (event.target as Element).closest?.("[role=option]");
     const index = items.findIndex((item) => item.node === node);

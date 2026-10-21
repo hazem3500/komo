@@ -107,7 +107,8 @@ const classTokens: TokenAdapter = {
 };
 
 // ?shell renders an app-shell layout whose root is sized with viewport units, as
-// many apps do (Tailwind "flex h-screen w-screen"). ?sidebar=frame starts in Frame.
+// many apps do (Tailwind "flex h-screen w-screen"). ?sidebar=frame starts in Frame;
+// add ?scale to scale the page into Frame instead of reflowing it.
 const query = new URLSearchParams(location.search);
 const appShell = query.has("shell");
 const sidebar = query.get("sidebar") === "frame" ? "background" : undefined;
@@ -193,6 +194,7 @@ function Demo() {
     repo: "tjcages/komo",
     branch: "main",
     ...(sidebar ? { sidebar } : {}),
+    ...(query.has("scale") ? { frame: { scale: true } } : {}),
     // Portals make body children ambiguous, so name the page root, as portal-heavy apps do.
     ...(query.has("portal") ? { pageRoot: document.getElementById("root")! } : {}),
     ...(classAdapter || cssAdapter || themes || fiberAdapter ? { design: { ...(classAdapter ? { tokens: classTokens } : cssAdapter ? { tokens: cssAdapter } : {}), ...(themes ? { themes } : {}), ...(fiberAdapter ? { components: fiberAdapter } : {}) } } : {}),

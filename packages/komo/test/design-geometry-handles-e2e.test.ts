@@ -98,7 +98,7 @@ async function open(mode = "", viewport = { width: 1280, height: 900 }) {
 
 const frameOf = (page: Page) => page.locator(".design-geometry__frame");
 const handleOf = (page: Page, name: string) => page.locator(`.design-geometry__handle[data-handle=${name}]`);
-const readout = (page: Page) => page.locator(".design-geometry__readout");
+const readout = (page: Page) => page.locator(".design-geometry__readout:not(.design-geometry__chip)");
 const inspector = (page: Page, name: string) => page.locator(".design-inspector").getByRole("button", { name, exact: true });
 
 let picked = "";
@@ -276,7 +276,7 @@ describe.skipIf(!chrome)("Figma-style geometry handles", () => {
       const live = page.locator(".design-geometry__live");
       expect(await live.getAttribute("role")).toBe("status");
       await frameOf(page).focus();
-      expect(await frameOf(page).getAttribute("aria-label")).toBe("Resize div#card: Ctrl or ⌘ + arrows, Shift for 10px");
+      expect(await frameOf(page).getAttribute("aria-label")).toBe("Move or resize div#card: Alt or ⌥ + arrows move, Ctrl or ⌘ + arrows resize, Shift for 10px");
       await page.keyboard.press("Control+ArrowRight");
       expect(await card.evaluate(node => node.style.width)).toBe("241px");
       await expect.poll(() => live.textContent()).toBe("Resized: width 241px");
@@ -288,10 +288,9 @@ describe.skipIf(!chrome)("Figma-style geometry handles", () => {
       await page.keyboard.press("Control+Shift+ArrowDown");
       expect((await card.boundingBox())!.height - height).toBeCloseTo(10, 0);
       await expect.poll(() => live.textContent()).toMatch(/^Resized: height [\d.]+px$/);
-      // Plain and Alt arrows are not resize keys; Alt+arrows stay Design mode's parent/child keys.
+      // Plain arrows are not resize keys (Alt + arrows move; see the structural move suite).
       const before = await card.getAttribute("style");
       await page.keyboard.press("ArrowRight");
-      await page.keyboard.press("Alt+ArrowRight");
       expect(await card.getAttribute("style")).toBe(before);
       for (let index = 0; index < 4; index++) await inspector(page, "Undo").click();
       expect(await card.getAttribute("style")).toBeNull();
