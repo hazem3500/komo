@@ -197,7 +197,8 @@ if (report.optionalTokenPicker.gzip > 5_275)
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and
 // footer chunks, so its own chunk is small. 4,730 measured, plus ~3%.
 // 4,950: rows update in place when the listed tokens keep their order, so an open popup stays open (4,814 -> 4,895).
-if (report.optionalTokenPage.gzip > 4_950)
+// 5,150: row details use the footer tooltip, placed beside the panel or above a narrow sheet (+~150).
+if (report.optionalTokenPage.gzip > 5_150)
   throw new Error("komo's Tokens view chunk exceeds its gzip budget.");
 // Experimental move/resize is default off and loads only with design.experimentalGeometry, after
 // Design mode opens; nothing else imports it. It was 3,375 gzip for normal-flow blocks only. Flex and
@@ -232,8 +233,9 @@ if (report.optionalColorEditor.gzip > 6_500)
   throw new Error("komo's color editor chunk exceeds its gzip budget.");
 // The typed Custom editors (lengths, spacing, radius, shadows, fonts: compact fields with inline
 // units, scrubbing, nudges and live apply) load the first time a non-color Custom tab opens.
-// 3,009 with the Apply form; the compact live fields and in-place shadow layers measure 4,564, plus ~3%.
-if (report.optionalTypedEditor.gzip > 4_700)
+// 3,009 with the Apply form. The compact live fields, Figma-style shadow layer rows (Drop/Inner, swatch,
+// visibility, remove, a sample tile) and the structured typography editor measure 5,698, plus ~3%.
+if (report.optionalTypedEditor.gzip > 5_875)
   throw new Error("komo's typed Custom editor chunk exceeds its gzip budget.");
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
