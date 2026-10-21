@@ -167,7 +167,8 @@ function lengthField(name: string, short: string, value: string, change: (next: 
 }
 
 export function typedCustom(body: HTMLElement, property: string, initial: string, exact: HTMLInputElement,
-  send: (value: string, keep: boolean) => boolean, field?: Field, tokens: readonly DesignToken[] = []) {
+  send: (value: string, keep: boolean) => boolean, field?: Field, tokens: readonly DesignToken[] = [],
+  hover: (value?: string) => void = () => {}) {
   const controls = el("div", "komo-typed");
   const advanced = el("details", "komo-typed komo-typed__advanced");
   const summary = el("summary", "", "Edit as CSS");
@@ -186,12 +187,14 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
   exact.onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); typedExact = false; send(exact.value, true); } };
   exact.onblur = () => { if (typedExact) { typedExact = false; send(exact.value, true); } };
 
-  const menu = (label: string, values: Array<[string, string]>, current: string, pick: (value: string) => void) => {
+  /** A menu; with `whole`, a hovered or arrowed option previews the value it would make, and `sample` shows options in their own face or weight. */
+  const menu = (label: string, values: Array<[string, string]>, current: string, pick: (value: string) => void, whole?: (value: string) => string, sample?: "fontFamily" | "fontWeight") => {
     const select = el("select", "komo-typed__menu");
     select.setAttribute("aria-label", label);
-    for (const [value, text] of values) { const option = el("option", "", text); option.value = value; option.title = value; select.append(option); }
+    for (const [value, text] of values) { const option = el("option", "", text); option.value = value; option.title = value; if (sample && value) option.style[sample] = value; select.append(option); }
     select.value = current;
     select.onchange = () => pick(select.value);
+    if (whole) select.addEventListener("komo-preview", event => { const value = (event as CustomEvent<string | null>).detail; hover(value === null ? undefined : whole(value)); });
     return select;
   };
 
@@ -209,7 +212,7 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
       const choices = tokens.filter(token => token.type === "fontFamily" && token.value && CSS.supports(property, token.value));
       if (choices.length) controls.append(menu("Font family choices", [[next, `Custom · ${primaryFamily(next)}`], ...choices.map(token => [token.value, token.label || primaryFamily(token.value)] as [string, string])], next, value => {
         if (send(value, true)) draw(value);
-      }));
+      }, value => value, "fontFamily"));
       else advanced.open = true;
     } else if (/^(box|text)-shadow$/.test(property)) {
       const layers = shadowLayers(next, property);
@@ -300,13 +303,13 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
       // Font sizes carry longer values ("0.875rem"), so on a narrow sheet these fields stack.
       const grid = el("div", "komo-typed__grid komo-typed__font");
       grid.append(
-        menu("Font weight", [...new Set([font.weight || "400", "100", "200", "300", "400", "500", "600", "700", "800", "900"])].map(value => [value, value]), font.weight || "400", value => { font.weight = value; keep(true); }),
+        menu("Font weight", [...new Set([font.weight || "400", "100", "200", "300", "400", "500", "600", "700", "800", "900"])].map(value => [value, value]), font.weight || "400", value => { font.weight = value; keep(true); }, weight => fontValue({ ...font, weight }), "fontWeight"),
         lengthField("Font size", "Size", font.size, (value, live) => { font.size = value; return !incomplete.size && keep(live); }, incomplete),
         lengthField("Line height", "LH", font.lineHeight, (value, live) => { font.lineHeight = value; return !incomplete.size && keep(live); }, incomplete, { unitless: true, optional: true }),
       );
-      controls.append(sample, menu("Font family", [[font.family, font.family ? primaryFamily(font.family) : "Inherited family"], ...families.map(token => [token.value, token.label || primaryFamily(token.value)] as [string, string])], font.family, value => { font.family = value; keep(true); }), grid);
+      controls.append(sample, menu("Font family", [[font.family, font.family ? primaryFamily(font.family) : "Inherited family"], ...families.map(token => [token.value, token.label || primaryFamily(token.value)] as [string, string])], font.family, value => { font.family = value; keep(true); }, family => fontValue({ ...font, family }), "fontFamily"), grid);
     } else if (field?.values?.length) {
-      controls.append(menu(field.label, [...new Set([next, ...field.values])].map(value => [value, value]), next, value => send(value, true)));
+      controls.append(menu(field.label, [...new Set([next, ...field.values])].map(value => [value, value]), next, value => send(value, true), value => value));
     } else {
       const parts = cssParts(next);
       const shorthand = /^(padding|margin|border-(width|radius)|gap)$/.test(property);

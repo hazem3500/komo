@@ -403,6 +403,26 @@ describe("one popup for tokens and Custom value", () => {
     expect(root.activeElement).toBe(search());
   });
 
+  it("previews a hovered menu option over a kept Custom value and brings that value back", async () => {
+    vi.stubGlobal("CSS", { supports: () => true });
+    const applied: string[] = [];
+    const onPreview = vi.fn((value: string) => { applied.push(value); return () => { applied.pop(); }; });
+    const { picker } = mount({ property: "font", tokens: [], custom: custom({ value: "500 14px serif", onPreview }) });
+    const weight = await vi.waitFor(() => {
+      const select = picker()!.querySelector<HTMLSelectElement>('select[aria-label="Font weight"]');
+      expect(select).not.toBeNull();
+      return select!;
+    });
+    weight.value = "600";
+    weight.dispatchEvent(new Event("change"));
+    expect(applied).toEqual(["600 14px serif"]);
+    weight.dispatchEvent(new CustomEvent("komo-preview", { detail: "800" }));
+    expect(applied).toEqual(["800 14px serif"]);
+    weight.dispatchEvent(new CustomEvent("komo-preview", { detail: null }));
+    expect(applied).toEqual(["600 14px serif"]);
+    vi.unstubAllGlobals();
+  });
+
   it("undoes a pending Custom edit before choosing a token, as one change", async () => {
     const calls: string[] = [];
     const { rows, picker, chosen } = mount({

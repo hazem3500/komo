@@ -385,6 +385,12 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
         options.custom.onCommit(value);
       },
       token: pick,
+      // A hovered menu option previews over the kept value; leaving it brings that value back.
+      hover(value) {
+        restorePreview();
+        if (value !== undefined) undoPreview = options.custom?.onPreview(value);
+        else if (customValue !== undefined) customPreview(customValue);
+      },
     });
     section.append(editor);
     // Placed again for the editor's own height.
