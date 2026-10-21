@@ -212,7 +212,8 @@ if (report.optionalDesignPanel.gzip > 4_800)
 // load as their own chunk beside the panel, so neither the panel nor the entry grows.
 // 3,125: token selects (data-picker) are left to the token picker below (+11 bytes).
 // 3,250: a letter on a closed select opens the list on its first match (3,085 -> 3,154), plus ~3%.
-if (report.optionalSelectMenu.gzip > 3_250)
+// 3,300: with the shared host-motion hold for previews (#151) alongside (3,260 measured).
+if (report.optionalSelectMenu.gzip > 3_300)
   throw new Error("komo's select menu chunk exceeds its gzip budget.");
 // The token picker (search, type previews, sticky groups, lazy rows, keyboard) loads the first
 // time a token field opens. 4,631 measured, plus ~3%. It now also hands its rows' previews and
