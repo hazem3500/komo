@@ -16,7 +16,27 @@ permissions:
   contents: write
   id-token: write
 jobs:
+  # The suite is split across parallel shards; publishing waits for all of them.
+  test:
+    if: ${{ !startsWith(github.event.head_commit.message, 'Release @hazem3500/komo') }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter @hazem3500/komo run build:setup
+      - run: pnpm --filter @hazem3500/komo exec vitest run --config vitest.config.ts --shard=${{ matrix.shard }}/6
   publish:
+    needs: test
     # The release commit below touches package.json; don't publish again for it.
     if: ${{ !startsWith(github.event.head_commit.message, 'Release @hazem3500/komo') }}
     runs-on: ubuntu-latest
@@ -35,7 +55,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm typecheck
-      - run: pnpm test
       - run: pnpm size
       - name: Choose the version
         id: version
