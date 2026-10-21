@@ -6,5 +6,7 @@ export default defineConfig({
     hookTimeout: 60000,
     testTimeout: 20000,
     fileParallelism: false,
+    // Never let a test reach the native EyeDropper (see the file).
+    setupFiles: ["test/setup-no-eyedropper.ts"],
   },
 });
