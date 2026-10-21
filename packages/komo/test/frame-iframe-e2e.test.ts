@@ -325,6 +325,105 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await context.close();
   });
 
+  it("lays out Fit and 100% in Viewport and In place, for frames smaller and larger than the stage", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    // A stored size larger than the window, at 100%, opens straight into Viewport mode.
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("seeded")) return;
+      sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("branch-comments:frame-size:frame-iframe:example/review", JSON.stringify({ v: 2, size: [1600, 1200], actual: true }));
+      localStorage.setItem("qa-threads", JSON.stringify([{ id: "card", page: "/", anchor: { selector: "#card-3", text: "Three", x: 0.1, y: 0.5, width: 0, height: 0, pageX: 400, pageY: 300, viewportWidth: 1280 }, resolved: false, resolvedBy: null, createdAt: 1, updatedAt: 1, tags: [], comments: [{ id: "card-comment", author: { id: "reviewer", name: "Example reviewer", verified: true }, body: "Card", createdAt: 1, editedAt: null, reactions: {} }] }]));
+    });
+    const stage = { left: 24, top: 48, width: 852, height: 728 };
+    const layout = () => page.evaluate(() => {
+      const root = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
+      const port = root.querySelector<HTMLElement>(".frame-port");
+      const iframe = root.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+      const box = (node: Element | null) => node && (({ left, top, width, height }) => ({ left, top, width, height }))(node.getBoundingClientRect());
+      return {
+        port: box(port), iframe: box(iframe), main: box(document.querySelector("main")),
+        scroll: port && [port.scrollLeft, port.scrollTop, port.scrollWidth, port.scrollHeight, port.clientWidth, port.clientHeight],
+        bars: [...root.querySelectorAll<HTMLElement>(".frame-scroll")].filter((bar) => !bar.hidden).length,
+      };
+    });
+    const near = (actual: number, expected: number, label: string) => expect(Math.abs(actual - expected), `${label}: ${actual} vs ${expected}`).toBeLessThanOrEqual(1.5);
+    await open(page);
+    await viewportFrame(page);
+    await page.waitForTimeout(300);
+    // Viewport, 100%, larger on both axes: the port is the stage, it scrolls exactly the frame, from its top-left.
+    let state = await layout();
+    expect(await page.locator(".frame-size-trigger").textContent()).toBe("Custom · 1600 × 1200");
+    for (const key of ["left", "top", "width", "height"] as const) near(state.port![key], stage[key], `port ${key}`);
+    expect(state.scroll).toEqual([0, 0, 1600, 1200, state.scroll![4], state.scroll![5]]);
+    near(state.iframe!.left, stage.left, "iframe left");
+    near(state.iframe!.top, stage.top, "iframe top");
+    expect(state.bars).toBe(0);
+    await page.screenshot({ path: join(shots, "viewport-100-larger.png") });
+    // Pins in the frame follow the port's scroll.
+    const pin = page.locator('.pin[data-thread="card"]');
+    await pin.waitFor();
+    await page.evaluate(() => [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!.querySelector(".frame-port")!.scrollBy(200, 150));
+    await page.waitForTimeout(250);
+    const card = await framed(page, "card-3"), dot = (await pin.boundingBox())!;
+    expect(dot.x).toBeGreaterThanOrEqual(card.x - dot.width);
+    expect(dot.x).toBeLessThanOrEqual(card.x + card.width);
+    // Fit: the whole frame inside the stage, no scrolling.
+    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    await page.waitForTimeout(250);
+    state = await layout();
+    // A fitted frame never scrolls its port, even programmatically (overflow: clip).
+    expect(state.scroll!.slice(0, 2)).toEqual([0, 0]);
+    expect(state.iframe!.left).toBeGreaterThanOrEqual(stage.left - 0.5);
+    expect(state.iframe!.left + state.iframe!.width).toBeLessThanOrEqual(stage.left + stage.width + 0.5);
+    // Fit back to 100% starts from the frame's top-left in Viewport mode.
+    await page.mouse.move(500, 500);
+    await page.getByRole("button", { name: "100%", exact: true }).click();
+    await page.waitForTimeout(250);
+    state = await layout();
+    near(state.port!.left, stage.left, "100% again port left");
+    near(state.iframe!.left, stage.left, "100% again iframe left");
+    // Smaller than the stage on both axes: centred, nothing to scroll.
+    await page.locator(".frame-size-trigger").click();
+    await page.getByLabel("Width", { exact: true }).fill("400");
+    await page.getByLabel("Height", { exact: true }).fill("500");
+    await page.getByRole("button", { name: "Set" }).click();
+    await page.waitForTimeout(300);
+    state = await layout();
+    near(state.port!.left, stage.left + (stage.width - 400) / 2, "small port left");
+    near(state.port!.top, stage.top + (stage.height - 500) / 2, "small port top");
+    near(state.port!.width, 400, "small port width");
+    expect(state.scroll!.slice(0, 2)).toEqual([0, 0]);
+    expect(state.scroll![2]).toBe(state.scroll![4]);
+    await page.screenshot({ path: join(shots, "viewport-100-smaller.png") });
+    // In place, 100%, larger: the stage pans the page itself, with its own scrollbars.
+    await page.locator(".frame-size-trigger").click();
+    await page.getByLabel("Width", { exact: true }).fill("1600");
+    await page.getByLabel("Height", { exact: true }).fill("1200");
+    await page.getByRole("button", { name: "Set" }).click();
+    await page.getByRole("button", { name: "In place", exact: true }).click();
+    await page.waitForTimeout(400);
+    state = await layout();
+    expect(state.port).toBeNull();
+    expect(state.bars).toBe(2);
+    expect(state.main!.left).toBeLessThanOrEqual(stage.left + 0.5);
+    expect(state.main!.left + state.main!.width).toBeGreaterThanOrEqual(stage.left + stage.width - 0.5);
+    await page.screenshot({ path: join(shots, "inplace-100-larger.png") });
+    // Closing and reopening Frame, then back to Viewport, keeps the layout right.
+    await page.getByRole("button", { name: "Close sidebar", exact: true }).click();
+    await page.waitForTimeout(400);
+    await page.keyboard.press("l");
+    await page.locator(".frame-bar").waitFor();
+    await page.getByRole("button", { name: "Viewport", exact: true }).click();
+    await viewportFrame(page);
+    await page.waitForTimeout(300);
+    state = await layout();
+    for (const key of ["left", "top", "width", "height"] as const) near(state.port![key], stage[key], `reopened port ${key}`);
+    near(state.iframe!.left, stage.left, "reopened iframe left");
+    expect(state.bars).toBe(0);
+    await context.close();
+  });
+
   it.each([
     ["deny", "X-Frame-Options: DENY"],
     ["away", "redirected to another origin"],

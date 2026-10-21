@@ -759,6 +759,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     viewport.destroy();
     viewport = undefined;
     viewportShown = false;
+    // In place again: the bar's note, the stage pan and its scrollbars come back.
+    frameControls?.status({ active: false });
     followSelection();
   }
   // Design mode's selection moves to the same element in the page now shown.

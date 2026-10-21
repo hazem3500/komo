@@ -178,7 +178,9 @@ await writeFile(
 // scrollers, Space+drag, stage keys, focus reveal, Fit-to-100% anchoring) and a one-time tip about scaled
 // floating UI, all in the frame-size chunk (~+2,400); initial ~+190 moves the frame and its overlays per
 // pan frame. Measured locally on main 53dedcc: 232,848.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 233_000)
+// 233,150: Viewport mode at 100% keeps the stage pan out of its port, resets the port on leaving 100% and
+// restores the in-place state when switching back (~+40; 233,027 measured on main 418bc33 with the fix).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 233_150)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

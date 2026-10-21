@@ -103,7 +103,7 @@ export interface FrameViewportOptions {
   changed(): void;
 }
 
-const css = `.frame-stage{position:fixed;inset:0;z-index:0;background:#080808;pointer-events:auto}.frame-port{position:absolute;overflow:hidden;border-radius:12px;overscroll-behavior:contain}.frame-port[data-pan]{overflow:auto}.frame-stage[data-loading]{visibility:hidden;pointer-events:none}.frame-port iframe{display:block;border:0;transform-origin:0 0;color-scheme:normal}`;
+const css = `.frame-stage{position:fixed;inset:0;z-index:0;background:#080808;pointer-events:auto}.frame-port{position:absolute;overflow:clip;border-radius:12px;overscroll-behavior:contain}.frame-port[data-pan]{overflow:auto;scrollbar-width:thin;scrollbar-color:#5a5a5a transparent}.frame-stage[data-loading]{visibility:hidden;pointer-events:none}.frame-port iframe{display:block;border:0;transform-origin:0 0;color-scheme:normal}`;
 
 /** Why a URL that didn't load as a same-origin document can't be framed. */
 export async function frameFailure(url: string): Promise<string> {
@@ -218,6 +218,8 @@ export function openFrameViewport(options: FrameViewportOptions): FrameViewport 
         width: `${width}px`,
         height: `${height}px`,
       });
+      // Leaving 100% resets the pan, so the next 100% starts at the frame's top-left.
+      if (!pan) port.scrollTo(0, 0);
       port.toggleAttribute("data-pan", pan);
       Object.assign(iframe.style, {
         width: `${logical[0]}px`,
