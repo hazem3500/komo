@@ -5943,13 +5943,17 @@ export function initComments(options: CommentsOptions): CommentsController {
               restoreCommentsAfterDesign();
             },
           });
-          if (destroyed) {
-            controller.destroy();
-            return null;
-          }
-          designController = controller;
-          controller.setActive(designActive);
-          return controller;
+          // The inspector opens once its controls and selection keys have loaded, so an
+          // Enter or Space pressed on the open inspector is never dropped.
+          return controller.ready.then(() => {
+            if (destroyed) {
+              controller.destroy();
+              return null;
+            }
+            designController = controller;
+            controller.setActive(designActive);
+            return controller;
+          });
         })
         .catch(() => {
           designActive = false;
