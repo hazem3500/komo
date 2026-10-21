@@ -73,7 +73,7 @@ import {
   age,
   avatar,
   button,
-  editable,
+  textEntry,
   el,
   googleLogo,
   icon,
@@ -6228,7 +6228,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       // Focus may sit in a nested shadow root that composedPath() can't see.
       let active = document.activeElement;
       while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
-      const typing = editable(target) || editable(active) || event.isComposing;
+      // Only true text entry pauses review keys; a focused button, switch or closed select keeps them.
+      const typing = textEntry(target) || textEntry(active) || event.isComposing;
       if (event.key === "Escape") {
         if (designActive) return;
         if (event.defaultPrevented && !event.composedPath().includes(host)) return;

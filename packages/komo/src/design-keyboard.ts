@@ -1,4 +1,6 @@
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
+import { isolated, textEntry } from "./dom.js";
+import { isMac } from "./kbd.js";
 
 // Check ancestors in the composed path, including widgets across shadow boundaries.
 export function ownsKeyboard(event: KeyboardEvent, inspect = false): boolean {
@@ -15,11 +17,38 @@ export function designKeyboard(options: {
   select(element: DesignTarget): void;
   compareBefore(before?: boolean): void;
   help?(): void;
+  /** Design mode's Undo; ⌘Z (Ctrl+Z) presses it from anywhere but a text field. */
+  undo?: HTMLButtonElement;
+  root?: ShadowRoot;
+  signal?: AbortSignal;
 }) {
+  // A closed select's type-ahead would pick an option on komo's own keys (B, ?, the review
+  // shortcuts); once every handler has run, those keys never reach it. Other letters still do.
+  const guard = (event: KeyboardEvent) => {
+    const target = event.composedPath()[0];
+    if (target instanceof HTMLSelectElement && event.composedPath().includes(options.host) && !textEntry(target) &&
+      !event.ctrlKey && !event.metaKey && !event.altKey && (/^[b?]$/i.test(event.key) || options.reserved?.(event))) event.preventDefault();
+  };
+  const { root, signal } = options;
+  addEventListener("keydown", guard, { signal });
+  root?.addEventListener("keydown", event => isolated(event, root) && guard(event as KeyboardEvent), { signal });
   return (event: KeyboardEvent): boolean => {
     if (event.isComposing || event.keyCode === 229) return false;
     const key = event.key.toLowerCase();
     const path = event.composedPath();
+    const typing = textEntry(path[0]);
+    const { undo } = options;
+    // Undo leaves focus where it was; when it redraws a field, on the same control there.
+    if (undo && !undo.disabled && key === "z" && (isMac() ? event.metaKey : event.ctrlKey) && !event.altKey && !event.shiftKey && !typing) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const focused = root?.activeElement ?? document.activeElement;
+      const field = focused?.closest<HTMLElement>("[data-field-property]")?.dataset.fieldProperty;
+      undo.click();
+      const back = focused?.isConnected ? focused : field && root?.querySelector(`[data-field-property="${CSS.escape(field)}"] ${focused!.localName}`);
+      if (back instanceof HTMLElement) back.focus({ preventScroll: true });
+      return true;
+    }
     // A field cancels its own preview on Escape. Checked before defaultPrevented:
     // komo's window-capture isolation already prevents every Escape inside its host.
     if (key === "escape" && path.some(node => node instanceof Element && node.matches("[data-field-property]"))) return true;
@@ -27,20 +56,21 @@ export function designKeyboard(options: {
     const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
     const horizontal = key === "arrowleft" || key === "arrowright";
     const comparison = path.includes(options.compare);
-    if (plain && !options.compare.hidden && (comparison && horizontal || key === "b" && (comparison || !path.includes(options.host) && !ownsKeyboard(event)))) {
+    // B and ? work from the canvas and any panel control; only true text entry pauses them.
+    if (plain && !options.compare.hidden && (comparison && horizontal || key === "b" && !typing)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       options.compareBefore(key === "b" ? undefined : key === "arrowleft");
       return true;
     }
-    const inspect = plain && (key === "enter" || key === " ");
-    if (path.includes(options.host) || ownsKeyboard(event, inspect)) return false;
-    if (event.key === "?" && options.help && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (event.key === "?" && options.help && !typing && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
       event.stopImmediatePropagation();
       options.help();
       return true;
     }
+    const inspect = plain && (key === "enter" || key === " ");
+    if (path.includes(options.host) || ownsKeyboard(event, inspect)) return false;
     const selected = options.selected();
     const eligible = (element: Element | null): element is DesignTarget => isDesignTarget(element)
       && element.isConnected && element !== document.body && element !== document.documentElement

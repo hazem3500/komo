@@ -9,6 +9,19 @@ export const editable = (node?: EventTarget | null) =>
   node instanceof HTMLElement &&
   (node.matches("input,textarea,select") || node.isContentEditable);
 /**
+ * True text entry, the only place single-key shortcuts pause: a text-like input (not a
+ * read-only one, nor a scrub field outside edit mode), a textarea, contenteditable, a
+ * textbox role, or an open listbox or combobox. Buttons, switches, closed selects and
+ * sliders keep shortcuts.
+ */
+export const textEntry = (node?: EventTarget | null) =>
+  node instanceof Element &&
+  ((node as HTMLElement).isContentEditable || node instanceof HTMLTextAreaElement ||
+    node instanceof HTMLInputElement && /^(text|search|number|url|email|tel|password)$/.test(node.type) &&
+      !node.readOnly && !node.matches("[data-scrub]:not([data-editing])") ||
+    node.matches('[aria-expanded="true"]:is(select,[role=combobox])') ||
+    !!node.closest('[contenteditable]:not([contenteditable="false"]),[role=textbox],[role=searchbox],[role=listbox]'));
+/**
  * Events komo stops at its shadow host (isolateEvents), so host shortcut
  * libraries and modal "outside interaction" listeners never see komo's UI.
  * Key events are stopped only while typing in a komo field.

@@ -22,6 +22,7 @@ export function designCommands(mac = isMac(), visibility?: Shortcut | null) {
     command("Child element", "ArrowDown", canvas, { alt: true }),
     command("Inspect focused element", "Enter", canvas),
     command("Exit Design mode", "Escape", canvas),
+    command("Undo last preview", "z", canvas, mac ? { meta: true } : { ctrl: true }),
     // M focuses the selection, so Alt+arrows there move it while Alt+arrows on the canvas keep
     // selecting parent and child. Ctrl+arrows switch spaces on macOS, so ⌘ resizes there.
     command("Focus selection to move or resize", "M", canvas),

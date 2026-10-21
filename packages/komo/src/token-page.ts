@@ -4,6 +4,7 @@
 // empty Design panel. It imports only chunks Design mode already loads, so the
 // shared bundles keep their shape. Comments stay out of the CSS: they would ship.
 import type { DesignEditChange, DesignSystem, DesignToken, TokenAdapter, TokenValueChange } from "./design-system.js";
+import { textEntry } from "./dom.js";
 
 /** What the Tokens view needs from Design mode. */
 export interface TokenPageHost {
@@ -448,12 +449,13 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
         };
         bar.addEventListener("pointerover", loadTips, { signal });
         bar.addEventListener("focusin", loadTips, { signal });
-        // ← Before, → After, B flips, as in Design mode; never while typing.
+        // ← Before, → After, B flips, as in Design mode. B pauses only in a text field; the
+        // arrows also leave fields, sliders and radios their own.
         document.addEventListener("keydown", (event) => {
           const key = event.key.toLowerCase();
           const origin = event.composedPath()[0];
           if (compare.hidden || event.metaKey || event.ctrlKey || event.altKey || !["b", "arrowleft", "arrowright"].includes(key) ||
-            (origin instanceof HTMLElement && (origin.isContentEditable || origin.matches("input,textarea,select,[role=slider],[role=radio]")))) return;
+            textEntry(origin) || key !== "b" && (origin as Element).matches?.("input,select,[role=slider],[role=radio]")) return;
           event.preventDefault();
           event.stopImmediatePropagation();
           show(key === "b" ? !isBefore() : key === "arrowleft");

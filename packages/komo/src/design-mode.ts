@@ -723,7 +723,7 @@ export function createDesignMode(options: DesignModeOptions) {
   const selectionReady = exporter().then(module => {
     if (listeners.signal.aborted) return;
     keyboard = module.designKeyboard({
-      host: options.host, compare, reserved: options.reservedKey,
+      host: options.host, compare, reserved: options.reservedKey, root: options.root, undo, signal: listeners.signal,
       selected: () => selectionPage === page() ? selected : null,
       select(element) { decorating = true; select(element); reveal(element); },
       compareBefore(before) { showBefore(before ?? !showingBefore); },

@@ -91,7 +91,7 @@ export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], desi
   const empty = el("p", "", "No matching shortcuts");
   empty.setAttribute("role", "status");
   empty.hidden = true;
-  body.append(empty, el("p", "", "Shortcuts pause while you type in a field."));
+  body.append(empty, el("p", "", "Shortcuts pause while typing in a text field."));
   filter.addEventListener("input", () => {
     const terms = filter.value.toLowerCase().split(/\s+/).filter(Boolean);
     for (const [line, text] of rows) line.hidden = !terms.every(term => text.includes(term));

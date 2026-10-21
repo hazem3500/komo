@@ -1,4 +1,4 @@
-import { ownsKeyboard } from "./design-keyboard.js";
+import { textEntry } from "./dom.js";
 // Loaded on demand: renders Design mode proposals as a change card with a
 // Before/After preview. The comment body stays plain text for agents and the CLI.
 import { isDesignTarget } from "./design-target.js";
@@ -574,7 +574,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   if (toggles.length) listenForShortcut();
 }
 
-// B flips the open design comment between Before and After, unless typing.
+// B flips the open design comment between Before and After from anywhere but a text field.
 let shortcutBound = false;
 function listenForShortcut() {
   if (shortcutBound) return;
@@ -585,7 +585,7 @@ function listenForShortcut() {
     if (event.defaultPrevented || key === null || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) return;
     const path = event.composedPath();
     const focused = [...visibleToggles].find(item => item.isConnected && path.includes(item));
-    if (!focused && (key !== -1 || ownsKeyboard(event))) return;
+    if (!focused && (key !== -1 || textEntry(path[0]))) return;
     const toggle = focused ?? [...visibleToggles].reverse().find(item => item.isConnected);
     const buttons = toggle?.querySelectorAll<HTMLButtonElement>("button");
     const next = key === -1 ? toggle?.querySelector<HTMLButtonElement>('button[aria-pressed="false"]') : buttons?.[key];
