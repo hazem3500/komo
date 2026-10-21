@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { frameSizeRecord, readFrameSize } from "../src/frame-size";
 
-const fallback = { size: "window", actual: false };
+const fallback = { size: "window", actual: false, inPlace: false };
 
 describe("remembered Frame size", () => {
   it("defaults to the window at Fit for nothing stored and unreadable values", () => {
@@ -21,11 +21,11 @@ describe("remembered Frame size", () => {
   });
 
   it("restores versioned choices, clamped to sane viewport bounds", () => {
-    expect(readFrameSize('{"v":2,"size":[1440,900],"actual":true}')).toEqual({ size: [1440, 900], actual: true });
-    expect(readFrameSize('{"v":2,"size":"available","actual":false}')).toEqual({ size: "available", actual: false });
-    expect(readFrameSize('{"v":2,"size":null,"actual":true}')).toEqual({ size: "window", actual: true });
-    expect(readFrameSize('{"v":2,"size":[100,9000]}')).toEqual({ size: [240, 2160], actual: false });
-    expect(readFrameSize('{"v":2,"size":[9000.4,10]}')).toEqual({ size: [3840, 240], actual: false });
+    expect(readFrameSize('{"v":2,"size":[1440,900],"actual":true}')).toEqual({ size: [1440, 900], actual: true, inPlace: false });
+    expect(readFrameSize('{"v":2,"size":"available","actual":false}')).toEqual({ size: "available", actual: false, inPlace: false });
+    expect(readFrameSize('{"v":2,"size":null,"actual":true}')).toEqual({ size: "window", actual: true, inPlace: false });
+    expect(readFrameSize('{"v":2,"size":[100,9000]}')).toEqual({ size: [240, 2160], actual: false, inPlace: false });
+    expect(readFrameSize('{"v":2,"size":[9000.4,10]}')).toEqual({ size: [3840, 240], actual: false, inPlace: false });
     expect(readFrameSize('{"v":2,"size":[390.6,844.2]}').size).toEqual([391, 844]);
   });
 
@@ -36,6 +36,13 @@ describe("remembered Frame size", () => {
     expect(JSON.parse(frameSizeRecord("available", false)!)).toEqual({ v: 2, size: "available", actual: false });
     // What is written reads back the same.
     for (const [size, actual] of [[[562, 610], false], ["available", true], ["window", true]] as const)
-      expect(readFrameSize(frameSizeRecord(size as never, actual))).toEqual({ size, actual });
+      expect(readFrameSize(frameSizeRecord(size as never, actual))).toEqual({ size, actual, inPlace: false });
+  });
+
+  it("remembers choosing In place over Viewport mode, even at the default size", () => {
+    const record = frameSizeRecord("window", false, true)!;
+    expect(JSON.parse(record)).toEqual({ v: 2, size: null, actual: false, inPlace: true });
+    expect(readFrameSize(record)).toEqual({ size: "window", actual: false, inPlace: true });
+    expect(readFrameSize('{"size":null,"actual":false,"inPlace":true}')).toEqual(fallback);
   });
 });

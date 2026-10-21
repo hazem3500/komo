@@ -155,7 +155,12 @@ await writeFile(
 // styles left the mount bundle, so initial shrinks 85 bytes. Leaves room for geometry keys (#146).
 // 223,200 -> 223,500: remembered Frame sizes are versioned and clamped, and only explicit choices
 // are stored (+157 in the frame-size chunk).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 223_500)
+// 223,500 -> 227,900: Frame's Viewport mode (frame.mode "iframe"). The iframe, its load checks, fallback
+// reasons and the frame geometry are their own chunk (below). Initial grows ~1,650: komo's page reads
+// reach the frame through frame-target.ts (cross-realm checks, a listener registry, identity geometry the
+// chunk replaces; ~620 in the shared core chunk) and Frame's layout keeps the viewport hooks (~1,000). The
+// size bar's Viewport / In place switch and reason note add ~420 to the frame-size chunk (227,627 measured).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 227_900)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -166,7 +171,9 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 223_500)
 // Passing select and the geometry proposal section to that chunk adds ~10 bytes (7,093 measured).
 // 7,350: geometry's structural move needs Design mode's click selection and Before state, and the
 // hidden original's display stays out of proposals and Copy CSS (7,234 -> 7,320 measured).
-if (report.optionalDesignMode.gzip > 7_350)
+// 7,475: Design mode also listens inside Frame's viewport iframe (pointer, click, keys, scroll) and
+// maps its outlines and picks through it (+~124: 7,320 -> 7,445).
+if (report.optionalDesignMode.gzip > 7_475)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).
@@ -197,7 +204,9 @@ if (report.optionalTokenPicker.gzip > 5_275)
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and
 // footer chunks, so its own chunk is small. 4,730 measured, plus ~3%.
 // 4,950: rows update in place when the listed tokens keep their order, so an open popup stays open (4,814 -> 4,895).
-if (report.optionalTokenPage.gzip > 4_950)
+// 5,000: previews and theme reads go to the reviewed page (Frame's viewport iframe when it shows one),
+// and Before/After keys also work with focus inside it (4,895 -> 4,954).
+if (report.optionalTokenPage.gzip > 5_000)
   throw new Error("komo's Tokens view chunk exceeds its gzip budget.");
 // Experimental move/resize is default off and loads only with design.experimentalGeometry, after
 // Design mode opens; nothing else imports it. It was 3,375 gzip for normal-flow blocks only. Flex and
