@@ -1,6 +1,7 @@
 export { designKeyboard } from "./design-keyboard.js";
 import { renderKeycaps } from "./kbd.js";
 import { el, icon } from "./dom.js";
+import { pageDocument } from "./frame-target.js";
 
 /** Selection guidance and recovery controls load with the proposal helpers. */
 export function selectionViews(options: {
@@ -85,7 +86,7 @@ export function selectionViews(options: {
       // Token edits pend like element previews: "1 element and 2 token changes have pending runtime previews."
       label.textContent = `${[count && `${count} element${count > 1 ? "s" : ""}`, edits && `${edits} token change${edits > 1 ? "s" : ""}`].filter(Boolean).join(" and ")} ${count + edits > 1 ? "have" : "has"} pending runtime previews. Undo, Reset or reload to restore.`;
       review.hidden = !canReview;
-      edit.hidden = !options.mode?.design?.tokens && !document.querySelector("[data-komo-design-tokens]");
+      edit.hidden = !options.mode?.design?.tokens && !pageDocument().querySelector("[data-komo-design-tokens]");
       edit.textContent = edits ? `Edit tokens · ${edits} change${edits > 1 ? "s" : ""}` : "Edit tokens";
       chip.hidden = !selected || !edits;
       chip.textContent = `Token changes · ${edits}`;
@@ -104,8 +105,8 @@ export function cssSelector(element: Element): string {
   for (let node: Element | null = element; node; node = node.parentElement) {
     // React useId and Radix ids change between renders, as in anchors.ts.
     const id = node.id && !/^radix-|^:r|_r_|«r/.test(node.id) ? `#${CSS.escape(node.id)}` : "";
-    if (id && document.querySelectorAll(id).length === 1) return [id, ...parts].join(" > ");
-    if (node === document.body || !node.parentElement) return [node.tagName.toLowerCase(), ...parts].join(" > ");
+    if (id && node.ownerDocument.querySelectorAll(id).length === 1) return [id, ...parts].join(" > ");
+    if (node === node.ownerDocument.body || !node.parentElement) return [node.tagName.toLowerCase(), ...parts].join(" > ");
     const classes = node === element ? [...node.classList].slice(0, 2).map((name) => `.${CSS.escape(name)}`).join("") : "";
     const index = [...node.parentElement.children].filter((child) => child.tagName === node!.tagName).indexOf(node) + 1;
     parts.unshift(`${node.tagName.toLowerCase()}${classes}:nth-of-type(${index})`);

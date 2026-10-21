@@ -25,6 +25,7 @@ export function previewVariables(
   token: (path: string) => Variable | undefined,
   scopes: Record<string, string> = {},
   theme?: string,
+  page: Document = document,
 ): () => void {
   const rules: string[] = [];
   for (const change of changes) {
@@ -42,9 +43,9 @@ export function previewVariables(
     rules.push(`${own.join("") || ":root"}${others.join("")}{${name}:${value}!important}`);
   }
   if (!rules.length) return () => {};
-  const style = document.createElement("style");
+  const style = page.createElement("style");
   style.dataset.komoTokenPreview = "";
   style.textContent = rules.join("");
-  (document.head ?? document.documentElement).append(style);
+  (page.head ?? page.documentElement).append(style);
   return () => style.remove();
 }

@@ -5,6 +5,7 @@
 // shared bundles keep their shape. Comments stay out of the CSS: they would ship.
 import type { DesignEditChange, DesignSystem, DesignToken, TokenAdapter, TokenValueChange } from "./design-system.js";
 import { textEntry } from "./dom.js";
+import { onFrame, previewTarget } from "./frame-target.js";
 
 /** What the Tokens view needs from Design mode. */
 export interface TokenPageHost {
@@ -42,7 +43,7 @@ export function themeKey(design?: DesignSystem): string | undefined {
   const ids: string[] = [];
   for (const axis of Array.isArray(design?.themes) ? design.themes : []) {
     if (!Array.isArray(axis?.options) || axis.options.length < 2) continue;
-    try { ids.push(String(axis.current())); } catch { /* An axis that throws is left out. */ }
+    try { ids.push(String(axis.current(previewTarget()))); } catch { /* An axis that throws is left out. */ }
   }
   return ids.length ? ids.join("+") : undefined;
 }
@@ -68,7 +69,7 @@ export function tokenEdits(adapter: TokenAdapter, options: { before?(): boolean;
     applied = key;
     try { undo?.(); } catch { /* The page keeps whatever the adapter restored. */ }
     if (changes.length && adapter.previewValues)
-      try { cleanup = adapter.previewValues(changes, theme); } catch { /* An adapter that throws previews nothing. */ }
+      try { cleanup = adapter.previewValues(changes, theme, previewTarget()); } catch { /* An adapter that throws previews nothing. */ }
   };
   const sync = () => run(before() ? [] : [...edits.values()]);
   const others = (key: string) => [...edits].filter(([item]) => item !== key).map(([, edit]) => edit);
@@ -250,7 +251,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     const text = proposal();
     if (!text) return;
     resetAll();
-    host.onComment(document.body, text);
+    host.onComment(previewTarget().document.body, text);
   });
   actions.append(undo, reset, comment);
   bar.append(count, compare, status, actions);
@@ -468,7 +469,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
         list.addEventListener("focusin", loadRowTips, { signal });
         // ← Before, → After, B flips, as in Design mode. B pauses only in a text field; the
         // arrows also leave fields, sliders and radios their own.
-        document.addEventListener("keydown", (event) => {
+        const compareKeys = (event: KeyboardEvent) => {
           const key = event.key.toLowerCase();
           const origin = event.composedPath()[0];
           if (compare.hidden || event.metaKey || event.ctrlKey || event.altKey || !["b", "arrowleft", "arrowright"].includes(key) ||
@@ -476,7 +477,9 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
           event.preventDefault();
           event.stopImmediatePropagation();
           show(key === "b" ? !isBefore() : key === "arrowleft");
-        }, { capture: true, signal });
+        };
+        document.addEventListener("keydown", compareKeys, { capture: true, signal });
+        onFrame("keydown", compareKeys, { capture: true, signal });
         render();
         void load();
       }

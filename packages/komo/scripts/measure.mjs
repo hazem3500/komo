@@ -45,6 +45,9 @@ const tokenPicker = (await readdir("dist"))
 const tokenPage = (await readdir("dist"))
   .filter((file) => /^token-page.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const frameIframe = (await readdir("dist"))
+  .filter((file) => /^frame-iframe.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const accountTokens = (await readdir("dist"))
   .filter((file) => /^account-tokens.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
@@ -89,6 +92,7 @@ const report = {
   optionalTokenPage: await sizes(new Set(tokenPage)),
   optionalGeometry: await sizes(new Set(geometry)),
   optionalAccountTokens: await sizes(new Set(accountTokens)),
+  optionalFrameViewport: await sizes(new Set(frameIframe)),
   optionalLiveColors: await sizes(new Set(liveColors)),
   optionalColorEditor: await sizes(new Set(colorEditor)),
   optionalTypedEditor: await sizes(new Set(typedEditor)),
@@ -160,7 +164,13 @@ await writeFile(
 // is a ~1,100-byte chunk loaded the first time a page has a group, and the bubble's list reuses the
 // comment action menu. Styles stay in the shared sheet: in the chunk they cost ~1,000 more in total.
 // Measured locally: main 223,370 -> 225,680 (+2,310); main's 130 bytes of headroom are kept.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 225_810)
+// 223,500 -> 227,900: Frame's Viewport mode (frame.mode "iframe"). The iframe, its load checks, fallback
+// reasons and the frame geometry are their own chunk (below). Initial grows ~1,650: komo's page reads
+// reach the frame through frame-target.ts (cross-realm checks, a listener registry, identity geometry the
+// chunk replaces; ~620 in the shared core chunk) and Frame's layout keeps the viewport hooks (~1,000). The
+// size bar's Viewport / In place switch and reason note add ~420 to the frame-size chunk (227,768 measured on main with #156 and #158).
+// 225,810 -> 230,200: both of the above together (230,073 measured with pin stacks and Viewport mode).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 230_200)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -171,8 +181,10 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 225_810)
 // Passing select and the geometry proposal section to that chunk adds ~10 bytes (7,093 measured).
 // 7,350: geometry's structural move needs Design mode's click selection and Before state, and the
 // hidden original's display stays out of proposals and Copy CSS (7,234 -> 7,320 measured).
-// 7,375: the entry imports chunks by hashed name, so a lazy chunk's new content can move it a byte (7,350 -> 7,351).
-if (report.optionalDesignMode.gzip > 7_375)
+// 7,475: Design mode also listens inside Frame's viewport iframe (pointer, click, keys, scroll) and
+// maps its outlines and picks through it (+~124: 7,320 -> 7,445). The entry imports chunks by hashed
+// name, so a lazy chunk's new content can also move it a byte.
+if (report.optionalDesignMode.gzip > 7_475)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).
@@ -207,6 +219,8 @@ if (report.optionalTokenPicker.gzip > 5_600)
 // footer chunks, so its own chunk is small. 4,730 measured, plus ~3%.
 // 4,950: rows update in place when the listed tokens keep their order, so an open popup stays open (4,814 -> 4,895).
 // 5,150: row details use the footer tooltip, placed beside the panel or above a narrow sheet (+~150).
+// It also covers previews and theme reads that go to the reviewed page (Frame's viewport iframe when it shows one)
+// and Before/After keys with focus inside it (+~60; 5,085 measured with both).
 if (report.optionalTokenPage.gzip > 5_150)
   throw new Error("komo's Tokens view chunk exceeds its gzip budget.");
 // Experimental move/resize is default off and loads only with design.experimentalGeometry, after
@@ -231,6 +245,11 @@ if (report.optionalGeometry.gzip > 13_900)
 // the chunk. 5,671 measured, plus ~3%.
 if (report.optionalAccountTokens.gzip > 5_850)
   throw new Error("komo's API tokens chunk exceeds its gzip budget.");
+// Viewport mode loads only when Frame opens with frame.mode "iframe": the iframe, its stage, the
+// same-origin and fallback checks (X-Frame-Options, frame-ancestors, cross-origin redirects, timeout) and
+// the frame geometry komo's page reads switch to. 2,216 measured, plus ~3%.
+if (report.optionalFrameViewport.gzip > 2_300)
+  throw new Error("komo's Viewport mode chunk exceeds its gzip budget.");
 // Color fields re-read the element once hover, focus, theme and transitions settle; fetched with the
 // panel as its own chunk. 704 measured, plus ~3%.
 if (report.optionalLiveColors.gzip > 725)

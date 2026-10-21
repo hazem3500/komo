@@ -1,12 +1,13 @@
 import { applyAccent } from "./accent.js";
 import type { CommentsOptions, Identity } from "./types.js";
 import { iconMarkup as icons } from "./icon-markup.js";
+import { isElement, isHTMLElement, onFrame } from "./frame-target.js";
 export { icons };
 /** Read on each use: the preference can change while the page is open. */
 export const reducedMotion = () =>
   matchMedia("(prefers-reduced-motion: reduce)").matches;
 export const editable = (node?: EventTarget | null) =>
-  node instanceof HTMLElement &&
+  isHTMLElement(node) &&
   (node.matches("input,textarea,select") || node.isContentEditable);
 /**
  * True text entry, the only place single-key shortcuts pause: a text-like input (not a
@@ -14,11 +15,12 @@ export const editable = (node?: EventTarget | null) =>
  * textbox role, or an open listbox or combobox. Buttons, switches, closed selects and
  * sliders keep shortcuts.
  */
+// Cross-realm checks: fields inside Frame's viewport iframe belong to another window.
 export const textEntry = (node?: EventTarget | null) =>
-  node instanceof Element &&
-  ((node as HTMLElement).isContentEditable || node instanceof HTMLTextAreaElement ||
-    node instanceof HTMLInputElement && /^(text|search|number|url|email|tel|password)$/.test(node.type) &&
-      !node.readOnly && !node.matches("[data-scrub]:not([data-editing])") ||
+  isElement(node) &&
+  ((node as HTMLElement).isContentEditable || node.localName === "textarea" ||
+    node.localName === "input" && /^(text|search|number|url|email|tel|password)$/.test((node as HTMLInputElement).type) &&
+      !(node as HTMLInputElement).readOnly && !node.matches("[data-scrub]:not([data-editing])") ||
     node.matches('[aria-expanded="true"]:is(select,[role=combobox])') ||
     !!node.closest('[contenteditable]:not([contenteditable="false"]),[role=textbox],[role=searchbox],[role=listbox]'));
 /**
@@ -43,7 +45,7 @@ export function isolateEscape(host: HTMLElement, signal: AbortSignal) {
     { capture: true, signal },
   );
 }
-/** Listen on document, plus komo's shadow root for the events stopped at its host. */
+/** Listen on document and Frame's viewport iframe, plus komo's shadow root for the events stopped at its host. */
 export function onPage<E extends Event>(
   node: Node,
   type: string,
@@ -52,6 +54,7 @@ export function onPage<E extends Event>(
 ) {
   const root = node.getRootNode();
   document.addEventListener(type, listener as EventListener, options);
+  onFrame(type, listener, options);
   root.addEventListener(
     type,
     (event) => isolated(event, root) && listener(event as E),
