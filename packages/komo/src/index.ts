@@ -111,6 +111,7 @@ import type {
   Thread,
 } from "./types.js";
 export type * from "./types.js";
+import type { SnapshotContext } from "./thread-snapshot.js";
 
 const pinSizes: readonly PinSize[] = ["full", "compact", "dot", "auto"];
 const pinSizeNames: Record<PinSize, string> = { full: "Full", compact: "Compact", dot: "Dot", auto: "Auto" };
@@ -583,6 +584,18 @@ export function initComments(options: CommentsOptions): CommentsController {
     options.snapshots && snapshotLimits && api.user && (api.user.verified || snapshotLimits.guests)
       ? import("./snapshot.js").then((module) => module.snapshotFor(anchor, resolveAnchor, options.snapshots!, snapshotLimits!, post), () => null)
       : undefined;
+  // Saved snapshots (thumbnails, the not-found fallback, the viewer, the draft preview)
+  // render from their own chunk, loaded when a thread or draft first has one.
+  let snapshotView: Promise<typeof import("./thread-snapshot.js")> | undefined;
+  const loadSnapshotView = () => (snapshotView ??= import("./thread-snapshot.js"));
+  // Drafts whose capture the reviewer removed before posting.
+  const droppedSnapshots = new WeakSet<Anchor>();
+  /** A slot the snapshot chunk fills (see mountSnapshot). */
+  const snapshotSlot = (mode: number, thread: Pick<Thread, "anchor" | "snapshot" | "page" | "id">, shot?: Promise<object | null>) => {
+    const slot = el("div");
+    void loadSnapshotView().then((module) => destroyed || module.mountSnapshot(slot, snapshotContext, mode, thread, shot), () => {});
+    return slot;
+  };
   /** Short text for pins and previews; design proposals read as a summary, not raw text. */
   const commentText = (body: string) =>
     designProposal.test(body)
@@ -622,6 +635,20 @@ export function initComments(options: CommentsOptions): CommentsController {
     isolation: "isolate",
   });
   const shadow = host.attachShadow({ mode: "open" });
+  const snapshotContext: SnapshotContext = {
+    root: shadow,
+    token: () => api.token,
+    origin: () => new URL(options.endpoint).origin,
+    dropped: droppedSnapshots,
+    go: (url) => void go(url),
+    notify,
+    remove: (thread) =>
+      run(() =>
+        saveOptimistic(changeThread(thread.id, ({ snapshot: _, ...current }) => current), async (id) => {
+          for (const kind in thread.snapshot) await api.request(`threads/${id(thread.id)}/snapshot/${kind}`, "DELETE");
+        }),
+      ),
+  };
   const style = el("style");
   style.textContent = styles;
   const catcher = el("div", "catch");
@@ -4126,6 +4153,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       tipFor(quickResolve);
       item.insertBefore(card, livePreviews ?? null);
       item.insertBefore(quickResolve, livePreviews ?? null);
+      if (thread.snapshot?.image)
+        item.insertBefore(snapshotSlot(0, thread), livePreviews ?? null);
       item.insertBefore(route, livePreviews ?? null);
       updateCardPage(item, thread);
       {
@@ -4788,8 +4817,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       send.disabled = pending || !input.value.trim();
       if (!input.closest<HTMLElement>(".sidebar-replies")?.hidden) resizeInput();
     });
-    // Start the target's snapshot while the reviewer writes.
-    if (!thread && draft) void snapshot(draft);
+    // Start the target's snapshot while the reviewer writes; the chunk shows it once captured.
+    const shot = !thread && draft && !droppedSnapshots.has(draft) && snapshot(draft);
+    if (shot) form.append(snapshotSlot(3, { anchor: draft!, page: "", id: "" }, shot));
     if (proposal) {
       const card = el("div", "draft-proposal");
       card.textContent = proposal;
@@ -4906,7 +4936,8 @@ export function initComments(options: CommentsOptions): CommentsController {
             { page: item.page, anchor, body: comment.body, ...(tags.length ? { tags } : {}) },
           );
           // Snapshots follow the saved thread and never hold up or fail the post.
-          void snapshot(anchor, (kind, body) => client.request(`threads/${result.id}/snapshot?kind=${kind}`, "POST", body, body.type));
+          if (!droppedSnapshots.has(anchor))
+            void snapshot(anchor, (kind, body) => client.request(`threads/${result.id}/snapshot?kind=${kind}`, "POST", body, body.type));
           // The initial message ID is returned so queued edits target the persisted comment.
           const saved =
             result.commentId ??
@@ -5115,6 +5146,12 @@ export function initComments(options: CommentsOptions): CommentsController {
           label: "Move pin",
           icon: "pointer" as const,
           onSelect: () => { void beginPinMove(thread); },
+        }] : []),
+        ...(thread.snapshot && api.user && (api.user.verified || (snapshotLimits?.guests && thread.comments[0]?.author.id === api.user.id)) ? [{
+          label: "Remove snapshot",
+          icon: "trash" as const,
+          destructive: true,
+          onSelect: () => void loadSnapshotView().then((module) => module.confirmRemove(thread, snapshotContext)),
         }] : []),
         ...(designEnabled ? [{
           label: "Open in Design",
@@ -5524,10 +5561,13 @@ export function initComments(options: CommentsOptions): CommentsController {
           if (!threadRequest?.pending) selectThread(thread);
         });
         status.append(destination);
+        if (thread.snapshot) status.append(snapshotSlot(2, thread));
         dialog.append(status);
       } else if (!resolveAnchor(thread.anchor)) {
-        const status = el("p", "notice thread-navigation thread-anchor-status", "This comment’s element could not be found on this page. The conversation is still available.");
+        // The chunk adds the route it was left on (opening it again) and how it looked.
+        const status = el("div", "notice thread-navigation thread-anchor-status");
         status.setAttribute("role", "status");
+        status.append(el("p", "", "Element not found on this page. The conversation is still available."), snapshotSlot(4, thread));
         dialog.append(status);
       }
       const messages = el("div", "messages");
@@ -5538,6 +5578,8 @@ export function initComments(options: CommentsOptions): CommentsController {
         (messages.dataset.fade = `${messages.scrollTop > 2 ? "top" : ""} ${messages.scrollTop + messages.clientHeight < messages.scrollHeight - 2 ? "bottom" : ""}`);
       messages.addEventListener("scroll", fade, { passive: true });
       requestAnimationFrame(fade);
+      if (thread.snapshot)
+        messages.querySelector(".message .message-text")?.after(snapshotSlot(1, thread));
       if (tagsEnabled) {
         const slot = tagSlot(
           thread.tags ?? [],
@@ -6860,6 +6902,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       clearTimeout(accountOpenTimer);
       clearTimeout(copiedPromptTimer);
       reactionSwaps.clear();
+      void snapshotView?.then((module) => module.disposeSnapshots(shadow));
       cardFollow.stop();
       run(saveProfile);
       disposeAccentPicker?.();

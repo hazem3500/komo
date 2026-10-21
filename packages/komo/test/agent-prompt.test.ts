@@ -142,3 +142,18 @@ it("quotes captured context without turning its contents into prompt structure",
     "DOM scope:",
   );
 });
+
+it("points agents at a thread's element snapshots, and leaves older threads alone", () => {
+  const item = thread("shot", "/");
+  item.snapshot = { image: "https://api.example.com/threads/shot/snapshot/image?v=1", html: "https://api.example.com/threads/shot/snapshot/html?v=1" };
+  const htmlOnly = { ...thread("markup", "/"), snapshot: { html: "https://api.example.com/threads/markup/snapshot/html?v=1" } };
+  const prompt = agentPrompt([item, htmlOnly, thread("plain", "/")], context)!;
+  expect(prompt).toContain('Element snapshot (image and HTML), as it looked when the comment was left: save it as files with komo comments snapshots "shot".');
+  expect(prompt).toContain('Element snapshot (HTML)');
+  expect(prompt.match(/Element snapshot/g)).toHaveLength(2);
+  // Snapshot URLs need credentials; the prompt never inlines them.
+  expect(prompt).not.toContain("api.example.com");
+  const saved = agentPrompt([item], { ...context, snapshotFiles: () => "- Image: \"/tmp/shot.webp\"" })!;
+  expect(saved).toContain('- Image: "/tmp/shot.webp"');
+  expect(saved).not.toContain("komo comments snapshots");
+});

@@ -99,7 +99,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("native retained
         expect(await page.evaluate(() => (window as any).navigationQA.copied)).toBe(`${origin}/destination?comment=away`);
       }
     } else if (scenario === "missing") {
-      expect(await page.locator(".thread-anchor-status").textContent()).toContain("could not be found on this page");
+      expect(await page.locator(".thread-anchor-status").textContent()).toContain("Element not found on this page");
       expect(await page.locator(".thread-destination").count()).toBe(0);
       expect(await page.locator("#target").count()).toBe(0);
       await page.evaluate(() => (window as any).navigationQA.render());

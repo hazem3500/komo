@@ -20,6 +20,8 @@ export function agentPrompt(
     page?: string;
     /** Extra Markdown after a message, e.g. the CLI's parsed design edit. */
     annotate?: (comment: Comment) => string | null | undefined;
+    /** Lines for a thread's saved element snapshots, e.g. the CLI's downloaded files. */
+    snapshotFiles?: (thread: Thread) => string | null | undefined;
   },
 ): string | null {
   const included = threads
@@ -80,6 +82,12 @@ export function agentPrompt(
       if (detail) lines.push(`${label}: ${value(detail)}`);
     }
     if (anchor.text) lines.push(`Target text:\n${quote(anchor.text)}`);
+    const { image, html } = thread.snapshot ?? {};
+    if (image || html)
+      lines.push(
+        context.snapshotFiles?.(thread) ||
+          `Element snapshot (${image ? (html ? "image and HTML" : "image") : "HTML"}), as it looked when the comment was left: save it as files with komo comments snapshots ${value(thread.id)}.`,
+      );
     lines.push(
       `Anchor within target: x ${percent(anchor.x)}, y ${percent(anchor.y)}${anchor.width || anchor.height ? `; highlighted area ${percent(anchor.width)} wide × ${percent(anchor.height)} high` : " (point)"}.\nCaptured document position: (${Math.round(anchor.pageX)}, ${Math.round(anchor.pageY)}) CSS px; viewport width: ${anchor.viewportWidth} CSS px. Coordinates are a fallback; layout may have changed.`,
     );
