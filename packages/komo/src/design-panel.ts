@@ -239,7 +239,7 @@ function section(context: PanelContext, name: string, properties: string[] | nul
   grid.className = "design-grid";
   for (const property of properties) {
     const field = fields.find((field) => field.property === property)!;
-    grid.append(fieldControl(context.element instanceof SVGElement && property === "color" ? { ...field, label: "Color" } : field, context));
+    grid.append(fieldControl(context.element.namespaceURI === "http://www.w3.org/2000/svg" && property === "color" ? { ...field, label: "Color" } : field, context));
   }
   group.append(summary, grid);
   group.addEventListener("toggle", () => {
@@ -263,9 +263,9 @@ export function renderPanel(container: HTMLElement, context: PanelContext) {
   // Selects open komo's own listbox once that module (fetched with the panel) is in.
   void selectMenu.then((menu) => menu?.attach(container, context.element));
   const style = getComputedStyle(element);
-  if (element instanceof SVGElement) {
+  if (element.namespaceURI === "http://www.w3.org/2000/svg") {
     container.append(
-      section(context, "Layout", element instanceof SVGSVGElement ? ["width", "height", "display"] : ["display"]),
+      section(context, "Layout", element.localName === "svg" ? ["width", "height", "display"] : ["display"]),
       section(context, "Appearance", ["color", "fill", "stroke", "stroke-width"]),
     );
     return liveColors(container, element);

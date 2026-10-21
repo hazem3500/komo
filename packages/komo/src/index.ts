@@ -14,6 +14,18 @@ import type { PinUnit } from "./pin-groups.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
 import { createFramePortals, preserveFrameStyles } from "./frame-portals.js";
 import { createFrameViewport } from "./frame-viewport.js";
+import {
+  clientPoint,
+  counterpart,
+  framedByKomo,
+  isElement,
+  onFrame,
+  pageDocument,
+  pageElementsAt,
+  pageFrame,
+  screenRect,
+} from "./frame-target.js";
+import type { FrameViewport } from "./frame-iframe.js";
 import { OptimisticQueue } from "./optimistic.js";
 import { agentPrompt } from "./agent-prompt.js";
 import { accentPicker } from "./lazy-accent-picker.js";
@@ -122,7 +134,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     comment() {},
     async refresh() {},
   };
-  if (typeof document === "undefined" || options.enabled === false) return noop;
+  if (typeof document === "undefined" || options.enabled === false || framedByKomo()) return noop;
   if (!options.endpoint || !options.repo || !options.branch || !options.project)
     throw new Error("Comments require endpoint, repo, branch, and project.");
   if (
@@ -723,16 +735,106 @@ export function initComments(options: CommentsOptions): CommentsController {
   let frameControls: FrameSizeControls | undefined;
   let frameControlsLoading = false;
   let frameArea: { left: number; top: number; width: number; height: number } | null = null;
+  // Viewport mode (frame.mode "iframe"): the page in its own same-origin iframe.
+  const viewportEnabled = options.frame?.mode === "iframe" && options.frame.scale !== true;
+  let viewport: FrameViewport | undefined;
+  let viewportOpening = false;
+  // The iframe shows a same-origin page and komo reads the page through it.
+  let viewportShown = false;
+  // The last layout used the iframe, so this page was left untouched beneath it.
+  let laidViewport = false;
+  let viewportFailed = "";
+  let storedInPlace = false;
+  try {
+    // Versioned like frame-size.ts's record; older entries mean the default.
+    const stored = JSON.parse(localStorage.getItem(frameSizeKey) ?? "{}");
+    storedInPlace = stored.v === 2 && stored.inPlace === true;
+  } catch {
+    /* Storage is blocked: viewport mode is the default. */
+  }
+  const wantsViewport = () =>
+    viewportEnabled && !viewportFailed && (frameControls ? frameControls.separate : !storedInPlace);
+  function closeViewport() {
+    if (!viewport) return;
+    viewport.destroy();
+    viewport = undefined;
+    viewportShown = false;
+    followSelection();
+  }
+  // Design mode's selection moves to the same element in the page now shown.
+  function followSelection() {
+    const previous = designController?.selected;
+    if (!previous || previous.ownerDocument === pageDocument()) return;
+    const next = counterpart(previous, pageDocument());
+    designController!.clearSelection();
+    if (next) designController!.select(next);
+  }
+  const relayout = () => {
+    appliedViewport = "";
+    scalePage();
+    checkPage();
+    geometry();
+  };
+  function openViewport() {
+    if (viewport || viewportOpening) return;
+    viewportOpening = true;
+    frameControls?.status({ active: false, loading: true });
+    // Where the reviewer was reading, before Frame moves this page.
+    const scroll = framed && !laidViewport ? surface.scrollTop : window.scrollY / htmlZoom();
+    void import("./frame-iframe.js").then(({ openFrameViewport }) => {
+      viewportOpening = false;
+      if (destroyed || !framed || viewport || !wantsViewport()) return;
+      const opened: FrameViewport = (viewport = openFrameViewport({
+        parent: shadow,
+        before: catcher,
+        url: options.frame?.iframeUrl?.(location) ?? location.href,
+        background: pageBackground,
+        scroll,
+        ready() {
+          if (viewport !== opened) return;
+          viewportShown = true;
+          followSelection();
+          frameControls?.status({ active: true });
+          relayout();
+        },
+        failed(reason) {
+          if (viewport !== opened) return;
+          viewportFailed = reason;
+          closeViewport();
+          frameControls?.status({ active: false, reason });
+          relayout();
+        },
+        changed() {
+          checkPage();
+          geometry();
+        },
+      }));
+      relayout();
+    });
+  }
+  /** The visible frame: the viewport iframe's port, else the page root. */
+  const frameRect = () => (viewportShown && viewport ? viewport.port : surface).getBoundingClientRect();
+  /** True for page elements shown inside the frame. */
+  const inFramePage = (element: Element) =>
+    viewportShown ? element.ownerDocument === pageDocument() : surface.contains(element);
+  // pageRoot's counterpart in the viewport iframe.
+  const framedRoot = (): Element => {
+    const page = pageDocument();
+    return page === document ? surface : (canFrame && counterpart(surface, page)) || page.body;
+  };
   function loadFrameControls() {
     if (frameControlsLoading) return;
     frameControlsLoading = true;
     void import("./frame-size.js").then(({ mountFrameSize }) => {
       if (destroyed) return;
-      frameControls = mountFrameSize(shadow, surface, frameSizeKey, () => {
+      frameControls = mountFrameSize(shadow, () => (viewportShown && viewport ? viewport.port : surface), frameSizeKey, (toggled) => {
+        // Choosing Viewport again retries one that couldn't load.
+        if (toggled) viewportFailed = "";
         appliedViewport = "";
         scalePage();
         geometry();
-      }, frameView);
+      }, frameView, viewportEnabled);
+      frameControls.status(viewportShown ? { active: true } : viewportFailed ? { active: false, reason: viewportFailed } : { active: false, loading: !!viewport || viewportOpening });
       // Re-layout only for a remembered size; the default keeps Frame's entrance motion.
       if (frameControls.sized) {
         appliedViewport = "";
@@ -751,7 +853,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     const left = frameBox.left - (frameBox.pan ? window.scrollX / zoom : 0);
     const top = frameBox.top - (frameBox.pan ? window.scrollY / zoom : 0);
     const { width, height } = frameBox;
-    const active = framed && !destroyed;
+    // The viewport iframe lays out its own portals and units; this page stays as it was.
+    const active = framed && !destroyed && !laidViewport;
     const reflow = active && options.frame?.scale !== true;
     if (reflow) frameViewport.update(frameBox.logical);
     portalFrame.update(active ? {
@@ -1332,7 +1435,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     (html as HTMLElement & { currentCSSZoom?: number })
       .currentCSSZoom ?? 1;
   function page() {
-    return canonicalPage(options.page?.() ?? location.pathname);
+    const current = (pageFrame()?.contentWindow?.location as Location | undefined) ?? location;
+    return canonicalPage(options.page?.(current) ?? current.pathname);
   }
   type NoticePosition = {
     cardKey: string | null;
@@ -1883,7 +1987,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       });
       return;
     }
-    const scroll = framed
+    const scroll = framed && !laidViewport
       ? surface.scrollTop
       : window.scrollY / (zoom * appliedScale);
     const wasFramed = framed;
@@ -1913,14 +2017,43 @@ export function initComments(options: CommentsOptions): CommentsController {
     const view = scaled
       ? { ...box, scale: 1, pan: false }
       : (frameControls?.view(box, windowSize) ?? frameView(box, windowSize, false));
-    const pan = useFrame && !scaled && view.pan;
+    if (useFrame && !scaled && wantsViewport()) openViewport();
+    else if (viewport) closeViewport();
+    const inViewport = useFrame && !scaled && viewportShown;
+    // The viewport iframe pans inside its own port, never the document.
+    const pan = useFrame && !scaled && view.pan && !inViewport;
     frameArea = useFrame && !scaled ? area : null;
     host.style.setProperty("--review-viewport-height", `${viewportHeight}px`);
     host.style.height = `${viewportHeight}px`;
     host.style.top = "";
     host.classList.toggle("review-open", expanded);
     host.classList.toggle("design-active", designActive);
-    if (useFrame) {
+    if (inViewport && viewport) {
+      // This page stays as it was beneath the iframe; leave a placeholder frame first.
+      if (wasFramed && !laidViewport) {
+        restorePage();
+        window.scrollTo({ left: frameBox.pan ? 0 : window.scrollX, top: scroll * zoom, behavior: "instant" });
+      }
+      html.style.overflow = "hidden";
+      appliedScale = 1;
+      frameBox = {
+        left: view.left,
+        top: view.top,
+        width: Math.min(box.width, view.width * view.scale),
+        height: Math.min(box.height, view.height * view.scale),
+        logical: [view.width, view.height],
+        pan: false,
+      };
+      viewport.place({
+        left: frameBox.left * zoom,
+        top: frameBox.top * zoom,
+        width: frameBox.width * zoom,
+        height: frameBox.height * zoom,
+        logical: frameBox.logical,
+        scale: view.scale,
+        pan: view.pan,
+      });
+    } else if (useFrame) {
       appliedScale = scaled ? layout.scale : view.scale;
       const effective = appliedScale * zoom;
       // Native client coordinates stay in viewport CSS pixels. Reflow by
@@ -1980,10 +2113,11 @@ export function initComments(options: CommentsOptions): CommentsController {
       if (pan !== wasPanned) window.scrollTo({ left: 0, top: 0, behavior: "instant" });
     } else {
       restorePage();
-      if (framed) window.scrollTo({ left: frameBox.pan ? 0 : window.scrollX, top: scroll * zoom, behavior: "instant" });
+      if (framed && !laidViewport) window.scrollTo({ left: frameBox.pan ? 0 : window.scrollX, top: scroll * zoom, behavior: "instant" });
       appliedScale = 1;
       frameBox.pan = false;
     }
+    laidViewport = inViewport;
     framed = useFrame;
     framePortals();
     if (frameArea) loadFrameControls();
@@ -2935,7 +3069,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   const pinBounds = () =>
     framed
-      ? surface.getBoundingClientRect()
+      ? frameRect()
       : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
   function renderPins(force = false) {
     const off = hidden || commentsHidden;
@@ -3164,7 +3298,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           left: 12,
           top: 12,
           right: window.innerWidth - right,
-          bottom: framed ? Math.min(window.innerHeight, surface.getBoundingClientRect().bottom) - 12 : window.innerHeight - 92,
+          bottom: framed ? Math.min(window.innerHeight, frameRect().bottom) - 12 : window.innerHeight - 92,
         });
         Object.assign(pinPreview.style, {
           left: `${place.x}px`,
@@ -5605,7 +5739,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     // Stay inside what's visible: the frame when framed, above the toolbar otherwise.
     // Content that loads later (design change cards) re-runs this through the observer.
-    const bottom = framed ? Math.min(availableHeight, surface.getBoundingClientRect().bottom) - 12 : availableHeight - 92;
+    const bottom = framed ? Math.min(availableHeight, frameRect().bottom) - 12 : availableHeight - 92;
     dialog.style.maxHeight = `${bottom - 12}px`;
     (dialogSize ??= new ResizeObserver(() => positionDialog())).observe(dialog);
     const anchor = draft ?? (thread && onThreadPage(thread) ? thread.anchor : null);
@@ -5733,19 +5867,20 @@ export function initComments(options: CommentsOptions): CommentsController {
   const locateAnchor = measureAnchor;
   function siteElementAt(x: number, y: number) {
     return (
-      document
-        .elementsFromPoint(x, y)
+      pageElementsAt(x, y)
         .find((element) => element !== host && !host.contains(element)) ?? null
     );
   }
   // Portals (dialogs, popovers) render into body outside pageRoot, so the
   // whole body is pickable unless the host narrows it with pickRoots.
   function pickable(element: Element | null): element is Element {
+    const page = pageDocument();
     return (
       !!element &&
-      element !== surface &&
-      element !== document.body &&
-      (options.pickRoots ? [surface, ...options.pickRoots()] : [document.body]).some(
+      element !== framedRoot() &&
+      element !== page.body &&
+      // In the viewport iframe all of its body is pickable; pickRoots name this page's elements.
+      (page === document && options.pickRoots ? [surface, ...options.pickRoots()] : [page.body]).some(
         (root) => root.contains(element),
       )
     );
@@ -5768,7 +5903,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             design: options.design,
             sourceHref: sourceLink,
             page,
-            bounds: element => framed && surface.contains(element) ? surface.getBoundingClientRect() : undefined,
+            bounds: element => framed && inFramePage(element) ? frameRect() : undefined,
             flip() {
               if (!edgeSidebar || !expanded || designDragged || edgeMorphing) return;
               const from = sidebar.getBoundingClientRect();
@@ -5928,7 +6063,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         const target = componentAt(point.x, point.y);
         if (!target) { notify("Pin unchanged. Choose an element on this page."); return; }
         const anchor = captureAnchor(
-          commentAnchorTarget(target, surface, options.anchorTarget), point,
+          commentAnchorTarget(target, framedRoot(), options.anchorTarget), point,
           { x: point.x + rect.width, y: point.y + rect.height }, options.source,
         );
         anchor.unstacked = true;
@@ -5972,7 +6107,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     pins.toggleAttribute("data-outlined", !!target && docked && outlineShown);
     if (target) {
       const element = anchorElement(thread.anchor);
-      outline(target, spot.width && spot.height ? null : element, framed && !!element && surface.contains(element));
+      outline(target, spot.width && spot.height ? null : element, framed && !!element && inFramePage(element));
       if (docked && !outlineShown) hoverOutline.style.opacity = "0";
       return;
     }
@@ -5992,12 +6127,12 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (mode && hoverPoint)
       hoverTarget = componentAt(hoverPoint.x, hoverPoint.y);
     if (mode && hoverTarget)
-      hoverTarget = commentAnchorTarget(hoverTarget, surface, options.anchorTarget);
+      hoverTarget = commentAnchorTarget(hoverTarget, framedRoot(), options.anchorTarget);
     if (!hoverTarget?.isConnected) {
       hoverOutline.style.opacity = "0";
       return;
     }
-    outline(hoverTarget.getBoundingClientRect(), hoverTarget, framed && surface.contains(hoverTarget));
+    outline(screenRect(hoverTarget), hoverTarget, framed && inFramePage(hoverTarget));
   }
   let outlinedElement: Element | null = null;
   function outline(
@@ -6010,7 +6145,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       hoverOutline,
       rect,
       element,
-      inFrame ? surface.getBoundingClientRect() : undefined,
+      inFrame ? frameRect() : undefined,
     ) ? "1" : "0";
   }
   function scheduleHover() {
@@ -6117,9 +6252,10 @@ export function initComments(options: CommentsOptions): CommentsController {
     revealComments();
     draftBeside = beside;
     hidePreview();
-    element = commentAnchorTarget(element, surface, options.anchorTarget);
+    element = commentAnchorTarget(element, framedRoot(), options.anchorTarget);
     draft = captureAnchor(element, start, end, options.source);
-    if (framed) {
+    // The viewport iframe's anchor is already in its own document coordinates.
+    if (framed && !viewportShown) {
       // Store document coordinates, not the scaled frame's.
       const frame = surface.getBoundingClientRect(),
         scale = appliedScale * htmlZoom();
@@ -6185,17 +6321,15 @@ export function initComments(options: CommentsOptions): CommentsController {
       updateHover();
     });
   }
-  document.addEventListener(
-    "scroll",
-    (event) => {
+  const onScroll = (event: Event) => {
       previewSuppressed = true;
       hidePreview();
       const target = event.target;
       // Sidebar and comment text scrolling do not move the page anchors.
       if (target === host || !target ||
         (target instanceof Node && target.getRootNode() === shadow)) return;
-      const scroller = target === document ? document.scrollingElement : target;
-      if (!(scroller instanceof Element)) return;
+      const scroller = (target as Node).nodeType === Node.DOCUMENT_NODE ? (target as Document).scrollingElement : target;
+      if (!isElement(scroller)) return;
       if (framed && frameBox.pan && target === document) {
         framePortals();
         frameControls?.update(frameArea, htmlZoom());
@@ -6213,13 +6347,10 @@ export function initComments(options: CommentsOptions): CommentsController {
         }, 180);
       }
       geometry();
-    },
-    {
-      capture: true,
-      passive: true,
-      signal: abort.signal,
-    },
-  );
+  };
+  const scrollOptions = { capture: true, passive: true, signal: abort.signal };
+  document.addEventListener("scroll", onScroll, scrollOptions);
+  onFrame("scroll", onScroll, scrollOptions);
   for (const type of ["focusin", "focusout", "click"])
     dialogs.addEventListener(type, () => requestAnimationFrame(positionDialog), {
       signal: abort.signal,
@@ -6294,6 +6425,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       let active = document.activeElement;
       while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
       // Only true text entry pauses review keys; a focused button, switch or closed select keeps them.
+      // With focus inside Frame's viewport iframe, the frame's focused element decides.
+      if (active === pageFrame()) active = pageDocument().activeElement;
       const typing = textEntry(target) || textEntry(active) || event.isComposing;
       if (event.key === "Escape") {
         if (designActive) return;
@@ -6340,7 +6473,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     "pointermove",
     (event) => {
       if (event.pointerType === "touch") return;
-      nearPoint = { x: event.clientX, y: event.clientY };
+      nearPoint = clientPoint(event);
       if (pins.dataset.size) nearFrame ||= requestAnimationFrame(markNear);
     },
     { passive: true, signal: abort.signal },
@@ -6435,6 +6568,12 @@ export function initComments(options: CommentsOptions): CommentsController {
   });
   /** A host router owns redirect/rejection decisions; never override them with a reload. */
   async function go(url: URL) {
+    const framed = pageFrame()?.contentWindow;
+    if (framed && url.origin === location.origin) {
+      url.searchParams.delete("comment");
+      url.searchParams.delete("comment-view");
+      return framed.location.assign(url);
+    }
     if (!options.navigate || url.origin !== location.origin)
       return location.assign(url);
     const id = url.searchParams.get("comment");
@@ -6666,9 +6805,10 @@ export function initComments(options: CommentsOptions): CommentsController {
       themeWatch.disconnect();
       hostGuard.disconnect();
       cancelAnimationFrame(themeFrame);
-      const scroll = framed
+      const scroll = framed && !laidViewport
         ? surface.scrollTop * htmlZoom()
         : window.scrollY / appliedScale;
+      closeViewport();
       framePortals();
       if (framed || !edgeSidebar) {
         restorePage();

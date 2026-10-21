@@ -1,10 +1,11 @@
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
 import { isolated, textEntry } from "./dom.js";
 import { isMac } from "./kbd.js";
+import { isElement, pageDocument } from "./frame-target.js";
 
 // Check ancestors in the composed path, including widgets across shadow boundaries.
 export function ownsKeyboard(event: KeyboardEvent, inspect = false): boolean {
-  return event.composedPath().some(node => node instanceof Element && !(inspect && node.matches('button,a[href],summary') && !node.matches('[contenteditable],[inert],[role]:not([role=button]):not([role=link])')) && node.matches(
+  return event.composedPath().some(node => isElement(node) && !(inspect && node.matches('button,a[href],summary') && !node.matches('[contenteditable],[inert],[role]:not([role=button]):not([role=link])')) && node.matches(
     'input,textarea,select,button,a[href],summary,dialog,[contenteditable]:not([contenteditable="false"]),[inert],[role]:not([role="none"]):not([role="presentation"]):not([role="img"]):not([role="group"]):not([role="region"]):not([role="main"]):not([role="article"]):not([role="heading"]):not([role="paragraph"]):not([role="generic"])',
   ));
 }
@@ -56,7 +57,7 @@ export function designKeyboard(options: {
     }
     // A field cancels its own preview on Escape. Checked before defaultPrevented:
     // komo's window-capture isolation already prevents every Escape inside its host.
-    if (key === "escape" && path.some(node => node instanceof Element && node.matches("[data-field-property]"))) return true;
+    if (key === "escape" && path.some(node => isElement(node) && node.matches("[data-field-property]"))) return true;
     if (event.defaultPrevented || options.reserved?.(event)) return false;
     const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
     const horizontal = key === "arrowleft" || key === "arrowright";
@@ -78,7 +79,7 @@ export function designKeyboard(options: {
     if (path.includes(options.host) || ownsKeyboard(event, inspect)) return false;
     const selected = options.selected();
     const eligible = (element: Element | null): element is DesignTarget => isDesignTarget(element)
-      && element.isConnected && element !== document.body && element !== document.documentElement
+      && element.isConnected && element !== element.ownerDocument.body && element !== element.ownerDocument.documentElement
       && !options.host.contains(element) && !element.matches("script,style,defs,title,desc,metadata,[hidden],[inert]")
       && getComputedStyle(element).display !== "none" && getComputedStyle(element).visibility !== "hidden";
     let next: Element | null = null;
@@ -92,7 +93,7 @@ export function designKeyboard(options: {
     } else if (selected?.isConnected && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
       if (key === "arrowup") next = selected.parentElement;
       if (key === "arrowdown") next = [...selected.children].find(eligible) ?? null;
-    } else if (inspect) next = document.activeElement;
+    } else if (inspect) next = pageDocument().activeElement;
     if (!eligible(next)) return event.defaultPrevented;
     event.preventDefault();
     event.stopImmediatePropagation();

@@ -110,7 +110,8 @@ describe("Design panel theme switcher", () => {
     await open({ tokens, themes: [mode] });
     expect(option("color.text.secondary")!.title).toContain("#6b6b6b");
     toggle().click();
-    expect(mode.apply).toHaveBeenCalledWith("dark");
+    // Axes receive the reviewed page, this document unless Frame shows a viewport iframe.
+    expect(mode.apply).toHaveBeenCalledWith("dark", { document, root: document.documentElement });
     await vi.waitFor(() => expect(option("color.text.secondary")?.title).toContain("#a3a3a3"));
     expect(tokens.list).toHaveBeenLastCalledWith({ mode: "dark" });
     expect(field().querySelector(".design-token-chip")!.textContent).toBe("Uses color.text.secondary");
@@ -132,7 +133,7 @@ describe("Design panel theme switcher", () => {
     expect(document.documentElement.dataset.mode).toBe("dark");
     controller!.setActive(false);
     expect(document.documentElement.dataset.mode).toBe("light");
-    expect(mode.apply).toHaveBeenLastCalledWith("light");
+    expect(mode.apply).toHaveBeenLastCalledWith("light", { document, root: document.documentElement });
     // The next session starts from the restored theme and records its own original.
     mode.apply.mockClear();
     controller!.setActive(true);
@@ -207,7 +208,7 @@ describe("Design panel theme switcher", () => {
     await vi.waitFor(() => expect(themeButton("Dark").getAttribute("aria-pressed")).toBe("true"));
     // Restoring tries every axis, even after one throws.
     expect(() => controller!.setActive(false)).not.toThrow();
-    expect(failing.apply).toHaveBeenLastCalledWith("cozy");
+    expect(failing.apply).toHaveBeenLastCalledWith("cozy", { document, root: document.documentElement });
     expect(document.documentElement.dataset.mode).toBe("light");
   });
 

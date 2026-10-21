@@ -51,10 +51,10 @@ const kinds: Record<string, [DesignTokenType, string[], string]> = {
 const colorValue = /^(#[0-9a-f]{3,8}|(rgb|hsl|hwb|lab|lch|oklab|oklch|color)a?\(.*\))$/i;
 const lengthValue = /^-?\d*\.?\d+(px|rem|em|%|vw|vh|ch)$/;
 /** Whether a grouping rule applies now: @media and @supports are evaluated, @container is not guessed. */
-const applies = (rule: CSSRule) => {
+const applies = (rule: CSSRule, view: Window | null = typeof window === "object" ? window : null) => {
   const { conditionText } = rule as CSSConditionRule;
   if (typeof conditionText !== "string") return true;
-  if ("media" in rule) return typeof matchMedia !== "function" || matchMedia(conditionText).matches;
+  if ("media" in rule) return typeof view?.matchMedia !== "function" || view.matchMedia(conditionText).matches;
   if (typeof CSS !== "undefined" && "supports" in CSS && rule.constructor.name.includes("Supports")) return CSS.supports(conditionText);
   return false;
 };
@@ -188,10 +188,11 @@ export function discoverCssTokens(options: DiscoverCssTokensOptions = {}): Token
               if (!best || rank >= best.rank) best = { rank, value };
             }
           }
-        } else if ("cssRules" in rule && applies(rule)) visit((rule as CSSGroupingRule).cssRules);
+        } else if ("cssRules" in rule && applies(rule, element.ownerDocument.defaultView)) visit((rule as CSSGroupingRule).cssRules);
       }
     };
-    for (const sheet of Array.from(document.styleSheets)) {
+    // The element's own document: Frame's viewport iframe has its own media queries.
+    for (const sheet of Array.from(element.ownerDocument.styleSheets)) {
       try {
         visit(sheet.cssRules);
       } catch {
@@ -224,9 +225,9 @@ export function discoverCssTokens(options: DiscoverCssTokensOptions = {}): Token
   return {
     id: "css-variables",
     list,
-    previewValues(changes, theme) {
+    previewValues(changes, theme, target) {
       if (!listed.size) list();
-      return previewVariables(changes, (path) => listed.get(path), scopes, theme);
+      return previewVariables(changes, (path) => listed.get(path), scopes, theme, target?.document);
     },
     resolve(element) {
       if (!found.size) scan();
