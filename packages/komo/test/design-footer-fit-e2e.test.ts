@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e";
 
 // The Design footer at every panel width: with a change count, Before/After, Undo, Redo, Reset,
 // Copy CSS and Comment all showing, every control stays inside the panel and Comment keeps its
@@ -84,7 +85,7 @@ describe.skipIf(!chrome).each(["light", "dark"])("Design footer on a %s page", t
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?theme=${theme}&${query}`);
     await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.locator(".design-inspector__empty").waitFor();
     await page.locator("#card").click();
     const field = page.locator('.design-inspector [data-property="width"]');
