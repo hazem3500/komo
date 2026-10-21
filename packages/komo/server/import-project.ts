@@ -1,6 +1,14 @@
 import { check, string, pagePath, anchorValue } from "./validation";
 import { digest } from "./digest";
 import { isEmoji } from "../src/emoji";
+import {
+  fromBase64,
+  snapshotCap,
+  snapshotKind,
+  snapshotValue,
+  storeSnapshot,
+} from "./snapshots";
+import { projectConfig } from "./workspaces";
 
 export async function importProject(
   env: Env,
@@ -34,6 +42,10 @@ export async function importProject(
     );
     return value;
   };
+  const snapshotLimit =
+    kind === "snapshots"
+      ? snapshotCap((await projectConfig(env, project))?.maxSnapshotBytes)
+      : 0;
   const statements: D1PreparedStatement[] = [];
   for (const value of data.records) {
     check(
@@ -149,6 +161,31 @@ export async function importProject(
         env.DB.prepare(
           "INSERT OR IGNORE INTO reactions(comment_id,user_id,emoji) VALUES(?,?,?) RETURNING comment_id"
         ).bind(comment, await id(row.user_id, true), row.emoji)
+      );
+    } else if (kind === "snapshots") {
+      const thread = await id(row.thread_id);
+      check(
+        await env.DB.prepare("SELECT id FROM threads WHERE id=? AND project=?")
+          .bind(thread, project)
+          .first(),
+        400,
+        "Import the parent thread first."
+      );
+      const snapshot = snapshotValue(
+        snapshotKind(row.kind),
+        string(row.mime, 100, "snapshot type"),
+        fromBase64(row.data)
+      );
+      statements.push(
+        storeSnapshot(
+          env.DB,
+          project,
+          thread,
+          snapshot,
+          time(row.created_at),
+          snapshotLimit,
+          false
+        )
       );
     } else check(false, 400, "Unknown import table.");
   }

@@ -54,6 +54,11 @@ export interface Thread {
   updatedAt: number;
   /** Reviewer-defined labels used to group related feedback. */
   tags?: string[];
+  /**
+   * Authenticated URLs of the thread's element snapshots, when it has any.
+   * Fetch them with the session's bearer token; HTML is served as plain text.
+   */
+  snapshot?: { image?: string; html?: string };
   comments: Comment[];
 }
 

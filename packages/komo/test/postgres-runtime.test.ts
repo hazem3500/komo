@@ -264,3 +264,148 @@ run(
     expect((await call("/me", "GET", token)).status).toBe(401);
   },
 );
+
+run(
+  "Node PostgreSQL stores, replaces, serves, and deletes element snapshots with quota accounting",
+  async () => {
+    const hash = async (value: string) =>
+      Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
+        ),
+        (byte) => byte.toString(16).padStart(2, "0"),
+      ).join("");
+    await db
+      .prepare("INSERT INTO users(id,name,verified) VALUES(?,?,1)")
+      .bind("google:snap-pg", "Snapper")
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES(?,?,?,?)",
+      )
+      .bind(await hash("snap-pg-session"), "google:snap-pg", "review", 9999999999999)
+      .run();
+    const send = async (
+      path: string,
+      method = "GET",
+      init: { body?: BodyInit; type?: string; token?: string } = {},
+    ) =>
+      worker.fetch(
+        new Request(
+          `http://localhost:8080${path}${path.includes("?") ? "&" : "?"}project=review&repo=team%2Fsite&branch=pr-snap`,
+          {
+            method,
+            headers: {
+              Origin: "http://localhost:3000",
+              ...(init.type ? { "Content-Type": init.type } : {}),
+              ...(init.token ? { Authorization: `Bearer ${init.token}` } : {}),
+            },
+            body: init.body,
+          },
+        ) as unknown as Parameters<typeof worker.fetch>[0],
+        env,
+        { waitUntil: () => {} } as unknown as ExecutionContext,
+      );
+    const token = "snap-pg-session";
+    const quota = async () =>
+      (await db
+        .prepare("SELECT comments,bytes FROM project_quotas WHERE project=?")
+        .bind("review")
+        .first<{ comments: number; bytes: number }>())!;
+    const baseline = await quota();
+    const created = await send("/threads", "POST", {
+      type: "application/json",
+      token,
+      body: JSON.stringify({
+        body: "Snapshot this",
+        page: "/snap",
+        anchor: { x: 0, y: 0, width: 0.4, height: 0.2, pageX: 0, pageY: 10, viewportWidth: 1200, selector: "#hero", text: "Hero" },
+      }),
+    });
+    expect(created.status).toBe(201);
+    const { id } = (await created.json()) as { id: string };
+    const afterThread = await quota();
+    const png = (size: number) => {
+      const bytes = new Uint8Array(size).fill(1);
+      bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+      return bytes;
+    };
+    const upload = (body: BodyInit, type?: string, as = token, query = "") =>
+      send(`/threads/${id}/snapshot${query}`, "POST", { type, token: as, body });
+    expect((await upload(png(40000), "image/png")).status).toBe(201);
+    expect((await quota()).bytes).toBe(afterThread.bytes + 40000 + 256);
+    const replacement = png(60000);
+    expect((await upload(replacement, "image/png")).status).toBe(201);
+    expect((await quota()).bytes).toBe(afterThread.bytes + 60000 + 256);
+    const image = await send(`/threads/${id}/snapshot/image`, "GET", { token });
+    expect(image.status).toBe(200);
+    expect(image.headers.get("Content-Type")).toBe("image/png");
+    expect(image.headers.get("Cache-Control")).toBe("private, max-age=300");
+    expect(new Uint8Array(await image.arrayBuffer())).toEqual(replacement);
+    const form = new FormData();
+    form.set("file", new Blob(["<p onclick=x()>Hi</p>"], { type: "text/html" }));
+    expect((await upload(form, undefined, token, "?kind=html")).status).toBe(201);
+    const html = await send(`/threads/${id}/snapshot/html`, "GET", { token });
+    expect(html.headers.get("Content-Type")).toBe("text/plain; charset=utf-8");
+    expect(html.headers.get("Content-Security-Policy")).toMatch(/^sandbox\b/);
+    expect(html.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(await html.text()).toBe("<p onclick=x()>Hi</p>");
+    // The project's 100,000-byte quota includes snapshots.
+    expect((await upload(png(99000), "image/png")).status).toBe(409);
+    const listed = (await (await send("/threads")).json()) as {
+      threads: { id: string; snapshot?: Record<string, string> }[];
+    };
+    expect(Object.keys(listed.threads[0].snapshot!).sort()).toEqual(["html", "image"]);
+    const count = async () =>
+      (await db.prepare("SELECT COUNT(*) AS n FROM snapshots").first<{ n: number }>())!.n;
+    expect(await count()).toBe(2);
+    const guest = (await (
+      await send("/auth/guest", "POST", {
+        type: "application/json",
+        body: JSON.stringify({ name: "Guest" }),
+      })
+    ).json()) as { token: string };
+    expect((await upload(png(100), "image/png", guest.token)).status).toBe(403);
+    await db
+      .prepare("DELETE FROM project_members WHERE project=? AND user_id LIKE 'guest:%'")
+      .bind("review")
+      .run();
+    // Export snapshots as base64 and import them with their parent thread.
+    await db
+      .prepare("INSERT INTO project_owners(project,user_id) VALUES(?,?)")
+      .bind("review", "google:snap-pg")
+      .run();
+    const exportTable = async (table: string) =>
+      ((await (await send(`/project/export?table=${table}`, "GET", { token })).json()) as {
+        rows: Record<string, unknown>[];
+      }).rows;
+    const threadRows = (await exportTable("threads")).filter((row) => row.id === id);
+    const snapshotRows = await exportTable("snapshots");
+    expect(snapshotRows.map((row) => row.kind).sort()).toEqual(["html", "image"]);
+    await db.prepare("DELETE FROM threads WHERE id=?").bind(id).run();
+    expect(await count()).toBe(0);
+    expect(await quota()).toEqual(baseline);
+    const importRows = async (kind: string, records: unknown[]) =>
+      (await (
+        await send("/project/import", "POST", {
+          type: "application/json",
+          token,
+          body: JSON.stringify({ source: "copy", kind, records }),
+        })
+      ).json()) as { imported: number };
+    expect((await importRows("threads", threadRows)).imported).toBe(1);
+    for (const row of snapshotRows)
+      expect((await importRows("snapshots", [row])).imported).toBe(1);
+    expect((await importRows("snapshots", [snapshotRows[0]])).imported).toBe(0);
+    const copy = (await (await send("/threads")).json()) as {
+      threads: { id: string; snapshot?: Record<string, string> }[];
+    };
+    const copied = copy.threads.find((thread) => thread.id.startsWith("import:"))!;
+    expect(Object.keys(copied.snapshot!).sort()).toEqual(["html", "image"]);
+    const copiedImage = await send(`/threads/${copied.id}/snapshot/image`, "GET", { token });
+    expect(new Uint8Array(await copiedImage.arrayBuffer())).toEqual(replacement);
+    await db.prepare("DELETE FROM threads WHERE id=?").bind(copied.id).run();
+    expect(await count()).toBe(0);
+    expect(await quota()).toEqual(baseline);
+  },
+);
