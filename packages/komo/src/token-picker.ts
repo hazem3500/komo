@@ -326,8 +326,8 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
       loadThemes();
     },
   };
-  // Color fields get the compact picker: narrower, and tall enough for its area, sliders and swatches.
-  const color = /color|^(fill|stroke)$/.test(property), tall = color ? 460 : 320;
+  // Every Custom editor shares one compact width and is sized to its content, up to 460px.
+  const color = /color|^(fill|stroke)$/.test(property), tall = 460;
   let customMode = !!options.custom && !tokens.some(token => token.path === options.current);
   let customValue: string | undefined;
   let editor: (HTMLElement & { live?: true; refresh(value: string): void; destroy(): void }) | undefined;
@@ -351,7 +351,8 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
       if (!editor) {
         const module = await (color ? import("./color-editor.js") : import("./token-custom.js"));
         if (open?.close !== close || !customMode || editor) return;
-        editor = "parseColor" in module ? module.pickerEditor(options, {
+        // Both editors apply live and keep values through the same host.
+        editor = module.pickerEditor(options, {
           preview: customPreview,
           // A host without live commits keeps the last value as a preview and takes it on close.
           commit(value) {
@@ -367,11 +368,11 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
             close(true);
             options.onSelect(token);
           },
-        }) : module.pickerEditor(options, customPreview, value => {
-          close(true);
-          options.custom?.onSelect(value);
         });
         box.append(editor);
+        // Placed again for the editor's own height.
+        at = "";
+        place();
       } else if (customValue !== undefined) customPreview(customValue);
       if (focus && !coarse) editor.querySelector<HTMLInputElement>("input")?.focus();
     } else if (focus && !coarse) (search.hidden ? list : search).focus();
@@ -404,7 +405,12 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     // A select open inside the popup closes its own list first.
     if (key === "Escape" && path[0] instanceof HTMLSelectElement && path[0] !== trigger && path[0].getAttribute("aria-expanded") === "true") return;
     if (key === "Escape") close(true, true);
-    else if (key === "Tab") return;
+    else if (key === "Tab") {
+      // Tab stays inside the popup, from its last control back to its first and the other way.
+      const focusable = [...box.querySelectorAll<HTMLElement>("button,input,select,summary,[tabindex='0']")].filter(node => !node.closest("[hidden]") && !node.matches("details:not([open]) :not(summary)") && node.getClientRects().length);
+      if (path[0] !== focusable[event.shiftKey ? 0 : focusable.length - 1]) return;
+      focusable[event.shiftKey ? focusable.length - 1 : 0]?.focus();
+    }
     else if (path[0] !== search && path[0] !== trigger && path[0] !== list) return;
     else if (step) activate(clamp(active + step, 0, items.length - 1));
     else if (key === "Enter") choose(active);
@@ -463,9 +469,10 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     if (at === `${anchor.left} ${anchor.top}`) return;
     at = `${anchor.left} ${anchor.top}`;
     const area = popupBounds(host);
-    const width = clamp(area.right - area.left - 8, 120, color ? 240 : 340);
+    const width = clamp(area.right - area.left - 8, 120, 256);
     const below = innerHeight - anchor.bottom - 8;
-    const up = below < tall && anchor.top - 8 > below;
+    const need = Math.min(tall, Math.max(box.scrollHeight, 200));
+    const up = below < need && anchor.top - 8 > below;
     box.style.width = `${width}px`;
     box.style.maxHeight = `${Math.min(tall, Math.max(up ? anchor.top - 8 : below, 120))}px`;
     box.style.left = `${clamp(anchor.left, area.left + 4, area.right - width - 4)}px`;
