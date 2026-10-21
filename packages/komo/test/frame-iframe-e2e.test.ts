@@ -345,8 +345,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     for (const zoom of ["Fit", "100%"]) {
       await page.getByRole("button", { name: zoom, exact: true }).click();
       await page.waitForTimeout(200);
-      await page.keyboard.press("d");
-      await page.waitForSelector('.design-inspector[aria-hidden="false"]');
+      await openDesign(page);
       const card = await framed(page, "card-2");
       await page.mouse.click(card.x + card.width / 2, card.y + card.height / 2);
       await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2 + 4);
