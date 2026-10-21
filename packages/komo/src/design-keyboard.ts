@@ -22,8 +22,10 @@ export function designKeyboard(options: {
   /** Design mode's Undo and Redo; their keys press them from anywhere but a text field. */
   undo?: HTMLButtonElement;
   redo?: HTMLButtonElement;
-  /** Before/After and selection keys; defaults are ← → and Tab, Shift+Tab, Enter, Shift+Enter. */
+  /** Before/After and selection keys; defaults are ← → and Tab, Shift+Tab, Shift+Enter. */
   keys?: DesignKeys;
+  /** Plain Enter with a selection. Return false when Comment is disabled. */
+  comment?(): boolean;
   root?: ShadowRoot;
   signal?: AbortSignal;
 }) {
@@ -98,7 +100,24 @@ export function designKeyboard(options: {
       return true;
     }
     // Selection keys apply on the page and the selection, never in the panel.
-    const inspect = plain && (key === "enter" || key === " ");
+    // Space still inspects a focused element. Enter posts the comment instead.
+    const inspect = plain && key === " ";
+    const posting = plain && key === "enter" && !event.repeat;
+    if (posting) {
+      const editing = typing || path.some(node => isElement(node) && node.matches(
+        "[data-field-property],[popover],[role=listbox],[role=menu],textarea,.new-comment-composer,.reply-composer",
+      ));
+      const panelControl = path.includes(options.host) && ownsKeyboard(event);
+      if (!editing && !panelControl) {
+        const current = options.selected();
+        if (current?.isConnected && options.comment?.()) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return true;
+        }
+        return false;
+      }
+    }
     if (path.includes(options.host) || ownsKeyboard(event, inspect)) return false;
     const selected = options.selected();
     const eligible = (element: Element | null): element is DesignTarget => isDesignTarget(element)

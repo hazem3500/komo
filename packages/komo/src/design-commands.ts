@@ -16,15 +16,18 @@ export function reviewCommands() {
 export function designCommands(mac = isMac(), visibility?: Shortcut | null, keys: DesignKeys = resolveDesignKeys()) {
   const canvas = "Design canvas", geometry = "Experimental geometry", text = "Text editing", compare = "Compare";
   const bound = (label: string, group: string, shortcut: Shortcut | null) => ({ label, group, shortcut });
+  const plainEnter = keys.child?.key === "enter" && !keys.child.alt && !keys.child.shift && !keys.child.ctrl && !keys.child.meta;
+  const customChild = plainEnter ? null : keys.child;
   return [
-    // Figma-style: Tab and Shift+Tab walk siblings, Enter and Shift+Enter go in and out.
+    // Tab and Shift+Tab walk siblings. Shift+Enter goes to the parent. Alt+↓ goes to the first child.
+    // Plain Enter posts the comment when a target is selected.
     bound("Next sibling", canvas, keys.next),
     bound("Previous sibling", canvas, keys.prev),
-    bound("First child", canvas, keys.child),
     bound("Parent element", canvas, keys.parent),
-    command("First child (alternative)", "ArrowDown", canvas, { alt: true }),
+    command("Post comment", "Enter", canvas),
+    ...(customChild ? [bound("First child", canvas, customChild)] : []),
+    command(customChild ? "First child (alternative)" : "First child", "ArrowDown", canvas, { alt: true }),
     command("Parent element (alternative)", "ArrowUp", canvas, { alt: true }),
-    command("Inspect focused element, with nothing selected", "Enter", canvas),
     command("Exit Design mode", "Escape", canvas),
     command("Undo last preview", "z", canvas, mac ? { meta: true } : { ctrl: true }),
     command("Redo last undo", "z", canvas, mac ? { meta: true, shift: true } : { ctrl: true, shift: true }),

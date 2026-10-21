@@ -155,7 +155,7 @@ describe.skipIf(!chrome)("Design mode keys", () => {
     await page.close();
   }, 40000);
 
-  it("walks the selection with Tab, Shift+Tab, Enter and Shift+Enter only from the page", async () => {
+  it("walks the selection with Tab, Shift+Tab, Alt+arrows and Shift+Enter only from the page", async () => {
     const page = await design("#title");
     expect(await target(page)).toContain("span#title");
     await page.keyboard.press("Tab");
@@ -164,7 +164,7 @@ describe.skipIf(!chrome)("Design mode keys", () => {
     expect(await target(page)).toContain("span#title");
     await page.keyboard.press("Shift+Enter");
     expect(await target(page)).toContain("div#card");
-    await page.keyboard.press("Enter");
+    await page.keyboard.press("Alt+ArrowDown");
     expect(await target(page)).toContain("span#title");
     await page.keyboard.press("Alt+ArrowUp");
     expect(await target(page)).toContain("div#card");
