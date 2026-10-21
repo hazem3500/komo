@@ -63,6 +63,11 @@ export interface Thread {
    * `page` stays the page it was made on.
    */
   scope?: ThreadScope;
+  /**
+   * Authenticated URLs of the thread's element snapshots, when it has any.
+   * Fetch them with the session's bearer token; HTML is served as plain text.
+   */
+  snapshot?: { image?: string; html?: string };
   comments: Comment[];
 }
 
@@ -156,6 +161,25 @@ export interface KomoToolbar {
    * Defaults to browse, comment, design | comments | more, account | dismiss.
    */
   items?: ToolbarItem[];
+}
+
+/**
+ * Opt-in snapshots of a new comment's target, saved with its thread. Off unless a
+ * kind is set to true. Needs server support; guests capture only when the project allows it.
+ */
+export interface KomoSnapshots {
+  /** A WebP image of the element and some padding, at most 1200px wide. */
+  image?: boolean;
+  /** The element's trimmed outerHTML (about 20 KB at most), with typed values redacted. */
+  html?: boolean;
+  /** Largest image in bytes; quality, then size, step down to fit. Defaults to 250,000, and never exceeds the server's limit. */
+  maxBytes?: number;
+  /**
+   * Return true to redact an element's text in both snapshots, beyond the input,
+   * textarea and password values that are always redacted. Called for each
+   * element in the target; keep it cheap.
+   */
+  redact?(element: Element): boolean;
 }
 
 export interface CommentsOptions {
@@ -303,6 +327,12 @@ export interface CommentsOptions {
    * local part). HTTPS only; return undefined for the initial. Not used for guests.
    */
   avatar?: (user: Pick<Identity, "id" | "name">) => string | undefined;
+  /**
+   * Save an image and/or trimmed HTML of the commented element with each new
+   * thread, e.g. { image: true, html: true }. Off by default. komo's own UI is
+   * never captured, nor is anything inside an element with data-komo-no-snapshot.
+   */
+  snapshots?: KomoSnapshots;
 }
 
 export interface CommentsController {

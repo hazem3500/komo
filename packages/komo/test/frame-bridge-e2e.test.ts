@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Frame, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e";
 
 // React registrations made inside Frame's viewport iframe (useKomoInspectable,
 // useKomoDesignTokens) reach komo in the parent window through the frame bridge.
@@ -93,7 +94,7 @@ describe.skipIf(!chrome)("Frame bridge", () => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     const frame = await viewport(page);
-    await page.keyboard.press("d");
+    await openDesign(page);
     const option = await framed(page, "option");
     await page.mouse.move(option.x, option.y);
     await page.waitForTimeout(150);
@@ -112,7 +113,7 @@ describe.skipIf(!chrome)("Frame bridge", () => {
   it("reads and previews design tokens registered inside the viewport iframe", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     const frame = await viewport(page);
-    await page.keyboard.press("d");
+    await openDesign(page);
     const card = await framed(page, "card");
     await page.mouse.move(card.x, card.y - 30);
     await page.waitForTimeout(150);

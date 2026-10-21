@@ -5,6 +5,7 @@ import { googleOwner } from "./workspaces";
 import type { Identity } from "../src/types";
 
 import { digest } from "./digest";
+import { blobBytes, toBase64 } from "./snapshots";
 import {
   encryptWebhookSecret,
   validateWebhookUrl,
@@ -285,6 +286,8 @@ export async function manageProject(
         "SELECT r.* FROM reactions r JOIN comments c ON c.id=r.comment_id JOIN threads t ON t.id=c.thread_id WHERE t.project=? ORDER BY r.comment_id,r.user_id,r.emoji",
       users:
         "SELECT DISTINCT u.id,u.name,u.verified,u.avatar_url,u.accent_color FROM users u WHERE u.id IN (SELECT c.user_id FROM comments c JOIN threads t ON t.id=c.thread_id WHERE t.project=?) OR u.id IN (SELECT resolved_by FROM threads WHERE project=?) OR u.id IN (SELECT r.user_id FROM reactions r JOIN comments c ON c.id=r.comment_id JOIN threads t ON t.id=c.thread_id WHERE t.project=?) ORDER BY u.id",
+      snapshots:
+        "SELECT s.thread_id,s.kind,s.mime,s.size,s.created_at,s.bytes FROM snapshots s JOIN threads t ON t.id=s.thread_id WHERE t.project=? ORDER BY s.thread_id,s.kind",
     };
     check(Object.hasOwn(queries, table), 400, "Invalid export table.");
     const offset = Number(url.searchParams.get("offset") ?? 0);
@@ -293,7 +296,9 @@ export async function manageProject(
       400,
       "Invalid export offset."
     );
-    const stmt = env.DB.prepare(`${queries[table]} LIMIT 200 OFFSET ?`);
+    // Snapshot rows carry base64 data, so their pages stay small.
+    const pageSize = table === "snapshots" ? 4 : 200;
+    const stmt = env.DB.prepare(`${queries[table]} LIMIT ${pageSize} OFFSET ?`);
     const [versionResult, rows] = await env.DB.batch([
       env.DB.prepare(
         "SELECT COALESCE((SELECT version FROM export_revisions WHERE project=?),0) AS version"
@@ -315,8 +320,14 @@ export async function manageProject(
       version: 1,
       project,
       table,
-      rows: rows.results,
-      next: rows.results.length === 200 ? offset + 200 : null,
+      rows:
+        table === "snapshots"
+          ? (rows.results as Record<string, unknown>[]).map(({ bytes, ...row }) => ({
+              ...row,
+              data: toBase64(blobBytes(bytes)),
+            }))
+          : rows.results,
+      next: rows.results.length === pageSize ? offset + pageSize : null,
     });
   }
   if (path === "/project/clear-resolved" && request.method === "POST") {

@@ -35,6 +35,18 @@ import { isEmoji } from "../src/emoji.js";
 import { timingSafeEqual } from "node:crypto";
 import type { Identity, Thread, Comment } from "../src/types.js";
 import {
+  blobBytes,
+  missingSnapshots,
+  readLimited,
+  readSnapshot,
+  snapshotCap,
+  snapshotKind,
+  SNAPSHOT_IMPORT_BYTES,
+  SNAPSHOT_LIMITS,
+  storeSnapshot,
+  type SnapshotKind,
+} from "./snapshots";
+import {
   anchorValue,
   threadScope,
   cliReturnOrigin,
@@ -138,26 +150,13 @@ async function body(request: Request): Promise<Record<string, unknown>> {
     415,
     "Use application/json."
   );
-  const reader = request.body?.getReader();
-  check(reader, 400, "Missing body.");
-  let length = 0;
-  const parts: Uint8Array[] = [];
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    length += value.length;
-    if (length > 16384) {
-      await reader.cancel();
-      throw new HttpError(413, "Request too large.");
-    }
-    parts.push(value);
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const part of parts) {
-    bytes.set(part, offset);
-    offset += part.length;
-  }
+  const path = new URL(request.url).pathname;
+  // A snapshot import carries one base64 image; every other body keeps 16 KiB.
+  const bytes = await readLimited(
+    request,
+    path === "/project/import" ? SNAPSHOT_IMPORT_BYTES : 16384
+  );
+  let parsed: Record<string, unknown>;
   try {
     const result = JSON.parse(new TextDecoder().decode(bytes));
     check(
@@ -165,7 +164,6 @@ async function body(request: Request): Promise<Record<string, unknown>> {
       400,
       "Invalid JSON object."
     );
-    const path = new URL(request.url).pathname;
     const allowed = path.startsWith("/project")
       ? path === "/project/import"
         ? ["source", "kind", "records"]
@@ -214,10 +212,16 @@ async function body(request: Request): Promise<Record<string, unknown>> {
       400,
       "Unexpected request fields."
     );
-    return result;
+    parsed = result;
   } catch {
     throw new HttpError(400, "Invalid JSON object.");
   }
+  check(
+    bytes.length <= 16384 || parsed.kind === "snapshots",
+    413,
+    "Request too large."
+  );
+  return parsed;
 }
 async function limit(env: Env, key: string, max: number, seconds = 60) {
   const now = Date.now();
@@ -1015,6 +1019,12 @@ async function route(
       guestResolve: config.allowGuestResolve !== false,
       // Signed-in Google accounts can manage personal access tokens here.
       tokens: true,
+      // Element snapshots are opt-in on the client; guests need project consent.
+      snapshots: {
+        guests: config.allowGuestSnapshots === true,
+        maxImageBytes: SNAPSHOT_LIMITS.image,
+        maxHtmlBytes: SNAPSHOT_LIMITS.html,
+      },
     });
   if (url.pathname === "/usage" && request.method === "GET") {
     const user = await authenticate(request, env, project);
@@ -1287,6 +1297,29 @@ async function route(
     )
       .bind(...ids)
       .all<{ comment_id: string; user_id: string; emoji: string }>();
+    const snapshots: { thread_id: string; kind: SnapshotKind; created_at: number }[] = [];
+    try {
+      snapshots.push(
+        ...(
+          await env.DB.prepare(
+            `SELECT thread_id,kind,created_at FROM snapshots WHERE thread_id IN (${placeholders})`
+          )
+            .bind(...ids)
+            .all<{ thread_id: string; kind: SnapshotKind; created_at: number }>()
+        ).results
+      );
+    } catch (error) {
+      if (!missingSnapshots(error)) throw error;
+    }
+    const snapshotsByThread = new Map<string, NonNullable<Thread["snapshot"]>>();
+    const scope = new URLSearchParams({ project, repo, branch });
+    for (const item of snapshots) {
+      const group = snapshotsByThread.get(item.thread_id) ?? {};
+      scope.set("v", String(item.created_at));
+      group[item.kind] =
+        `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/threads/${item.thread_id}/snapshot/${item.kind}?${scope}`;
+      snapshotsByThread.set(item.thread_id, group);
+    }
     const commentsByThread = new Map<string, CommentRow[]>();
     for (const comment of comments.results) {
       const group = commentsByThread.get(comment.thread_id) ?? [];
@@ -1316,6 +1349,9 @@ async function route(
         : null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      ...(snapshotsByThread.has(row.id)
+        ? { snapshot: snapshotsByThread.get(row.id) }
+        : {}),
       comments: (commentsByThread.get(row.id) ?? []).map((c) => ({
         id: c.id,
         body: c.body,
@@ -1411,6 +1447,108 @@ async function route(
       ).catch(() => {})
     );
     return json({ id, commentId: firstCommentId }, 201);
+  }
+  const snapshotRoute = url.pathname.match(
+    /^\/threads\/([\w:-]{1,100})\/snapshot(?:\/(image|html))?$/
+  );
+  if (snapshotRoute) {
+    const [, threadId, pathKind] = snapshotRoute;
+    const thread = await env.DB.prepare(
+      "SELECT id FROM threads WHERE id=? AND project=? AND repo=? AND branch=?"
+    )
+      .bind(threadId, project, repo, branch)
+      .first<{ id: string }>();
+    check(thread, 404, "Thread not found on this branch.");
+    if (request.method === "GET") {
+      const kind = snapshotKind(pathKind);
+      const row = await env.DB.prepare(
+        "SELECT mime,bytes FROM snapshots WHERE thread_id=? AND kind=?"
+      )
+        .bind(threadId, kind)
+        .first<{ mime: string; bytes: unknown }>();
+      check(row, 404, "This thread has no snapshot of that kind.");
+      const bytes = blobBytes(row.bytes);
+      return new Response(bytes as Uint8Array<ArrayBuffer>, {
+        headers: {
+          // HTML is evidence for agents and sandboxed viewers, never live markup.
+          "Content-Type":
+            kind === "html" ? "text/plain; charset=utf-8" : row.mime,
+          "Content-Length": String(bytes.length),
+          "Content-Security-Policy": "sandbox; default-src 'none'",
+          "Cache-Control": "private, max-age=300",
+        },
+      });
+    }
+    check(
+      request.method === "POST" || request.method === "DELETE",
+      405,
+      "Method not allowed."
+    );
+    // Snapshots may hold page content: guests need the project's explicit consent.
+    check(
+      user.verified || config.allowGuestSnapshots === true,
+      403,
+      "Guests cannot attach snapshots in this project."
+    );
+    const author = await env.DB.prepare(
+      "SELECT user_id FROM comments WHERE thread_id=? ORDER BY created_at,id LIMIT 1"
+    )
+      .bind(threadId)
+      .first<{ user_id: string }>();
+    check(
+      user.verified || author?.user_id === user.id,
+      403,
+      "Only the author or a signed-in reviewer can change this snapshot."
+    );
+    if (request.method === "DELETE") {
+      const kind = snapshotKind(pathKind);
+      const [deleted] = await env.DB.batch([
+        env.DB.prepare("DELETE FROM snapshots WHERE thread_id=? AND kind=?").bind(
+          threadId,
+          kind
+        ),
+        env.DB.prepare("UPDATE threads SET updated_at=? WHERE id=?").bind(
+          now,
+          threadId
+        ),
+      ]);
+      return json({ ok: true, deleted: deleted.meta.changes });
+    }
+    await limit(env, `${project}:snapshot:${user.id}`, 60, 600);
+    const snapshot = await readSnapshot(
+      request,
+      pathKind ?? url.searchParams.get("kind")
+    );
+    const [stored] = await env.DB.batch([
+      storeSnapshot(
+        env.DB,
+        project,
+        threadId,
+        snapshot,
+        now,
+        snapshotCap(config.maxSnapshotBytes),
+        true
+      ),
+      env.DB.prepare("UPDATE threads SET updated_at=? WHERE id=?").bind(
+        now,
+        threadId
+      ),
+    ]);
+    check(
+      stored.meta.changes,
+      409,
+      "This project reached its snapshot storage limit. Remove resolved threads to free space."
+    );
+    const scope = new URLSearchParams({ project, repo, branch, v: String(now) });
+    return json(
+      {
+        ok: true,
+        kind: snapshot.kind,
+        size: snapshot.bytes.length,
+        url: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/threads/${threadId}/snapshot/${snapshot.kind}?${scope}`,
+      },
+      201
+    );
   }
   const match = url.pathname.match(
     /^\/threads\/([\w:-]{1,100})(?:\/comments(?:\/([\w:-]{1,100})(?:\/(reactions))?)?)?$/
@@ -1761,7 +1899,9 @@ export default {
       headers.set("Access-Control-Max-Age", "600");
     }
     headers.set("Vary", "Origin");
-    headers.set("Cache-Control", "no-store");
+    // Only authenticated snapshot reads opt into a private browser cache.
+    if (!(response.ok && headers.get("Cache-Control")?.startsWith("private")))
+      headers.set("Cache-Control", "no-store");
     headers.set("X-Content-Type-Options", "nosniff");
     return new Response(response.body, { status: response.status, headers });
   },

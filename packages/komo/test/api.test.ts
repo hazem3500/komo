@@ -110,6 +110,13 @@ beforeAll(async () => {
     scopes: { repo: "owner/site", origins: [origin] },
     strict: { repo: "owner/site", origins: [origin], allowGuestResolve: false },
     demo: { repo: "owner/site", origins: [origin], retainedCommentsPerUser: 3 },
+    snapshots: {
+      repo: "owner/site",
+      origins: [origin],
+      allowGuestSnapshots: true,
+      maxSnapshotBytes: 400000,
+    },
+    snapquota: { repo: "owner/site", origins: [origin] },
     owned: {
       repo: "owner/site",
       origins: [origin, "https://docs.example.com"],
@@ -189,6 +196,14 @@ beforeAll(async () => {
       ('${h("managed-stranger")}','google:stranger','managed',9999999999999),
       ('${h("manage-control")}','google:management','_komo',9999999999999);
     INSERT INTO project_quotas(project,max_comments,max_bytes) VALUES('owned',1,100000),('demo',100,100000);
+    INSERT INTO users(id,name,verified) VALUES('google:snapper','Snapper',1);
+    INSERT INTO project_owners(project,user_id) VALUES('snapshots','google:snapper');
+    INSERT INTO project_quotas(project,max_comments,max_bytes) VALUES('snapquota',100,20000);
+    INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES
+      ('${h("snap-owner")}','google:snapper','snapshots',9999999999999),
+      ('${h("snap-reviewer")}','google:photo-legacy','snapshots',9999999999999),
+      ('${h("snap-test-reviewer")}','google:photo-legacy','test',9999999999999),
+      ('${h("snapquota-owner")}','google:snapper','snapquota',9999999999999);
     INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES
       ('${h("owner-token")}','google:fixture','_komo',9999999999999),
       ('${h("guest-management-token")}','guest:fixture','_komo',9999999999999),
@@ -1905,6 +1920,24 @@ describe("owner management and private projects", () => {
       ).status
     ).toBe(201);
     await call(`/threads/${created.id}`, "PATCH", { resolved: true });
+    const capture = new Uint8Array(300_000).fill(5);
+    capture.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+    expect(
+      (
+        await fetch(
+          `http://localhost:${port}/threads/${created.id}/snapshot?project=managed&repo=owner%2Fsite&branch=shared&kind=image`,
+          {
+            method: "POST",
+            headers: {
+              Origin: origin,
+              "Content-Type": "image/png",
+              Authorization: "Bearer managed-owner",
+            },
+            body: capture.subarray(0, 200_000),
+          }
+        )
+      ).status
+    ).toBe(201);
     const snapshot = await (await call("/project/export?table=threads")).json();
     await call(`/threads/${created.id}/comments`, "POST", {
       body: "New feedback during export",
@@ -1917,7 +1950,7 @@ describe("owner management and private projects", () => {
       ).status
     ).toBe(409);
     const tables: Record<string, unknown[]> = {};
-    for (const kind of ["users", "threads", "comments", "reactions"]) {
+    for (const kind of ["users", "threads", "comments", "reactions", "snapshots"]) {
       const response = await call(`/project/export?table=${kind}`);
       expect(response.status).toBe(200);
       tables[kind] = (await response.json()).rows;
@@ -1966,6 +1999,31 @@ describe("owner management and private projects", () => {
     const imported = result.threads[0];
     expect(imported.id).toMatch(/^import:/);
     expect(imported.scope).toBe("all");
+    expect(tables.snapshots).toHaveLength(1);
+    expect(Object.keys(imported.snapshot)).toEqual(["image"]);
+    const copied = await fetch(imported.snapshot.image, {
+      headers: { Origin: origin, Authorization: "Bearer destination-owner" },
+    });
+    expect(copied.headers.get("Content-Type")).toBe("image/png");
+    expect(new Uint8Array(await copied.arrayBuffer())).toEqual(
+      capture.subarray(0, 200_000)
+    );
+    // Snapshot imports may exceed the JSON cap; other tables keep 16 KiB.
+    expect(
+      (
+        await call(
+          "/project/import",
+          "POST",
+          {
+            source: "managed",
+            kind: "comments",
+            records: [{ id: "x", thread_id: "y", user_id: "z", body: "x".repeat(17000) }],
+          },
+          "destination-owner",
+          "destination"
+        )
+      ).status
+    ).toBe(413);
     const cliRead = await promisify(execFile)(process.execPath,
       [join(root, "packages/komo/cli/index.mjs"), "comments", "get", imported.id],
       {cwd: directory, env: {...process.env, KOMO_ENDPOINT: `http://localhost:${port}`, KOMO_PROJECT: "destination", KOMO_REPO: "owner/site", KOMO_BRANCH: "shared", KOMO_ORIGIN: origin, KOMO_TOKEN: "destination-owner"}});
@@ -2086,6 +2144,358 @@ describe("owner management and private projects", () => {
     expect((await call("/config")).status).toBe(200);
     const usage = await (await call("/usage")).json();
     expect(usage.projects.used).toBe(1);
+  });
+});
+
+describe("element snapshots", () => {
+  const webp = (size: number) => {
+    const bytes = new Uint8Array(size).fill(7);
+    bytes.set(new TextEncoder().encode("RIFF"), 0);
+    bytes.set(new TextEncoder().encode("WEBP"), 8);
+    return bytes;
+  };
+  const png = (size: number) => {
+    const bytes = new Uint8Array(size).fill(3);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+    return bytes;
+  };
+  const scoped = (path: string, project: string, branch = "snapshots") => {
+    const url = new URL(path, `http://localhost:${port}`);
+    url.searchParams.set("project", project);
+    url.searchParams.set("repo", "owner/site");
+    url.searchParams.set("branch", branch);
+    return url;
+  };
+  const upload = (
+    thread: string,
+    body: BodyInit,
+    type: string | undefined,
+    token?: string,
+    {
+      project = "snapshots",
+      kind,
+      branch,
+    }: { project?: string; kind?: string; branch?: string } = {}
+  ) => {
+    const url = scoped(`/threads/${thread}/snapshot`, project, branch);
+    if (kind) url.searchParams.set("kind", kind);
+    return fetch(url, {
+      method: "POST",
+      headers: {
+        Origin: origin,
+        ...(type ? { "Content-Type": type } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body,
+    });
+  };
+  const read = (
+    thread: string,
+    kind: string,
+    token?: string,
+    project = "snapshots",
+    branch?: string
+  ) =>
+    fetch(scoped(`/threads/${thread}/snapshot/${kind}`, project, branch), {
+      headers: {
+        Origin: origin,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+  const remove = (thread: string, kind: string, token = "snap-owner") =>
+    fetch(scoped(`/threads/${thread}/snapshot/${kind}`, "snapshots"), {
+      method: "DELETE",
+      headers: { Origin: origin, Authorization: `Bearer ${token}` },
+    });
+  const call = (
+    path: string,
+    method = "GET",
+    data?: unknown,
+    token = "snap-owner",
+    project = "snapshots"
+  ) => request(path, method, data, token, "snapshots", "owner/site", project);
+  const thread = async (token: string, project = "snapshots") => {
+    const response = await call(
+      "/threads",
+      "POST",
+      { page: "/snapshots", anchor, body: "Snapshot this card." },
+      token,
+      project
+    );
+    expect(response.status).toBe(201);
+    return (await response.json()).id as string;
+  };
+  const listed = async (project = "snapshots", token = "snap-owner") =>
+    (await (await call("/threads", "GET", undefined, token, project)).json())
+      .threads as Thread[];
+  const exportedSnapshots = async () => {
+    const rows: { thread_id: string; kind: string; size: number; data?: string }[] = [];
+    for (let offset: number | null = 0; offset !== null; ) {
+      const page = await (
+        await call(`/project/export?table=snapshots&offset=${offset}`)
+      ).json();
+      rows.push(...page.rows);
+      offset = page.next;
+    }
+    return rows;
+  };
+  const guestToken = async (name: string, project = "snapshots") =>
+    (await (await call("/auth/guest", "POST", { name }, undefined, project)).json())
+      .token as string;
+
+  it("uploads and serves each kind with private, inert responses", async () => {
+    const guest = await guestToken("Snapper");
+    const id = await thread(guest);
+    const image = webp(2048);
+    const posted = await upload(id, image, "image/webp", guest);
+    expect(posted.status).toBe(201);
+    expect(await posted.json()).toMatchObject({
+      ok: true,
+      kind: "image",
+      size: 2048,
+    });
+    const html = '<div class="card"><script>alert(1)</script>Café</div>';
+    const form = new FormData();
+    form.set("kind", "html");
+    form.set("file", new Blob([html], { type: "text/html" }), "snapshot.html");
+    expect((await upload(id, form, undefined, guest)).status).toBe(201);
+
+    const fetchedImage = await read(id, "image", guest);
+    expect(fetchedImage.status).toBe(200);
+    expect(fetchedImage.headers.get("Content-Type")).toBe("image/webp");
+    expect(fetchedImage.headers.get("Cache-Control")).toBe(
+      "private, max-age=300"
+    );
+    expect(fetchedImage.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(fetchedImage.headers.get("Access-Control-Allow-Origin")).toBe(
+      origin
+    );
+    expect(new Uint8Array(await fetchedImage.arrayBuffer())).toEqual(image);
+
+    const fetchedHtml = await read(id, "html", guest);
+    expect(fetchedHtml.status).toBe(200);
+    expect(fetchedHtml.headers.get("Content-Type")).toBe(
+      "text/plain; charset=utf-8"
+    );
+    expect(fetchedHtml.headers.get("Content-Security-Policy")).toMatch(
+      /^sandbox\b/
+    );
+    expect(fetchedHtml.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(fetchedHtml.headers.get("Cache-Control")).toMatch(/^private/);
+    expect(await fetchedHtml.text()).toBe(html);
+
+    const item = (await listed()).find((entry) => entry.id === id)!;
+    expect(Object.keys(item.snapshot!).sort()).toEqual(["html", "image"]);
+    const link = new URL(item.snapshot!.image!);
+    expect(link.pathname).toBe(`/threads/${id}/snapshot/image`);
+    expect(link.searchParams.get("project")).toBe("snapshots");
+    expect(link.searchParams.get("branch")).toBe("snapshots");
+    expect(
+      (
+        await fetch(link, {
+          headers: { Origin: origin, Authorization: `Bearer ${guest}` },
+        })
+      ).status
+    ).toBe(200);
+    // Reads need a session, unlike the public thread listing.
+    const anonymous = await read(id, "image");
+    expect(anonymous.status).toBe(401);
+    expect(anonymous.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("enforces per-kind limits, declared types, and actual contents", async () => {
+    const id = await thread("snap-owner");
+    const owner = "snap-owner";
+    expect((await upload(id, webp(256 * 1024), "image/webp", owner)).status).toBe(201);
+    expect((await upload(id, webp(256 * 1024 + 1), "image/webp", owner)).status).toBe(413);
+    expect((await upload(id, "x".repeat(32 * 1024 + 1), "text/html", owner)).status).toBe(413);
+    const multipart = new FormData();
+    multipart.set("kind", "image");
+    multipart.set("file", new Blob([webp(256 * 1024 + 1)], { type: "image/webp" }));
+    expect((await upload(id, multipart, undefined, owner)).status).toBe(413);
+    // Snapshots are not JSON, so the 16 KiB request cap does not apply.
+    expect((await upload(id, "x".repeat(20000), "text/html", owner)).status).toBe(201);
+
+    expect((await upload(id, webp(100), "image/gif", owner)).status).toBe(415);
+    expect(
+      (await upload(id, webp(100), "image/svg+xml", owner, { kind: "image" })).status
+    ).toBe(415);
+    expect((await upload(id, webp(100), "image/png", owner)).status).toBe(415);
+    expect(
+      (await upload(id, "<p>hi</p>", "text/html", owner, { kind: "image" })).status
+    ).toBe(415);
+    expect(
+      (await upload(id, png(100), "image/png", owner, { kind: "html" })).status
+    ).toBe(415);
+    expect((await upload(id, "<p>hi</p>", "text/plain", owner)).status).toBe(400);
+    expect(
+      (await upload(id, "<p>hi</p>", "text/html; charset=latin1", owner)).status
+    ).toBe(415);
+    expect(
+      (await upload(id, new Uint8Array([0xff, 0xfe]), "text/html", owner)).status
+    ).toBe(415);
+    expect((await upload(id, new Uint8Array(), "image/png", owner)).status).toBe(400);
+    expect((await read(id, "video", owner)).status).toBe(404);
+  });
+
+  it("checks sessions, projects, branches, guests, and authorship", async () => {
+    const id = await thread("snap-owner");
+    expect((await upload(id, png(64), "image/png")).status).toBe(401);
+    // A session from another project cannot reach this project's thread.
+    expect(
+      (await upload(id, png(64), "image/png", "snap-test-reviewer")).status
+    ).toBe(401);
+    expect(
+      (
+        await upload(id, png(64), "image/png", "snap-test-reviewer", {
+          project: "test",
+        })
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await upload(id, png(64), "image/png", "snap-owner", {
+          branch: "elsewhere",
+        })
+      ).status
+    ).toBe(404);
+    expect((await upload(id, png(64), "image/png", "snap-owner")).status).toBe(201);
+    expect((await read(id, "image", "snap-test-reviewer", "test")).status).toBe(404);
+    expect(
+      (await read(id, "image", "snap-owner", "snapshots", "elsewhere")).status
+    ).toBe(404);
+    // Guests may only change snapshots on their own threads, even when allowed.
+    const guest = await guestToken("Passer-by");
+    expect((await upload(id, png(64), "image/png", guest)).status).toBe(403);
+    expect((await remove(id, "image", guest)).status).toBe(403);
+    expect((await read(id, "image", guest)).status).toBe(200);
+    // Signed-in reviewers may replace a snapshot they did not capture.
+    expect((await upload(id, png(80), "image/png", "snap-reviewer")).status).toBe(201);
+
+    // Projects default to no guest snapshots.
+    const testGuest = (
+      await (
+        await request("/auth/guest", "POST", { name: "Default guest" })
+      ).json()
+    ).token as string;
+    const created = await request(
+      "/threads",
+      "POST",
+      { page: "/", anchor, body: "Guest thread" },
+      testGuest
+    );
+    const guestThread = (await created.json()).id as string;
+    const guestUpload = await fetch(
+      `http://localhost:${port}/threads/${guestThread}/snapshot?project=test&repo=owner%2Fsite&branch=feature%2Fa`,
+      {
+        method: "POST",
+        headers: {
+          Origin: origin,
+          "Content-Type": "image/png",
+          Authorization: `Bearer ${testGuest}`,
+        },
+        body: png(64),
+      }
+    );
+    expect(guestUpload.status).toBe(403);
+    expect((await guestUpload.json()).error).toMatch(
+      /Guests cannot attach snapshots/
+    );
+    expect((await (await request("/config")).json()).snapshots).toEqual({
+      guests: false,
+      maxImageBytes: 262144,
+      maxHtmlBytes: 32768,
+    });
+    expect((await (await call("/config")).json()).snapshots.guests).toBe(true);
+  });
+
+  it("replaces on re-upload, deletes on request, and leaves old threads unchanged", async () => {
+    const id = await thread("snap-owner");
+    expect((await upload(id, png(300), "image/png", "snap-owner")).status).toBe(201);
+    const first = (await listed()).find((entry) => entry.id === id)!.snapshot!
+      .image!;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const replacement = webp(500);
+    expect(
+      (await upload(id, replacement, "image/webp", "snap-owner")).status
+    ).toBe(201);
+    const item = (await listed()).find((entry) => entry.id === id)!;
+    expect(Object.keys(item.snapshot!)).toEqual(["image"]);
+    expect(item.snapshot!.image).not.toBe(first);
+    const fetched = await read(id, "image", "snap-owner");
+    expect(fetched.headers.get("Content-Type")).toBe("image/webp");
+    expect(new Uint8Array(await fetched.arrayBuffer())).toEqual(replacement);
+    const rows = (await exportedSnapshots()).filter((row) => row.thread_id === id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: "image", mime: "image/webp", size: 500 });
+
+    const removed = await remove(id, "image");
+    expect(await removed.json()).toEqual({ ok: true, deleted: 1 });
+    expect((await read(id, "image", "snap-owner")).status).toBe(404);
+    expect(
+      (await listed()).find((entry) => entry.id === id)!.snapshot
+    ).toBeUndefined();
+
+    // Threads from before snapshots have no snapshot field and no snapshot.
+    const old = (
+      await (
+        await request("/threads", "GET", undefined, undefined, "pagination")
+      ).json()
+    ).threads as Thread[];
+    expect(old.length).toBeGreaterThan(0);
+    expect(old.every((entry) => !("snapshot" in entry))).toBe(true);
+    const oldRead = await fetch(
+      `http://localhost:${port}/threads/${old[0].id}/snapshot/image?project=test&repo=owner%2Fsite&branch=pagination`,
+      {
+        headers: { Origin: origin, Authorization: "Bearer snap-test-reviewer" },
+      }
+    );
+    expect(oldRead.status).toBe(404);
+  });
+
+  it("caps project storage, counts hosted quotas, and deletes snapshots with their thread", async () => {
+    // Clear earlier tests' snapshots so the 400,000-byte cap arithmetic is exact.
+    for (const entry of (await listed()).filter((item) => item.snapshot))
+      for (const kind of Object.keys(entry.snapshot!))
+        expect((await remove(entry.id, kind)).status).toBe(200);
+    const keep = await thread("snap-owner");
+    const doomed = await thread("snap-owner");
+    expect((await upload(doomed, webp(250000), "image/webp", "snap-owner")).status).toBe(201);
+    const full = await upload(keep, webp(200000), "image/webp", "snap-owner");
+    expect(full.status).toBe(409);
+    expect((await full.json()).error).toMatch(/snapshot storage limit/);
+    // Replacing a snapshot only counts the difference.
+    expect((await upload(doomed, webp(260000), "image/webp", "snap-owner")).status).toBe(201);
+    await call(`/threads/${doomed}`, "PATCH", { resolved: true });
+    expect(
+      (
+        await call("/project/clear-resolved", "POST", {
+          confirm: "snapshots",
+          threadIds: [doomed],
+        })
+      ).status
+    ).toBe(200);
+    expect((await read(doomed, "image", "snap-owner")).status).toBe(404);
+    expect(await exportedSnapshots()).toEqual([]);
+    expect((await upload(keep, webp(200000), "image/webp", "snap-owner")).status).toBe(201);
+    const exported = await exportedSnapshots();
+    expect(exported.map((row) => row.thread_id)).toEqual([keep]);
+    expect(atob(exported[0].data!).length).toBe(200000);
+
+    // Database quotas count snapshot bytes alongside comments.
+    const quotaThread = await thread("snapquota-owner", "snapquota");
+    const quotaUpload = (size: number) =>
+      upload(quotaThread, "x".repeat(size), "text/html", "snapquota-owner", {
+        project: "snapquota",
+      });
+    const blocked = await quotaUpload(25000);
+    expect(blocked.status).toBe(409);
+    expect((await blocked.json()).error).toMatch(/storage or comment limit/);
+    expect((await quotaUpload(8000)).status).toBe(201);
+    expect((await quotaUpload(19500)).status).toBe(409);
+    // Replacement frees the previous bytes first.
+    expect((await quotaUpload(4000)).status).toBe(201);
+    expect((await quotaUpload(12000)).status).toBe(201);
   });
 });
 

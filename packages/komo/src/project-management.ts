@@ -81,14 +81,23 @@ export function projectManagement(
       tables: {},
     };
     let revision: number | undefined;
-    for (const table of ["threads", "comments", "reactions", "users"]) {
+    for (const table of ["threads", "comments", "reactions", "users", "snapshots"]) {
       snapshot.tables[table] = [];
       let offset: number | null = 0;
       while (offset !== null) {
-        const page: { rows: unknown[]; next: number | null; revision: number } =
-          await api.request(
+        const page: { rows: unknown[]; next: number | null; revision: number } | null =
+          await api.request<{ rows: unknown[]; next: number | null; revision: number }>(
             `project/export?table=${table}&offset=${offset}${revision === undefined ? "" : `&revision=${revision}`}${workspace ? `&workspace=${encodeURIComponent(workspace)}` : ""}`
-          );
+          ).catch((error: unknown) => {
+            // Servers released before snapshots have no snapshot table.
+            if (table === "snapshots" && !offset && (error as { status?: number }).status === 400)
+              return null;
+            throw error;
+          });
+        if (!page) {
+          delete snapshot.tables[table];
+          break;
+        }
         revision = page.revision;
         snapshot.tables[table].push(...page.rows);
         offset = page.next;
