@@ -89,7 +89,7 @@ describe.skipIf(!chrome).each([false, true])("SVG lifecycle in Frame=%s", frame 
     await edit("#shape", "#ef3340", true);
     await page.keyboard.press("v");
     expect(await page.locator("#shape").getAttribute("style")).toBe(original);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.waitForTimeout(450);
     expect(await computed("#shape")).toBe("rgb(239, 51, 64)");
     for (const property of ["color", "fill"]) {
