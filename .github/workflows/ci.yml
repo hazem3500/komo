@@ -1,6 +1,7 @@
 name: ci
 # Validates pull requests: build, typecheck, tests (including the Node +
 # PostgreSQL runtime) and bundle budgets. Nothing here deploys or publishes.
+# Tests are split across parallel shards; `check` passes only when every job does.
 on:
   pull_request:
   workflow_dispatch:
@@ -10,8 +11,26 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  check:
+  static:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm size
+      - run: pnpm --filter @hazem3500/komo test:package
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
         image: postgres:16-alpine
@@ -35,7 +54,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm size
-      - run: pnpm --filter @hazem3500/komo test:package
+      - run: pnpm --filter @hazem3500/komo run build:setup
+      - run: pnpm --filter @hazem3500/komo exec vitest run --config vitest.config.ts --shard=${{ matrix.shard }}/6
+  check:
+    if: always()
+    needs: [static, test]
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.static.result }}" = success && test "${{ needs.test.result }}" = success
