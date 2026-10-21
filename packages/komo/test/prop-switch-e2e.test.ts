@@ -78,6 +78,8 @@ async function open(colorScheme: "light" | "dark", reducedMotion: "reduce" | "no
   await page.goto(origin);
   await page.locator(".fixture-option").waitFor();
   await page.keyboard.press("d");
+  // Pick only once Design mode is open; a click before then reaches the page.
+  await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
   await page.click(".fixture-option");
   const control = (name: string) => page.getByRole("switch", { name: `Option ${name}`, exact: true });
   await control("selected").waitFor();

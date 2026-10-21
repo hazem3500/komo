@@ -2,6 +2,7 @@ import { isDesignTarget, pickDesignTarget, type DesignTarget } from "./design-ta
 import { previewMessage, changePreviewStyles, createStyleEdits, inlineStyleSnapshot, removeEmptyStyle, restoreStyle, type StyleEdit, type StyleOriginal } from "./design-preview.js";
 import { designModeStyles } from "./design-mode-styles.js";
 import { el, icon } from "./dom.js";
+import { isMac } from "./kbd.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
 import { clientPoint, isHTMLElement, onFrame, screenRect } from "./frame-target.js";
 import type { Control, PanelContext } from "./design-panel.js";
@@ -25,6 +26,8 @@ export interface DesignModeOptions {
   design?: DesignSystem;
   /** The comments visibility shortcut; in Design mode experimental geometry uses it to hide its overlays. */
   visibility?: import("./shortcuts.js").Shortcut | null;
+  /** Configured Before/After and selection keys. */
+  keys?: import("./shortcuts.js").DesignKeys;
   page?(): string;
   bounds?(element: Element): { left: number; top: number; right: number; bottom: number } | undefined;
   /** Link for a component's repository-relative source, e.g. through `sourceUrl`. */
@@ -32,8 +35,8 @@ export interface DesignModeOptions {
 }
 
 type TextEdit = { kind: "text"; element: DesignTarget };
-/** A token previewed through the app's adapter; its undo comes from `preview()`. */
-type TokenSwap = { kind?: undefined; element: DesignTarget; undo(): void; props?: boolean };
+/** A token previewed through the app's adapter; its undo comes from `preview()`. Entries may redo themselves. */
+type TokenSwap = { kind?: undefined; element: DesignTarget; undo(): void; redo?(): void; props?: boolean };
 /** One step of the Tokens view's page-wide edits, in the same chronological history. */
 type TokenStep = { kind: "token"; element?: undefined; step: object };
 
@@ -100,6 +103,9 @@ export function createDesignMode(options: DesignModeOptions) {
     return button;
   };
   const undo = tool("Undo");
+  const redo = tool("Redo");
+  undo.dataset.tip = `Undo · ${isMac() ? "⌘Z" : "Ctrl+Z"}`;
+  redo.dataset.tip = `Redo · ${isMac() ? "⌘⇧Z" : "Ctrl+Y"}`;
   const reset = tool("Reset");
   const copy = tool("Copy CSS");
   copy.append(icon("copy"));
@@ -107,7 +113,7 @@ export function createDesignMode(options: DesignModeOptions) {
   const editText = action("design-text-edit", "Edit text");
   editText.title = "Edit text";
   editText.setAttribute("aria-label", "Edit selected text inline");
-  actions.append(undo, reset, copy, comment);
+  actions.append(undo, redo, reset, copy, comment);
   // Before shows the page without this session's edits; After puts them back.
   const compare = el("div", "design-inspector__compare");
   compare.setAttribute("role", "group");
@@ -129,6 +135,7 @@ export function createDesignMode(options: DesignModeOptions) {
   (options.panelRoot ?? options.root).append(panel);
 
   let active = false;
+  let resume: [DesignTarget, string] | null = null;
   // Editing stays undecorated until the canvas is targeted again.
   let decorating = true;
   let closeTimer = 0;
@@ -158,7 +165,13 @@ export function createDesignMode(options: DesignModeOptions) {
   bar.addEventListener("pointerover", loadTips);
   bar.addEventListener("focusin", loadTips);
   const collapsed = new Set<string>();
-  const history: Array<StyleEdit | TextEdit | TokenSwap | TokenStep> = [];
+  type Entry = StyleEdit | TextEdit | TokenSwap | TokenStep;
+  const history: Entry[] = [];
+  // Undone entries with how to put each back; any new edit, from any module, clears them.
+  const future: Array<[Entry, () => void]> = [];
+  let redoing = false;
+  const record = history.push.bind(history);
+  history.push = (...items) => { if (!redoing) future.length = 0; return record(...items); };
   const styleEdits = createStyleEdits(history);
   let geometry: ReturnType<typeof import("./design-geometry.js")["bindGeometry"]> | undefined;
   if (options.design?.experimentalGeometry) void import("./design-geometry.js").then(module => {
@@ -460,6 +473,7 @@ export function createDesignMode(options: DesignModeOptions) {
     // Every edit, undo and reset lands here; re-measure after it applies.
     scheduleOutline();
     undo.disabled = !history.length && !reactPanelModule?.canUndoReactProp(selected) && !reactPanelModule?.canUndoDesignTokenEdit(selected);
+    redo.disabled = !future.length;
     reset.disabled = !syncBar();
     copy.disabled = !selected || !(changed.get(selected)?.size);
     comment.disabled = !selected;
@@ -508,10 +522,18 @@ export function createDesignMode(options: DesignModeOptions) {
     renderOutlines(!selected);
   }
   function onDown(event: PointerEvent) {
-    if (!active || event.button !== 0 || event.composedPath().includes(options.host)) return;
+    if (!active || event.button !== 0) return;
+    const path = event.composedPath();
+    // The backdrop around Frame's viewport is canvas too.
+    if (path.includes(options.host)) return void (isHTMLElement(path[0]) && path[0].matches(".frame-stage") && clearSelection());
     const point = clientPoint(event);
     const element = pickDesignTarget(options.targetAt(point.x, point.y), event.metaKey || event.ctrlKey);
-    if (!element || options.host.contains(element)) return;
+    // Empty canvas deselects, Figma-style.
+    if (!element || element === element.ownerDocument.body || element === element.ownerDocument.documentElement) {
+      if (!textTools?.element) clearSelection();
+      return;
+    }
+    if (options.host.contains(element)) return;
     decorating = true;
     if (textTools?.element && (element === textTools.element || textTools.element.contains(element))) return;
     event.preventDefault();
@@ -550,6 +572,8 @@ export function createDesignMode(options: DesignModeOptions) {
     if (event.defaultPrevented && !event.composedPath().includes(options.host)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    // One press leaves; the selection comes back on the next entry, as do pending previews.
+    resume = selected && [selected, page()];
     clearSelection();
     setActive(false);
     options.onExit();
@@ -570,6 +594,8 @@ export function createDesignMode(options: DesignModeOptions) {
       showBefore(before, false);
     }
     if (value && selected && (selectionPage !== page() || (!selected.isConnected && !retainSelection()))) clearSelection();
+    if (value && !active && !selected && resume?.[0].isConnected && resume[1] === page()) select(resume[0]);
+    if (value) resume = null;
     clearTimeout(closeTimer);
     closeTimer = 0;
     active = value;
@@ -624,7 +650,7 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     originals.clear();
     changed.clear();
-    history.length = 0;
+    history.length = future.length = 0;
     textTools?.restoreAll();
     views?.tokens?.reset();
     previewTargets.clear();
@@ -655,12 +681,24 @@ export function createDesignMode(options: DesignModeOptions) {
       }
       status.textContent = previewMessage;
     } else if (!edit.kind) {
+      // Props redo through their own stack; other entries without redo get their inline style back.
+      const style = edit.element.getAttribute("style");
       edit.undo();
+      future.push([edit, edit.redo ?? (edit.props ? () => reactPanelModule?.redoReactProp(edit.element)
+        : () => style === null ? edit.element.removeAttribute("style") : edit.element.setAttribute("style", style))]);
       renderControls();
     } else if (edit.kind === "text") {
       if (selected === (textTools?.undo() ?? edit.element)) renderControls();
-    } else if (edit.kind === "token") views?.tokens?.undo();
-    else {
+      future.push([edit, () => textTools?.redo()]);
+    } else if (edit.kind === "token") {
+      views?.tokens?.undo();
+      future.push([edit, () => views?.tokens?.redo()]);
+    } else {
+      future.push([edit, () => {
+        restoreStyle(edit.element, edit.property, edit.after);
+        reactPanelModule?.syncDesignTokenBinding(edit.element, edit.property);
+        track(edit.element, edit.property);
+      }]);
       restore(edit.element, edit.property, edit.before);
       edit.before.bindingUndo?.();
       reactPanelModule?.syncDesignTokenBinding(edit.element, edit.property);
@@ -674,6 +712,23 @@ export function createDesignMode(options: DesignModeOptions) {
     // goes to Undo, or to the selection once nothing is left to undo, never to Exit.
     const now = options.root.activeElement;
     if (!refocus && (!now || now === undo || !now.getClientRects().length)) undo.disabled ? focusSelection() : undo.focus({ preventScroll: true });
+  });
+  redo.addEventListener("click", () => {
+    const next = future.pop();
+    if (!next) return;
+    redoing = true;
+    // Back in history first, so a move's stand-in counts it as live; token steps return through the Tokens view's own sync.
+    if (next[0].kind !== "token") history.push(next[0]);
+    next[1]();
+    redoing = false;
+    renderControls();
+    renderOutlines();
+    updateActions();
+    options.root.dispatchEvent(new CustomEvent("komo-announce", { detail: "Redone" }));
+    // As for Undo: a redrawn field gets its focus back, a control still shown keeps it; otherwise
+    // Redo, or the selection once nothing is left to redo, never Exit.
+    const now = options.root.activeElement;
+    if (!refocus && (!now || now === redo || !now.getClientRects().length)) redo.disabled ? focusSelection() : redo.focus({ preventScroll: true });
   });
   function resetElement(element: DesignTarget) {
     if (textTools?.isEditing(isHTMLElement(element) ? element : null)) finishTextEdit(true);
@@ -694,6 +749,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (hasReactValues) reactPanelModule?.resetReactProps(element);
     for (let index = history.length - 1; index >= 0; index--)
       if (history[index].element === element) history.splice(index, 1);
+    future.length = 0;
   }
   reset.addEventListener("click", () => {
     if (!selected) return;
@@ -755,7 +811,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (listeners.signal.aborted) return;
     keepFocus = module.keepFocus;
     keyboard = module.designKeyboard({
-      host: options.host, compare, reserved: options.reservedKey, root: options.root, undo, signal: listeners.signal,
+      host: options.host, compare, reserved: options.reservedKey, root: options.root, undo, redo, keys: options.keys, signal: listeners.signal,
       selected: () => selectionPage === page() ? selected : null,
       select(element) { decorating = true; select(element); reveal(element); },
       compareBefore(before) { showBefore(before ?? !showingBefore); },
@@ -777,6 +833,7 @@ export function createDesignMode(options: DesignModeOptions) {
     bar.before(views.chip);
     style.textContent += views.styles;
     undo.innerHTML = views.icons.undo;
+    redo.innerHTML = views.icons.redo;
     reset.innerHTML = views.icons.reset;
     pendingSlot.append(views.pending);
     if (active) renderControls();

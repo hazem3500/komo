@@ -57,6 +57,7 @@ export interface InlineTextTools {
   handleKey(event: KeyboardEvent): boolean;
   hasChanges(element: HTMLElement): boolean;
   undo(): HTMLElement | null;
+  redo(): HTMLElement | null;
   reset(element: HTMLElement): void;
   reconcile(element: HTMLElement, text: string): void;
   proposal(element: HTMLElement): string | undefined;
@@ -142,6 +143,7 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
     },
     hasChanges(element) { return history.original(element) !== undefined; },
     undo() { const element = history.undo(); options.onChange(); return element; },
+    redo() { const element = history.redo(); options.onChange(); return element; },
     reset(element) { history.reset(element); options.onChange(); },
     reconcile(element, text) { history.reconcile(element, text); options.onChange(); },
     proposal(element) { return history.proposal(element); },

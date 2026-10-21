@@ -168,7 +168,7 @@ describe("React props inspector bridge", () => {
     const currentInput = shadow.querySelector<HTMLInputElement>('[aria-label="PromoCard title"]')!;
     currentInput.value = "Reset me";
     currentInput.dispatchEvent(new Event("change", { bubbles: true }));
-    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:nth-child(2)")!.click();
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions [aria-label=Reset]")!.click();
     expect(changes.at(-1)?.title).toBe("A preview title");
   });
 
@@ -183,7 +183,7 @@ describe("React props inspector bridge", () => {
     controller.setActive(true);
     expect(changes.at(-1)?.title).toBe("Left behind");
     expect(shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:first-child")!.disabled).toBe(false);
-    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:nth-child(2)")!.click();
+    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions [aria-label=Reset]")!.click();
     expect(changes.at(-1)?.title).toBe("A preview title");
   });
 

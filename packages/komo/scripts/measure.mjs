@@ -180,7 +180,11 @@ await writeFile(
 // pan frame. Measured locally on main 53dedcc: 232,848.
 // 233,150: Viewport mode at 100% keeps the stage pan out of its port, resets the port on leaving 100% and
 // restores the in-place state when switching back (~+40; 233,027 measured on main 418bc33 with the fix).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 233_150)
+// 233,150 -> 233,800: Design mode keys. Redo for every edit kind (props, styles, tokens, text,
+// resize, move), Before/After on ← → anywhere, Tab/Enter selection and configurable compare/select
+// keys, one-press Escape (+599 measured on main 418bc33: 232,968 -> 233,567). Initial +472 for the key resolver and named keycaps;
+// resolving the keys on demand instead cost ~500 more in total for the extra chunk boundary.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 233_800)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -197,7 +201,10 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 233_150)
 // 7,700: redraws of the same selection keep focus on the same control (or the selection, never
 // Exit), and moves, Undo and applied tokens reach komo's one live region from here, not core
 // (+~228: 7,445 -> 7,673). The re-resolving itself lives in the keyboard chunk.
-if (report.optionalDesignMode.gzip > 7_700)
+// 7,700 -> 8,150: the Redo button and its stack (each undone entry with how to put it back, cleared by any
+// new edit), keyed tooltips, empty-canvas deselect (also on Frame's viewport backdrop) and the selection
+// restored on re-entry (7,677 -> 8,109 on main 418bc33).
+if (report.optionalDesignMode.gzip > 8_150)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).
@@ -211,6 +218,7 @@ if (report.optionalInlineTextEditing.gzip > 3_100)
 // 4,625: field-label.ts moved into this chunk with the picker (it left a shared chunk the panel already loaded, because the typed Custom editor stopped importing it with the old color form).
 // 4,800: letter spacing and opacity fields, per-field scrub steps, no Custom popup for keyword
 // fields and the fetch of the field controls chunk below (4,591 -> 4,677), plus ~3%.
+// The field Escape that cancels and lets go of focus fits in the 4,800 above.
 if (report.optionalDesignPanel.gzip > 4_800)
   throw new Error("komo's design panel chunk exceeds its gzip budget.");
 // The Design panel's styled select popups (listbox, keyboard, flip and check marks)

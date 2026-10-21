@@ -259,10 +259,12 @@ describe.skipIf(!chrome)("Design mode empty state", () => {
     expect(await keys("Inspect element")).toBe("Click");
     expect(await keys("Select inner element")).toBe(mac ? "Command + Click" : "Control + Click");
     expect(await keys("Edit text")).toBe("Double-click");
-    expect(await keys("Previous sibling")).toBe("ArrowLeft");
-    expect(await keys("Next sibling")).toBe("ArrowRight");
-    expect(await keys("Parent element")).toBe(mac ? "Option + ArrowUp" : "Alt + ArrowUp");
-    expect(await keys("Child element")).toBe(mac ? "Option + ArrowDown" : "Alt + ArrowDown");
+    expect(await keys("Previous sibling")).toBe("Shift + Tab");
+    expect(await keys("Next sibling")).toBe("Tab");
+    expect(await keys("Parent element")).toBe("Shift + Enter");
+    expect(await keys("First child")).toBe("Enter");
+    expect(await keys("Parent element (alternative)")).toBe(mac ? "Option + ArrowUp" : "Alt + ArrowUp");
+    expect(await keys("First child (alternative)")).toBe(mac ? "Option + ArrowDown" : "Alt + ArrowDown");
     expect(await keys("Exit Design mode")).toBe("Escape");
     expect(await keys("Design mode")).toBe("Shift + D");
     expect(await keys("Keyboard shortcuts")).toBe("?");
