@@ -151,7 +151,12 @@ await writeFile(
 // styles left the mount bundle, so initial shrinks 85 bytes. Leaves room for geometry keys (#146).
 // 223,200 -> 223,500: remembered Frame sizes are versioned and clamped, and only explicit choices
 // are stored (+157 in the frame-size chunk).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 223_500)
+// 223,500 -> 225,810: pin stacks and collision bubbles (pins.cluster). Grouping, the 24px collision pass
+// and the stack/bubble styles run at mount (initial +1,218: 82,457 -> 83,675); drawing stacks and bubbles
+// is a ~1,100-byte chunk loaded the first time a page has a group, and the bubble's list reuses the
+// comment action menu. Styles stay in the shared sheet: in the chunk they cost ~1,000 more in total.
+// Measured locally: main 223,370 -> 225,680 (+2,310); main's 130 bytes of headroom are kept.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 225_810)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
