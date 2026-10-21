@@ -181,7 +181,7 @@ describe("Design mode preview cleanup", () => {
     expect(shadow.querySelector(".design-inspector__empty")).not.toBeNull();
     const undo = shadow.querySelector<HTMLButtonElement>('.design-inspector [aria-label="Undo"]')!;
     expect(undo.disabled).toBe(false);
-    shadow.querySelector<HTMLButtonElement>('.design-inspector__pending button:last-child')!.click();
+    shadow.querySelector<HTMLButtonElement>('.design-inspector__pending [aria-label="Discard all"]')!.click();
     restored(link("Timer"));
   });
 

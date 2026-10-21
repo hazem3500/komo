@@ -128,7 +128,6 @@ export function createDesignMode(options: DesignModeOptions) {
   });
   bar.append(count, compare, status, actions);
   const pendingSlot = el("div");
-  pendingSlot.hidden = true;
   let views: ReturnType<typeof import("./design-export.js")["selectionViews"]> | undefined;
   panel.append(heading, pendingSlot, controls, bar);
   options.root.append(style, outline, prospective);
@@ -168,7 +167,8 @@ export function createDesignMode(options: DesignModeOptions) {
   type Entry = StyleEdit | TextEdit | TokenSwap | TokenStep;
   const history: Entry[] = [];
   // Undone entries with how to put each back; any new edit, from any module, clears them.
-  const future: Array<[Entry, () => void]> = [];
+  // A restored Discard all is one too, though it never joins the history.
+  const future: Array<[Entry | { kind: "discard" }, () => void]> = [];
   let redoing = false;
   const record = history.push.bind(history);
   history.push = (...items) => { if (!redoing) future.length = 0; return record(...items); };
@@ -213,15 +213,18 @@ export function createDesignMode(options: DesignModeOptions) {
    */
   function syncBar() {
     const element = selected;
-    const own = element
-      ? (changed.get(element)?.size ?? 0) + Number(isHTMLElement(element) && !!textTools?.hasChanges(element)) + Number(!!reactPanelModule?.hasReactPropChanges(element)) ||
-        Number(!!reactPanelModule?.hasDesignTokenEdit(element))
-      : 0;
+    const own = element ? changeCount(element) : 0;
     const total = own + (element && views?.tokens?.size || 0);
     count.textContent = total ? `${total} change${total > 1 ? "s" : ""}` : "";
     bar.toggleAttribute("data-changes", total > 0 || !undo.disabled);
-    compare.hidden = !total && !showingBefore;
+    // Discarded changes wait in Before until ⌘Z brings them back, so they can't be flipped.
+    compare.hidden = !!views?.parked || !total && !showingBefore;
     return own;
+  }
+  /** The footer's count for one element; the pending card lists the same number. */
+  function changeCount(element: DesignTarget) {
+    return (changed.get(element)?.size ?? 0) + Number(isHTMLElement(element) && !!textTools?.hasChanges(element)) + Number(!!reactPanelModule?.hasReactPropChanges(element)) ||
+      Number(!!reactPanelModule?.hasDesignTokenEdit(element));
   }
   let showingBefore = false;
   let suspendedBefore: boolean | undefined;
@@ -362,10 +365,7 @@ export function createDesignMode(options: DesignModeOptions) {
   function syncEmpty() {
     panel.toggleAttribute("data-empty", (comment.hidden = !selected));
     panel.parentElement?.toggleAttribute("data-design-empty", active && !selected);
-    const pending = [...previewTargets.keys()].filter(hasChanges);
-    pendingSlot.hidden = !!selected || !pending.length && !views?.tokens?.size;
-    if (views) views.pending.hidden = pendingSlot.hidden;
-    views?.update(pending.length, pending.some(element => element.isConnected && previewTargets.get(element) === page()), !!selected);
+    views?.update(!!selected);
   }
   function hasChanges(element: DesignTarget) {
     return !!(changed.get(element)?.size || (isHTMLElement(element) && textTools?.hasChanges(element)) || reactPanelModule?.hasReactPropChanges(element) || reactPanelModule?.hasDesignTokenEdit(element));
@@ -404,9 +404,11 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     marker.hidden = !drawHighlight(marker, rect, element, options.bounds?.(element));
   }
+  // The pending card's hovered row outlines its element like a selection.
+  let peek: DesignTarget | null = null;
   function renderOutlines(retarget = false) {
     geometry?.render();
-    outlineFor(selected ?? hovered, selected ? "selected" : "hover", retarget);
+    outlineFor(selected ?? hovered ?? peek, selected || !hovered ? "selected" : "hover", retarget);
     outlineFor(selected && hovered !== selected ? hovered : null, "hover", false, prospective);
   }
   function scheduleOutline() {
@@ -438,6 +440,7 @@ export function createDesignMode(options: DesignModeOptions) {
   const resized = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleOutline) : null;
   function select(element: Element | null) {
     if (!isDesignTarget(element) || !element.isConnected || options.host.contains(element)) return;
+    views?.settle();
     if (textTools?.element && textTools.element !== element) finishTextEdit();
     resized?.disconnect();
     resized?.observe(element);
@@ -472,7 +475,7 @@ export function createDesignMode(options: DesignModeOptions) {
   function updateActions() {
     // Every edit, undo and reset lands here; re-measure after it applies.
     scheduleOutline();
-    undo.disabled = !history.length && !reactPanelModule?.canUndoReactProp(selected) && !reactPanelModule?.canUndoDesignTokenEdit(selected);
+    undo.disabled = !views?.parked && !history.length && !reactPanelModule?.canUndoReactProp(selected) && !reactPanelModule?.canUndoDesignTokenEdit(selected);
     redo.disabled = !future.length;
     reset.disabled = !syncBar();
     copy.disabled = !selected || !(changed.get(selected)?.size);
@@ -672,6 +675,11 @@ export function createDesignMode(options: DesignModeOptions) {
       reactPanelModule?.designContext(element, options.design));
   }
   undo.addEventListener("click", () => {
+    // Undo after Discard all brings the whole set back; Redo discards it again.
+    if (views?.restore()) {
+      future.push([{ kind: "discard" }, () => views?.discard()]);
+      return updateActions();
+    }
     const edit = history.pop();
     if (!edit) {
       if (selected) {
@@ -718,7 +726,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (!next) return;
     redoing = true;
     // Back in history first, so a move's stand-in counts it as live; token steps return through the Tokens view's own sync.
-    if (next[0].kind !== "token") history.push(next[0]);
+    if (next[0].kind !== "token" && next[0].kind !== "discard") history.push(next[0]);
     next[1]();
     redoing = false;
     renderControls();
@@ -810,24 +818,27 @@ export function createDesignMode(options: DesignModeOptions) {
   const selectionReady = exporter().then(module => {
     if (listeners.signal.aborted) return;
     keepFocus = module.keepFocus;
+    const show = (element: DesignTarget) => { decorating = true; select(element); reveal(element); };
     keyboard = module.designKeyboard({
       host: options.host, compare, reserved: options.reservedKey, root: options.root, undo, redo, keys: options.keys, signal: listeners.signal,
       selected: () => selectionPage === page() ? selected : null,
-      select(element) { decorating = true; select(element); reveal(element); },
+      select: show,
       compareBefore(before) { showBefore(before ?? !showingBefore); },
       help: options.shortcutHelp,
     });
     module.watchDesignStatus(status, bar, () => !!textTools?.element, listeners.signal);
     views = module.selectionViews({
       help: options.shortcutHelp,
-      review() {
-        const target = [...previewTargets.keys()].reverse().find(element => element.isConnected && previewTargets.get(element) === page() && hasChanges(element));
-        if (target) select(target);
-      },
+      select: show,
+      peek(element) { peek = element; decorating = true; renderOutlines(); },
+      // Discard all and its Undo flip Before; older undone steps can't be redone on top.
+      before(on) { future.length = 0; showBefore(on); },
       reset: resetAll,
-      proposals: () => [...previewTargets.keys()].filter(hasChanges).map(element => proposalFor(element, module.designProposal)),
+      items: () => [...previewTargets].filter(([element]) => hasChanges(element)).map(([element, at]) => ({
+        element, here: at === page() && element.isConnected, count: changeCount(element), proposal: proposalFor(element, module.designProposal),
+      })),
       message: text => { status.textContent = text; },
-      mode: options,
+      mode: options, signal: listeners.signal,
       history, update: updateActions, clear: clearSelection,
     });
     bar.before(views.chip);

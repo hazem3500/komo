@@ -56,8 +56,8 @@ beforeAll(async () => {
       };
       const params=new URLSearchParams(location.search);
       window.komo=initKomo({endpoint:location.origin,project:'frame-iframe',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
-        design:{tokens:discoverCssTokens()},
-        frame:{mode:params.has('transform')?'transform':'iframe',...(params.get('url')?{iframeUrl:()=>params.get('url')}:{})}});
+        design:{tokens:discoverCssTokens(),experimentalGeometry:params.has('geometry')},
+        frame:{mode:params.has('transform')?'transform':'iframe',...(params.has('inplace')?{defaultMode:'transform'}:{}),...(params.get('url')?{iframeUrl:()=>params.get('url')}:{})}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -188,7 +188,8 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     const frame = await viewportFrame(page);
     await comment(page, "card-3", "From the viewport");
     const pin = page.locator('.pin[data-thread="thread-1"]');
-    await pin.waitFor();
+    // The pin re-renders as the new thread saves; wait until it's shown on the card.
+    await expect.poll(async () => !!(await pin.boundingBox())).toBe(true);
     expectOn(await pin.boundingBox(), await framed(page, "card-3"), "viewport pin at Fit");
     await page.screenshot({ path: join(shots, "viewport-pin-fit.png") });
     // 100%: the frame pans inside its port, and the pin follows the card.
@@ -327,6 +328,92 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await frame.evaluate(() => history.back());
     await pin.waitFor();
     expect(await frame.locator("#title").textContent()).toBe("Home");
+    await context.close();
+  });
+
+  it("resizes and moves page elements inside the frame with experimental geometry, at Fit and 100%", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await open(page, "?geometry");
+    const frame = await viewportFrame(page);
+    const height = () => frame.locator("#card-2").evaluate((node) => node.getBoundingClientRect().height);
+    const scale = () => page.evaluate(() => {
+      const iframe = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]")!;
+      return iframe.getBoundingClientRect().width / iframe.offsetWidth;
+    });
+    for (const zoom of ["Fit", "100%"]) {
+      await page.getByRole("button", { name: zoom, exact: true }).click();
+      await page.waitForTimeout(200);
+      await page.keyboard.press("d");
+      await page.waitForSelector('.design-inspector[aria-hidden="false"]');
+      const card = await framed(page, "card-2");
+      await page.mouse.click(card.x + card.width / 2, card.y + card.height / 2);
+      await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2 + 4);
+      // The bottom edge's handle (the card is wider than the stage at 100%).
+      const bottom = page.locator(".design-geometry__handle[data-handle=s]");
+      await bottom.waitFor({ state: "visible" });
+      // The handles sit on the framed element, on screen.
+      const handle = (await bottom.boundingBox())!;
+      expect(Math.abs(handle.y + handle.height / 2 - (card.y + card.height)), `${zoom} handle y`).toBeLessThanOrEqual(8);
+      // A screen drag resizes by page pixels: the drag over the frame's scale.
+      const before = await height(), ratio = await scale();
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2 + 30, { steps: 5 });
+      await page.mouse.up();
+      await page.waitForTimeout(100);
+      expect(Math.abs(await height() - (before + 30 / ratio)), `${zoom} resize`).toBeLessThanOrEqual(2);
+      await page.screenshot({ path: join(shots, `viewport-geometry-${zoom === "Fit" ? "fit" : "100"}.png`) });
+      await page.locator('.design-inspector__actions [aria-label="Undo"]').click();
+      await page.waitForTimeout(100);
+      expect(Math.abs(await height() - before), `${zoom} undo`).toBeLessThanOrEqual(1);
+      // Alt + ↓ on the focused selection moves it after the next card, inside the frame's document.
+      // (Hover wakes the canvas after the panel click.)
+      await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2);
+      await page.waitForTimeout(100);
+      await page.locator(".design-geometry__frame").focus();
+      await page.keyboard.press("Alt+ArrowDown");
+      await page.waitForTimeout(100);
+      expect(await frame.evaluate(() => {
+        const moved = document.querySelector("[data-komo-move-clone]");
+        return [moved?.previousElementSibling?.id, getComputedStyle(document.getElementById("card-2")!).display];
+      }), `${zoom} move`).toEqual(["card-3", "none"]);
+      await page.locator('.design-inspector__actions [aria-label="Undo"]').click();
+      await page.waitForTimeout(100);
+      expect(await frame.locator("[data-komo-move-clone]").count()).toBe(0);
+      // Escape leaves the selection's focus, then Design mode (and no further: Frame stays open).
+      for (let tries = 0; tries < 3 && await page.locator('.design-inspector[aria-hidden="false"]').count(); tries++) {
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(100);
+      }
+      await page.waitForTimeout(150);
+    }
+    expect(errors).toEqual([]);
+    await page.close();
+  });
+
+  it("starts In place with defaultMode transform until the reviewer picks Viewport, then remembers it", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    await open(page, "?inplace");
+    await page.waitForTimeout(400);
+    // No second copy of the app until it's asked for.
+    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(await page.getByRole("button", { name: "In place", exact: true }).getAttribute("aria-pressed")).toBe("true");
+    // Each mode says what it trades, on hover.
+    for (const [name, text] of [["In place", "No extra copy"], ["Viewport", "Runs a second copy of the app"]]) {
+      const button = page.getByRole("button", { name, exact: true });
+      await button.hover();
+      expect(await button.evaluate((node) => getComputedStyle(node, "::after").content)).toContain(text);
+    }
+    await page.screenshot({ path: join(shots, "mode-tooltip.png") });
+    await page.getByRole("button", { name: "Viewport", exact: true }).click();
+    await viewportFrame(page);
+    // The reviewer's choice wins over the host's default after a reload.
+    await open(page, "?inplace");
+    await viewportFrame(page);
+    expect(await page.getByRole("button", { name: "Viewport", exact: true }).getAttribute("aria-pressed")).toBe("true");
     await context.close();
   });
 

@@ -132,10 +132,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     await expect.poll(background).toBe(light);
     await openDesign(page);
     await expect.poll(background).toBe(orange);
-    expect(await page.locator(".design-inspector__pending p").textContent()).toBe("1 token change has pending runtime previews. Undo, Reset or reload to restore.");
+    expect(await page.locator(".design-inspector__pending h3").textContent()).toBe("1 unsaved change");
     await card.click();
     await chip.waitFor();
-    expect(await chip.textContent()).toBe("Token changes · 1");
+    expect(await chip.getAttribute("aria-label")).toBe("Token changes · 1 change");
     expect(await count.textContent()).toBe("1 change");
 
     // The chip is a keyboard-reachable link back to the Tokens view.
@@ -206,7 +206,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     expect(posted.body).toContain("\n\nProposed token changes (preview only)\nToken: color.surface #f0f0f0 → #ff8000\nToken adapter: css-variables");
     expect(await card.getAttribute("style")).toBeNull();
 
-    // Reset all previews clears element and token previews together.
+    // Discard all clears element and token previews together.
     // Posting selects the new thread, and D would open it in Design mode; start again from a fresh page.
     await page.reload();
     await page.waitForFunction(() => !!(window as any).komo);
@@ -218,10 +218,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     await page.getByRole("button", { name: "Exit design mode", exact: true }).click();
     await openDesign(page);
     const pending = page.locator(".design-inspector__pending");
-    expect(await pending.locator("p").textContent()).toBe("1 element and 1 token change have pending runtime previews. Undo, Reset or reload to restore.");
+    expect(await pending.locator("h3").textContent()).toBe("2 unsaved changes");
     await page.screenshot({ path: join(tmpdir(), `komo-pending-edits-${mode}-pending.png`) });
-    await pending.getByRole("button", { name: "Reset all previews", exact: true }).click();
-    expect([await background(), await card.getAttribute("style")]).toEqual([light, null]);
+    await pending.getByRole("button", { name: "Discard all", exact: true }).click();
+    await expect.poll(async () => [await background(), await card.getAttribute("style")]).toEqual([light, null]);
     await pending.waitFor({ state: "hidden" });
 
     await page.evaluate(() => (window as any).komo.destroy());

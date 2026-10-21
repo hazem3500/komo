@@ -31,7 +31,7 @@ export const FRAME_PRESETS: Array<[string, number, number]> = [
 const LIMITS = [[240, 3840], [240, 2160]];
 /** Remembered sizes carry this version; anything older predates the window-at-Fit default. */
 const VERSION = 2;
-const css = `.frame-size{position:fixed;inset:0;pointer-events:none;z-index:3;font-size:12px;font-weight:500;line-height:1;color:#d6d3ce}.frame-size>*{pointer-events:auto;position:fixed}.frame-size [hidden]{display:none}.frame-bar,.frame-zoom,.frame-custom{display:flex;align-items:center;gap:6px}.frame-size button,.frame-size input,.frame-zoom,.frame-menu{font:inherit;color:inherit;background:#1c1c1c;border:1px solid #ffffff14;border-radius:8px;height:28px;padding:0 10px;cursor:pointer}.frame-size button:hover{background:#262626}.frame-size :focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:1px}.frame-zoom{gap:2px;padding:2px}.frame-zoom button{height:22px;border:0;padding:0 8px}.frame-size [aria-pressed=true],.frame-size [aria-checked=true]{background:#ffffff1f;color:#f1efeb}.frame-menu{display:grid;height:auto;min-width:200px;padding:4px;border:0;border-radius:10px;background:#232323;box-shadow:0 0 0 1px #ffffff14,0 12px 32px #0008;font-size:11px;cursor:auto}.frame-menu>button{display:flex;gap:12px;padding:0 8px;border:0;background:none}.frame-menu>button>span{margin-left:auto}.frame-menu>button::after{content:"";width:7px;height:3.5px;align-self:center;margin:-3px 3px 0 0;border:solid #0000;border-width:0 0 1.5px 1.5px;rotate:-45deg}.frame-menu>[aria-checked=true]::after{border-color:#bda6ef}.frame-size .frame-menu>[aria-checked=true]{background:none}.frame-size span,.frame-readout,.frame-custom{color:#898680;font-variant-numeric:tabular-nums}.frame-custom{gap:4px;padding:4px 4px 2px;border-top:1px solid #ffffff0d}.frame-custom input{width:64px;padding:0 6px;cursor:text}.frame-handle{width:10px;margin-left:-5px;cursor:ew-resize;touch-action:none}.frame-corner{width:18px;height:18px;margin:-9px 0 0 -9px;cursor:nwse-resize;touch-action:none}.frame-handle::after,.frame-corner::after{content:'';position:absolute;left:3px;top:calc(50% - 20px);width:4px;height:40px;border-radius:2px;background:#ffffff40}.frame-corner::after{inset:4px;width:auto;height:auto;background:none;border:solid #ffffff59;border-width:0 2px 2px 0;border-radius:0 0 4px 0}.frame-handle:hover::after,.frame-handle[data-active]::after{background:var(--accent,#bda6ef)}.frame-corner:hover::after,.frame-corner[data-active]::after{border-color:var(--accent,#bda6ef)}.frame-readout{padding:5px 8px;border-radius:6px;background:#1c1c1cf2;color:#f1efeb}.frame-scroll{box-sizing:border-box;touch-action:none}.frame-scroll[data-axis=y]{width:12px}.frame-scroll[data-axis=x]{height:12px}.frame-thumb{position:absolute;border-radius:4px;background:#2a2a2ad9;box-shadow:0 0 0 1px #ffffff2e}.frame-scroll[data-axis=y] .frame-thumb{left:3px;right:3px}.frame-scroll[data-axis=x] .frame-thumb{top:3px;bottom:3px}.frame-scroll:hover .frame-thumb,.frame-scroll:focus-visible .frame-thumb,.frame-thumb[data-active]{background:#3a3a3af2;box-shadow:0 0 0 1px #ffffff59}.frame-hand{cursor:grab;touch-action:none}.frame-hand[data-grabbing]{cursor:grabbing}.frame-hint{display:flex;align-items:center;gap:8px;box-sizing:border-box;padding:4px 4px 4px 12px;border:1px solid #ffffff14;border-radius:10px;background:#1c1c1cf2;box-shadow:0 8px 24px #0006;line-height:1.35}.frame-hint span{color:#d6d3ce}.frame-size .frame-hint-close{width:28px;padding:0;border:0;background:none;color:#898680;font-size:16px}.frame-bar{white-space:nowrap}.frame-bar .frame-scale{min-width:44px;color:#f1efeb;font-size:14px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums}.frame-note{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding-left:4px}.frame-note>span:first-child{overflow:hidden;text-overflow:ellipsis}.frame-bar .frame-info{flex:none;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:none;color:#898680}.frame-bar .frame-info:hover{background:#ffffff12;color:#f1efeb}.frame-info::before{content:"i";display:inline-grid;place-items:center;width:12px;height:12px;border:1.2px solid;border-radius:50%;font:italic 600 9px/1 Georgia,serif}.frame-size .frame-tip{position:absolute;z-index:1;top:calc(100% + 8px);right:0;width:260px;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font-weight:400;line-height:1.45;white-space:normal;opacity:0;visibility:hidden;transition:opacity .15s}.frame-info:is(:hover,:focus-visible)+.frame-tip{opacity:1;visibility:visible}.frame-note[data-reason]>span:first-child{color:#f3c27a}`;
+const css = `.frame-size{position:fixed;inset:0;pointer-events:none;z-index:3;font-size:12px;font-weight:500;line-height:1;color:#d6d3ce}.frame-size>*{pointer-events:auto;position:fixed}.frame-size [hidden]{display:none}.frame-bar,.frame-zoom,.frame-custom{display:flex;align-items:center;gap:6px}.frame-size button,.frame-size input,.frame-zoom,.frame-menu{font:inherit;color:inherit;background:#1c1c1c;border:1px solid #ffffff14;border-radius:8px;height:28px;padding:0 10px;cursor:pointer}.frame-size button:hover{background:#262626}.frame-size :focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:1px}.frame-zoom{gap:2px;padding:2px}.frame-zoom button{height:22px;border:0;padding:0 8px}.frame-size [aria-pressed=true],.frame-size [aria-checked=true]{background:#ffffff1f;color:#f1efeb}.frame-menu{display:grid;height:auto;min-width:200px;padding:4px;border:0;border-radius:10px;background:#232323;box-shadow:0 0 0 1px #ffffff14,0 12px 32px #0008;font-size:11px;cursor:auto}.frame-menu>button{display:flex;gap:12px;padding:0 8px;border:0;background:none}.frame-menu>button>span{margin-left:auto}.frame-menu>button::after{content:"";width:7px;height:3.5px;align-self:center;margin:-3px 3px 0 0;border:solid #0000;border-width:0 0 1.5px 1.5px;rotate:-45deg}.frame-menu>[aria-checked=true]::after{border-color:#bda6ef}.frame-size .frame-menu>[aria-checked=true]{background:none}.frame-size span,.frame-readout,.frame-custom{color:#898680;font-variant-numeric:tabular-nums}.frame-custom{gap:4px;padding:4px 4px 2px;border-top:1px solid #ffffff0d}.frame-custom input{width:64px;padding:0 6px;cursor:text}.frame-handle{width:10px;margin-left:-5px;cursor:ew-resize;touch-action:none}.frame-corner{width:18px;height:18px;margin:-9px 0 0 -9px;cursor:nwse-resize;touch-action:none}.frame-handle::after,.frame-corner::after{content:'';position:absolute;left:3px;top:calc(50% - 20px);width:4px;height:40px;border-radius:2px;background:#ffffff40}.frame-corner::after{inset:4px;width:auto;height:auto;background:none;border:solid #ffffff59;border-width:0 2px 2px 0;border-radius:0 0 4px 0}.frame-handle:hover::after,.frame-handle[data-active]::after{background:var(--accent,#bda6ef)}.frame-corner:hover::after,.frame-corner[data-active]::after{border-color:var(--accent,#bda6ef)}.frame-readout{padding:5px 8px;border-radius:6px;background:#1c1c1cf2;color:#f1efeb}.frame-scroll{box-sizing:border-box;touch-action:none}.frame-scroll[data-axis=y]{width:12px}.frame-scroll[data-axis=x]{height:12px}.frame-thumb{position:absolute;border-radius:4px;background:#2a2a2ad9;box-shadow:0 0 0 1px #ffffff2e}.frame-scroll[data-axis=y] .frame-thumb{left:3px;right:3px}.frame-scroll[data-axis=x] .frame-thumb{top:3px;bottom:3px}.frame-scroll:hover .frame-thumb,.frame-scroll:focus-visible .frame-thumb,.frame-thumb[data-active]{background:#3a3a3af2;box-shadow:0 0 0 1px #ffffff59}.frame-hand{cursor:grab;touch-action:none}.frame-hand[data-grabbing]{cursor:grabbing}.frame-hint{display:flex;align-items:center;gap:8px;box-sizing:border-box;padding:4px 4px 4px 12px;border:1px solid #ffffff14;border-radius:10px;background:#1c1c1cf2;box-shadow:0 8px 24px #0006;line-height:1.35}.frame-hint span{color:#d6d3ce}.frame-size .frame-hint-close{width:28px;padding:0;border:0;background:none;color:#898680;font-size:16px}.frame-bar{white-space:nowrap}.frame-bar .frame-scale{min-width:44px;color:#f1efeb;font-size:14px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums}.frame-note{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding-left:4px}.frame-note>span:first-child{overflow:hidden;text-overflow:ellipsis}.frame-bar .frame-info{flex:none;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:none;color:#898680}.frame-bar .frame-info:hover{background:#ffffff12;color:#f1efeb}.frame-info::before{content:"i";display:inline-grid;place-items:center;width:12px;height:12px;border:1.2px solid;border-radius:50%;font:italic 600 9px/1 Georgia,serif}.frame-size .frame-tip{position:absolute;z-index:1;top:calc(100% + 8px);right:0;width:260px;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font-weight:400;line-height:1.45;white-space:normal;opacity:0;visibility:hidden;transition:opacity .15s}.frame-info:is(:hover,:focus-visible)+.frame-tip{opacity:1;visibility:visible}.frame-note[data-reason]>span:first-child{color:#f3c27a}.frame-mode{position:relative}.frame-mode button:is(:hover,:focus-visible)::after{content:attr(data-tip) / "";position:absolute;z-index:1;top:calc(100% + 8px);left:0;width:250px;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font-weight:400;line-height:1.45;white-space:normal;text-align:left;pointer-events:none}`;
 
 const element = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -60,29 +60,30 @@ const clamp = (value: number, axis = 0) =>
  * nothing stored, unreadable values and entries from before versioning, which
  * kept implicit sizes from the old Fit default.
  */
-export function readFrameSize(raw: string | null): { size: Choice; actual: boolean; inPlace: boolean } {
+export function readFrameSize(raw: string | null): { size: Choice; actual: boolean; inPlace?: boolean } {
   try {
     const stored = JSON.parse(raw ?? "null");
-    if (stored?.v !== VERSION) return { size: "window", actual: false, inPlace: false };
+    if (stored?.v !== VERSION) return { size: "window", actual: false };
     const size: Choice =
       stored.size === "available"
         ? "available"
         : Array.isArray(stored.size) && stored.size.length === 2 && stored.size.every(Number.isFinite)
           ? [clamp(stored.size[0]), clamp(stored.size[1], 1)]
           : "window";
-    return { size, actual: stored.actual === true, inPlace: stored.inPlace === true };
+    // The reviewer's Viewport / In place choice, when they made one; otherwise the host's default applies.
+    return { size, actual: stored.actual === true, ...(typeof stored.inPlace === "boolean" ? { inPlace: stored.inPlace } : {}) };
   } catch {
-    return { size: "window", actual: false, inPlace: false };
+    return { size: "window", actual: false };
   }
 }
 /**
  * What to remember for an explicit choice; null for the default, so it is never
- * pinned. `inPlace` records choosing In place over Viewport mode.
+ * pinned. `inPlace` records the reviewer's Viewport / In place choice, when they made one.
  */
-export const frameSizeRecord = (size: Choice, actual: boolean, inPlace = false) =>
-  size === "window" && !actual && !inPlace
+export const frameSizeRecord = (size: Choice, actual: boolean, inPlace?: boolean) =>
+  size === "window" && !actual && inPlace === undefined
     ? null
-    : JSON.stringify({ v: VERSION, size: size === "window" ? null : size, actual, ...(inPlace ? { inPlace } : {}) });
+    : JSON.stringify({ v: VERSION, size: size === "window" ? null : size, actual, ...(inPlace === undefined ? {} : { inPlace }) });
 /** Keep a pan offset inside what the frame has beyond the stage. */
 export const clampPan = (pan: number[], range: number[]) =>
   pan.map((value, axis) => Math.round(Math.min(range[axis], Math.max(0, value)))) as Size;
@@ -141,8 +142,8 @@ export function mountFrameSize(
   apply: (toggled?: boolean) => void,
   // Passed in, so this chunk does not pull the eager layout module into a shared chunk.
   frameView: typeof placeView,
-  /** The host enabled viewport mode (frame.mode "iframe"). */
-  viewport = false,
+  /** Viewport mode is enabled (frame.mode "iframe"), starting in this mode (frame.defaultMode) until the reviewer picks one. */
+  viewport: false | "iframe" | "transform" = false,
   hooks: {
     /** The frame panned: move it and what follows it, without a full layout. */
     pan?(): void;
@@ -158,14 +159,15 @@ export function mountFrameSize(
   }
   const restored = readFrameSize(raw);
   let { size, actual } = restored;
-  let separate = viewport && !restored.inPlace;
+  let chosen = restored.inPlace !== undefined;
+  let separate = !!viewport && (chosen ? !restored.inPlace : viewport === "iframe");
   let state: { active: boolean; loading?: boolean; reason?: string } = { active: false };
   let current: FrameView | null | undefined;
   // Only the reviewer's own choices are remembered: a preset, a custom size, a drag,
   // an arrow-key resize or the zoom. Choosing the default forgets the entry.
   const remember = () => {
     try {
-      const record = frameSizeRecord(size, actual, viewport && !separate);
+      const record = frameSizeRecord(size, actual, viewport && chosen ? !separate : undefined);
       if (record) localStorage.setItem(key, record);
       else localStorage.removeItem(key);
     } catch {
@@ -173,7 +175,7 @@ export function mountFrameSize(
     }
   };
   // An old or unreadable entry is dropped, so it can't come back.
-  if (raw !== null && raw !== frameSizeRecord(size, actual, viewport && !separate)) remember();
+  if (raw !== null && raw !== frameSizeRecord(size, actual, viewport && chosen ? !separate : undefined)) remember();
   // 100% larger than the stage pans like a design tool; these are page pixels past the stage's edge.
   let pan: Size = [0, 0];
   let range: Size = [0, 0];
@@ -216,8 +218,9 @@ export function mountFrameSize(
   zoom.append(fit, full);
   // Viewport shows the page in its own iframe; In place reflows this page.
   const mode = element("div", "frame-zoom frame-mode", { role: "group", "aria-label": "Viewport", hidden: "" });
-  const own = element("button", "", { type: "button", title: "The page in its own viewport: real media queries" }, "Viewport");
-  const inPlace = element("button", "", { type: "button", title: "This page, resized in place" }, "In place");
+  // One line each on what the two modes trade, shown on hover and focus and read as the description.
+  const own = element("button", "", { type: "button", "data-tip": "Loads the page in a frame at this size. Breakpoints, popovers and menus behave like a real screen. Runs a second copy of the app.", "aria-description": "Loads the page in a frame at this size. Breakpoints, popovers and menus behave like a real screen. Runs a second copy of the app." }, "Viewport");
+  const inPlace = element("button", "", { type: "button", "data-tip": "Shows the page itself resized. No extra copy, but breakpoints follow your browser window.", "aria-description": "Shows the page itself resized. No extra copy, but breakpoints follow your browser window." }, "In place");
   mode.append(own, inPlace);
   // In place, the page keeps the browser window's media queries; say so when they disagree.
   const note = element("span", "frame-note", { hidden: "" });
@@ -404,8 +407,8 @@ export function mountFrameSize(
     if (!menu.hidden && !event.composedPath().some((node) => node === menu || node === trigger)) close();
   }, { capture: true, signal: abort.signal });
   fit.addEventListener("click", () => change(size, false));
-  own.addEventListener("click", () => change(size, actual, true, true));
-  inPlace.addEventListener("click", () => change(size, actual, true, false));
+  own.addEventListener("click", () => ((chosen = true), change(size, actual, true, true)));
+  inPlace.addEventListener("click", () => ((chosen = true), change(size, actual, true, false)));
   full.addEventListener("click", () => {
     dismissHint();
     change(size, true);
