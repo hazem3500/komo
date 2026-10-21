@@ -1361,8 +1361,16 @@ ${morphingMenuStyles}
 .selection-menu [aria-checked="false"] svg {
   opacity: 0;
 }
-.selection-menu [aria-checked="true"] {
-  background: #ffffff0b;
+.selection-menu .menu-action {
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+.selection-menu .menu-action svg {
+  order: 1;
+  margin-left: auto;
+  color: #bda6ef;
 }
 .selection-menu .menu-action:last-child {
   margin-top: 0;
