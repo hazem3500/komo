@@ -1,3 +1,5 @@
+import { eachFrameDocument, isElement } from "./frame-target.js";
+
 type Box = { left: number; top: number; right: number; bottom: number };
 const visibleColor = (value: string) =>
   value && value !== "transparent" && !/(?:^rgba\([^)]*,|\/)\s*0(?:\.0+)?%?\s*\)$/.test(value);
@@ -56,9 +58,9 @@ export function drawHighlight(
 /** Follow style-only changes and live transitions, without observing feedback chrome. */
 export function watchHighlight(host: HTMLElement, targets: () => Array<Element | null>, update: () => void, signal: AbortSignal, lost?: () => void) {
   if (signal.aborted) return;
-  const document = host.ownerDocument, view = document.defaultView!;
+  const view = host.ownerDocument.defaultView!;
   const sheets = "style,link[rel~=stylesheet]";
-  const sheetTarget = (node: Node) => node instanceof Element
+  const sheetTarget = (node: Node) => isElement(node)
     ? node.matches(sheets) || !!node.closest("style")
     : !!node.parentElement?.closest("style");
   let frame = 0;
@@ -78,20 +80,26 @@ export function watchHighlight(host: HTMLElement, targets: () => Array<Element |
   const relevant = (node: Node) => node !== host && !host.contains(node) && targets().some(target =>
     target && (!target.isConnected || node.contains(target) || target.contains(node) || sheetTarget(node)),
   );
-  const observer = new MutationObserver(records => {
-    if (!targets().some(Boolean)) return;
-    const primary = targets()[0];
-    if (primary && !primary.isConnected) lost?.();
-    if (records.some(record => relevant(record.target) ||
-      (record.type === "attributes" && record.attributeName === "rel" && record.target.nodeName === "LINK") ||
-      // Head insertions/removals report the parent, not the stylesheet, as target.
-      (record.type === "childList" && [...record.addedNodes, ...record.removedNodes].some(node =>
-        node instanceof Element && (node.matches(sheets) || node.querySelector(sheets)),
-      )))) schedule();
-  });
-  observer.observe(document.documentElement, { attributes: true, childList: true, characterData: true, subtree: true });
-  for (const type of ["transitionrun", "animationstart"])
-    document.addEventListener(type, event => { if (event.target instanceof Node && relevant(event.target)) schedule(); }, { capture: true, signal });
-  document.addEventListener("load", event => { if (event.target instanceof Node && sheetTarget(event.target)) schedule(); }, { capture: true, signal });
-  signal.addEventListener("abort", () => { observer.disconnect(); view.cancelAnimationFrame(frame); }, { once: true });
+  // The page, and Frame's viewport iframe whenever it shows one.
+  const watch = (document: Document, signal: AbortSignal) => {
+    const observer = new MutationObserver(records => {
+      if (!targets().some(Boolean)) return;
+      const primary = targets()[0];
+      if (primary && !primary.isConnected) lost?.();
+      if (records.some(record => relevant(record.target) ||
+        (record.type === "attributes" && record.attributeName === "rel" && record.target.nodeName === "LINK") ||
+        // Head insertions/removals report the parent, not the stylesheet, as target.
+        (record.type === "childList" && [...record.addedNodes, ...record.removedNodes].some(node =>
+          isElement(node) && (node.matches(sheets) || node.querySelector(sheets)),
+        )))) schedule();
+    });
+    observer.observe(document.documentElement, { attributes: true, childList: true, characterData: true, subtree: true });
+    for (const type of ["transitionrun", "animationstart"])
+      document.addEventListener(type, event => { if (isElement(event.target) && relevant(event.target)) schedule(); }, { capture: true, signal });
+    document.addEventListener("load", event => { if (isElement(event.target) && sheetTarget(event.target)) schedule(); }, { capture: true, signal });
+    signal.addEventListener("abort", () => observer.disconnect(), { once: true });
+  };
+  watch(host.ownerDocument, signal);
+  eachFrameDocument(watch, signal);
+  signal.addEventListener("abort", () => view.cancelAnimationFrame(frame), { once: true });
 }

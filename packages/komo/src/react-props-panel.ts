@@ -4,6 +4,7 @@ import { sourceInfo, sourceInfoStyles, type SourceHref } from "./source-info.js"
 import { previewStyle, watchPopup } from "./design-popup.js";
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
 import { holdHostMotion, stillPreview } from "./host-motion.js";
+import { isHTMLElement, previewTarget } from "./frame-target.js";
 import {
   adaptComponentEditor,
   currentInspectableElement,
@@ -93,7 +94,7 @@ export function retainReactPropSelection(
   textTools: import("./inline-text-editor.js").InlineTextTools | null,
   retain: (element: DesignTarget, panel: HTMLElement | undefined) => void,
 ): boolean {
-  if (previous instanceof HTMLElement && (textTools?.element === previous || textTools?.hasChanges(previous))) return false;
+  if (isHTMLElement(previous) && (textTools?.element === previous || textTools?.hasChanges(previous))) return false;
   const element = retainReactPropTarget(previous);
   if (!element || element === previous || context.host.contains(element)) return false;
   const panel = controls.querySelector<HTMLElement>(".design-react-group:not(.design-react-discovered)") ?? undefined;
@@ -155,7 +156,7 @@ const componentSource = (component: RegisteredInspectableComponent) => component
 /** Before/After for React prop previews and shared theme values. */
 export function showDesignBefore(on: boolean): void {
   // Props, theme values and token swaps re-render the page; its own transitions hold still meanwhile.
-  const release = holdHostMotion(document.documentElement);
+  const release = holdHostMotion(previewTarget().root);
   try {
     if (on)
       for (const [element, baseline] of originals) {
@@ -1021,13 +1022,13 @@ const themeWatched = new WeakSet<AbortSignal>();
 const themeControl = ".design-theme-switch,.design-theme-toggle";
 
 function currentTheme(axis: ThemeAxis): string | undefined {
-  try { return String(axis.current()); } catch { return undefined; }
+  try { return String(axis.current(previewTarget())); } catch { return undefined; }
 }
 
 /** Put every axis Design mode switched back to its original option. */
 export function restoreThemes(container?: HTMLElement): void {
   for (const [axis, id] of themeOriginals)
-    try { if (currentTheme(axis) !== id) axis.apply(id); } catch { /* An adapter that throws keeps its state. */ }
+    try { if (currentTheme(axis) !== id) axis.apply(id, previewTarget()); } catch { /* An adapter that throws keeps its state. */ }
   themeOriginals.clear();
   const control = container?.querySelector<HTMLElement>(themeControl);
   if (control) { themeClosers.get(control)?.(); control.remove(); }
@@ -1103,7 +1104,7 @@ export function attachThemeSwitcher(
     if (id === before) return;
     if (!themeOriginals.has(axis)) themeOriginals.set(axis, before ?? fallback);
     themeFocus = axis;
-    try { axis.apply(id); } catch { /* The page keeps whatever the adapter managed to apply. */ }
+    try { axis.apply(id, previewTarget()); } catch { /* The page keeps whatever the adapter managed to apply. */ }
     onSwitch();
     sync();
   };

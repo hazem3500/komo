@@ -119,7 +119,7 @@ function frame(page: Page) {
       transform: getComputedStyle(main).transform,
       label: shadow.querySelector(".frame-size-trigger")!.textContent,
       scale: shadow.querySelector(".frame-scale")!.textContent,
-      pressed: [...shadow.querySelectorAll(".frame-zoom button")].map((button) => button.getAttribute("aria-pressed")),
+      pressed: [...shadow.querySelectorAll(".frame-zoom:not(.frame-mode) button")].map((button) => button.getAttribute("aria-pressed")),
       note: !shadow.querySelector<HTMLElement>(".frame-note")!.hidden,
     };
   });

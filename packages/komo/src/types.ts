@@ -202,8 +202,26 @@ export interface CommentsOptions {
    * arbitrary canvas, drag, and grid handlers cannot be corrected generically.
    * `include` overrides the default per body child; true maps the whole child
    * through the frame, and false leaves its subtree alone.
+   *
+   * `mode: "iframe"` adds Viewport mode: the current URL renders in a same-origin
+   * iframe sized to the chosen viewport, so media queries, viewport units,
+   * matchMedia, resize events and window.innerWidth are real. komo stays in this
+   * window and reaches into the frame; komo inside the frame stays inert. The
+   * framed copy is a second live instance of the app (its own requests, sockets
+   * and analytics), so it is opt-in; "transform" (the default) keeps the in-place
+   * frame. Reviewers can switch between Viewport and In place. When the frame
+   * can't show a same-origin page (X-Frame-Options, CSP frame-ancestors, a
+   * cross-origin redirect or a timeout), Frame falls back to in place and says why.
+   * `iframeUrl(location)` picks the URL to frame, e.g. a preview route for an app
+   * that needs its own bootstrap; it must be same-origin. Pair it with `page` so
+   * comments keep the page they belong to.
    */
-  frame?: { scale?: boolean; include?(element: HTMLElement): boolean };
+  frame?: {
+    scale?: boolean;
+    include?(element: HTMLElement): boolean;
+    mode?: "iframe" | "transform";
+    iframeUrl?(location: Location): string;
+  };
   /**
    * Stop komo's own pointer, focus, wheel and typing events at its host
    * element, so page shortcuts and open modals don't react to komo's UI.
@@ -226,8 +244,12 @@ export interface CommentsOptions {
   source?: (element: Element) => string | undefined;
   /** Defaults to GitHub's source viewer. */
   sourceUrl?: (source: string, branch: string) => string;
-  /** Defaults to location.pathname; query strings are not stored. */
-  page?: () => string;
+  /**
+   * Defaults to location.pathname; query strings are not stored. In Frame's
+   * Viewport mode komo passes the frame's location: read it instead of
+   * window.location so comments keep their page in both modes.
+   */
+  page?: (location?: Location) => string;
   /**
    * Client-side router navigation for opening a comment on another page, e.g.
    * (url) => router.navigate({ href: url.pathname + url.search + url.hash }).

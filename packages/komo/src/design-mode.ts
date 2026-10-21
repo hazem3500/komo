@@ -3,6 +3,7 @@ import { previewMessage, changePreviewStyles, createStyleEdits, inlineStyleSnaps
 import { designModeStyles } from "./design-mode-styles.js";
 import { el, icon } from "./dom.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
+import { clientPoint, isHTMLElement, onFrame, screenRect } from "./frame-target.js";
 import type { Control, PanelContext } from "./design-panel.js";
 import type { InlineTextTools } from "./inline-text-editor.js";
 import type { DesignSystem } from "./design-system.js";
@@ -198,7 +199,7 @@ export function createDesignMode(options: DesignModeOptions) {
   function syncBar() {
     const element = selected;
     const own = element
-      ? (changed.get(element)?.size ?? 0) + Number(element instanceof HTMLElement && !!textTools?.hasChanges(element)) + Number(!!reactPanelModule?.hasReactPropChanges(element)) ||
+      ? (changed.get(element)?.size ?? 0) + Number(isHTMLElement(element) && !!textTools?.hasChanges(element)) + Number(!!reactPanelModule?.hasReactPropChanges(element)) ||
         Number(!!reactPanelModule?.hasDesignTokenEdit(element))
       : 0;
     const total = own + (element && views?.tokens?.size || 0);
@@ -276,11 +277,11 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     const identity = `${selected.tagName.toLowerCase()}${selected.id ? `#${selected.id}` : ""}`;
     title.textContent = identity;
-    subtitle.textContent = selected instanceof HTMLIFrameElement
+    subtitle.textContent = selected.localName === "iframe"
       ? "Frame only · contents are isolated"
       : (selected.classList.length ? `.${[...selected.classList].slice(0, 2).join(".")}` : "");
     const up = selected.parentElement;
-    parent.hidden = !up || up === document.body || up === document.documentElement;
+    parent.hidden = !up || up === selected.ownerDocument.body || up === selected.ownerDocument.documentElement;
     parent.textContent = up?.tagName.toLowerCase() ?? "";
     parent.setAttribute("aria-label", `Select parent ${parent.textContent}`);
     const element = selected;
@@ -339,7 +340,7 @@ export function createDesignMode(options: DesignModeOptions) {
     views?.update(pending.length, pending.some(element => element.isConnected && previewTargets.get(element) === page()), !!selected);
   }
   function hasChanges(element: DesignTarget) {
-    return !!(changed.get(element)?.size || (element instanceof HTMLElement && textTools?.hasChanges(element)) || reactPanelModule?.hasReactPropChanges(element) || reactPanelModule?.hasDesignTokenEdit(element));
+    return !!(changed.get(element)?.size || (isHTMLElement(element) && textTools?.hasChanges(element)) || reactPanelModule?.hasReactPropChanges(element) || reactPanelModule?.hasDesignTokenEdit(element));
   }
   function clearSelection() {
     finishTextEdit();
@@ -356,7 +357,7 @@ export function createDesignMode(options: DesignModeOptions) {
       marker.hidden = true;
       return;
     }
-    const rect = element.getBoundingClientRect();
+    const rect = screenRect(element);
     if (!rect.width || !rect.height) {
       marker.hidden = true;
       return;
@@ -431,7 +432,7 @@ export function createDesignMode(options: DesignModeOptions) {
     setFolded(false);
     if (!compact()) return;
     requestAnimationFrame(() => {
-      const rect = element.getBoundingClientRect();
+      const rect = screenRect(element);
       const limit = panel.getBoundingClientRect().top - 12;
       if (rect.top >= 12 && rect.bottom <= limit) return;
       window.scrollBy({
@@ -448,9 +449,9 @@ export function createDesignMode(options: DesignModeOptions) {
     copy.disabled = !selected || !(changed.get(selected)?.size);
     comment.disabled = !selected;
     // Nested markup is never editable; the editor checks privacy and interactivity on use.
-    editText.disabled = !!textTools?.busy || !selected?.isConnected || !(selected instanceof HTMLElement);
-    editText.textContent = textTools?.isEditing(selected instanceof HTMLElement ? selected : null) ? "Done editing" : "Edit text";
-    editText.setAttribute("aria-label", textTools?.isEditing(selected instanceof HTMLElement ? selected : null) ? "Finish inline text editing" : "Edit selected text inline");
+    editText.disabled = !!textTools?.busy || !selected?.isConnected || !(isHTMLElement(selected));
+    editText.textContent = textTools?.isEditing(isHTMLElement(selected) ? selected : null) ? "Done editing" : "Edit text";
+    editText.setAttribute("aria-label", textTools?.isEditing(isHTMLElement(selected) ? selected : null) ? "Finish inline text editing" : "Edit selected text inline");
     // Resizes, Undo, Reset and Before/After change declarations behind the fields; show them.
     if (selected && !fieldsSettling) panelModule?.syncFields(controls, styleEdits.isDirty);
     syncEmpty();
@@ -468,7 +469,7 @@ export function createDesignMode(options: DesignModeOptions) {
       textTools = module.bindInlineTextTools({
         button: editText,
         status,
-        selected: () => selected instanceof HTMLElement ? selected : null,
+        selected: () => isHTMLElement(selected) ? selected : null,
         active: () => active,
         onChange: updateActions,
         onCommit(result) {
@@ -485,14 +486,16 @@ export function createDesignMode(options: DesignModeOptions) {
       renderOutlines();
       return;
     }
-    const element = pickDesignTarget(options.targetAt(event.clientX, event.clientY), event.metaKey || event.ctrlKey);
+    const point = clientPoint(event);
+    const element = pickDesignTarget(options.targetAt(point.x, point.y), event.metaKey || event.ctrlKey);
     hovered = element && !options.host.contains(element) ? element : null;
     if (hovered) decorating = true;
     renderOutlines(!selected);
   }
   function onDown(event: PointerEvent) {
     if (!active || event.button !== 0 || event.composedPath().includes(options.host)) return;
-    const element = pickDesignTarget(options.targetAt(event.clientX, event.clientY), event.metaKey || event.ctrlKey);
+    const point = clientPoint(event);
+    const element = pickDesignTarget(options.targetAt(point.x, point.y), event.metaKey || event.ctrlKey);
     if (!element || options.host.contains(element)) return;
     decorating = true;
     if (textTools?.element && (element === textTools.element || textTools.element.contains(element))) return;
@@ -504,7 +507,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (textTools?.element) finishTextEdit();
     select(element);
     const focused = options.root.activeElement ?? document.activeElement;
-    if (focused instanceof HTMLElement) focused.blur();
+    if (isHTMLElement(focused)) focused.blur();
   }
   function onClick(event: MouseEvent) {
     if (!active || event.composedPath().includes(options.host)) return;
@@ -623,7 +626,7 @@ export function createDesignMode(options: DesignModeOptions) {
   function proposalFor(element: DesignTarget, create: typeof import("./design-export.js")["designProposal"]) {
     return create(element, styles(element), property => originals.get(element)?.get(property)?.computed,
       reactPanelModule?.tokenBoundProperties(element),
-      [(element instanceof HTMLElement ? textTools?.proposal(element) : undefined), reactPanelModule?.proposedDesignChanges(element), geometry?.proposal(element)],
+      [(isHTMLElement(element) ? textTools?.proposal(element) : undefined), reactPanelModule?.proposedDesignChanges(element), geometry?.proposal(element)],
       reactPanelModule?.designContext(element, options.design));
   }
   undo.addEventListener("click", () => {
@@ -653,13 +656,13 @@ export function createDesignMode(options: DesignModeOptions) {
     (undo.disabled ? close : undo).focus({ preventScroll: true });
   });
   function resetElement(element: DesignTarget) {
-    if (textTools?.isEditing(element instanceof HTMLElement ? element : null)) finishTextEdit(true);
+    if (textTools?.isEditing(isHTMLElement(element) ? element : null)) finishTextEdit(true);
     const values = changed.get(element);
-    const hasTextValue = (element instanceof HTMLElement && textTools?.hasChanges(element)) ?? false;
+    const hasTextValue = (isHTMLElement(element) && textTools?.hasChanges(element)) ?? false;
     const hasReactValues = reactPanelModule?.hasReactPropChanges(element) ?? false;
     const hasTokenValues = reactPanelModule?.hasDesignTokenEdit(element) ?? false;
     if (!values?.size && !hasTextValue && !hasReactValues && !hasTokenValues) return;
-    if (hasTextValue && element instanceof HTMLElement) textTools?.reset(element);
+    if (hasTextValue && isHTMLElement(element)) textTools?.reset(element);
     if (hasTokenValues) reactPanelModule?.resetDesignTokenEdits(element);
     changePreviewStyles(element, values?.keys() ?? [], () => {
       for (const property of values?.keys() ?? []) restore(element, property, originals.get(element)?.get(property));
@@ -697,7 +700,7 @@ export function createDesignMode(options: DesignModeOptions) {
   comment.addEventListener("click", () => {
     const element = selected;
     if (!element) return;
-    if (textTools?.isEditing(element instanceof HTMLElement ? element : null)) finishTextEdit();
+    if (textTools?.isEditing(isHTMLElement(element) ? element : null)) finishTextEdit();
     void exporter().then(({ designProposal }) => {
       if (!active || selected !== element || !element.isConnected) return;
       // The comment carries everything the count shows, pending token edits included; both are then cleared.
@@ -719,6 +722,9 @@ export function createDesignMode(options: DesignModeOptions) {
   window.addEventListener("keydown", escape, { signal: listeners.signal });
   window.addEventListener("scroll", scheduleOutline, { capture: true, passive: true, signal: listeners.signal });
   window.addEventListener("resize", scheduleOutline, { passive: true, signal: listeners.signal });
+  // Frame's viewport iframe gets its own events: picking, keys and scrolling inside it.
+  for (const [type, listener, window] of [["pointermove", onMove], ["pointerdown", onDown], ["click", onClick], ["keydown", onKey], ["keydown", escape, 1], ["scroll", scheduleOutline, 1], ["resize", scheduleOutline, 1]] as const)
+    onFrame(type, listener, { capture: type !== "resize" && !(window && type === "keydown"), passive: type === "scroll" || type === "resize", signal: listeners.signal }, window ? "window" : "document");
   watchHighlight(options.host, () => active ? [selected ?? hovered, hovered] : [], scheduleOutline, listeners.signal, () => { if (!retainSelection()) clearSelection(); });
   const selectionReady = exporter().then(module => {
     if (listeners.signal.aborted) return;
@@ -771,6 +777,7 @@ export function createDesignMode(options: DesignModeOptions) {
       }
     },
     get active() { return active; },
+    get selected() { return selected; },
     /** Resolves once the property controls have loaded. */
     ready: Promise.all([ready, selectionReady]),
     destroy() {
