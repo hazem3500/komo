@@ -872,6 +872,8 @@ export function createDesignMode(options: DesignModeOptions) {
     },
     get active() { return active; },
     get selected() { return selected; },
+    /** Previews that a reload would drop. */
+    get edited() { return history.length > 0; },
     /** Resolves once the property controls and selection keys have loaded; the panel then carries data-ready. */
     ready: Promise.all([ready, selectionReady]).then(() => { panel.dataset.ready = ""; }),
     destroy() {

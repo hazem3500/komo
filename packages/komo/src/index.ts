@@ -14,6 +14,7 @@ import type { PinUnit } from "./pin-groups.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
 import { createFramePortals, preserveFrameStyles } from "./frame-portals.js";
 import { createFrameViewport } from "./frame-viewport.js";
+import { SHELL_OFF_KEY, claimShell, shellNonce } from "./shell-session.js";
 import {
   clientPoint,
   counterpart,
@@ -195,9 +196,14 @@ export function initComments(options: CommentsOptions): CommentsController {
   const surface =
     getComputedStyle(root).display === "contents" ? document.body : root;
   const canFrame = surface !== document.body;
+  // Single-copy Viewport (frame.shell): this load is komo's shell when it carries the nonce komo
+  // set in this tab, and the app runs only in the frame.
+  const shellWanted = options.frame?.mode === "iframe" && options.frame.scale !== true && options.frame.shell === true;
+  const shell = shellWanted ? shellNonce(options.project) : "";
   const sidebarModeKey = `branch-comments:sidebar-mode:${options.project}:${options.repo}`;
   let sidebarMode: "background" | "edge" = (() => {
     if (!canFrame) return "edge";
+    if (shell) return "background";
     try {
       const stored = localStorage.getItem(sidebarModeKey);
       if (stored === "edge" || stored === "background") return stored;
@@ -768,6 +774,46 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   const wantsViewport = () =>
     viewportEnabled && !viewportFailed && (frameControls ? frameControls.separate : !storedInPlace);
+  // The shell page leaves for the normal page once it can't show the viewport (after it opens).
+  let shellReady = false;
+  let shellMoving = false;
+  // Two copies for this tab: the last shell ended early, the reviewer kept two, or a reload didn't happen.
+  let shellSkipped = false;
+  try {
+    shellSkipped = !!sessionStorage.getItem(SHELL_OFF_KEY);
+  } catch {
+    shellSkipped = true;
+  }
+  let shellModule: Promise<typeof import("./shell-mode.js")> | undefined;
+  const shellMode = () => (shellModule ??= import("./shell-mode.js"));
+  function enterShell() {
+    if (shellMoving) return;
+    shellMoving = true;
+    frameControls?.status({ active: false, loading: true });
+    // A remembered Frame reopening on load has nothing to lose yet; otherwise ask first.
+    const ask = !restoring;
+    void shellMode().then(({ enterShell }) =>
+      !destroyed && enterShell(options.project, ask, !!designController?.edited, () => {
+        // Two copies after all: the reviewer kept them, or the page stayed.
+        shellMoving = false;
+        shellSkipped = true;
+        if (!destroyed) relayout();
+      }),
+    );
+  }
+  function leaveShell(reason = "") {
+    if (shellMoving) return;
+    shellMoving = true;
+    let href = location.href;
+    try {
+      const shown = viewport?.iframe.contentWindow?.location.href;
+      if (shown?.startsWith(location.origin)) href = shown;
+    } catch {
+      /* Leave for this page's URL. */
+    }
+    void shellMode().then(({ leaveShellPage }) => leaveShellPage(href, reason));
+  }
+  const syncShell = () => void shellMode().then(({ syncShell }) => syncShell(viewport?.iframe.contentWindow, shell));
   function closeViewport() {
     if (!viewport) return;
     viewport.destroy();
@@ -803,30 +849,39 @@ export function initComments(options: CommentsOptions): CommentsController {
       const opened: FrameViewport = (viewport = openFrameViewport({
         parent: shadow,
         before: catcher,
-        url: options.frame?.iframeUrl?.(location) ?? location.href,
+        url: framedUrl(),
         background: pageBackground,
         scroll,
         ready() {
           if (viewport !== opened) return;
           viewportShown = true;
+          if (shell) syncShell();
           followSelection();
           frameControls?.status({ active: true });
           relayout();
         },
         failed(reason) {
           if (viewport !== opened) return;
+          if (shell) return leaveShell(reason);
           viewportFailed = reason;
           closeViewport();
           frameControls?.status({ active: false, reason });
           relayout();
         },
         changed() {
+          if (shell) syncShell();
           checkPage();
           geometry();
         },
       }));
       relayout();
     });
+  }
+  // The frame's document: the host's URL for it, without the shell's nonce.
+  function framedUrl() {
+    const url = new URL(options.frame?.iframeUrl?.(location) ?? location.href, location.href);
+    if (shell) url.searchParams.delete("komo-shell");
+    return url.href;
   }
   /** The visible frame: the viewport iframe's port, else the page root. */
   const frameRect = () => (viewportShown && viewport ? viewport.port : surface).getBoundingClientRect();
@@ -844,8 +899,16 @@ export function initComments(options: CommentsOptions): CommentsController {
     void import("./frame-size.js").then(({ mountFrameSize }) => {
       if (destroyed) return;
       frameControls = mountFrameSize(shadow, () => (viewportShown && viewport ? viewport.port : surface), frameSizeKey, (toggled) => {
-        // Choosing Viewport again retries one that couldn't load.
-        if (toggled) viewportFailed = "";
+        // Choosing Viewport again retries one that couldn't load, and asks for a single copy again.
+        if (toggled) {
+          viewportFailed = "";
+          shellSkipped = false;
+          try {
+            sessionStorage.removeItem(SHELL_OFF_KEY);
+          } catch {
+            /* The tab keeps two copies. */
+          }
+        }
         appliedViewport = "";
         scalePage();
         geometry();
@@ -2016,6 +2079,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     host.style.width = `${window.innerWidth}px`;
     pins.style.opacity = "";
     if (edgeSidebar || compactSidebar) {
+      if (shell && shellReady) return leaveShell();
       // The edge sidebar floats over the live page: never frame or zoom it.
       pageMotion?.cancel();
       pageTransitioning = false;
@@ -2077,7 +2141,10 @@ export function initComments(options: CommentsOptions): CommentsController {
     const view = scaled
       ? { ...box, scale: 1, pan: false }
       : (frameControls?.view(box, windowSize) ?? frameView(box, windowSize, false));
-    if (useFrame && !scaled && wantsViewport()) openViewport();
+    if (useFrame && !scaled && wantsViewport()) {
+      if (shellWanted && !shell && !shellSkipped) enterShell();
+      else openViewport();
+    } else if (shell && shellReady) return leaveShell();
     else if (viewport) closeViewport();
     const inViewport = useFrame && !scaled && viewportShown;
     // The viewport iframe pans inside its own port, never the document.
@@ -6843,6 +6910,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   const controller: CommentsController = {
     destroy() {
       if (destroyed) return;
+      // The shell has no app of its own to show.
+      if (shell) leaveShell();
       destroyed = true;
       frameControls?.destroy();
       cancelThreadRequest();
@@ -6934,7 +7003,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     },
   };
   instances.set(document, { scope, controller });
-  restoring = !options.onboarding && openStore.get();
+  restoring = !!shell || (!options.onboarding && openStore.get());
   scalePage();
   const cached = options.onboarding ? null : api.cached();
   knownThreads ||= cached !== null;
@@ -6963,6 +7032,13 @@ export function initComments(options: CommentsOptions): CommentsController {
           duration: 200,
           easing: "cubic-bezier(0.22, 1, 0.36, 1)",
         });
+  }
+  if (shell) {
+    // komo started in its shell: the guard's fallback stands down.
+    claimShell(shell);
+    shellReady = true;
+    if (!canFrame) leaveShell("Single-copy Viewport needs the app's root element in the page's HTML.");
+    else if (!expanded) toggleExpanded(true);
   }
   void openDeepLink();
   async function loadProject() {
