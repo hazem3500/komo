@@ -116,6 +116,18 @@ const adapters = await build({
   minify: true,
   metafile: true,
 });
+// The single-copy Viewport guard (@hazem3500/komo/shell): self-contained, with no
+// top-level side effects, so a build-time guard around isShell() drops it.
+const shell = await build({
+  entryPoints: ["src/shell.ts"],
+  outfile: "dist/shell.js",
+  bundle: true,
+  format: "esm",
+  platform: "browser",
+  target: "es2022",
+  minify: true,
+  metafile: true,
+});
 // Compress the emitted modules without changing their split boundaries or exports.
 // Preserve framework directives ("use client") and linked license notices.
 // Spend the extra compression passes on the modules loaded at mount.
@@ -129,7 +141,7 @@ function visit(path) {
 }
 visit(Object.keys(result.metafile.outputs).find((path) => result.metafile.outputs[path].entryPoint === "src/index.ts"));
 await Promise.all(
-  [...Object.keys(result.metafile.outputs), ...Object.keys(adapters.metafile.outputs)]
+  [...Object.keys(result.metafile.outputs), ...Object.keys(adapters.metafile.outputs), ...Object.keys(shell.metafile.outputs)]
     .filter((path) => path.endsWith(".js"))
     .map(async (path) => {
       const { code } = await minify(await readFile(path, "utf8"), {

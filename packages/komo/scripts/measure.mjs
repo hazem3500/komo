@@ -109,6 +109,7 @@ const report = {
   adapterReactFiber: await sizes(new Set(["dist/adapters/react-fiber.js"])),
   adapterReactPreview: await sizes(new Set(["dist/adapters/react-preview.js"])),
   adapterClassTheme: await sizes(new Set(["dist/adapters/class-theme.js"])),
+  shell: await sizes(new Set(["dist/shell.js"])),
   package: {
     tarball: pack.size,
     unpacked: pack.unpackedSize,
@@ -205,7 +206,11 @@ await writeFile(
 // 236,061 measured on main bc089fe, plus ~100 for CI's measurement.
 // 236,200 -> 241,100: opt-in comment snapshots, a 4,561-byte on-demand chunk (below) plus ~150 in initial for the /config gate, raw-body uploads and the hook (240,969 measured on main 4d26ac1 with #177).
 // 241,100 -> 241,500: all-pages comments on persistent layout (scope at create, page membership, list label, the … toggle) run at mount (~+400); 241,364 measured on main 4be3b4d, plus ~140 for CI's measurement.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 241_500)
+// 241,500 -> 242,700: single-copy Viewport (frame.shell). Core checks the shell's nonce at mount,
+// claims the shell and leaves it when the viewport can't show (initial +~580); entering, leaving
+// and the URL sync are an on-demand chunk (~590). The allowance includes the latest main budget plus
+// the shell feature's measured increase and CI margin; pnpm size verifies the combined result.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 242_700)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -350,3 +355,7 @@ if (report.adapterReactPreview.gzip > 2_000)
   throw new Error("komo's opt-in React preview bridge exceeds its gzip budget.");
 if (report.adapterClassTheme.gzip > 1_000)
   throw new Error("komo's class theme adapter exceeds its gzip budget.");
+// The single-copy Viewport guard (@hazem3500/komo/shell) runs before the app mounts, and a
+// build-time guard drops it from production; 434 measured.
+if (report.shell.gzip > 500)
+  throw new Error("komo's shell guard exceeds its gzip budget.");

@@ -62,6 +62,28 @@ try {
     /^['"]use client['"];?/,
     "React entry must preserve its client boundary after minification",
   );
+  // The single-copy shell guard vanishes from a minified production build behind
+  // import.meta.env.DEV, and stays in development.
+  await writeFile(
+    join(root, "shell-host.js"),
+    `import { isShell } from '@hazem3500/komo/shell';
+    if (import.meta.env.DEV && isShell('example-project')) console.log('shell-branch');
+    else console.log('app-branch');`,
+  );
+  for (const dev of [false, true]) {
+    const [output] = (await build({
+      entryPoints: [join(root, "shell-host.js")],
+      absWorkingDir: root,
+      bundle: true,
+      minify: true,
+      format: "esm",
+      platform: "browser",
+      define: { "import.meta.env.DEV": String(dev) },
+      write: false,
+    })).outputFiles;
+    if (dev) assert.match(output.text, /komo-shell/, "the shell guard runs in development");
+    else assert.equal(output.text.trim(), 'console.log("app-branch");', "the shell guard must drop out of production builds");
+  }
   await writeFile(
     join(root, "smoke.mjs"),
     `
@@ -218,7 +240,7 @@ try {
     join(root, ".komo/wrangler.json"),
   ]);
   console.log(
-    `Packed consumer passed: SSR/types, Node server/metadata exports, workerd source, self-host init/resume, migrations, server bundles (${packed.entryCount} files).`,
+    `Packed consumer passed: SSR/types, shell guard tree-shaking, Node server/metadata exports, workerd source, self-host init/resume, migrations, server bundles (${packed.entryCount} files).`,
   );
 } finally {
   await rm(root, { recursive: true, force: true });
