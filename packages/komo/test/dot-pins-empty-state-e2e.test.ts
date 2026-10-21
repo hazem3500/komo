@@ -252,18 +252,18 @@ describe.skipIf(!chrome)("Design mode empty state", () => {
     await link.click();
     const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
     await help.waitFor();
-    const keys = (label: string) => help.evaluate((dialog, label) => [...dialog.querySelectorAll(":scope > div")]
+    const keys = (label: string) => help.evaluate((dialog, label) => [...dialog.querySelectorAll(".komo-shortcuts__row")]
       .find(line => line.firstChild?.textContent === label)?.querySelector(".komo-kbd")?.getAttribute("aria-label"), label);
     const mac = await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform));
     // Every hint that left the empty state, with the configured bindings.
     expect(await keys("Inspect element")).toBe("Click");
-    expect(await keys("Select an inner target")).toBe(mac ? "Command + Click" : "Control + Click");
+    expect(await keys("Select inner element")).toBe(mac ? "Command + Click" : "Control + Click");
     expect(await keys("Edit text")).toBe("Double-click");
     expect(await keys("Previous sibling")).toBe("ArrowLeft");
     expect(await keys("Next sibling")).toBe("ArrowRight");
     expect(await keys("Parent element")).toBe(mac ? "Option + ArrowUp" : "Alt + ArrowUp");
     expect(await keys("Child element")).toBe(mac ? "Option + ArrowDown" : "Alt + ArrowDown");
-    expect(await keys("Exit design mode")).toBe("Escape");
+    expect(await keys("Exit Design mode")).toBe("Escape");
     expect(await keys("Design mode")).toBe("Shift + D");
     expect(await keys("Keyboard shortcuts")).toBe("?");
     await page.keyboard.press("Escape");
