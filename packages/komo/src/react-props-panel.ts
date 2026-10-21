@@ -3,6 +3,7 @@ import { el } from "./dom.js";
 import { sourceInfo, sourceInfoStyles, type SourceHref } from "./source-info.js";
 import { previewStyle, watchPopup } from "./design-popup.js";
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
+import { holdHostMotion, stillPreview } from "./host-motion.js";
 import {
   adaptComponentEditor,
   currentInspectableElement,
@@ -153,17 +154,21 @@ const componentSource = (component: RegisteredInspectableComponent) => component
   ? `${component.definition.source}${component.definition.line ? `:${component.definition.line}` : ""}` : "";
 /** Before/After for React prop previews and shared theme values. */
 export function showDesignBefore(on: boolean): void {
-  if (on)
-    for (const [element, baseline] of originals) {
-      const component = inspectableFor(element);
-      if (!component) continue;
-      afterProps.set(element, component.props);
-      component.setProps({ ...component.props, ...Object.fromEntries(baseline) });
-    }
-  else for (const [element, props] of afterProps) inspectableFor(element)?.setProps(props);
-  if (!on) afterProps.clear();
-  showThemeBefore(on);
-  showTokenSwapsBefore(on);
+  // Props, theme values and token swaps re-render the page; its own transitions hold still meanwhile.
+  const release = holdHostMotion(document.documentElement);
+  try {
+    if (on)
+      for (const [element, baseline] of originals) {
+        const component = inspectableFor(element);
+        if (!component) continue;
+        afterProps.set(element, component.props);
+        component.setProps({ ...component.props, ...Object.fromEntries(baseline) });
+      }
+    else for (const [element, props] of afterProps) inspectableFor(element)?.setProps(props);
+    if (!on) afterProps.clear();
+    showThemeBefore(on);
+    showTokenSwapsBefore(on);
+  } finally { release(); }
 }
 
 export function hasReactPropChanges(element: DesignTarget): boolean {
@@ -541,7 +546,7 @@ export function createElementTokenControl(
     custom: customPickerValue(element, property, row.parentElement?.querySelector("[data-property]")),
     onPreview: token => {
       const target = available.find(item => item.path === token.path)!;
-      return previewStyle(element, property, `var(${target.cssVariable})`);
+      return stillPreview(element, () => previewStyle(element, property, `var(${target.cssVariable})`));
     },
     onSelect: (token) => choose(token.path),
   }));
@@ -759,11 +764,11 @@ export function createAdapterTokenControl(
   };
   const picker = pickerTrigger(select, () => ({ tokens, property, current: current(), themes,
     custom: customPickerValue(element, property, input),
-    onPreview: token => {
+    onPreview: token => stillPreview(element, () => {
       const undo = previewToken(adapter, element, property, token);
       refresh?.();
       return () => { undo(); refresh?.(); };
-    }, onSelect: choose }));
+    }), onSelect: choose }));
   const update = () => {
     const swapped = swappedToken(element, property);
     const path = current();
