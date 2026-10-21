@@ -20,8 +20,10 @@ export const FRAME_PRESETS: Array<[string, number, number]> = [
   ["Tablet", 768, 1024],
   ["Mobile", 390, 844],
 ];
-const MIN = 200;
-const MAX = 4000;
+// Restored and typed sizes stay within sane viewports.
+const LIMITS = [[240, 3840], [240, 2160]];
+/** Remembered sizes carry this version; anything older predates the window-at-Fit default. */
+const VERSION = 2;
 const css = `.frame-size{position:fixed;inset:0;pointer-events:none;z-index:3;font-size:12px;font-weight:500;line-height:1;color:#d6d3ce}.frame-size>*{pointer-events:auto;position:fixed}.frame-size [hidden]{display:none}.frame-bar,.frame-zoom,.frame-custom{display:flex;align-items:center;gap:6px}.frame-size button,.frame-size input,.frame-zoom,.frame-menu{font:inherit;color:inherit;background:#1c1c1c;border:1px solid #ffffff14;border-radius:8px;height:28px;padding:0 10px;cursor:pointer}.frame-size button:hover{background:#262626}.frame-size :focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:1px}.frame-zoom{gap:2px;padding:2px}.frame-zoom button{height:22px;border:0;padding:0 8px}.frame-size [aria-pressed=true],.frame-size [aria-checked=true]{background:#ffffff1f;color:#f1efeb}.frame-menu{display:grid;gap:2px;height:auto;min-width:200px;padding:4px;border-radius:10px;box-shadow:0 8px 24px #0008;cursor:auto}.frame-menu button{display:flex;justify-content:space-between;gap:16px;border:0}.frame-size span,.frame-readout,.frame-custom{color:#898680;font-variant-numeric:tabular-nums}.frame-custom{gap:4px;padding:4px 4px 2px;border-top:1px solid #ffffff0d}.frame-custom input{width:64px;padding:0 6px;cursor:text}.frame-handle{width:10px;margin-left:-5px;cursor:ew-resize;touch-action:none}.frame-corner{width:18px;height:18px;margin:-9px 0 0 -9px;cursor:nwse-resize;touch-action:none}.frame-handle::after,.frame-corner::after{content:'';position:absolute;left:3px;top:calc(50% - 20px);width:4px;height:40px;border-radius:2px;background:#ffffff40}.frame-corner::after{inset:4px;width:auto;height:auto;background:none;border:solid #ffffff59;border-width:0 2px 2px 0;border-radius:0 0 4px 0}.frame-handle:hover::after,.frame-handle[data-active]::after{background:var(--accent,#bda6ef)}.frame-corner:hover::after,.frame-corner[data-active]::after{border-color:var(--accent,#bda6ef)}.frame-readout{padding:5px 8px;border-radius:6px;background:#1c1c1cf2;color:#f1efeb}.frame-bar{white-space:nowrap}.frame-bar .frame-scale{min-width:44px;color:#f1efeb;font-size:14px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums}.frame-note{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding-left:4px}.frame-note>span:first-child{overflow:hidden;text-overflow:ellipsis}.frame-bar .frame-info{flex:none;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:none;color:#898680}.frame-bar .frame-info:hover{background:#ffffff12;color:#f1efeb}.frame-info::before{content:"i";display:inline-grid;place-items:center;width:12px;height:12px;border:1.2px solid;border-radius:50%;font:italic 600 9px/1 Georgia,serif}.frame-size .frame-tip{position:absolute;z-index:1;top:calc(100% + 8px);right:0;width:260px;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font-weight:400;line-height:1.45;white-space:normal;opacity:0;visibility:hidden;transition:opacity .15s}.frame-info:is(:hover,:focus-visible)+.frame-tip{opacity:1;visibility:visible}`;
 
 const element = <K extends keyof HTMLElementTagNameMap>(
@@ -43,8 +45,32 @@ const place = (node: HTMLElement, left: number, top: number, height?: number) =>
     top: `${top}px`,
     height: height === undefined ? "" : `${height}px`,
   });
-const clamp = (value: number) =>
-  Math.round(Math.min(MAX, Math.max(MIN, value)));
+const clamp = (value: number, axis = 0) =>
+  Math.round(Math.min(LIMITS[axis][1], Math.max(LIMITS[axis][0], value)));
+
+/**
+ * The reviewer's remembered choice, or the default (the window at Fit) for
+ * nothing stored, unreadable values and entries from before versioning, which
+ * kept implicit sizes from the old Fit default.
+ */
+export function readFrameSize(raw: string | null): { size: Choice; actual: boolean } {
+  try {
+    const stored = JSON.parse(raw ?? "null");
+    if (stored?.v !== VERSION) return { size: "window", actual: false };
+    const size: Choice =
+      stored.size === "available"
+        ? "available"
+        : Array.isArray(stored.size) && stored.size.length === 2 && stored.size.every(Number.isFinite)
+          ? [clamp(stored.size[0]), clamp(stored.size[1], 1)]
+          : "window";
+    return { size, actual: stored.actual === true };
+  } catch {
+    return { size: "window", actual: false };
+  }
+}
+/** What to remember for an explicit choice; null for the default, so it is never pinned. */
+export const frameSizeRecord = (size: Choice, actual: boolean) =>
+  size === "window" && !actual ? null : JSON.stringify({ v: VERSION, size: size === "window" ? null : size, actual });
 const dimensions = ([width, height]: number[]) =>
   `${Math.round(width)} × ${Math.round(height)}`;
 
@@ -60,28 +86,32 @@ export function mountFrameSize(
   // Passed in, so this chunk does not pull the eager layout module into a shared chunk.
   frameView: typeof placeView,
 ): FrameSizeControls {
-  let size: Choice = "window";
-  let actual = false;
+  let raw: string | null = null;
   try {
-    const stored = JSON.parse(localStorage.getItem(key) ?? "{}");
-    if (stored.size === "available") size = "available";
-    else if (stored.size?.every?.((value: unknown) => Number.isFinite(value)))
-      size = [clamp(stored.size[0]), clamp(stored.size[1])];
-    actual = stored.actual === true;
+    raw = localStorage.getItem(key);
   } catch {
-    /* Use the default, the window at Fit, when storage is blocked or unreadable. */
+    /* Storage is blocked: use the default, the window at Fit. */
   }
+  let { size, actual } = readFrameSize(raw);
   let current: FrameView | null | undefined;
+  // Only the reviewer's own choices are remembered: a preset, a custom size, a drag,
+  // an arrow-key resize or the zoom. Choosing the default forgets the entry.
+  const remember = () => {
+    try {
+      const record = frameSizeRecord(size, actual);
+      if (record) localStorage.setItem(key, record);
+      else localStorage.removeItem(key);
+    } catch {
+      /* Keep the size for this session when storage is blocked. */
+    }
+  };
+  // An old or unreadable entry is dropped, so it can't come back.
+  if (raw !== null && raw !== frameSizeRecord(size, actual)) remember();
   const change = (next: Choice, zoom: boolean, persist = true) => {
     size = next;
     actual = zoom;
     apply();
-    if (persist)
-      try {
-        localStorage.setItem(key, JSON.stringify({ size: size === "window" ? null : size, actual }));
-      } catch {
-        /* Keep the size for this session when storage is blocked. */
-      }
+    if (persist) remember();
   };
   const layer = element("div", "frame-size");
   const style = element("style", "", {}, css);
@@ -147,13 +177,13 @@ export function mountFrameSize(
   const custom = element("form", "frame-custom", {
     "aria-label": "Custom size",
   });
-  const fields = ["Width", "Height"].map((label) =>
+  const fields = ["Width", "Height"].map((label, index) =>
     element("input", "", {
       "aria-label": label,
       inputmode: "numeric",
       type: "number",
-      min: String(MIN),
-      max: String(MAX),
+      min: String(LIMITS[index][0]),
+      max: String(LIMITS[index][1]),
       required: "",
     }),
   );
@@ -166,7 +196,7 @@ export function mountFrameSize(
   custom.addEventListener("submit", (event) => {
     event.preventDefault();
     close();
-    change([clamp(+fields[0].value), clamp(+fields[1].value)], actual);
+    change([clamp(+fields[0].value), clamp(+fields[1].value, 1)], actual);
   });
   menu.append(...items, custom);
   const edge = element("div", "frame-handle", {
@@ -174,8 +204,8 @@ export function mountFrameSize(
     tabindex: "0",
     "aria-label": "Frame width",
     "aria-orientation": "horizontal",
-    "aria-valuemin": String(MIN),
-    "aria-valuemax": String(MAX),
+    "aria-valuemin": String(LIMITS[0][0]),
+    "aria-valuemax": String(LIMITS[0][1]),
   });
   const corner = element("div", "frame-corner", {
     role: "button",
@@ -245,7 +275,7 @@ export function mountFrameSize(
       if (!start) return;
       resize([
         clamp(start.size[0] + (event.clientX - start.x) / start.ratio),
-        both ? clamp(start.size[1] + (event.clientY - start.y) / start.ratio) : Math.round(start.size[1]),
+        both ? clamp(start.size[1] + (event.clientY - start.y) / start.ratio, 1) : Math.round(start.size[1]),
       ], false);
     });
     const end = () => {
@@ -267,7 +297,7 @@ export function mountFrameSize(
       event.preventDefault();
       event.stopPropagation();
       const [width, height] = logical();
-      resize([clamp(width + delta[0]), clamp(height + delta[1])], true);
+      resize([clamp(width + delta[0]), clamp(height + delta[1], 1)], true);
     });
   }
   return {

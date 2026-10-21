@@ -41,7 +41,7 @@ beforeAll(async () => {
       window.fetch=async()=>Response.json({threads:[],guests:true});
       window.mountGridQA=()=>initKomo({endpoint:location.origin,project:'grid-review',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',frame:{scale:new URLSearchParams(location.search).get('mode')==='scaled'},restoreOpen:false,shortcuts:new URLSearchParams(location.search).has('parity')?{comments:'Shift+L'}:undefined,pollInterval:60000});
       // These cases cover the unscaled in-place frame: the space beside the comments.
-      localStorage.setItem('branch-comments:frame-size:grid-review:example/review',JSON.stringify({size:'available'}));
+      localStorage.setItem('branch-comments:frame-size:grid-review:example/review',JSON.stringify({v:2,size:'available'}));
       window.komo=window.mountGridQA();
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
