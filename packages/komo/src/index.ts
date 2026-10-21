@@ -87,7 +87,7 @@ import {
   setAvatarResolver,
 } from "./dom.js";
 import { matchesShortcut, resolveShortcuts, type Shortcut } from "./shortcuts.js";
-import { renderKbd } from "./kbd.js";
+import { isMac, renderKbd } from "./kbd.js";
 import { styles } from "./styles.js";
 import type {
   Anchor,
@@ -2589,11 +2589,13 @@ export function initComments(options: CommentsOptions): CommentsController {
       )
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
-  // Help lists the toolbar's current commands; More and Design mode both open it.
+  // Help lists the toolbar's current commands with their configured keys, the current
+  // mode's groups first. More, the Design empty state and ? open it; ? closes it again.
   function openShortcutHelp() {
     void import("./shortcut-help.js").then(({ showShortcutHelp }) => showShortcutHelp(shadow, [
-      ...helpItems, { label: "Restore feedback", shortcut: shortcuts.restore, group: "Feedback" },
-    ], designEnabled));
+      ...helpItems.map(({ label, shortcut, group }) => ({ label, shortcut, group: group === "Comments & view" ? "Comments" : "General" })),
+      { label: "Restore feedback", shortcut: shortcuts.restore, group: "General" },
+    ], designEnabled, designActive ? "design" : commentMode ? "comment" : undefined));
   }
   function renderToolbar() {
     toolbar.style.display = toolbarDismissed ? "none" : "";
@@ -4187,7 +4189,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         "primary",
       );
       save.disabled = pending;
-      const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+      const mac = isMac();
       const withKeys = (node: HTMLButtonElement, label: string, key: string, modifier = false) => {
         node.replaceChildren(label, renderKbd({ key, ctrl: modifier && !mac, meta: modifier && mac } as Shortcut, mac));
         node.removeAttribute("title");

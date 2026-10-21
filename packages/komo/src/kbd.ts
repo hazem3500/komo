@@ -1,6 +1,10 @@
 import type { Shortcut } from "./shortcuts.js";
 
-export function shortcutKeys(shortcut: Shortcut, mac = /Mac|iPhone|iPad/.test(navigator.platform)) {
+/** Apple platforms label modifiers ⌘ ⌥ ⌃ ⇧; others spell out Ctrl and Alt. */
+export const isMac = () =>
+  /mac|iphone|ipad/i.test((navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform || navigator.platform);
+
+export function shortcutKeys(shortcut: Shortcut, mac = isMac()) {
   const names = [shortcut.ctrl && "Control", shortcut.alt && "Alt", shortcut.shift && "Shift", shortcut.meta && "Meta", shortcut.key.length === 1 ? shortcut.key.toUpperCase() : shortcut.key].filter(Boolean) as string[];
   const symbols: Record<string, string> = mac ? { Control: "⌃", Alt: "⌥", Shift: "⇧", Meta: "⌘" } : { Control: "Ctrl", Meta: "Meta" };
   return { aria: names.join("+"), spoken: names.map(key => key === "Meta" && mac ? "Command" : key === "Alt" && mac ? "Option" : key).join(" + "), keys: names.map(key => symbols[key] ?? ({ ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓", Enter: "↵", Escape: "Esc" } as Record<string, string>)[key] ?? key) };
