@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { composeTranslate, eligibleAncestor, geometryProposal, geometryReason, spanFor, type GeometryChange } from "../src/design-geometry.js";
+import { WAIT, eligibleAncestor, geometryProposal, geometryReason, spanFor, type GeometryChange } from "../src/design-geometry.js";
 import { parseDesignComment } from "../src/design-comment.js";
 // @ts-expect-error CLI modules are plain JavaScript.
 import { designEditFromComment, formatDesignEdit, parseDesignEdit } from "../cli/design-edit.mjs";
@@ -46,6 +46,25 @@ describe("geometry eligibility reasons", () => {
     expect(geometryReason($("#empty"))).toBe("Boxes split across lines or columns can't be previewed.");
   });
 
+  it("waits only for running motion that moves or sizes the box, and never for a komo preview", () => {
+    layout();
+    html(`<button id="button">Example</button><div data-komo-still><span id="held" style="display:block">x</span></div>`);
+    const running = (...keys: string[]) => ({ playState: "running", effect: { getKeyframes: () => [Object.fromEntries([["offset", 0], ["easing", "ease"], ...keys.map(key => [key, "1px"])])] } });
+    const animate = (element: Element, ...animations: unknown[]) => { element.getAnimations = (() => animations) as unknown as Element["getAnimations"]; };
+    // A color, fill or border-color transition leaves every edge where it is.
+    animate($("#button"), running("color", "backgroundColor", "borderTopColor", "borderLeftColor", "borderBottomRightRadius"));
+    expect(geometryReason($("#button"))).toBeNull();
+    for (const key of ["width", "maxHeight", "borderTopWidth", "transform", "translate", "top", "insetInlineStart", "flexBasis", "gridColumnEnd"]) {
+      animate($("#button"), running("color"), running(key));
+      expect(geometryReason($("#button")), key).toBe(WAIT);
+    }
+    animate($("#button"), { ...running("width"), playState: "finished" });
+    expect(geometryReason($("#button"))).toBeNull();
+    // komo holds motion while it previews; whatever runs there is its own doing.
+    animate($("#held"), running("width"));
+    expect(geometryReason($("#held"))).toBeNull();
+  });
+
   it("selects the nearest movable ancestor for Select parent", () => {
     layout();
     html(`<section id="section"><div id="contents" style="display:contents"><p id="p"><span id="inline">x</span></p></div></section><svg id="svg"><g><rect id="rect"/></g></svg>`);
@@ -57,14 +76,6 @@ describe("geometry eligibility reasons", () => {
 });
 
 describe("geometry math", () => {
-  it("composes with the host translate, keeping units and the z part", () => {
-    expect(composeTranslate("none", 12.345, -4)).toBe("12.35px -4px");
-    expect(composeTranslate("", 1, 2)).toBe("1px 2px");
-    expect(composeTranslate("10px", 5, 5)).toBe("15px 5px");
-    expect(composeTranslate("5% 8px", 3, -2)).toBe("calc(5% + 3px) 6px");
-    expect(composeTranslate("calc(5% + 3px) 1em 4px", -6, 0)).toBe("calc(calc(5% + 3px) - 6px) 1em 4px");
-  });
-
   it("picks the span whose end edge is nearest, adding implicit tracks", () => {
     const starts = [0, 110, 220], ends = [100, 210, 320];
     expect(spanFor(starts, ends, 10, 100, 0, 90)).toBe(1);
@@ -133,11 +144,64 @@ Layout: flex item, row
     expect(parseDesignEdit(edit({ mode: "size", property: "width", from: "1px", to: "2px", effects: [3] }))).toBeNull();
   });
 
-  it("renders geometry rows in the change card without previewing them as CSS", () => {
+  it("renders geometry rows in the change card, previewing sizes, spans and translations as styles", () => {
     const section = parseDesignComment(body).find(block => "title" in block && block.title === "Geometry changes");
     expect(section).toMatchObject({ target: "#cta" });
-    const rows = (section as { changes: Array<{ label: string; after: string; apply?: unknown }> }).changes;
-    expect(rows.map(row => row.label)).toEqual(["Move (translate)", "Resize (flex-basis) width", "Resize (span) grid-column-end", "Move (offset)"]);
-    expect(rows.every(row => !row.apply)).toBe(true);
+    const rows = (section as { changes: Array<{ label: string; after: string; apply?: { kind: string; property: string; also?: string[][] } }> }).changes;
+    expect(rows.map(row => row.label)).toEqual(["translate", "width", "grid-column-end", "Move (offset)"]);
+    expect(rows.map(row => row.apply && [row.apply.property, row.apply.also])).toEqual([
+      ["translate", undefined], ["width", [["flex-basis", "240px"], ["flex-grow", "0"]]], ["grid-column-end", []], undefined,
+    ]);
+  });
+});
+
+describe("structural move records", () => {
+  const place = (parent: string, label: string, index: number, position?: "before" | "after" | "inside") => ({ parent, label, index, ...(position ? { position } : {}) });
+  const step = (to: ReturnType<typeof place>): GeometryChange => ({ mode: "structure", layout: "flex item, row", effects: [],
+    move: { label: "Button “Invite”", target: "#invite", from: place("#toolbar", "Toolbar “Views”", 2), to } });
+
+  it("nets moves to the first origin and the last destination, dropping a return to the start", () => {
+    expect(geometryProposal([step(place("#side > nav", "Sidebar", 3, "after")), step({ ...place("#side > nav", "Sidebar", 0, "inside"), component: "SideNav" })])).toBe([
+      "Proposed geometry changes (preview only)",
+      "Layout: flex item, row",
+      "- Move Button “Invite”: from Toolbar “Views” (3rd) → Sidebar (1st)",
+      "From: #toolbar · index 2",
+      "To: #side > nav · index 0 · inside · component SideNav",
+    ].join("\n"));
+    expect(geometryProposal([step(place("#side", "Sidebar", 0, "inside")), step(place("#toolbar", "Toolbar “Views”", 2, "before"))])).toBeUndefined();
+  });
+
+  const body = `Proposed geometry changes (preview only)
+Target: #invite
+Layout: flex item, row
+- Move Button “Invite”: from Toolbar “Views” (3rd) → Sidebar (11th)
+From: #toolbar · index 2
+To: #side > nav · index 10 · inside · component SideNav`;
+
+  it("parses into a DesignEdit move with both places, and tells agents to move the markup", () => {
+    const edit = designEditFromComment(body, "button");
+    expect(edit.target.selector).toBe("#invite");
+    expect(edit.changes).toEqual([{ kind: "move", target: "#invite", label: "Button “Invite”",
+      from: { parent: "#toolbar", index: 2, label: "Toolbar “Views”" },
+      to: { parent: "#side > nav", index: 10, position: "inside", label: "Sidebar", component: "SideNav" } }]);
+    expect(formatDesignEdit(edit)).toContain("move the element's markup");
+    expect(parseDesignEdit(JSON.stringify(edit))).toEqual(edit);
+    // A move line without its places is dropped rather than guessed.
+    expect(designEditFromComment(body.split("\nFrom:")[0], "button")).toBeNull();
+  });
+
+  it("validates move changes in fenced edits", () => {
+    const edit = (change: object) => JSON.stringify({ komo: "design-edit", version: 1, target: { selector: "a" }, changes: [{ kind: "move", ...change }] });
+    const from = { parent: "#a", index: 0 }, to = { parent: "#b", index: 1, position: "after" };
+    expect(parseDesignEdit(edit({ from, to, extra: 1 })).changes[0]).toEqual({ kind: "move", from, to });
+    expect(parseDesignEdit(edit({ from, to: { ...to, position: "over" } }))).toBeNull();
+    expect(parseDesignEdit(edit({ from: { parent: "#a", index: -1 }, to }))).toBeNull();
+    expect(parseDesignEdit(edit({ from, to: { index: 1, position: "after" } }))).toBeNull();
+  });
+
+  it("reads the move as places to preview with a stand-in", () => {
+    const section = parseDesignComment(body).find(block => "title" in block && block.title === "Geometry changes");
+    const rows = (section as { changes: Array<{ label: string; before: string; after: string; apply?: unknown }> }).changes;
+    expect(rows).toMatchObject([{ label: "Button “Invite”", before: "Toolbar “Views” · 3rd", after: "Sidebar · 11th", apply: { kind: "move" } }]);
   });
 });

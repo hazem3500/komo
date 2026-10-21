@@ -4,6 +4,7 @@
 - Package, CLI, API and tests: `packages/komo/`. Marketing website: `packages/komo-site/`.
 - Use pnpm with Node 22.12 or later. Run `pnpm build`, `pnpm typecheck`, `pnpm test`, and `pnpm size` before delivery.
 - Keep browser bundle costs within the existing measured budgets. CLI-only code must not enter browser bundles.
+- Never open the native EyeDropper from tests, scripts, or browser QA: on macOS it starts the system colour sampler, which takes over the pointer. Tests get a stub from `packages/komo/test/setup-no-eyedropper.ts`; launch any other automated Chrome with `--disable-blink-features=EyeDropperAPI`, and check only that the eyedropper button renders and calls the stub.
 - Never commit credentials, local databases, generated bundles, or npm tarballs.
 - Preserve API authentication, project boundaries, quotas, and data compatibility.
 - Deliver changes on a feature branch with a pull request. For package-only changes, verify the packed artifact locally on Boat; Cloudflare credentials and a deployed website preview are not required. Verify website changes locally on Boat; upload a deployed preview when requested, using a preview version of the existing `komo-site` Worker, never Cloudflare Pages. Never merge without approval. Validate locally; hosted CI is not a delivery gate.

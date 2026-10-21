@@ -169,9 +169,11 @@ describe("design mode preview inspector", () => {
     shadow.querySelector<HTMLButtonElement>('.design-inspector__pending button')!.click();
     expect(shadow.querySelector('.design-inspector__target')?.textContent).toBe("button#hero");
     expect(shadow.querySelector('.design-inspector__count')?.textContent).toBe("1 change");
+    // One Escape leaves with the selection, and the next entry brings it back.
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(controller.active).toBe(false);
     controller.setActive(true);
-    expect(shadow.querySelector('.design-inspector__empty')).not.toBeNull();
+    expect(shadow.querySelector('.design-inspector__target')?.textContent).toBe("button#hero");
   });
 
   it("lets a host picker consume Escape before Design exits and still handles feedback-owned Escape", () => {
@@ -361,7 +363,7 @@ describe("design mode preview inspector", () => {
     label.firstChild!.textContent = "Reset me";
     label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
     label.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
-    shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button:nth-child(2)")!.click();
+    shadow.querySelector<HTMLButtonElement>('.design-inspector__actions [aria-label="Reset"]')!.click();
     expect(label.textContent).toBe("Selected text");
 
     edit.click();
@@ -569,7 +571,7 @@ describe("design mode preview inspector", () => {
     undo.click();
     expect(button.style.getPropertyValue("font-size")).toBe("18px");
     expect(button.style.getPropertyPriority("font-size")).toBe("important");
-    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__close"));
+    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__target"));
     input.dispatchEvent(new Event("focus"));
     input.value = "30";
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -577,13 +579,69 @@ describe("design mode preview inspector", () => {
     const reset = shadow.querySelector<HTMLButtonElement>('.design-inspector__actions [aria-label="Reset"]')!;
     reset.click();
     expect(button.style.getPropertyValue("font-size")).toBe("18px");
-    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__close"));
+    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__target"));
     input.dispatchEvent(new Event("focus"));
     input.value = "30";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     controller.destroy();
     expect(button.style.getPropertyValue("font-size")).toBe("18px");
     expect(button.style.getPropertyPriority("font-size")).toBe("important");
+  });
+
+  it("redoes undone style and text edits, keeps focus for keys, and clears redo on a new edit", async () => {
+    pointer("pointerdown", button);
+    const undo = shadow.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!;
+    const redo = shadow.querySelector<HTMLButtonElement>('[aria-label="Redo"]')!;
+    expect(redo.disabled).toBe(true);
+    expect(redo.dataset.tip).toMatch(/^Redo · (⌘⇧Z|Ctrl\+Y)$/);
+    const size = (value: string) => {
+      const input = shadow.querySelector<HTMLInputElement>('[data-property="font-size"]')!;
+      input.dispatchEvent(new Event("focus"));
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    size("26");
+    size("30");
+    undo.click();
+    undo.click();
+    expect(button.style.getPropertyValue("font-size")).toBe("");
+    expect(redo.disabled).toBe(false);
+    redo.click();
+    expect(button.style.getPropertyValue("font-size")).toBe("26px");
+    redo.click();
+    expect(button.style.getPropertyValue("font-size")).toBe("30px");
+    expect(redo.disabled).toBe(true);
+    // A new edit after an undo drops what was undone.
+    undo.click();
+    size("40");
+    expect(redo.disabled).toBe(true);
+    // Text edits redo too.
+    const label = document.querySelector<HTMLElement>("#label")!;
+    pointer("pointerdown", label);
+    shadow.querySelector<HTMLButtonElement>('[aria-label="Edit selected text inline"]')!.click();
+    await vi.waitFor(() => expect(label.getAttribute("contenteditable")).toBe("true"));
+    label.firstChild!.textContent = "Edited text";
+    label.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
+    label.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true }));
+    undo.click();
+    expect(label.textContent).toBe("Selected text");
+    redo.click();
+    expect(label.textContent).toBe("Edited text");
+  });
+
+  it("clicking empty canvas deselects, and Escape leaves in one press from a panel control", () => {
+    pointer("pointerdown", button);
+    pointed = document.body;
+    pointer("pointerdown", document.body);
+    expect(shadow.querySelector(".design-inspector__empty")).not.toBeNull();
+    pointed = button;
+    pointer("pointerdown", button);
+    const select = shadow.querySelector<HTMLSelectElement>('[data-field-property] select')!;
+    select.focus();
+    select.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
+    expect(controller.active).toBe(false);
+    expect(exited).toBe(1);
   });
 
   it("exits without hijacking clicks outside mode and can hand the target to comments", async () => {
@@ -650,6 +708,7 @@ describe("design mode preview inspector", () => {
     expect(button.style.fontSize).toBe("18px");
   });
 
+  // Effects always holds Layer opacity; its shadow is added from the section.
   it("shows only the sections that apply and adds a fill from its empty section", () => {
     const sections = () => [...shadow.querySelectorAll(".design-section")].map((item) =>
       `${item.querySelector("summary, .design-section__title")?.textContent}${item.querySelector(".design-group") ? "" : " (empty)"}`);
@@ -657,7 +716,7 @@ describe("design mode preview inspector", () => {
     box.append(document.createElement("span"));
     page.append(box);
     pointer("pointerdown", box);
-    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border (empty)", "Effects (empty)"]);
+    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border (empty)", "Effects"]);
     expect(shadow.querySelector('[data-property="gap"]')).toBeNull();
     expect(shadow.querySelector("[aria-label='Edit selected text inline']")).toBeNull();
 
@@ -665,14 +724,14 @@ describe("design mode preview inspector", () => {
     box.style.border = "2px solid red";
     pointer("pointerdown", box);
     expect(shadow.querySelector('[data-property="gap"]')).not.toBeNull();
-    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border", "Effects (empty)"]);
+    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border", "Effects"]);
 
     pointer("pointerdown", button);
-    expect(sections()).toEqual(["Layout", "Typography", "Fill (empty)", "Border (empty)", "Effects (empty)"]);
+    expect(sections()).toEqual(["Layout", "Typography", "Fill (empty)", "Border (empty)", "Effects"]);
     expect(shadow.querySelector(".design-section:nth-child(2) [aria-label='Edit selected text inline']")).not.toBeNull();
     shadow.querySelector<HTMLButtonElement>('[aria-label="Add fill"]')!.click();
     expect(button.style.backgroundColor).toBe("rgb(255, 255, 255)");
-    expect(sections()).toEqual(["Layout", "Typography", "Fill", "Border (empty)", "Effects (empty)"]);
+    expect(sections()).toEqual(["Layout", "Typography", "Fill", "Border (empty)", "Effects"]);
     expect(shadow.querySelector<HTMLInputElement>('[data-property="background-color"]')?.value).toBe("#ffffff");
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button")!.click();
     expect(button.style.backgroundColor).toBe("");

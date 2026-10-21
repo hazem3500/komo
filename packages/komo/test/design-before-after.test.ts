@@ -165,7 +165,7 @@ describe("Design mode preview cleanup", () => {
     restored(link("Reports"));
   });
 
-  it("keeps pending edits recoverable while explicit exit clears the visible selection", async () => {
+  it("keeps pending edits recoverable through a one-press exit, and brings the selection back", async () => {
     const { press, edit, shadow } = await mount();
     await edit(link("Timer"));
     press("Escape");
@@ -173,10 +173,15 @@ describe("Design mode preview cleanup", () => {
     press("d");
     await vi.waitFor(() => expect(shadow.querySelector(".design-inspector")?.getAttribute("aria-hidden")).toBe("false"));
     expect(link("Timer").style.width).toBe("166px");
+    expect(shadow.querySelector(".design-inspector__empty")).toBeNull();
+    // A press on empty canvas deselects, which shows the pending previews again.
+    const empty = new Event("pointerdown", { bubbles: true, cancelable: true, composed: true });
+    Object.defineProperties(empty, { clientX: { value: 1 }, clientY: { value: 1 }, button: { value: 0 } });
+    document.documentElement.dispatchEvent(empty);
     expect(shadow.querySelector(".design-inspector__empty")).not.toBeNull();
     const undo = shadow.querySelector<HTMLButtonElement>('.design-inspector [aria-label="Undo"]')!;
     expect(undo.disabled).toBe(false);
-    shadow.querySelector<HTMLButtonElement>('.design-inspector__pending button:last-child')!.click();
+    shadow.querySelector<HTMLButtonElement>('.design-inspector__pending [aria-label="Discard all"]')!.click();
     restored(link("Timer"));
   });
 

@@ -2,7 +2,9 @@ import { isDesignTarget, pickDesignTarget, type DesignTarget } from "./design-ta
 import { previewMessage, changePreviewStyles, createStyleEdits, inlineStyleSnapshot, removeEmptyStyle, restoreStyle, type StyleEdit, type StyleOriginal } from "./design-preview.js";
 import { designModeStyles } from "./design-mode-styles.js";
 import { el, icon } from "./dom.js";
+import { isMac } from "./kbd.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
+import { clientPoint, isHTMLElement, onFrame, screenRect } from "./frame-target.js";
 import type { Control, PanelContext } from "./design-panel.js";
 import type { InlineTextTools } from "./inline-text-editor.js";
 import type { DesignSystem } from "./design-system.js";
@@ -22,6 +24,10 @@ export interface DesignModeOptions {
   flip?(): void;
   /** The app's design-system adapters; `tokens` replaces CSS-variable token chips. */
   design?: DesignSystem;
+  /** The comments visibility shortcut; in Design mode experimental geometry uses it to hide its overlays. */
+  visibility?: import("./shortcuts.js").Shortcut | null;
+  /** Configured Before/After and selection keys. */
+  keys?: import("./shortcuts.js").DesignKeys;
   page?(): string;
   bounds?(element: Element): { left: number; top: number; right: number; bottom: number } | undefined;
   /** Link for a component's repository-relative source, e.g. through `sourceUrl`. */
@@ -29,8 +35,8 @@ export interface DesignModeOptions {
 }
 
 type TextEdit = { kind: "text"; element: DesignTarget };
-/** A token previewed through the app's adapter; its undo comes from `preview()`. */
-type TokenSwap = { kind?: undefined; element: DesignTarget; undo(): void; props?: boolean };
+/** A token previewed through the app's adapter; its undo comes from `preview()`. Entries may redo themselves. */
+type TokenSwap = { kind?: undefined; element: DesignTarget; undo(): void; redo?(): void; props?: boolean };
 /** One step of the Tokens view's page-wide edits, in the same chronological history. */
 type TokenStep = { kind: "token"; element?: undefined; step: object };
 
@@ -70,6 +76,8 @@ export function createDesignMode(options: DesignModeOptions) {
   const parent = action("design-inspector__parent");
   parent.hidden = true;
   const title = el("span", "design-inspector__target");
+  // Focus falls back here, never to Exit, when the control that had it is gone after a redraw.
+  title.tabIndex = -1;
   const subtitle = el("small");
   const close = action("design-inspector__close");
   close.setAttribute("aria-label", "Exit design mode");
@@ -95,6 +103,9 @@ export function createDesignMode(options: DesignModeOptions) {
     return button;
   };
   const undo = tool("Undo");
+  const redo = tool("Redo");
+  undo.dataset.tip = `Undo · ${isMac() ? "⌘Z" : "Ctrl+Z"}`;
+  redo.dataset.tip = `Redo · ${isMac() ? "⌘⇧Z" : "Ctrl+Y"}`;
   const reset = tool("Reset");
   const copy = tool("Copy CSS");
   copy.append(icon("copy"));
@@ -102,7 +113,7 @@ export function createDesignMode(options: DesignModeOptions) {
   const editText = action("design-text-edit", "Edit text");
   editText.title = "Edit text";
   editText.setAttribute("aria-label", "Edit selected text inline");
-  actions.append(undo, reset, copy, comment);
+  actions.append(undo, redo, reset, copy, comment);
   // Before shows the page without this session's edits; After puts them back.
   const compare = el("div", "design-inspector__compare");
   compare.setAttribute("role", "group");
@@ -117,13 +128,13 @@ export function createDesignMode(options: DesignModeOptions) {
   });
   bar.append(count, compare, status, actions);
   const pendingSlot = el("div");
-  pendingSlot.hidden = true;
   let views: ReturnType<typeof import("./design-export.js")["selectionViews"]> | undefined;
   panel.append(heading, pendingSlot, controls, bar);
   options.root.append(style, outline, prospective);
   (options.panelRoot ?? options.root).append(panel);
 
   let active = false;
+  let resume: [DesignTarget, string] | null = null;
   // Editing stays undecorated until the canvas is targeted again.
   let decorating = true;
   let closeTimer = 0;
@@ -153,7 +164,14 @@ export function createDesignMode(options: DesignModeOptions) {
   bar.addEventListener("pointerover", loadTips);
   bar.addEventListener("focusin", loadTips);
   const collapsed = new Set<string>();
-  const history: Array<StyleEdit | TextEdit | TokenSwap | TokenStep> = [];
+  type Entry = StyleEdit | TextEdit | TokenSwap | TokenStep;
+  const history: Entry[] = [];
+  // Undone entries with how to put each back; any new edit, from any module, clears them.
+  // A restored Discard all is one too, though it never joins the history.
+  const future: Array<[Entry | { kind: "discard" }, () => void]> = [];
+  let redoing = false;
+  const record = history.push.bind(history);
+  history.push = (...items) => { if (!redoing) future.length = 0; return record(...items); };
   const styleEdits = createStyleEdits(history);
   let geometry: ReturnType<typeof import("./design-geometry.js")["bindGeometry"]> | undefined;
   if (options.design?.experimentalGeometry) void import("./design-geometry.js").then(module => {
@@ -162,7 +180,12 @@ export function createDesignMode(options: DesignModeOptions) {
       options, signal: listeners.signal, selected: () => selected,
       enabled: () => active && decorating && !showingBefore && !textTools?.element,
       remember, track, history, update: updateActions, select,
-      tokens: () => reactPanelModule,
+      tokens: () => reactPanelModule, panel: () => controls,
+      before: () => showingBefore,
+      pick(x, y) {
+        const element = pickDesignTarget(options.targetAt(x, y));
+        if (element && !options.host.contains(element)) { decorating = true; choose(element); }
+      },
     });
   });
 
@@ -190,15 +213,18 @@ export function createDesignMode(options: DesignModeOptions) {
    */
   function syncBar() {
     const element = selected;
-    const own = element
-      ? (changed.get(element)?.size ?? 0) + Number(element instanceof HTMLElement && !!textTools?.hasChanges(element)) + Number(!!reactPanelModule?.hasReactPropChanges(element)) ||
-        Number(!!reactPanelModule?.hasDesignTokenEdit(element))
-      : 0;
+    const own = element ? changeCount(element) : 0;
     const total = own + (element && views?.tokens?.size || 0);
     count.textContent = total ? `${total} change${total > 1 ? "s" : ""}` : "";
     bar.toggleAttribute("data-changes", total > 0 || !undo.disabled);
-    compare.hidden = !total && !showingBefore;
+    // Discarded changes wait in Before until ⌘Z brings them back, so they can't be flipped.
+    compare.hidden = !!views?.parked || !total && !showingBefore;
     return own;
+  }
+  /** The footer's count for one element; the pending card lists the same number. */
+  function changeCount(element: DesignTarget) {
+    return (changed.get(element)?.size ?? 0) + Number(isHTMLElement(element) && !!textTools?.hasChanges(element)) + Number(!!reactPanelModule?.hasReactPropChanges(element)) ||
+      Number(!!reactPanelModule?.hasDesignTokenEdit(element));
   }
   let showingBefore = false;
   let suspendedBefore: boolean | undefined;
@@ -255,9 +281,21 @@ export function createDesignMode(options: DesignModeOptions) {
     styleEdits.commit(control, selected, property, final);
     updateActions();
   }
+  /** The inspector's title names the selection; focus lands there when its control is gone. */
+  const focusSelection = () => title.focus({ preventScroll: true });
+  let refocus: ((fallback: boolean) => void) | undefined;
+  let keepFocus: typeof import("./design-keyboard.js")["keepFocus"] | undefined;
+  let drawn: DesignTarget | null = null;
   function renderControls(retainedProps?: HTMLElement) {
+    const focused = (panel.getRootNode() as Document | ShadowRoot).activeElement;
+    // Only a redraw of the same selection keeps focus; a pick on the page leaves the panel (choose).
+    const keep = focused && selected === drawn && controls.contains(focused) && keepFocus;
+    drawn = selected;
+    if (keep) refocus?.(false);
     cancelPreview();
     controls.replaceChildren();
+    // Undo, Reset, Before/After and theme switches redraw; focus returns to the same control, else the selection.
+    if (keep) refocus = keep(controls, focused, () => { refocus = undefined; }, () => { if (active && selected) focusSelection(); });
     syncEmpty();
     if (!selected) {
       if (views) controls.append(views.empty);
@@ -269,11 +307,11 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     const identity = `${selected.tagName.toLowerCase()}${selected.id ? `#${selected.id}` : ""}`;
     title.textContent = identity;
-    subtitle.textContent = selected instanceof HTMLIFrameElement
+    subtitle.textContent = selected.localName === "iframe"
       ? "Frame only · contents are isolated"
       : (selected.classList.length ? `.${[...selected.classList].slice(0, 2).join(".")}` : "");
     const up = selected.parentElement;
-    parent.hidden = !up || up === document.body || up === document.documentElement;
+    parent.hidden = !up || up === selected.ownerDocument.body || up === selected.ownerDocument.documentElement;
     parent.textContent = up?.tagName.toLowerCase() ?? "";
     parent.setAttribute("aria-label", `Select parent ${parent.textContent}`);
     const element = selected;
@@ -296,6 +334,7 @@ export function createDesignMode(options: DesignModeOptions) {
         updateActions();
       },
       rerender: renderControls,
+      reserved: options.reservedKey,
     } satisfies PanelContext);
     if (retainedProps) controls.prepend(retainedProps);
     // Any design-system adapter needs the token and props controls, not only registered elements.
@@ -326,13 +365,10 @@ export function createDesignMode(options: DesignModeOptions) {
   function syncEmpty() {
     panel.toggleAttribute("data-empty", (comment.hidden = !selected));
     panel.parentElement?.toggleAttribute("data-design-empty", active && !selected);
-    const pending = [...previewTargets.keys()].filter(hasChanges);
-    pendingSlot.hidden = !!selected || !pending.length && !views?.tokens?.size;
-    if (views) views.pending.hidden = pendingSlot.hidden;
-    views?.update(pending.length, pending.some(element => element.isConnected && previewTargets.get(element) === page()), !!selected);
+    views?.update(!!selected);
   }
   function hasChanges(element: DesignTarget) {
-    return !!(changed.get(element)?.size || (element instanceof HTMLElement && textTools?.hasChanges(element)) || reactPanelModule?.hasReactPropChanges(element) || reactPanelModule?.hasDesignTokenEdit(element));
+    return !!(changed.get(element)?.size || (isHTMLElement(element) && textTools?.hasChanges(element)) || reactPanelModule?.hasReactPropChanges(element) || reactPanelModule?.hasDesignTokenEdit(element));
   }
   function clearSelection() {
     finishTextEdit();
@@ -349,7 +385,7 @@ export function createDesignMode(options: DesignModeOptions) {
       marker.hidden = true;
       return;
     }
-    const rect = element.getBoundingClientRect();
+    const rect = screenRect(element);
     if (!rect.width || !rect.height) {
       marker.hidden = true;
       return;
@@ -368,9 +404,11 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     marker.hidden = !drawHighlight(marker, rect, element, options.bounds?.(element));
   }
+  // The pending card's hovered row outlines its element like a selection.
+  let peek: DesignTarget | null = null;
   function renderOutlines(retarget = false) {
     geometry?.render();
-    outlineFor(selected ?? hovered, selected ? "selected" : "hover", retarget);
+    outlineFor(selected ?? hovered ?? peek, selected || !hovered ? "selected" : "hover", retarget);
     outlineFor(selected && hovered !== selected ? hovered : null, "hover", false, prospective);
   }
   function scheduleOutline() {
@@ -402,6 +440,7 @@ export function createDesignMode(options: DesignModeOptions) {
   const resized = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleOutline) : null;
   function select(element: Element | null) {
     if (!isDesignTarget(element) || !element.isConnected || options.host.contains(element)) return;
+    views?.settle();
     if (textTools?.element && textTools.element !== element) finishTextEdit();
     resized?.disconnect();
     resized?.observe(element);
@@ -424,7 +463,7 @@ export function createDesignMode(options: DesignModeOptions) {
     setFolded(false);
     if (!compact()) return;
     requestAnimationFrame(() => {
-      const rect = element.getBoundingClientRect();
+      const rect = screenRect(element);
       const limit = panel.getBoundingClientRect().top - 12;
       if (rect.top >= 12 && rect.bottom <= limit) return;
       window.scrollBy({
@@ -436,14 +475,15 @@ export function createDesignMode(options: DesignModeOptions) {
   function updateActions() {
     // Every edit, undo and reset lands here; re-measure after it applies.
     scheduleOutline();
-    undo.disabled = !history.length && !reactPanelModule?.canUndoReactProp(selected) && !reactPanelModule?.canUndoDesignTokenEdit(selected);
+    undo.disabled = !views?.parked && !history.length && !reactPanelModule?.canUndoReactProp(selected) && !reactPanelModule?.canUndoDesignTokenEdit(selected);
+    redo.disabled = !future.length;
     reset.disabled = !syncBar();
     copy.disabled = !selected || !(changed.get(selected)?.size);
     comment.disabled = !selected;
     // Nested markup is never editable; the editor checks privacy and interactivity on use.
-    editText.disabled = !!textTools?.busy || !selected?.isConnected || !(selected instanceof HTMLElement);
-    editText.textContent = textTools?.isEditing(selected instanceof HTMLElement ? selected : null) ? "Done editing" : "Edit text";
-    editText.setAttribute("aria-label", textTools?.isEditing(selected instanceof HTMLElement ? selected : null) ? "Finish inline text editing" : "Edit selected text inline");
+    editText.disabled = !!textTools?.busy || !selected?.isConnected || !(isHTMLElement(selected));
+    editText.textContent = textTools?.isEditing(isHTMLElement(selected) ? selected : null) ? "Done editing" : "Edit text";
+    editText.setAttribute("aria-label", textTools?.isEditing(isHTMLElement(selected) ? selected : null) ? "Finish inline text editing" : "Edit selected text inline");
     // Resizes, Undo, Reset and Before/After change declarations behind the fields; show them.
     if (selected && !fieldsSettling) panelModule?.syncFields(controls, styleEdits.isDirty);
     syncEmpty();
@@ -461,7 +501,7 @@ export function createDesignMode(options: DesignModeOptions) {
       textTools = module.bindInlineTextTools({
         button: editText,
         status,
-        selected: () => selected instanceof HTMLElement ? selected : null,
+        selected: () => isHTMLElement(selected) ? selected : null,
         active: () => active,
         onChange: updateActions,
         onCommit(result) {
@@ -478,23 +518,37 @@ export function createDesignMode(options: DesignModeOptions) {
       renderOutlines();
       return;
     }
-    const element = pickDesignTarget(options.targetAt(event.clientX, event.clientY), event.metaKey || event.ctrlKey);
+    const point = clientPoint(event);
+    const element = pickDesignTarget(options.targetAt(point.x, point.y), event.metaKey || event.ctrlKey);
     hovered = element && !options.host.contains(element) ? element : null;
     if (hovered) decorating = true;
     renderOutlines(!selected);
   }
   function onDown(event: PointerEvent) {
-    if (!active || event.button !== 0 || event.composedPath().includes(options.host)) return;
-    const element = pickDesignTarget(options.targetAt(event.clientX, event.clientY), event.metaKey || event.ctrlKey);
-    if (!element || options.host.contains(element)) return;
+    if (!active || event.button !== 0) return;
+    const path = event.composedPath();
+    // The backdrop around Frame's viewport is canvas too.
+    if (path.includes(options.host)) return void (isHTMLElement(path[0]) && path[0].matches(".frame-stage") && clearSelection());
+    const point = clientPoint(event);
+    const element = pickDesignTarget(options.targetAt(point.x, point.y), event.metaKey || event.ctrlKey);
+    // Empty canvas deselects, Figma-style.
+    if (!element || element === element.ownerDocument.body || element === element.ownerDocument.documentElement) {
+      if (!textTools?.element) clearSelection();
+      return;
+    }
+    if (options.host.contains(element)) return;
     decorating = true;
     if (textTools?.element && (element === textTools.element || textTools.element.contains(element))) return;
-    if (textTools?.element) finishTextEdit();
     event.preventDefault();
     event.stopImmediatePropagation();
+    choose(element);
+  }
+  function choose(element: DesignTarget) {
+    if (textTools?.element) finishTextEdit();
     select(element);
     const focused = options.root.activeElement ?? document.activeElement;
-    if (focused instanceof HTMLElement) focused.blur();
+    if (isHTMLElement(focused)) focused.blur();
+    refocus?.(false);
   }
   function onClick(event: MouseEvent) {
     if (!active || event.composedPath().includes(options.host)) return;
@@ -521,6 +575,8 @@ export function createDesignMode(options: DesignModeOptions) {
     if (event.defaultPrevented && !event.composedPath().includes(options.host)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    // One press leaves; the selection comes back on the next entry, as do pending previews.
+    resume = selected && [selected, page()];
     clearSelection();
     setActive(false);
     options.onExit();
@@ -541,6 +597,8 @@ export function createDesignMode(options: DesignModeOptions) {
       showBefore(before, false);
     }
     if (value && selected && (selectionPage !== page() || (!selected.isConnected && !retainSelection()))) clearSelection();
+    if (value && !active && !selected && resume?.[0].isConnected && resume[1] === page()) select(resume[0]);
+    if (value) resume = null;
     clearTimeout(closeTimer);
     closeTimer = 0;
     active = value;
@@ -595,7 +653,7 @@ export function createDesignMode(options: DesignModeOptions) {
     }
     originals.clear();
     changed.clear();
-    history.length = 0;
+    history.length = future.length = 0;
     textTools?.restoreAll();
     views?.tokens?.reset();
     previewTargets.clear();
@@ -605,13 +663,23 @@ export function createDesignMode(options: DesignModeOptions) {
     geometry?.cancel();
     options.root.dispatchEvent(new Event("komo-preview-cancel"));
   }
+  /** Style rows to propose or copy; a structural move's hidden original is not a `display` change. */
+  function styles(element: DesignTarget) {
+    const values = changed.get(element);
+    return values && geometry?.moved(element) ? new Map([...values].filter(([property]) => property !== "display")) : values;
+  }
   function proposalFor(element: DesignTarget, create: typeof import("./design-export.js")["designProposal"]) {
-    return create(element, changed.get(element), property => originals.get(element)?.get(property)?.computed,
+    return create(element, styles(element), property => originals.get(element)?.get(property)?.computed,
       reactPanelModule?.tokenBoundProperties(element),
-      [(element instanceof HTMLElement ? textTools?.proposal(element) : undefined), reactPanelModule?.proposedDesignChanges(element), geometry?.proposal(element)],
+      [(isHTMLElement(element) ? textTools?.proposal(element) : undefined), reactPanelModule?.proposedDesignChanges(element), geometry?.proposal(element)],
       reactPanelModule?.designContext(element, options.design));
   }
   undo.addEventListener("click", () => {
+    // Undo after Discard all brings the whole set back; Redo discards it again.
+    if (views?.restore()) {
+      future.push([{ kind: "discard" }, () => views?.discard()]);
+      return updateActions();
+    }
     const edit = history.pop();
     if (!edit) {
       if (selected) {
@@ -621,12 +689,24 @@ export function createDesignMode(options: DesignModeOptions) {
       }
       status.textContent = previewMessage;
     } else if (!edit.kind) {
+      // Props redo through their own stack; other entries without redo get their inline style back.
+      const style = edit.element.getAttribute("style");
       edit.undo();
+      future.push([edit, edit.redo ?? (edit.props ? () => reactPanelModule?.redoReactProp(edit.element)
+        : () => style === null ? edit.element.removeAttribute("style") : edit.element.setAttribute("style", style))]);
       renderControls();
     } else if (edit.kind === "text") {
       if (selected === (textTools?.undo() ?? edit.element)) renderControls();
-    } else if (edit.kind === "token") views?.tokens?.undo();
-    else {
+      future.push([edit, () => textTools?.redo()]);
+    } else if (edit.kind === "token") {
+      views?.tokens?.undo();
+      future.push([edit, () => views?.tokens?.redo()]);
+    } else {
+      future.push([edit, () => {
+        restoreStyle(edit.element, edit.property, edit.after);
+        reactPanelModule?.syncDesignTokenBinding(edit.element, edit.property);
+        track(edit.element, edit.property);
+      }]);
       restore(edit.element, edit.property, edit.before);
       edit.before.bindingUndo?.();
       reactPanelModule?.syncDesignTokenBinding(edit.element, edit.property);
@@ -635,16 +715,37 @@ export function createDesignMode(options: DesignModeOptions) {
       renderOutlines();
     }
     updateActions();
-    (undo.disabled ? close : undo).focus({ preventScroll: true });
+    options.root.dispatchEvent(new CustomEvent("komo-announce", { detail: "Undone" }));
+    // A redrawn field gets its focus back (refocus); a control still shown keeps it. Otherwise focus
+    // goes to Undo, or to the selection once nothing is left to undo, never to Exit.
+    const now = options.root.activeElement;
+    if (!refocus && (!now || now === undo || !now.getClientRects().length)) undo.disabled ? focusSelection() : undo.focus({ preventScroll: true });
+  });
+  redo.addEventListener("click", () => {
+    const next = future.pop();
+    if (!next) return;
+    redoing = true;
+    // Back in history first, so a move's stand-in counts it as live; token steps return through the Tokens view's own sync.
+    if (next[0].kind !== "token" && next[0].kind !== "discard") history.push(next[0]);
+    next[1]();
+    redoing = false;
+    renderControls();
+    renderOutlines();
+    updateActions();
+    options.root.dispatchEvent(new CustomEvent("komo-announce", { detail: "Redone" }));
+    // As for Undo: a redrawn field gets its focus back, a control still shown keeps it; otherwise
+    // Redo, or the selection once nothing is left to redo, never Exit.
+    const now = options.root.activeElement;
+    if (!refocus && (!now || now === redo || !now.getClientRects().length)) redo.disabled ? focusSelection() : redo.focus({ preventScroll: true });
   });
   function resetElement(element: DesignTarget) {
-    if (textTools?.isEditing(element instanceof HTMLElement ? element : null)) finishTextEdit(true);
+    if (textTools?.isEditing(isHTMLElement(element) ? element : null)) finishTextEdit(true);
     const values = changed.get(element);
-    const hasTextValue = (element instanceof HTMLElement && textTools?.hasChanges(element)) ?? false;
+    const hasTextValue = (isHTMLElement(element) && textTools?.hasChanges(element)) ?? false;
     const hasReactValues = reactPanelModule?.hasReactPropChanges(element) ?? false;
     const hasTokenValues = reactPanelModule?.hasDesignTokenEdit(element) ?? false;
     if (!values?.size && !hasTextValue && !hasReactValues && !hasTokenValues) return;
-    if (hasTextValue && element instanceof HTMLElement) textTools?.reset(element);
+    if (hasTextValue && isHTMLElement(element)) textTools?.reset(element);
     if (hasTokenValues) reactPanelModule?.resetDesignTokenEdits(element);
     changePreviewStyles(element, values?.keys() ?? [], () => {
       for (const property of values?.keys() ?? []) restore(element, property, originals.get(element)?.get(property));
@@ -656,6 +757,7 @@ export function createDesignMode(options: DesignModeOptions) {
     if (hasReactValues) reactPanelModule?.resetReactProps(element);
     for (let index = history.length - 1; index >= 0; index--)
       if (history[index].element === element) history.splice(index, 1);
+    future.length = 0;
   }
   reset.addEventListener("click", () => {
     if (!selected) return;
@@ -663,11 +765,11 @@ export function createDesignMode(options: DesignModeOptions) {
     renderControls();
     renderOutlines();
     updateActions();
-    close.focus({ preventScroll: true });
+    if (!refocus) focusSelection();
   });
   copy.addEventListener("click", () => {
     const element = selected;
-    const values = element ? changed.get(element) : undefined;
+    const values = element ? styles(element) : undefined;
     if (!element || !values?.size) return;
     void exporter().then(async ({ cssText }) => {
       const css = cssText(element, values);
@@ -682,7 +784,7 @@ export function createDesignMode(options: DesignModeOptions) {
   comment.addEventListener("click", () => {
     const element = selected;
     if (!element) return;
-    if (textTools?.isEditing(element instanceof HTMLElement ? element : null)) finishTextEdit();
+    if (textTools?.isEditing(isHTMLElement(element) ? element : null)) finishTextEdit();
     void exporter().then(({ designProposal }) => {
       if (!active || selected !== element || !element.isConnected) return;
       // The comment carries everything the count shows, pending token edits included; both are then cleared.
@@ -697,6 +799,11 @@ export function createDesignMode(options: DesignModeOptions) {
   const toAfter = () => showBefore(false);
   for (const node of [controls, actions, editText])
     for (const type of ["pointerdown", "focusin", "click", "input"]) node.addEventListener(type, toAfter, true);
+  // Moves, Undo and applied tokens announce in komo's one polite live region (index.ts).
+  options.root.addEventListener("komo-announce", event => {
+    const live = options.root.querySelector(".sr-only[aria-live]");
+    if (live) live.textContent = (event as CustomEvent<string>).detail;
+  }, { signal: listeners.signal });
   document.addEventListener("pointermove", onMove, { capture: true, signal: listeners.signal });
   document.addEventListener("pointerdown", onDown, { capture: true, signal: listeners.signal });
   document.addEventListener("click", onClick, { capture: true, signal: listeners.signal });
@@ -704,32 +811,40 @@ export function createDesignMode(options: DesignModeOptions) {
   window.addEventListener("keydown", escape, { signal: listeners.signal });
   window.addEventListener("scroll", scheduleOutline, { capture: true, passive: true, signal: listeners.signal });
   window.addEventListener("resize", scheduleOutline, { passive: true, signal: listeners.signal });
+  // Frame's viewport iframe gets its own events: picking, keys and scrolling inside it.
+  for (const [type, listener, window] of [["pointermove", onMove], ["pointerdown", onDown], ["click", onClick], ["keydown", onKey], ["keydown", escape, 1], ["scroll", scheduleOutline, 1], ["resize", scheduleOutline, 1]] as const)
+    onFrame(type, listener, { capture: type !== "resize" && !(window && type === "keydown"), passive: type === "scroll" || type === "resize", signal: listeners.signal }, window ? "window" : "document");
   watchHighlight(options.host, () => active ? [selected ?? hovered, hovered] : [], scheduleOutline, listeners.signal, () => { if (!retainSelection()) clearSelection(); });
   const selectionReady = exporter().then(module => {
     if (listeners.signal.aborted) return;
+    keepFocus = module.keepFocus;
+    const show = (element: DesignTarget) => { decorating = true; select(element); reveal(element); };
     keyboard = module.designKeyboard({
-      host: options.host, compare, reserved: options.reservedKey,
+      host: options.host, compare, reserved: options.reservedKey, root: options.root, undo, redo, keys: options.keys, signal: listeners.signal,
       selected: () => selectionPage === page() ? selected : null,
-      select(element) { decorating = true; select(element); reveal(element); },
+      select: show,
       compareBefore(before) { showBefore(before ?? !showingBefore); },
       help: options.shortcutHelp,
     });
     module.watchDesignStatus(status, bar, () => !!textTools?.element, listeners.signal);
     views = module.selectionViews({
       help: options.shortcutHelp,
-      review() {
-        const target = [...previewTargets.keys()].reverse().find(element => element.isConnected && previewTargets.get(element) === page() && hasChanges(element));
-        if (target) select(target);
-      },
+      select: show,
+      peek(element) { peek = element; decorating = true; renderOutlines(); },
+      // Discard all and its Undo flip Before; older undone steps can't be redone on top.
+      before(on) { future.length = 0; showBefore(on); },
       reset: resetAll,
-      proposals: () => [...previewTargets.keys()].filter(hasChanges).map(element => proposalFor(element, module.designProposal)),
+      items: () => [...previewTargets].filter(([element]) => hasChanges(element)).map(([element, at]) => ({
+        element, here: at === page() && element.isConnected, count: changeCount(element), proposal: proposalFor(element, module.designProposal),
+      })),
       message: text => { status.textContent = text; },
-      mode: options,
+      mode: options, signal: listeners.signal,
       history, update: updateActions, clear: clearSelection,
     });
     bar.before(views.chip);
     style.textContent += views.styles;
     undo.innerHTML = views.icons.undo;
+    redo.innerHTML = views.icons.redo;
     reset.innerHTML = views.icons.reset;
     pendingSlot.append(views.pending);
     if (active) renderControls();
@@ -756,8 +871,9 @@ export function createDesignMode(options: DesignModeOptions) {
       }
     },
     get active() { return active; },
-    /** Resolves once the property controls have loaded. */
-    ready: Promise.all([ready, selectionReady]),
+    get selected() { return selected; },
+    /** Resolves once the property controls and selection keys have loaded; the panel then carries data-ready. */
+    ready: Promise.all([ready, selectionReady]).then(() => { panel.dataset.ready = ""; }),
     destroy() {
       textTools?.finish(true);
       setActive(false);

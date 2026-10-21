@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -48,7 +49,7 @@ beforeAll(async () => {
         if(!frame&&!reflow)document.body.append(document.createElement('aside'));
         const tokens=tailwindTokens({tokens:[{path:'color.primary',label:'Primary',type:'color',class:'text-primary',properties:['color'],value:'#b42318'},{path:'color.secondary',label:'Secondary',type:'color',class:'text-secondary',properties:['color'],value:'#2468ff'},...Array.from({length:8},(_,index)=>({path:'color.fixture'+index,label:'Supplemental '+index,type:'color',class:'text-fixture-'+index,properties:['color'],value:'#123456'}))]});
         // The reflow cases cover the unscaled in-place frame: the space beside the comments.
-        if(reflow)localStorage.setItem('branch-comments:frame-size:nested-props:example/review',JSON.stringify({size:'available'}));
+        if(reflow)localStorage.setItem('branch-comments:frame-size:nested-props:example/review',JSON.stringify({v:2,size:'available'}));
         window.komo=initKomo({endpoint:location.origin,project:'nested-props',repo:'example/review',branch:'fixture',pageRoot:frame||reflow?document.querySelector('main'):undefined,sidebar:frame||reflow?'background':'edge',frame:{scale:frame},restoreOpen:false,design:{components:adapter,tokens}});
       `, resolveDir: process.cwd(), loader: "ts" },
       alias: { react: dirname(require.resolve("react/package.json")), "react-dom": dirname(require.resolve("react-dom/package.json")) },
@@ -88,7 +89,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     const target = page.locator("main button");
     await target.waitFor();
     const baseline = await target.evaluate(node => ({ style: node.getAttribute("style"), className: node.className, color: getComputedStyle(node).color, display: getComputedStyle(node).display }));
-    await page.keyboard.press("d");
+    await openDesign(page);
     await target.click();
     await page.locator('[data-property="display"]').click();
     const layout = page.locator(".komo-select");
@@ -106,7 +107,6 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await field.locator("select[data-picker]").click();
     const popup = page.locator(".komo-tokens");
     await popup.waitFor();
-    await popup.getByRole("button", { name: "Tokens", exact: true }).click();
     const search = popup.getByRole("combobox", { name: "Search tokens for color", exact: true });
     await search.fill("Primary");
     await popup.evaluate(node => (window as any).popupQA.tokens = node);
@@ -125,7 +125,6 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     expect(await target.getAttribute("class")).toBe(baseline.className);
     expect(await target.getAttribute("style")).toBe(baseline.style);
     await field.locator("select[data-picker]").click();
-    await popup.getByRole("button", { name: "Tokens", exact: true }).click();
     await popup.getByRole("option").filter({ hasText: "Primary" }).click();
     expect(await target.evaluate(node => getComputedStyle(node).color)).toBe("rgb(180, 35, 24)");
     await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -143,7 +142,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await target.waitFor();
     const baselineStyle = await target.getAttribute("style");
     await target.evaluate(node => (window as any).originalLeaf = node);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await target.click();
     const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
     await variant.evaluate(node => (window as any).originalControl = node);
@@ -178,7 +177,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await page.waitForFunction(() => document.querySelector("main button")?.getAttribute("aria-label") === "Second edit");
     await page.keyboard.press("v");
     await page.waitForFunction(() => document.querySelector("main button")?.className === "button-tertiary");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.waitForFunction(() => document.querySelector("main button")?.className === "button-primary");
     expect(await variant.inputValue()).toBe("primary");
     await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -211,7 +210,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
       const target = page.locator("main button");
       await target.waitFor();
       const style = await target.getAttribute("style");
-      await page.keyboard.press("d");
+      await openDesign(page);
       await target.click();
       const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
       const label = page.getByRole("textbox", { name: "ActionButton aria-label", exact: true });
@@ -257,7 +256,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await page.goto(`${origin}/?react=${version}&replace`);
     const target = page.locator("main button");
     await target.waitFor();
-    await page.keyboard.press("d");
+    await openDesign(page);
     await target.click();
     const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
     await variant.fill("primary");
@@ -285,8 +284,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await page.goto(`${origin}/?react=${version}${frame ? "&frame" : ""}`);
     await page.locator("main button").waitFor();
     await page.waitForFunction(() => Number(document.querySelector("output")?.textContent) > 1);
-    await page.keyboard.press("d");
-    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await openDesign(page);
     await page.locator("main button").click();
     const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
     await variant.fill("primary");
@@ -306,7 +304,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await page.waitForFunction(() => document.querySelector("main button")?.getAttribute("aria-label") === "Preview action");
     await page.keyboard.press("v");
     await page.waitForFunction(() => document.querySelector("main button")?.className === "button-tertiary");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.waitForFunction(() => document.querySelector("main button")?.className === "button-primary");
     expect(await variant.inputValue()).toBe("primary");
     await page.getByRole("button", { name: "Undo", exact: true }).click();

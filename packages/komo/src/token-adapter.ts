@@ -1,6 +1,7 @@
 import { previewStyle } from "./design-popup.js";
 import { inlineStyleSnapshot } from "./design-preview.js";
 import { isDesignTarget } from "./design-target.js";
+import { previewTarget } from "./frame-target.js";
 // Design mode's side of an app's TokenAdapter: cached token lists, per-element
 // token swaps with their undo, Before/After, and the proposal text. Loaded with
 // the token controls, never at startup.
@@ -40,6 +41,7 @@ const baselines = new WeakMap<Element, Map<string, {
 }>>();
 let suspendedCustoms = new Map<Element, Map<string, ReturnType<typeof inlineStyleSnapshot>>>();
 const lists = new WeakMap<TokenAdapter, Map<string, Promise<DesignToken[]>>>();
+const reported = new WeakMap<TokenAdapter, Map<string, Promise<DesignToken[]>> | undefined>();
 let showingBefore = false;
 
 function removeCustom(element: Element, property: string) {
@@ -136,7 +138,7 @@ export function originalTokenStyle(element: Element, property: string) {
 export function themeState(design?: DesignSystem): ThemeState {
   const state: ThemeState = {};
   for (const axis of design?.themes ?? []) {
-    try { state[axis.id] = axis.current(); } catch { /* An axis that throws is left out. */ }
+    try { state[axis.id] = axis.current(previewTarget()); } catch { /* An axis that throws is left out. */ }
   }
   return state;
 }
@@ -161,8 +163,9 @@ export function watchThemes(design: DesignSystem | undefined, document: Document
     } catch { fallback = true; }
   }
   const observer = fallback ? new MutationObserver(changed) : undefined;
-  observer?.observe(document.documentElement, { attributes: true });
-  if (document.body) observer?.observe(document.body, { attributes: true });
+  const page = previewTarget().document;
+  observer?.observe(page.documentElement, { attributes: true });
+  if (page.body) observer?.observe(page.body, { attributes: true });
   signal.addEventListener("abort", () => {
     observer?.disconnect();
     for (const cleanup of cleanups) cleanup();
@@ -171,8 +174,8 @@ export function watchThemes(design: DesignSystem | undefined, document: Document
 
 /**
  * Run `update` after an adapter with `subscribe()` reports a new token set, until
- * `signal` aborts. Each report drops the adapter's cached lists. Adapters without
- * `subscribe()` cost nothing.
+ * `signal` aborts. Each report drops the adapter's cached lists and updates only when a list
+ * changed. Adapters without `subscribe()` cost nothing.
  */
 export function watchTokenList(adapter: TokenAdapter | undefined, update: () => void, signal: AbortSignal): void {
   if (!adapter?.subscribe || signal.aborted) return;
@@ -180,8 +183,15 @@ export function watchTokenList(adapter: TokenAdapter | undefined, update: () => 
   lists.delete(adapter);
   try {
     const stop = adapter.subscribe(() => {
+      // Only a list that changed refreshes, so a report caused by komo's own previews keeps open
+      // popups and rows. Every watcher of one report compares with the lists from before it.
+      const before = reported.get(adapter) ?? lists.get(adapter);
+      reported.set(adapter, before);
+      queueMicrotask(() => reported.delete(adapter));
       lists.delete(adapter);
-      update();
+      void Promise.all([...before ?? []].map(([key, list]) => Promise.all([list, listTokens(adapter, Object.fromEntries(JSON.parse(key)))])
+        .then(([old, next]) => JSON.stringify(old) === JSON.stringify(next))))
+        .then(same => same.length && same.every(Boolean) || update(), update);
     });
     signal.addEventListener("abort", () => { try { stop(); } catch { /* Ignore a failing unsubscribe. */ } }, { once: true });
   } catch { /* An adapter whose subscribe() throws keeps its cached lists. */ }

@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { waitForInspector } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -228,6 +229,7 @@ describe.skipIf(!chrome)("Design mode empty state", () => {
   async function design(query: string, options: Options = {}) {
     const page = await open(query, options);
     await page.keyboard.press("Shift+D");
+    await waitForInspector(page);
     await page.locator(".design-inspector__empty").waitFor();
     await settle(page, 300);
     return page;
@@ -252,18 +254,20 @@ describe.skipIf(!chrome)("Design mode empty state", () => {
     await link.click();
     const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
     await help.waitFor();
-    const keys = (label: string) => help.evaluate((dialog, label) => [...dialog.querySelectorAll(":scope > div")]
+    const keys = (label: string) => help.evaluate((dialog, label) => [...dialog.querySelectorAll(".komo-shortcuts__row")]
       .find(line => line.firstChild?.textContent === label)?.querySelector(".komo-kbd")?.getAttribute("aria-label"), label);
     const mac = await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform));
     // Every hint that left the empty state, with the configured bindings.
     expect(await keys("Inspect element")).toBe("Click");
-    expect(await keys("Select an inner target")).toBe(mac ? "Command + Click" : "Control + Click");
+    expect(await keys("Select inner element")).toBe(mac ? "Command + Click" : "Control + Click");
     expect(await keys("Edit text")).toBe("Double-click");
-    expect(await keys("Previous sibling")).toBe("ArrowLeft");
-    expect(await keys("Next sibling")).toBe("ArrowRight");
-    expect(await keys("Parent element")).toBe(mac ? "Option + ArrowUp" : "Alt + ArrowUp");
-    expect(await keys("Child element")).toBe(mac ? "Option + ArrowDown" : "Alt + ArrowDown");
-    expect(await keys("Exit design mode")).toBe("Escape");
+    expect(await keys("Previous sibling")).toBe("Shift + Tab");
+    expect(await keys("Next sibling")).toBe("Tab");
+    expect(await keys("Parent element")).toBe("Shift + Enter");
+    expect(await keys("First child")).toBe("Enter");
+    expect(await keys("Parent element (alternative)")).toBe(mac ? "Option + ArrowUp" : "Alt + ArrowUp");
+    expect(await keys("First child (alternative)")).toBe(mac ? "Option + ArrowDown" : "Alt + ArrowDown");
+    expect(await keys("Exit Design mode")).toBe("Escape");
     expect(await keys("Design mode")).toBe("Shift + D");
     expect(await keys("Keyboard shortcuts")).toBe("?");
     await page.keyboard.press("Escape");
@@ -317,6 +321,7 @@ it.skipIf(!chrome)("captures dot and compact pin close-ups and the empty state o
     for (const tokens of ["", "tokens=1"]) {
       const page = await open(`theme=${theme}&${tokens}`, { reducedMotion: "reduce", scale: 2 });
       await page.keyboard.press("Shift+D");
+      await waitForInspector(page);
       await page.locator(".design-inspector__empty").waitFor();
       await settle(page);
       const inspector = (await page.locator(".design-inspector").boundingBox())!;

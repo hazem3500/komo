@@ -1,17 +1,67 @@
-export { designKeyboard } from "./design-keyboard.js";
-import { renderKeycaps } from "./kbd.js";
+export { designKeyboard, keepFocus } from "./design-keyboard.js";
+import { isMac, renderKeycaps } from "./kbd.js";
 import { el, icon } from "./dom.js";
+import { pageDocument } from "./frame-target.js";
+import { elementLabel } from "./element-label.js";
+import type { DesignTarget } from "./design-target.js";
+
+/** One changed element, as the pending card lists it. */
+export interface PendingItem {
+  element: DesignTarget;
+  /** Connected, on the page it was edited on, so it can be selected. */
+  here: boolean;
+  /** The footer's change count for the element. */
+  count: number;
+  /** Its comment proposal: section headers give the row's kind, a "Component: " line its name. */
+  proposal?: string;
+}
+
+// Proposal sections as the comment cards read them, by row kind.
+const KINDS: Record<string, string> = { style: "style", "inline text": "text", "design-token": "token", token: "token", "React prop": "prop", geometry: "geometry" };
+/** The row's kind icon: geometry when the element moved or resized, else the first section's. */
+export function changeKind(proposal = "") {
+  const kinds = [...proposal.matchAll(/^Proposed (.+?) changes? \(preview only\)$/gm)].map(([, name]) => KINDS[name]);
+  return kinds.includes("geometry") ? "geometry" : kinds.find(Boolean) ?? "style";
+}
+
+const glyph = (path: string) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
+const kindIcons: Record<string, string> = {
+  style: "M8 2.5c2 2.4 4 4.6 4 6.8a4 4 0 0 1-8 0c0-2.2 2-4.4 4-6.8z",
+  token: "M8 2.5 13.5 8 8 13.5 2.5 8z",
+  text: "M3.5 4.5V3h9v1.5M8 3v10M6 13h4",
+  prop: "M2.5 5h6m3 0h2m-11 6h2m3 0h6M10 3.5v3m-4 3v3",
+  geometry: "M2.5 6V2.5H6m4 0h3.5V6m0 4v3.5H10m-4 0H2.5V10",
+};
+const plural = (count: number) => `${count} change${count === 1 ? "" : "s"}`;
+
+/**
+ * A pending change summary: kind icon, label and count. The pending card's rows and the
+ * element footer's "Token changes" chip both use it, so pending state reads the same everywhere.
+ */
+export function changeRow(row: HTMLElement, kind: string, label: string, count: number) {
+  row.innerHTML = glyph(kindIcons[kind] ?? kindIcons.style);
+  row.dataset.kind = kind;
+  row.append(el("span", "", label), el("small", "", String(count)));
+  row.setAttribute("aria-label", `${label} · ${plural(count)}`);
+}
 
 /** Selection guidance and recovery controls load with the proposal helpers. */
 export function selectionViews(options: {
   /** Opens komo's shortcut help, which lists every canvas key and gesture. */
   help?(): void;
-  review(): void;
+  /** Select and reveal a changed element. */
+  select(element: DesignTarget): void;
+  /** Outline a changed element on the page while its row is hovered; null clears it. */
+  peek(element: DesignTarget | null): void;
+  /** Design mode's Before/After; Discard all waits in Before until Undo or the next selection. */
+  before(on: boolean): void;
+  /** Reset all previews: elements and page tokens. */
   reset(): void;
-  proposals(): Array<string | undefined>;
+  items(): PendingItem[];
   message(text: string): void;
-  /** Design mode's options, for the Tokens view. */
+  /** Design mode's options, for the Tokens view and comments. */
   mode?: import("./token-page.js").TokenPageHost;
+  signal?: AbortSignal;
   /** Design mode's chronological history; pending token steps join it. */
   history?: Array<{ kind?: string; step?: object }>;
   /** Re-sync Design mode after a token change. */
@@ -19,24 +69,81 @@ export function selectionViews(options: {
   /** Return to the empty panel, where the Tokens view opens. */
   clear?(): void;
 }) {
-  const glyph = (path: string) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
   const empty = el("div", "design-inspector__empty");
   empty.append(icon("design"), el("strong", "", "Select an element"), el("p", "", "Click to inspect · Double-click text to edit"));
-  const pending = el("section", "design-inspector__pending");
-  const label = el("p");
-  const button = (text: string, run: () => void) => {
-    const control = el("button", "", text);
+  const button = (text: string, run: () => void, className = "") => {
+    const control = el("button", className, text);
     control.type = "button";
     control.addEventListener("click", run);
     return control;
   };
-  const review = button("Review previous element", options.review);
-  const copy = button("Copy pending proposals", async () => {
-    const text = [...options.proposals(), tokens?.proposal()].filter(Boolean).join("\n\n");
-    try { await navigator.clipboard.writeText(text); options.message("Pending proposals copied"); }
-    catch { options.message("Couldn't copy pending proposals. Try again."); }
-  });
-  pending.append(label, review, copy, button("Reset all previews", options.reset));
+  const tip = (control: HTMLElement, label: string, text = label) => {
+    control.setAttribute("aria-label", label);
+    control.dataset.tip = text;
+    return control;
+  };
+  // Nothing selected: what is previewed, one row per changed element, and what to do with it.
+  // It is built like a design comment card: head, rows, then its actions.
+  const pending = el("section", "design-inspector__pending design-card");
+  pending.setAttribute("aria-label", "Unsaved changes");
+  pending.hidden = true;
+  const head = el("div", "design-card-head");
+  const label = el("div", "design-card-label");
+  const title = el("h3", "design-card-title");
+  label.append(title, el("p", "design-card-target", "Preview only. Nothing is saved until you comment or copy."));
+  head.append(label);
+  const list = el("div", "design-rows design-pending__list");
+  const actions = el("div", "design-pending__actions");
+  pending.append(head, list, actions);
+  // Discard and its Undo are announced in komo's one polite live region.
+  const say = (text: string) => options.mode?.root.dispatchEvent(new CustomEvent("komo-announce", { detail: text }));
+  let items: PendingItem[] = [];
+  let drawn: unknown[] = [];
+  let total = 0;
+  /** How many changes Discard all set aside; Undo brings them back, the next selection drops them. */
+  let parked = 0;
+  const proposal = () => [...items.map(item => item.proposal), tokens?.proposal()].filter(Boolean).join("\n\n");
+  const copy = tip(button("", async () => {
+    try { await navigator.clipboard.writeText(proposal()); options.message("Changes copied"); }
+    catch { options.message("Couldn't copy changes. Try again."); }
+  }), "Copy changes");
+  copy.append(icon("copy"));
+  actions.append(
+    button("Comment with changes", () => {
+      const text = proposal();
+      // One element carries its own comment; several, or tokens, make a page comment.
+      const [only] = items;
+      const target = items.length === 1 && !tokens?.size && only.here ? only.element : pageDocument().body;
+      options.reset();
+      options.mode?.onComment(target, text || undefined);
+    }),
+    copy,
+    tip(button("Discard all", () => {
+      discard();
+      // The card is gone; focus goes to the inspector's title, as after Reset.
+      options.mode?.root.querySelector<HTMLElement>(".design-inspector__target")?.focus({ preventScroll: true });
+    }), "Discard all", `Undo · ${isMac() ? "⌘Z" : "Ctrl+Z"}`),
+  );
+  // The card's tooltips use the footer's surface, which is in this chunk.
+  const tips = (event: Event) => {
+    pending.removeEventListener("pointerover", tips);
+    pending.removeEventListener("focusin", tips);
+    if (options.mode && options.signal) footerTips(pending, options.mode.root, options.signal, event);
+  };
+  pending.addEventListener("pointerover", tips);
+  pending.addEventListener("focusin", tips);
+  /** Set every pending change aside in Before; Undo brings the set back, Redo discards it again. */
+  function discard() {
+    parked = total;
+    options.before(true);
+    say(`${plural(parked)} discarded`);
+  }
+  /** Drop a discarded set for good, before anything new is edited. */
+  const settle = () => {
+    if (!parked) return;
+    parked = 0;
+    options.reset();
+  };
   // Tokens are edited page-wide, so the view opens with nothing selected.
   const panel = () => options.mode?.root.querySelector<HTMLElement>(".design-inspector");
   let tokens: import("./token-page.js").PageTokens | undefined;
@@ -51,44 +158,88 @@ export function selectionViews(options: {
   };
   const mode = options.mode && { ...options.mode, link(page: import("./token-page.js").PageTokens) { tokens = page; return sync; } };
   const edit = button("Edit tokens", () => {
+    settle();
     const inspector = panel();
     if (inspector && mode) void import("./token-page.js").then(module => module.openTokenPage(inspector, mode), () => options.message("Tokens unavailable · try again"));
-  });
-  edit.className = "design-inspector__tokens";
+  }, "design-inspector__tokens");
   // The full list of keys and gestures lives in shortcut help.
-  const help = button("Keyboard shortcuts", () => options.help?.());
-  help.className = "design-inspector__help";
+  const help = button("Keyboard shortcuts", () => options.help?.(), "design-inspector__help");
   help.setAttribute("aria-label", "Keyboard shortcuts");
   help.setAttribute("aria-keyshortcuts", "?");
   help.append(renderKeycaps(["?"], "?"));
   help.hidden = !options.help;
   empty.append(edit, help);
-  // Pending token edits stay visible in the element view; the chip opens the Tokens view.
-  const chip = button("", () => {
+  // Pending token edits open the Tokens view: from the card's row, and from the element view's chip.
+  const openTokens = () => {
     options.clear?.();
     tokens?.open();
-  });
-  chip.className = "design-inspector__token-chip";
+  };
+  const tokenRow = button("", openTokens, "design-change-row");
+  const chip = button("", openTokens, "design-change-row design-inspector__token-chip");
   chip.title = "Open the Tokens view";
   chip.hidden = true;
+  function render(edits: number) {
+    // The hovered row may go, and its outline with it.
+    options.peek(null);
+    list.replaceChildren(...items.map(item => {
+      const row = button("", () => {
+        if (!item.here) return;
+        options.peek(null);
+        item.element.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+        options.select(item.element);
+      }, "design-change-row");
+      const component = /^Component: (.+?)(?: \(.*\))?$/m.exec(item.proposal ?? "")?.[1];
+      changeRow(row, changeKind(item.proposal), component || elementLabel(item.element), item.count);
+      if (!item.here) {
+        row.setAttribute("aria-disabled", "true");
+        row.dataset.tip = "On another page";
+      } else for (const [type, target] of [["pointerenter", item.element], ["pointerleave", null], ["focus", item.element], ["blur", null]] as const)
+        row.addEventListener(type, () => options.peek(target));
+      return row;
+    }));
+    if (edits) {
+      changeRow(tokenRow, "token", "Token changes", edits);
+      list.append(tokenRow);
+    }
+  }
   return {
     empty, pending, chip,
     get tokens() { return tokens; },
+    /** Discard all is waiting for Undo. */
+    get parked() { return parked > 0; },
+    settle, discard,
+    /** Undo after Discard all: show the set again. False when nothing was discarded. */
+    restore() {
+      if (!parked) return false;
+      say(`${plural(parked)} restored`);
+      parked = 0;
+      options.before(false);
+      return true;
+    },
     icons: {
       undo: glyph("M5.5 3.5 2.5 6.5l3 3m-3-3h7a4 4 0 0 1 0 8h-2"),
+      redo: glyph("M10.5 3.5 13.5 6.5l-3 3m3-3h-7a4 4 0 0 0 0 8h2"),
       reset: glyph("M2.5 2.5v3h3M3 5.5a5.5 5.5 0 1 1-.5 2.5"),
     },
-    styles: '@keyframes design-status{from{opacity:0;translate:0 2px}}.design-inspector__count{white-space:nowrap;font-variant-numeric:tabular-nums}.design-inspector__status{display:none;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:design-status .2s var(--ease-smooth-out)}.design-inspector__bar[data-message] .design-inspector__status{display:block}.design-inspector__bar[data-message] .design-inspector__count,.design-inspector__bar:not([data-changes]) .design-inspector__tool{display:none}.design-inspector__compare { display:inline-flex; flex:none; padding:2px; border-radius:7px; background:#ffffff0a; }.design-inspector__compare[hidden],.design-inspector__bar[data-message] .design-inspector__compare { display:none; }.design-inspector__compare button { height:22px; padding:0 8px; border-radius:5px; color:#9a9a9a; font:inherit; font-size:11px; }.design-inspector__compare button:hover { color:#fff; }.design-inspector__compare button[aria-pressed="true"] { color:#fff; background:#ffffff1a; }.design-inspector__empty { display:flex; flex-direction:column; align-items:center; gap:4px; padding:0 24px 28px; color:#898680; font-size:11px; text-align:center; }.design-inspector__empty > svg { box-sizing:content-box; width:20px; height:20px; margin-bottom:8px; padding:8px; border-radius:10px; background:#ffffff0a; color:#77736f; }.design-inspector__empty strong { color:#e9e6e1; font-size:12px; font-weight:600; }.design-inspector__empty p { margin:2px 0 0; line-height:1.5; }.design-inspector__pick-hint{flex:none;margin:0 12px 10px;color:#989898;font-size:10px;line-height:1.5}.design-inspector__pending{margin:12px;padding:12px;border:1px solid #ffffff1a;border-radius:10px;display:flex;flex-wrap:wrap;gap:8px}.design-inspector__pending[hidden]{display:none}.design-inspector__pending p{flex-basis:100%;margin:0 0 4px;color:#aaa;line-height:1.5}.design-inspector__pending button{min-height:32px;padding:6px 10px;border:1px solid #ffffff20;border-radius:7px;background:#ffffff08;font:inherit;color:inherit;cursor:pointer}.design-inspector__tokens{margin-top:16px;min-height:34px;padding:0 14px;border-radius:8px;background:var(--accent,#bda6ef);color:#211b2d;font:inherit;font-size:12px;font-weight:500}.design-inspector__tokens:hover{filter:brightness(1.08)}.design-inspector__help{gap:6px;margin-top:8px;min-height:28px;padding:0 8px;border-radius:7px;color:#898680;font:inherit;font-size:11px}.design-inspector__tokens[hidden]+.design-inspector__help{margin-top:14px}.design-inspector__help:hover{background:#ffffff0a;color:#e9e6e1}.design-inspector__tokens[hidden],.design-inspector__help[hidden]{display:none}.design-inspector__token-chip{flex:none;align-self:flex-start;margin:0 12px 8px;min-height:24px;padding:0 8px;border-radius:6px;background:#bda6ef1f;color:#e6dcfb;font:inherit;font-size:11px}.design-inspector__token-chip:hover{background:#bda6ef33}.design-inspector__token-chip:focus-visible{outline:2px solid #bda6ef;outline-offset:1px}.design-inspector__token-chip[hidden]{display:none}',
+    styles: '@keyframes design-status{from{opacity:0;translate:0 2px}}.design-inspector__count{white-space:nowrap;font-variant-numeric:tabular-nums}.design-inspector__status{display:none;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:design-status .2s var(--ease-smooth-out)}.design-inspector__bar[data-message] .design-inspector__status{display:block}.design-inspector__bar[data-message] .design-inspector__count,.design-inspector__bar:not([data-changes]) .design-inspector__tool{display:none}.design-inspector__compare { display:inline-flex; flex:none; padding:2px; border-radius:7px; background:#ffffff0a; }.design-inspector__compare[hidden],.design-inspector__bar[data-message] .design-inspector__compare { display:none; }.design-inspector__compare button { height:22px; padding:0 8px; border-radius:5px; color:#9a9a9a; font:inherit; font-size:11px; }.design-inspector__compare button:hover { color:#fff; }.design-inspector__compare button[aria-pressed="true"] { color:#fff; background:#ffffff1a; }.design-inspector__empty { display:flex; flex-direction:column; align-items:center; gap:4px; padding:0 24px 28px; color:#898680; font-size:11px; text-align:center; }.design-inspector__empty > svg { box-sizing:content-box; width:20px; height:20px; margin-bottom:8px; padding:8px; border-radius:10px; background:#ffffff0a; color:#77736f; }.design-inspector__empty strong { color:#e9e6e1; font-size:12px; font-weight:600; }.design-inspector__empty p { margin:2px 0 0; line-height:1.5; }.design-inspector__pick-hint{flex:none;margin:0 12px 10px;color:#989898;font-size:10px;line-height:1.5}.design-inspector__pending{margin:0 12px 12px;min-width:0;border-radius:10px;background:#ffffff08;box-shadow:inset 0 0 0 1px #ffffff0d;font-size:12px;animation:design-status .2s var(--ease-smooth-out)}.design-inspector__pending[hidden]{display:none}.design-inspector__pending .design-card-head{display:flex;min-width:0;padding:10px 12px}.design-inspector__pending .design-card-label{display:grid;flex:1;min-width:0;gap:2px}.design-inspector__pending .design-card-title{margin:0;overflow:hidden;color:#eee;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}.design-inspector__pending .design-card-target{margin:0;color:#8a8a8a;font-size:11px;line-height:1.45}.design-pending__list{display:flex;flex-direction:column;max-height:168px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;border-top:1px solid #ffffff0a}.design-pending__list .design-change-row{padding:0 12px;border-radius:0}.design-pending__list .design-change-row+.design-change-row{border-top:1px solid #ffffff06}.design-change-row{display:grid;grid-template-columns:12px minmax(0,1fr) auto;align-items:center;gap:8px;flex:none;box-sizing:border-box;height:28px;padding:0 8px;border-radius:6px;color:#ddd;font:inherit;font-size:12px;text-align:left}.design-change-row:hover:not([aria-disabled]){background:#ffffff0a;color:#fff}.design-change-row:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-change-row[aria-disabled]{opacity:.5;cursor:default}.design-change-row svg{width:12px;height:12px;color:#8a8a8a}.design-change-row[data-kind=token] svg{color:var(--accent,#bda6ef)}.design-change-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-change-row small{color:#8a8a8a;font-size:11px;font-variant-numeric:tabular-nums}.design-pending__actions{display:flex;align-items:center;gap:4px;padding:8px 8px 8px 12px;border-top:1px solid #ffffff0a}.design-pending__actions button{display:grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border-radius:7px;color:#9a9a9a;font:inherit;font-size:12px}.design-pending__actions button:hover{background:#ffffff0f;color:#fff}.design-pending__actions button:first-child{padding:0 12px;background:var(--accent,#bda6ef);color:#211b2d;font-weight:500}.design-pending__actions button:first-child:hover{background:var(--accent,#bda6ef);color:#211b2d;filter:brightness(1.08)}.design-pending__actions button:last-child{margin-left:auto}.design-pending__actions svg{width:16px;height:16px}.design-pending__actions button:focus-visible{outline:2px solid #bda6ef;outline-offset:1px}@media (prefers-reduced-motion:reduce){.design-inspector__pending{animation:none}}@media (pointer:coarse){.design-change-row,.design-pending__actions button{height:36px}}.design-inspector__tokens{margin-top:16px;min-height:34px;padding:0 14px;border-radius:8px;background:var(--accent,#bda6ef);color:#211b2d;font:inherit;font-size:12px;font-weight:500}.design-inspector__tokens:hover{filter:brightness(1.08)}.design-inspector__help{gap:6px;margin-top:8px;min-height:28px;padding:0 8px;border-radius:7px;color:#898680;font:inherit;font-size:11px}.design-inspector__tokens[hidden]+.design-inspector__help{margin-top:14px}.design-inspector__help:hover{background:#ffffff0a;color:#e9e6e1}.design-inspector__tokens[hidden],.design-inspector__help[hidden]{display:none}.design-inspector__token-chip{flex:none;align-self:flex-start;margin:0 12px 8px;background:#ffffff08;box-shadow:inset 0 0 0 1px #ffffff0d}.design-inspector__token-chip[hidden]{display:none}',
     /** `selected`: an element view is showing, so the chip stands for the pending token edits. */
-    update(count: number, canReview: boolean, selected = false) {
-      const edits = tokens?.size ?? 0;
-      // Token edits pend like element previews: "1 element and 2 token changes have pending runtime previews."
-      label.textContent = `${[count && `${count} element${count > 1 ? "s" : ""}`, edits && `${edits} token change${edits > 1 ? "s" : ""}`].filter(Boolean).join(" and ")} ${count + edits > 1 ? "have" : "has"} pending runtime previews. Undo, Reset or reload to restore.`;
-      review.hidden = !canReview;
-      edit.hidden = !options.mode?.design?.tokens && !document.querySelector("[data-komo-design-tokens]");
-      edit.textContent = edits ? `Edit tokens · ${edits} change${edits > 1 ? "s" : ""}` : "Edit tokens";
+    update(selected = false) {
+      // Discarded changes count as gone until Undo brings them back.
+      const edits = parked ? 0 : tokens?.size ?? 0;
+      // Most recent first.
+      items = selected || parked ? [] : options.items().reverse();
+      total = items.reduce((sum, item) => sum + item.count, edits);
+      pending.hidden = selected || !!parked || !total;
+      title.textContent = `${total} unsaved change${total === 1 ? "" : "s"}`;
+      const next = [...items.flatMap(item => [item.element, item.count, item.here, item.proposal]), edits];
+      if (next.length !== drawn.length || next.some((value, index) => value !== drawn[index])) {
+        drawn = next;
+        render(edits);
+      }
+      edit.hidden = !options.mode?.design?.tokens && !pageDocument().querySelector("[data-komo-design-tokens]");
+      edit.textContent = edits ? `Edit tokens · ${plural(edits)}` : "Edit tokens";
       chip.hidden = !selected || !edits;
-      chip.textContent = `Token changes · ${edits}`;
+      changeRow(chip, "token", "Token changes", edits);
     },
   };
 }
@@ -104,8 +255,8 @@ export function cssSelector(element: Element): string {
   for (let node: Element | null = element; node; node = node.parentElement) {
     // React useId and Radix ids change between renders, as in anchors.ts.
     const id = node.id && !/^radix-|^:r|_r_|«r/.test(node.id) ? `#${CSS.escape(node.id)}` : "";
-    if (id && document.querySelectorAll(id).length === 1) return [id, ...parts].join(" > ");
-    if (node === document.body || !node.parentElement) return [node.tagName.toLowerCase(), ...parts].join(" > ");
+    if (id && node.ownerDocument.querySelectorAll(id).length === 1) return [id, ...parts].join(" > ");
+    if (node === node.ownerDocument.body || !node.parentElement) return [node.tagName.toLowerCase(), ...parts].join(" > ");
     const classes = node === element ? [...node.classList].slice(0, 2).map((name) => `.${CSS.escape(name)}`).join("") : "";
     const index = [...node.parentElement.children].filter((child) => child.tagName === node!.tagName).indexOf(node) + 1;
     parts.unshift(`${node.tagName.toLowerCase()}${classes}:nth-of-type(${index})`);
@@ -150,7 +301,7 @@ export function designProposal(
  * Footer controls use the toolbar's tooltip surface, like the Comments header.
  * Loaded on the bar's first hover or focus, which `first` replays.
  */
-export function footerTips(bar: HTMLElement, root: ShadowRoot, signal: AbortSignal, first: Event) {
+export function footerTips(bar: HTMLElement, root: ShadowRoot, signal: AbortSignal, first: Event, place?: (tip: HTMLElement, target: HTMLElement) => void) {
   if (signal.aborted) return;
   const tip = el("div", "morphing-menu__tooltip sidebar-tooltip");
   tip.setAttribute("aria-hidden", "true");
@@ -171,12 +322,13 @@ export function footerTips(bar: HTMLElement, root: ShadowRoot, signal: AbortSign
       const half = tip.offsetWidth / 2;
       tip.style.left = `${Math.max(8 + half, Math.min(document.documentElement.clientWidth - 8 - half, box.left + box.width / 2))}px`;
       tip.style.top = `${box.top - 8 - tip.offsetHeight}px`;
+      place?.(tip, button);
       tip.dataset.open = "true";
     }, tip.dataset.open ? 0 : 400);
   };
   bar.addEventListener("pointerover", show, { signal });
   bar.addEventListener("focusin", show, { signal });
-  for (const type of ["pointerleave", "pointerdown", "focusout"]) bar.addEventListener(type, hide, { signal });
+  for (const type of ["pointerleave", "pointerdown", "focusout", "scroll"]) bar.addEventListener(type, hide, { signal });
   signal.addEventListener("abort", () => {
     hide();
     tip.remove();

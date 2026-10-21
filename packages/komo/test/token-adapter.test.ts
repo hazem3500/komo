@@ -291,9 +291,9 @@ describe("custom token adapter in Design mode", () => {
     await vi.waitFor(() => expect(shadow.querySelector(".komo-tokens")).not.toBeNull());
     const search = shadow.querySelector<HTMLInputElement>(".komo-tokens input")!;
     const press = (key: string) => search.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true }));
-    const primary = shadow.querySelector<HTMLElement>('.komo-tokens [role="option"][title*="text-primary"]')!;
+    const primary = shadow.querySelector<HTMLElement>('.komo-tokens [role="option"][aria-label*="text-primary"]')!;
     expect(shadow.querySelectorAll('.komo-tokens [role="option"]')).toHaveLength(2);
-    expect(shadow.querySelector('.komo-tokens [aria-selected="true"]')?.getAttribute("title")).toContain("text-secondary");
+    expect(shadow.querySelector('.komo-tokens [aria-selected="true"]')?.getAttribute("aria-label")).toContain("text-secondary");
     for (let i = 0; i < 12; i++) {
       primary.dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
       expect(label.className).toBe("text-primary");
@@ -661,15 +661,16 @@ describe("token list invalidation", () => {
     expect(adapter.list).toHaveBeenCalledTimes(2);
     version = 2;
     listeners.forEach(listener => listener());
-    expect(one).toHaveBeenCalledTimes(1);
-    expect(two).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(one).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(two).toHaveBeenCalledTimes(1));
     expect(paths(await listTokens(adapter, { mode: "dark" }))).toEqual(["t.2"]);
     expect(paths(await listTokens(adapter))).toEqual(["t.2"]);
     first.abort();
     expect(listeners.size).toBe(1);
+    version = 3;
     listeners.forEach(listener => listener());
+    await vi.waitFor(() => expect(two).toHaveBeenCalledTimes(2));
     expect(one).toHaveBeenCalledTimes(1);
-    expect(two).toHaveBeenCalledTimes(2);
     second.abort();
     expect(listeners.size).toBe(0);
     // An adapter whose subscribe() throws or returns no function changes nothing.
@@ -680,6 +681,31 @@ describe("token list invalidation", () => {
       watchTokenList(item, one, controller.signal);
       controller.abort();
     }
+  });
+
+  it("ignores a report whose list did not change, such as one caused by komo's own previews", async () => {
+    const listeners = new Set<() => void>();
+    let value = "#111111";
+    const adapter = {
+      id: "reporting",
+      list: vi.fn(() => [{ path: "color.ink", type: "color" as const, value }]),
+      resolve: () => ({}),
+      subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    } satisfies TokenAdapter;
+    const update = vi.fn(), controller = new AbortController();
+    watchTokenList(adapter, update, controller.signal);
+    await listTokens(adapter);
+    for (let report = 0; report < 3; report++) {
+      listeners.forEach(listener => listener());
+      await listTokens(adapter);
+      await new Promise(done => setTimeout(done));
+    }
+    expect(update).not.toHaveBeenCalled();
+    value = "#222222";
+    listeners.forEach(listener => listener());
+    await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect((await listTokens(adapter))[0].value).toBe("#222222");
+    controller.abort();
   });
 
   it("costs nothing for an adapter without subscribe()", async () => {

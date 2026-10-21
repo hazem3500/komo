@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const require=createRequire(resolve('packages/komo/package.json'));
 const {chromium}=require('playwright-core');
 const out='/private/tmp/komo-conversation-corrective-visuals';await mkdir(out,{recursive:true});
-const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',args:['--disable-blink-features=EyeDropperAPI']});
 const results=[];
 try {
 for(const mode of ['floating','frame']) for(const colorScheme of ['light','dark']) {

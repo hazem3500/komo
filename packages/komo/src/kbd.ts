@@ -1,7 +1,15 @@
 import type { Shortcut } from "./shortcuts.js";
 
-export function shortcutKeys(shortcut: Shortcut, mac = /Mac|iPhone|iPad/.test(navigator.platform)) {
-  const names = [shortcut.ctrl && "Control", shortcut.alt && "Alt", shortcut.shift && "Shift", shortcut.meta && "Meta", shortcut.key.length === 1 ? shortcut.key.toUpperCase() : shortcut.key].filter(Boolean) as string[];
+/** Apple platforms label modifiers ⌘ ⌥ ⌃ ⇧; others spell out Ctrl and Alt. */
+export const isMac = () =>
+  /mac|iphone|ipad/i.test((navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform || navigator.platform);
+
+// Configured keys arrive lower-cased ("arrowleft"); named keys read in their DOM casing.
+const NAMED = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter", "Escape", "Tab", "Backspace", "Delete", "Home", "End", "PageUp", "PageDown"];
+const named = (key: string) => key.length === 1 ? key.toUpperCase() : NAMED.find(name => name.toLowerCase() === key.toLowerCase()) ?? key;
+
+export function shortcutKeys(shortcut: Shortcut, mac = isMac()) {
+  const names = [shortcut.ctrl && "Control", shortcut.alt && "Alt", shortcut.shift && "Shift", shortcut.meta && "Meta", named(shortcut.key)].filter(Boolean) as string[];
   const symbols: Record<string, string> = mac ? { Control: "⌃", Alt: "⌥", Shift: "⇧", Meta: "⌘" } : { Control: "Ctrl", Meta: "Meta" };
   return { aria: names.join("+"), spoken: names.map(key => key === "Meta" && mac ? "Command" : key === "Alt" && mac ? "Option" : key).join(" + "), keys: names.map(key => symbols[key] ?? ({ ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓", Enter: "↵", Escape: "Esc" } as Record<string, string>)[key] ?? key) };
 }

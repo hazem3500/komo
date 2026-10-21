@@ -9,10 +9,23 @@ import { resolveConfig, type KomoConfig } from "./config.js";
 export type { KomoConfig } from "./config.js";
 import { adaptivePolling } from "./polling.js";
 import { pinDirection } from "./pin-direction.js";
-import { pinStacks } from "./pin-stacks.js";
+import { byAge, collisions, hitArea, pinStacks, stackWidth } from "./pin-stacks.js";
+import type { PinUnit } from "./pin-groups.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
 import { createFramePortals, preserveFrameStyles } from "./frame-portals.js";
 import { createFrameViewport } from "./frame-viewport.js";
+import {
+  clientPoint,
+  counterpart,
+  framedByKomo,
+  isElement,
+  onFrame,
+  pageDocument,
+  pageElementsAt,
+  pageFrame,
+  screenRect,
+} from "./frame-target.js";
+import type { FrameViewport } from "./frame-iframe.js";
 import { OptimisticQueue } from "./optimistic.js";
 import { agentPrompt } from "./agent-prompt.js";
 import { accentPicker } from "./lazy-accent-picker.js";
@@ -74,7 +87,7 @@ import {
   age,
   avatar,
   button,
-  editable,
+  textEntry,
   el,
   googleLogo,
   icon,
@@ -87,8 +100,8 @@ import {
   reducedMotion,
   setAvatarResolver,
 } from "./dom.js";
-import { matchesShortcut, resolveShortcuts, type Shortcut } from "./shortcuts.js";
-import { renderKbd } from "./kbd.js";
+import { matchesShortcut, resolveDesignKeys, resolveShortcuts, type Shortcut } from "./shortcuts.js";
+import { isMac, renderKbd } from "./kbd.js";
 import { styles } from "./styles.js";
 import type {
   Anchor,
@@ -122,7 +135,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     comment() {},
     async refresh() {},
   };
-  if (typeof document === "undefined" || options.enabled === false) return noop;
+  if (typeof document === "undefined" || options.enabled === false || framedByKomo()) return noop;
   if (!options.endpoint || !options.repo || !options.branch || !options.project)
     throw new Error("Comments require endpoint, repo, branch, and project.");
   if (
@@ -146,6 +159,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
   setAvatarResolver(options.avatar);
   const shortcuts = resolveShortcuts(options.shortcuts);
+  const designKeys = resolveDesignKeys(options.shortcuts);
   const hostPinSize = options.pins?.size ?? "full";
   if (!pinSizes.includes(hostPinSize))
     throw new Error(`Invalid komo pins.size: "${hostPinSize}".`);
@@ -565,6 +579,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     designProposal.test(body)
       ? (summarizeDesign?.(body) ?? (void loadDesignComments(), "Design change"))
       : body;
+  const firstLine = (body: string) => commentText(body).trim().split("\n")[0]!.slice(0, 100);
   let draftText = "",
     // A Design mode proposal attached to the new comment, shown as a change card.
     draftProposal = "",
@@ -725,16 +740,117 @@ export function initComments(options: CommentsOptions): CommentsController {
   let frameControls: FrameSizeControls | undefined;
   let frameControlsLoading = false;
   let frameArea: { left: number; top: number; width: number; height: number } | null = null;
+  // Viewport mode (frame.mode "iframe"): the page in its own same-origin iframe.
+  const viewportEnabled = options.frame?.mode === "iframe" && options.frame.scale !== true;
+  let viewport: FrameViewport | undefined;
+  let viewportOpening = false;
+  // The iframe shows a same-origin page and komo reads the page through it.
+  let viewportShown = false;
+  // The last layout used the iframe, so this page was left untouched beneath it.
+  let laidViewport = false;
+  let viewportFailed = "";
+  let storedInPlace = options.frame?.defaultMode === "transform";
+  try {
+    // Versioned like frame-size.ts's record; older entries mean the default.
+    const stored = JSON.parse(localStorage.getItem(frameSizeKey) ?? "{}");
+    storedInPlace = stored.v === 2 && typeof stored.inPlace === "boolean" ? stored.inPlace : options.frame?.defaultMode === "transform";
+  } catch {
+    /* Storage is blocked: viewport mode is the default. */
+  }
+  const wantsViewport = () =>
+    viewportEnabled && !viewportFailed && (frameControls ? frameControls.separate : !storedInPlace);
+  function closeViewport() {
+    if (!viewport) return;
+    viewport.destroy();
+    viewport = undefined;
+    viewportShown = false;
+    // In place again: the bar's note, the stage pan and its scrollbars come back.
+    frameControls?.status({ active: false });
+    followSelection();
+  }
+  // Design mode's selection moves to the same element in the page now shown.
+  function followSelection() {
+    const previous = designController?.selected;
+    if (!previous || previous.ownerDocument === pageDocument()) return;
+    const next = counterpart(previous, pageDocument());
+    designController!.clearSelection();
+    if (next) designController!.select(next);
+  }
+  const relayout = () => {
+    appliedViewport = "";
+    scalePage();
+    checkPage();
+    geometry();
+  };
+  function openViewport() {
+    if (viewport || viewportOpening) return;
+    viewportOpening = true;
+    frameControls?.status({ active: false, loading: true });
+    // Where the reviewer was reading, before Frame moves this page.
+    const scroll = framed && !laidViewport ? surface.scrollTop : window.scrollY / htmlZoom();
+    void import("./frame-iframe.js").then(({ openFrameViewport }) => {
+      viewportOpening = false;
+      if (destroyed || !framed || viewport || !wantsViewport()) return;
+      const opened: FrameViewport = (viewport = openFrameViewport({
+        parent: shadow,
+        before: catcher,
+        url: options.frame?.iframeUrl?.(location) ?? location.href,
+        background: pageBackground,
+        scroll,
+        ready() {
+          if (viewport !== opened) return;
+          viewportShown = true;
+          followSelection();
+          frameControls?.status({ active: true });
+          relayout();
+        },
+        failed(reason) {
+          if (viewport !== opened) return;
+          viewportFailed = reason;
+          closeViewport();
+          frameControls?.status({ active: false, reason });
+          relayout();
+        },
+        changed() {
+          checkPage();
+          geometry();
+        },
+      }));
+      relayout();
+    });
+  }
+  /** The visible frame: the viewport iframe's port, else the page root. */
+  const frameRect = () => (viewportShown && viewport ? viewport.port : surface).getBoundingClientRect();
+  /** True for page elements shown inside the frame. */
+  const inFramePage = (element: Element) =>
+    viewportShown ? element.ownerDocument === pageDocument() : surface.contains(element);
+  // pageRoot's counterpart in the viewport iframe.
+  const framedRoot = (): Element => {
+    const page = pageDocument();
+    return page === document ? surface : (canFrame && counterpart(surface, page)) || page.body;
+  };
   function loadFrameControls() {
     if (frameControlsLoading) return;
     frameControlsLoading = true;
     void import("./frame-size.js").then(({ mountFrameSize }) => {
       if (destroyed) return;
-      frameControls = mountFrameSize(shadow, surface, frameSizeKey, () => {
+      frameControls = mountFrameSize(shadow, () => (viewportShown && viewport ? viewport.port : surface), frameSizeKey, (toggled) => {
+        // Choosing Viewport again retries one that couldn't load.
+        if (toggled) viewportFailed = "";
         appliedViewport = "";
         scalePage();
         geometry();
-      }, frameView);
+      }, frameView, viewportEnabled && (options.frame?.defaultMode === "transform" ? "transform" : "iframe"), {
+        pan: schedulePan,
+        // Switching to 100% keeps the open comment's target in view.
+        anchor() {
+          const thread = threads.find((item) => item.id === selected);
+          const anchor = draft ?? (thread && onThreadPage(thread) ? thread.anchor : null);
+          const spot = anchor && locateAnchor(anchor);
+          return spot && spot.attached ? { x: spot.x / htmlZoom(), y: spot.y / htmlZoom() } : null;
+        },
+      });
+      frameControls.status(viewportShown ? { active: true } : viewportFailed ? { active: false, reason: viewportFailed } : { active: false, loading: !!viewport || viewportOpening });
       // Re-layout only for a remembered size; the default keeps Frame's entrance motion.
       if (frameControls.sized) {
         appliedViewport = "";
@@ -748,12 +864,49 @@ export function initComments(options: CommentsOptions): CommentsController {
   } catch {
     /* Storage is blocked: the default needs no controls until Frame opens. */
   }
+  // A 100% frame larger than its stage pans by moving the page root; everything that
+  // follows the frame moves in the same frame. Scroll events let Design mode, geometry
+  // handles and the app's own floating UI re-measure: once on input, so their animation
+  // frames run after this one, and once after the move, for those that measure at once.
+  let panFrameId = 0;
+  let panEvent = false;
+  const panScroll = () => {
+    panEvent = true;
+    document.dispatchEvent(new Event("scroll", { bubbles: true }));
+    panEvent = false;
+  };
+  function schedulePan() {
+    if (panFrameId) return;
+    panFrameId = requestAnimationFrame(panFrame);
+    panScroll();
+  }
+  function panFrame() {
+    panFrameId = 0;
+    if (!framed || !frameArea || !frameControls || destroyed || laidViewport) return;
+    const zoom = htmlZoom();
+    const view = frameControls.view(
+      { left: frameArea.left / zoom, top: frameArea.top / zoom, width: frameArea.width / zoom, height: frameArea.height / zoom },
+      [window.innerWidth / zoom, window.innerHeight / zoom],
+    );
+    frameBox.left = view.left;
+    frameBox.top = view.top;
+    surface.style.left = `${view.left}px`;
+    surface.style.top = `${view.top}px`;
+    framePortals();
+    frameControls.update(frameArea, zoom);
+    renderPins(true);
+    positionDialog();
+    positionNotice();
+    updateHover();
+    panScroll();
+  }
   function framePortals() {
     const zoom = htmlZoom();
-    const left = frameBox.left - (frameBox.pan ? window.scrollX / zoom : 0);
-    const top = frameBox.top - (frameBox.pan ? window.scrollY / zoom : 0);
+    const left = frameBox.left;
+    const top = frameBox.top;
     const { width, height } = frameBox;
-    const active = framed && !destroyed;
+    // The viewport iframe lays out its own portals and units; this page stays as it was.
+    const active = framed && !destroyed && !laidViewport;
     const reflow = active && options.frame?.scale !== true;
     if (reflow) frameViewport.update(frameBox.logical);
     portalFrame.update(active ? {
@@ -1334,7 +1487,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     (html as HTMLElement & { currentCSSZoom?: number })
       .currentCSSZoom ?? 1;
   function page() {
-    return canonicalPage(options.page?.() ?? location.pathname);
+    const current = (pageFrame()?.contentWindow?.location as Location | undefined) ?? location;
+    return canonicalPage(options.page?.(current) ?? current.pathname);
   }
   type NoticePosition = {
     cardKey: string | null;
@@ -1885,7 +2039,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       });
       return;
     }
-    const scroll = framed
+    const scroll = framed && !laidViewport
       ? surface.scrollTop
       : window.scrollY / (zoom * appliedScale);
     const wasFramed = framed;
@@ -1907,7 +2061,6 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
     const useFrame = layout.framed;
     const scaled = options.frame?.scale === true;
-    const wasPanned = framed && frameBox.pan;
     const area = { left: layout.left, top: layout.top, width: layout.visibleWidth, height: layout.height };
     const box = { left: area.left / zoom, top: area.top / zoom, width: area.width / zoom, height: area.height / zoom };
     // Frame opens on the browser window's own size at Fit, so the page keeps its real layout.
@@ -1915,14 +2068,43 @@ export function initComments(options: CommentsOptions): CommentsController {
     const view = scaled
       ? { ...box, scale: 1, pan: false }
       : (frameControls?.view(box, windowSize) ?? frameView(box, windowSize, false));
-    const pan = useFrame && !scaled && view.pan;
+    if (useFrame && !scaled && wantsViewport()) openViewport();
+    else if (viewport) closeViewport();
+    const inViewport = useFrame && !scaled && viewportShown;
+    // The viewport iframe pans inside its own port, never the document.
+    const pan = useFrame && !scaled && view.pan && !inViewport;
     frameArea = useFrame && !scaled ? area : null;
     host.style.setProperty("--review-viewport-height", `${viewportHeight}px`);
     host.style.height = `${viewportHeight}px`;
     host.style.top = "";
     host.classList.toggle("review-open", expanded);
     host.classList.toggle("design-active", designActive);
-    if (useFrame) {
+    if (inViewport && viewport) {
+      // This page stays as it was beneath the iframe; leave a placeholder frame first.
+      if (wasFramed && !laidViewport) {
+        restorePage();
+        window.scrollTo({ left: frameBox.pan ? 0 : window.scrollX, top: scroll * zoom, behavior: "instant" });
+      }
+      html.style.overflow = "hidden";
+      appliedScale = 1;
+      frameBox = {
+        left: view.left,
+        top: view.top,
+        width: Math.min(box.width, view.width * view.scale),
+        height: Math.min(box.height, view.height * view.scale),
+        logical: [view.width, view.height],
+        pan: false,
+      };
+      viewport.place({
+        left: frameBox.left * zoom,
+        top: frameBox.top * zoom,
+        width: frameBox.width * zoom,
+        height: frameBox.height * zoom,
+        logical: frameBox.logical,
+        scale: view.scale,
+        pan: view.pan,
+      });
+    } else if (useFrame) {
       appliedScale = scaled ? layout.scale : view.scale;
       const effective = appliedScale * zoom;
       // Native client coordinates stay in viewport CSS pixels. Reflow by
@@ -1945,24 +2127,23 @@ export function initComments(options: CommentsOptions): CommentsController {
             logical: [view.width, view.height],
             pan,
           };
-      // A pannable 100% frame scrolls the document, with room beside the sidebar.
-      const gap = (value: number) => (pan ? `${value / zoom}px solid transparent` : "");
+      // A 100% frame larger than its stage stays fixed and pans inside it (see panFrame).
       Object.assign(surface.style, {
-        position: pan ? "absolute" : "fixed",
+        position: "fixed",
         transform: appliedScale !== 1 ? `scale(${appliedScale})` : savedStyle.transform,
         transformOrigin: "top left",
         left: `${frameBox.left}px`,
         top: `${frameBox.top}px`,
-        width: `${scaled ? window.innerWidth / zoom : view.width + (pan ? layout.right / zoom : 0)}px`,
+        width: `${scaled ? window.innerWidth / zoom : view.width}px`,
         boxSizing: "border-box",
-        height: `${scaled ? layout.height / effective : view.height + (pan ? 24 / zoom : 0)}px`,
+        height: `${scaled ? layout.height / effective : view.height}px`,
         paddingBottom: savedStyle.paddingBottom,
         zoom: savedStyle.zoom,
         overflow: scaled ? "hidden auto" : "auto",
         borderRadius: `${12 / effective}px`,
         background: pageBackground,
-        borderRight: gap(layout.right) || savedStyle.borderRight,
-        borderBottom: gap(24) || savedStyle.borderBottom,
+        borderRight: savedStyle.borderRight,
+        borderBottom: savedStyle.borderBottom,
         clipPath: savedStyle.clipPath,
       });
       for (const header of surface.querySelectorAll<HTMLElement>("header")) {
@@ -1975,17 +2156,17 @@ export function initComments(options: CommentsOptions): CommentsController {
           header.style.marginBottom = `-${header.offsetHeight}px`;
         }
       }
-      html.style.overflow = pan ? "auto" : "hidden";
-      document.body.style.overflow = pan ? "visible" : "hidden";
+      html.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
       html.style.background = document.body.style.background = "#080808";
       surface.scrollTop = scroll;
-      if (pan !== wasPanned) window.scrollTo({ left: 0, top: 0, behavior: "instant" });
     } else {
       restorePage();
-      if (framed) window.scrollTo({ left: frameBox.pan ? 0 : window.scrollX, top: scroll * zoom, behavior: "instant" });
+      if (framed && !laidViewport) window.scrollTo({ left: window.scrollX, top: scroll * zoom, behavior: "instant" });
       appliedScale = 1;
       frameBox.pan = false;
     }
+    laidViewport = inViewport;
     framed = useFrame;
     framePortals();
     if (frameArea) loadFrameControls();
@@ -2037,9 +2218,16 @@ export function initComments(options: CommentsOptions): CommentsController {
       }).catch(() => {});
     }
     // Pins and picking follow the visible frame, which a fitted viewport may not fill.
-    const visible = scaled || pan
+    // A panned frame shows only where it overlaps its stage.
+    const clip = (start: number, size: number, from: number, length: number) => {
+      const low = Math.max(start, from);
+      return [low, Math.max(0, Math.min(start + size, from + length) - low)];
+    };
+    const [visibleLeft, visibleWidth] = clip(frameBox.left * zoom, frameBox.width * zoom, area.left, area.width);
+    const [visibleTop, visibleHeight] = clip(frameBox.top * zoom, frameBox.height * zoom, area.top, area.height);
+    const visible = scaled
       ? { left: layout.visibleLeft, top: layout.visibleTop, width: layout.visibleWidth, height: layout.visibleHeight }
-      : { left: frameBox.left * zoom, top: frameBox.top * zoom, width: frameBox.width * zoom, height: frameBox.height * zoom };
+      : { left: visibleLeft, top: visibleTop, width: visibleWidth, height: visibleHeight };
     pins.style.clipPath = useFrame
       ? `inset(${visible.top}px ${window.innerWidth - visible.left - visible.width}px ${viewportHeight - visible.top - visible.height}px ${visible.left}px)`
       : "";
@@ -2594,11 +2782,13 @@ export function initComments(options: CommentsOptions): CommentsController {
       )
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
-  // Help lists the toolbar's current commands; More and Design mode both open it.
+  // Help lists the toolbar's current commands with their configured keys, the current
+  // mode's groups first. More, the Design empty state and ? open it; ? closes it again.
   function openShortcutHelp() {
     void import("./shortcut-help.js").then(({ showShortcutHelp }) => showShortcutHelp(shadow, [
-      ...helpItems, { label: "Restore feedback", shortcut: shortcuts.restore, group: "Feedback" },
-    ], designEnabled));
+      ...helpItems.map(({ label, shortcut, group }) => ({ label, shortcut, group: group === "Comments & view" ? "Comments" : "General" })),
+      { label: "Restore feedback", shortcut: shortcuts.restore, group: "General" },
+    ], designEnabled, designActive ? "design" : commentMode ? "comment" : undefined, designKeys));
   }
   function renderToolbar() {
     toolbar.style.display = toolbarDismissed ? "none" : "";
@@ -2923,6 +3113,25 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   let pinsScrolling = false;
   let pinScrollTimer = 0;
+  // Stacks and collision bubbles load the first time a page has one to draw; until then
+  // their pins wait, so a crowded row never flashes uncollapsed.
+  let grouping = options.pins?.cluster !== false;
+  let pinGroups: typeof import("./pin-groups.js") | undefined;
+  let groupsLoading = false;
+  function loadGroups() {
+    if (groupsLoading) return;
+    groupsLoading = true;
+    void import("./pin-groups.js")
+      .then((module) => (pinGroups = module), () => (grouping = false))
+      .then(() => {
+        pinSnapshot = "";
+        renderPins();
+      });
+  }
+  const pinBounds = () =>
+    framed
+      ? frameRect()
+      : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
   function renderPins(force = false) {
     const off = hidden || commentsHidden;
     if (off) cancelPinMove();
@@ -2947,9 +3156,18 @@ export function initComments(options: CommentsOptions): CommentsController {
         here(t, anchors.resolve, currentPage),
     );
     if (density === "dot") breathe(visible);
-    const stacks = pinStacks(visible, (thread) =>
-      anchors.resolve(thread.anchor),
-    );
+    // Same-target threads share their persistent owner (the anchorTarget adapter's, else
+    // komo's); the page itself is no shared target.
+    const owners = new Map<string, Element>();
+    const stacks = grouping
+      ? pinStacks(visible, (thread) => {
+          const element = anchors.resolve(thread.anchor);
+          const owner = element && commentAnchorTarget(element, surface, options.anchorTarget);
+          if (!owner || owner === surface || owner === document.body) return null;
+          owners.set(thread.id, owner);
+          return owner;
+        })
+      : new Map<string, Thread[]>();
     const positions = visible.map((thread) => {
       const rect = anchors.locate(thread.anchor);
       if (rect.y < -rect.height - 40 || rect.y > window.innerHeight + 40)
@@ -2975,32 +3193,36 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     const snapshot = JSON.stringify([
       selected,
+      density,
       draft && anchors.locate(draft),
       positions.map(({ thread, rect, blocked }) => [
         thread.id,
         rect,
         blocked,
         pinDirection(rect, window.innerWidth),
+        stacks.get(thread.id)?.[0].id,
       ]),
     ]);
     if (snapshot === pinSnapshot) return;
     pinSnapshot = snapshot;
     // A hover card previewing After changes the page itself; keep it open.
     if (!designModule?.isPreviewing(hoverPreviewKey)) hidePreview();
-    const scrollOffsets = new Map(
-      Array.from(pins.querySelectorAll<HTMLElement>(".pin-stack"), (stack) => [
-        stack.dataset.stack,
-        stack.scrollLeft,
-      ]),
-    );
+    const focused = shadow.activeElement?.matches(".pins :focus-visible")
+      ? (shadow.activeElement as HTMLElement).dataset
+      : undefined;
+    const listed = pins.querySelector<HTMLElement>(".pin-cluster[open]")?.dataset.cluster;
     pins.replaceChildren();
     // Rebuilt pins pick up the breath where the previous ones left it.
     if ("breathe" in pins.dataset)
       pins.style.setProperty("--pin-breathe-delay", `${(breatheStart - performance.now()) % 1800}ms`);
-    const stackElements = new Map<string, HTMLElement>();
     const measured = new Map(
       positions.map((position) => [position.thread.id, position]),
     );
+    const bounds = pinBounds();
+    // Each unit is a lone pin or a same-target stack at its oldest thread's anchor. Moved
+    // pins keep their own place: they never stack or merge.
+    const units: PinUnit[] = [];
+    const grouped = new Set<Thread[]>();
     for (const { thread, rect, blocked } of positions) {
       // Never draw a pin at stale page coordinates; the sidebar lists it instead.
       if (!rect.attached) continue;
@@ -3013,7 +3235,6 @@ export function initComments(options: CommentsOptions): CommentsController {
       )
         continue;
       if (placement.blocked) continue;
-      const number = threads.indexOf(thread) + 1;
       if (rect.width && rect.height) {
         const area = el("div", "area");
         Object.assign(area.style, {
@@ -3025,10 +3246,30 @@ export function initComments(options: CommentsOptions): CommentsController {
         });
         pins.append(area);
       }
+      const stack = leader?.rect.attached ? group! : null;
+      if (stack && grouped.has(stack)) continue;
+      const at = placement.rect;
+      // A stack fans out away from the nearer edge of the page.
+      const right = stack
+        ? at.x - 9 + Math.min(stack.length, 6) * 38 > bounds.right
+        : pinDirection(at, window.innerWidth) === "right";
+      if (stack) grouped.add(stack);
+      units.push({
+        threads: stack ?? [thread],
+        rect: at,
+        right,
+        owner: stack ? owners.get(stack[0].id) : undefined,
+        box: thread.anchor.unstacked || thread.id === selected
+          ? null
+          : hitArea(at.x, at.y, right, stack ? stackWidth(stack.length, density === "dot" ? 12 : 20) : 24),
+      });
+    }
+    const pinFor = (thread: Thread, rect: (typeof positions)[number]["rect"]) => {
+      const number = threads.indexOf(thread) + 1;
       const first = thread.comments[0];
       const pin = button(
         first
-          ? `Comment ${number} by ${first.author.name}: ${commentText(first.body).trim().split("\n")[0]!.slice(0, 100)}`
+          ? `Comment ${number} by ${first.author.name}: ${firstLine(first.body)}`
           : `Comment ${number}`,
         () => selectThread(thread),
         `pin${thread.id === selected ? " active" : ""}${thread.id === hotCard ? " hot" : ""}${thread.resolved ? " resolved" : ""}${rect.attached ? "" : " detached"}`,
@@ -3114,11 +3355,11 @@ export function initComments(options: CommentsOptions): CommentsController {
           expanded && !compactSidebar
             ? 396
             : 12;
-        const place = placeCard(pin.getBoundingClientRect(), pinPreview.offsetWidth || 320, pinPreview.offsetHeight, {
+        const place = placeCard(pinEdges(pin), pinPreview.offsetWidth || 320, pinPreview.offsetHeight, {
           left: 12,
           top: 12,
           right: window.innerWidth - right,
-          bottom: framed ? Math.min(window.innerHeight, surface.getBoundingClientRect().bottom) - 12 : window.innerHeight - 92,
+          bottom: framed ? Math.min(window.innerHeight, frameRect().bottom) - 12 : window.innerHeight - 92,
         });
         Object.assign(pinPreview.style, {
           left: `${place.x}px`,
@@ -3157,40 +3398,42 @@ export function initComments(options: CommentsOptions): CommentsController {
         previewTimer = window.setTimeout(hidePreview, 120);
       });
       pin.dataset.thread = thread.id;
-      pin.dataset.pointer = pinDirection(placement.rect, window.innerWidth);
-      Object.assign(pin.style, { left: `${rect.x}px`, top: `${rect.y}px` });
-      if (group && leader?.rect.attached && !leader.blocked) {
-        let stack = stackElements.get(group[0].id);
-        if (!stack) {
-          stack = el("div", "pin-stack");
-          stack.dataset.stack = group[0].id;
-          stack.setAttribute("role", "group");
-          stack.setAttribute(
-            "aria-label",
-            `${group.length} comments on this component`,
+      return pin;
+    };
+    const context = {
+      root: shadow,
+      bounds,
+      pin: (thread: Thread) => pinFor(thread, measured.get(thread.id)!.rect),
+      summary: (thread: Thread) => firstLine(thread.comments[0]?.body ?? ""),
+      open: (thread: Thread) => selectThread(thread),
+      menu: actionMenu,
+    };
+    // Pins on distinct targets whose 24px hit areas overlap at the current scale merge.
+    for (const members of grouping ? collisions(units.map((unit) => unit.box)) : units.map((_, index) => [index])) {
+      const unit = units[members[0]];
+      if (members.length > 1 || unit.threads.length > 1) {
+        if (!pinGroups) loadGroups();
+        else
+          pins.append(
+            members.length > 1
+              ? pinGroups.bubble(members.map((index) => units[index]), members.flatMap((index) => units[index].threads).sort(byAge), context)
+              : pinGroups.stack(unit, context),
           );
-          const width = Math.min(178, 40 + (group.length - 1) * 22);
-          Object.assign(stack.style, {
-            left: `${Math.max(4, Math.min(leader.rect.x - 25, window.innerWidth - width - 8))}px`,
-            top: `${leader.rect.y - 34}px`,
-            maxWidth: `${width}px`,
-          });
-          stack.addEventListener("scroll", () => {
-            hidePreview();
-            positionDialog();
-          });
-          stackElements.set(group[0].id, stack);
-          pins.append(stack);
-        }
-        pin.style.left = "";
-        pin.style.top = "";
-        pin.style.order = String(group.indexOf(thread));
-        pin.style.marginLeft = group[0].id === thread.id ? "0" : "-12px";
-        stack.append(pin);
-      } else pins.append(pin);
+      } else {
+        const pin = context.pin(unit.threads[0]);
+        pin.dataset.pointer = unit.right ? "right" : "left";
+        Object.assign(pin.style, { left: `${unit.rect.x}px`, top: `${unit.rect.y}px` });
+        pins.append(pin);
+      }
     }
-    for (const [id, stack] of stackElements)
-      stack.scrollLeft = scrollOffsets.get(id) ?? 0;
+    // Keyboard focus survives a redraw; an open bubble list follows its bubble.
+    if (focused?.thread || focused?.cluster)
+      pins
+        .querySelector<HTMLElement>(
+          focused.thread ? `.pin[data-thread="${CSS.escape(focused.thread)}"]` : `[data-cluster="${CSS.escape(focused.cluster!)}"]`,
+        )
+        ?.focus({ preventScroll: true });
+    if (listed) pins.querySelector<HTMLDetailsElement>(`[data-cluster="${CSS.escape(listed)}"]`)?.setAttribute("open", "");
     if (pins.dataset.size && nearPoint) markNear();
     if (draft && draft.width > 0 && draft.height > 0) {
       const rect = locateAnchor(draft);
@@ -4197,7 +4440,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         "primary",
       );
       save.disabled = pending;
-      const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+      const mac = isMac();
       const withKeys = (node: HTMLButtonElement, label: string, key: string, modifier = false) => {
         node.replaceChildren(label, renderKbd({ key, ctrl: modifier && !mac, meta: modifier && mac } as Shortcut, mac));
         node.removeAttribute("title");
@@ -4238,6 +4481,9 @@ export function initComments(options: CommentsOptions): CommentsController {
           tip: tipFor,
           // The element can grow under the dialog; place it again once the change settles.
           onSwitch: () => positionDialog(),
+          // After never mixes with this reviewer's own Design mode previews.
+          blocked: () => !onThreadPage(thread) ? "Proposed on another page"
+            : designActive && shadow.querySelector<HTMLElement>(".design-inspector__compare")?.hidden === false ? "Send or reset your Design mode edits first" : undefined,
         });
       if (designModule) show(designModule);
       else void loadDesignComments().then(show);
@@ -5567,13 +5813,13 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     // Stay inside what's visible: the frame when framed, above the toolbar otherwise.
     // Content that loads later (design change cards) re-runs this through the observer.
-    const bottom = framed ? Math.min(availableHeight, surface.getBoundingClientRect().bottom) - 12 : availableHeight - 92;
+    const bottom = framed ? Math.min(availableHeight, frameRect().bottom) - 12 : availableHeight - 92;
     dialog.style.maxHeight = `${bottom - 12}px`;
     (dialogSize ??= new ResizeObserver(() => positionDialog())).observe(dialog);
     const anchor = draft ?? (thread && onThreadPage(thread) ? thread.anchor : null);
     // Areas and design changes are about a region: open beside it, not over it.
     let around: { left: number; top: number; right: number; bottom: number } | undefined;
-    let pinRect: DOMRect | undefined;
+    let pinRect: ReturnType<typeof pinEdges> | undefined;
     const pin =
       draggedPin?.id === selected
         ? draggedPin
@@ -5595,7 +5841,7 @@ export function initComments(options: CommentsOptions): CommentsController {
                 pins.querySelector<HTMLElement>(
                   `[data-thread="${CSS.escape(selected)}"]`,
                 );
-              pinRect = indicator ? indicator.getBoundingClientRect() : undefined;
+              pinRect = indicator ? pinEdges(indicator) : undefined;
               return indicator ? indicatorPoint(indicator, rect) : rect;
             })()
           : null;
@@ -5695,19 +5941,20 @@ export function initComments(options: CommentsOptions): CommentsController {
   const locateAnchor = measureAnchor;
   function siteElementAt(x: number, y: number) {
     return (
-      document
-        .elementsFromPoint(x, y)
+      pageElementsAt(x, y)
         .find((element) => element !== host && !host.contains(element)) ?? null
     );
   }
   // Portals (dialogs, popovers) render into body outside pageRoot, so the
   // whole body is pickable unless the host narrows it with pickRoots.
   function pickable(element: Element | null): element is Element {
+    const page = pageDocument();
     return (
       !!element &&
-      element !== surface &&
-      element !== document.body &&
-      (options.pickRoots ? [surface, ...options.pickRoots()] : [document.body]).some(
+      element !== framedRoot() &&
+      element !== page.body &&
+      // In the viewport iframe all of its body is pickable; pickRoots name this page's elements.
+      (page === document && options.pickRoots ? [surface, ...options.pickRoots()] : [page.body]).some(
         (root) => root.contains(element),
       )
     );
@@ -5725,12 +5972,12 @@ export function initComments(options: CommentsOptions): CommentsController {
             root: shadow,
             panelRoot: sidebar,
             host,
-            shortcutHelp: openShortcutHelp,
+            shortcutHelp: openShortcutHelp, visibility: shortcuts.visibility, keys: designKeys,
             reservedKey: event => Object.values(shortcuts).some(shortcut => matchesShortcut(event, shortcut)),
             design: options.design,
             sourceHref: sourceLink,
             page,
-            bounds: element => framed && surface.contains(element) ? surface.getBoundingClientRect() : undefined,
+            bounds: element => framed && inFramePage(element) ? frameRect() : undefined,
             flip() {
               if (!edgeSidebar || !expanded || designDragged || edgeMorphing) return;
               const from = sidebar.getBoundingClientRect();
@@ -5770,13 +6017,18 @@ export function initComments(options: CommentsOptions): CommentsController {
               restoreCommentsAfterDesign();
             },
           });
-          if (destroyed) {
-            controller.destroy();
-            return null;
-          }
-          designController = controller;
-          controller.setActive(designActive);
-          return controller;
+          // The inspector opens once its controls and selection keys have loaded, so an
+          // Enter or Space pressed on the open inspector is never dropped. A slow network
+          // delays it by 2s at most; the controls then fill in as they arrive.
+          return Promise.race([controller.ready, new Promise(resolve => setTimeout(resolve, 2e3))]).then(() => {
+            if (destroyed) {
+              controller.destroy();
+              return null;
+            }
+            designController = controller;
+            controller.setActive(designActive);
+            return controller;
+          });
         })
         .catch(() => {
           designActive = false;
@@ -5818,6 +6070,16 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     controller.select(target);
     controller.setReturnAction({ label: "Back to comment", run: () => setDesignMode(false) });
+  }
+  // Cards beside a stacked pin clear the whole fanned row, so the other pins stay reachable.
+  function pinEdges(pin: Element) {
+    const stack = pin.parentElement!;
+    if (!stack.matches(".pin-stack")) return pin.getBoundingClientRect();
+    const rect = stack.getBoundingClientRect();
+    const width = Math.min(stack.children.length, 6) * 38 + 4;
+    const left = stack.dataset.pointer === "right" ? rect.right - width : rect.left;
+    const top = stack.hasAttribute("data-below") ? rect.top : rect.bottom - 38;
+    return { left, right: left + width, top, bottom: top + 38, width };
   }
   function indicatorPoint(
     pin: HTMLElement,
@@ -5876,7 +6138,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     Object.assign(pin.style, { position: "fixed", margin: "0", left: `${point.x}px`, top: `${point.y}px` });
     pinMove = module.startPinMove({
       root: shadow, pin, point,
-      bounds: () => framed ? surface.getBoundingClientRect() : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight },
+      bounds: pinBounds,
       preview(point) {
         pin.dataset.pointer = pinDirection(point, window.innerWidth);
         pin.style.left = `${point.x}px`;
@@ -5896,7 +6158,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         const target = componentAt(point.x, point.y);
         if (!target) { notify("Pin unchanged. Choose an element on this page."); return; }
         const anchor = captureAnchor(
-          commentAnchorTarget(target, surface, options.anchorTarget), point,
+          commentAnchorTarget(target, framedRoot(), options.anchorTarget), point,
           { x: point.x + rect.width, y: point.y + rect.height }, options.source,
         );
         anchor.unstacked = true;
@@ -5940,7 +6202,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     pins.toggleAttribute("data-outlined", !!target && docked && outlineShown);
     if (target) {
       const element = anchorElement(thread.anchor);
-      outline(target, spot.width && spot.height ? null : element, framed && !!element && surface.contains(element));
+      outline(target, spot.width && spot.height ? null : element, framed && !!element && inFramePage(element));
       if (docked && !outlineShown) hoverOutline.style.opacity = "0";
       return;
     }
@@ -5960,12 +6222,12 @@ export function initComments(options: CommentsOptions): CommentsController {
     if (mode && hoverPoint)
       hoverTarget = componentAt(hoverPoint.x, hoverPoint.y);
     if (mode && hoverTarget)
-      hoverTarget = commentAnchorTarget(hoverTarget, surface, options.anchorTarget);
+      hoverTarget = commentAnchorTarget(hoverTarget, framedRoot(), options.anchorTarget);
     if (!hoverTarget?.isConnected) {
       hoverOutline.style.opacity = "0";
       return;
     }
-    outline(hoverTarget.getBoundingClientRect(), hoverTarget, framed && surface.contains(hoverTarget));
+    outline(screenRect(hoverTarget), hoverTarget, framed && inFramePage(hoverTarget));
   }
   let outlinedElement: Element | null = null;
   function outline(
@@ -5978,7 +6240,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       hoverOutline,
       rect,
       element,
-      inFrame ? surface.getBoundingClientRect() : undefined,
+      inFrame ? frameRect() : undefined,
     ) ? "1" : "0";
   }
   function scheduleHover() {
@@ -6085,9 +6347,10 @@ export function initComments(options: CommentsOptions): CommentsController {
     revealComments();
     draftBeside = beside;
     hidePreview();
-    element = commentAnchorTarget(element, surface, options.anchorTarget);
+    element = commentAnchorTarget(element, framedRoot(), options.anchorTarget);
     draft = captureAnchor(element, start, end, options.source);
-    if (framed) {
+    // The viewport iframe's anchor is already in its own document coordinates.
+    if (framed && !viewportShown) {
       // Store document coordinates, not the scaled frame's.
       const frame = surface.getBoundingClientRect(),
         scale = appliedScale * htmlZoom();
@@ -6153,17 +6416,17 @@ export function initComments(options: CommentsOptions): CommentsController {
       updateHover();
     });
   }
-  document.addEventListener(
-    "scroll",
-    (event) => {
+  const onScroll = (event: Event) => {
+      // komo's own pan notice is for others; pins already moved with the frame.
+      if (panEvent) return;
       previewSuppressed = true;
       hidePreview();
       const target = event.target;
       // Sidebar and comment text scrolling do not move the page anchors.
       if (target === host || !target ||
         (target instanceof Node && target.getRootNode() === shadow)) return;
-      const scroller = target === document ? document.scrollingElement : target;
-      if (!(scroller instanceof Element)) return;
+      const scroller = (target as Node).nodeType === Node.DOCUMENT_NODE ? (target as Document).scrollingElement : target;
+      if (!isElement(scroller)) return;
       if (framed && frameBox.pan && target === document) {
         framePortals();
         frameControls?.update(frameArea, htmlZoom());
@@ -6181,13 +6444,10 @@ export function initComments(options: CommentsOptions): CommentsController {
         }, 180);
       }
       geometry();
-    },
-    {
-      capture: true,
-      passive: true,
-      signal: abort.signal,
-    },
-  );
+  };
+  const scrollOptions = { capture: true, passive: true, signal: abort.signal };
+  document.addEventListener("scroll", onScroll, scrollOptions);
+  onFrame("scroll", onScroll, scrollOptions);
   for (const type of ["focusin", "focusout", "click"])
     dialogs.addEventListener(type, () => requestAnimationFrame(positionDialog), {
       signal: abort.signal,
@@ -6261,7 +6521,10 @@ export function initComments(options: CommentsOptions): CommentsController {
       // Focus may sit in a nested shadow root that composedPath() can't see.
       let active = document.activeElement;
       while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
-      const typing = editable(target) || editable(active) || event.isComposing;
+      // Only true text entry pauses review keys; a focused button, switch or closed select keeps them.
+      // With focus inside Frame's viewport iframe, the frame's focused element decides.
+      if (active === pageFrame()) active = pageDocument().activeElement;
+      const typing = textEntry(target) || textEntry(active) || event.isComposing;
       if (event.key === "Escape") {
         if (designActive) return;
         if (event.defaultPrevented && !event.composedPath().includes(host)) return;
@@ -6307,7 +6570,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     "pointermove",
     (event) => {
       if (event.pointerType === "touch") return;
-      nearPoint = { x: event.clientX, y: event.clientY };
+      nearPoint = clientPoint(event);
       if (pins.dataset.size) nearFrame ||= requestAnimationFrame(markNear);
     },
     { passive: true, signal: abort.signal },
@@ -6383,6 +6646,8 @@ export function initComments(options: CommentsOptions): CommentsController {
   function checkPage() {
     if (destroyed || page() === lastPage) return;
     lastPage = page();
+    // A proposal previewed on the last route never stays behind on this one.
+    designModule?.resetDesignPreviews();
     designController?.clearSelection();
     designController?.setReturnAction(null);
     parkedDraft = null;
@@ -6402,6 +6667,12 @@ export function initComments(options: CommentsOptions): CommentsController {
   });
   /** A host router owns redirect/rejection decisions; never override them with a reload. */
   async function go(url: URL) {
+    const framed = pageFrame()?.contentWindow;
+    if (framed && url.origin === location.origin) {
+      url.searchParams.delete("comment");
+      url.searchParams.delete("comment-view");
+      return framed.location.assign(url);
+    }
     if (!options.navigate || url.origin !== location.origin)
       return location.assign(url);
     const id = url.searchParams.get("comment");
@@ -6626,6 +6897,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(hoverFrame);
       cancelAnimationFrame(nearFrame);
+      cancelAnimationFrame(panFrameId);
       cancelAnimationFrame(noticeFrame);
       hidePreview();
       observer.disconnect();
@@ -6633,9 +6905,10 @@ export function initComments(options: CommentsOptions): CommentsController {
       themeWatch.disconnect();
       hostGuard.disconnect();
       cancelAnimationFrame(themeFrame);
-      const scroll = framed
+      const scroll = framed && !laidViewport
         ? surface.scrollTop * htmlZoom()
         : window.scrollY / appliedScale;
+      closeViewport();
       framePortals();
       if (framed || !edgeSidebar) {
         restorePage();

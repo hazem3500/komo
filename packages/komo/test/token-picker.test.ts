@@ -62,17 +62,20 @@ describe("token picker", () => {
     expect(row(all, "card").querySelector<HTMLElement>(".komo-tokens__shadow")).not.toBeNull();
     const title = row(all, "Title");
     expect(title.querySelector(".komo-tokens__ag")!.textContent).toBe("Ag");
-    expect(title.title).toContain("type-title");
+    expect(title.getAttribute("aria-label")).toContain("type-title");
+    // No tooltip covers the rows; the path and value are a muted subline shown on the active row.
+    expect(title.title).toBe("");
+    expect(title.querySelector(".komo-tokens__sub")!.textContent).toBe("type.title · 600 16px/1.5 Georgia, serif");
     expect(title.querySelector(".komo-tokens__meta")).toBeNull();
     expect(row(all, "bold").querySelector<HTMLElement>(".komo-tokens__ag")!.style.fontWeight).toBe("700");
     expect(row(all, "serif").querySelector<HTMLElement>(".komo-tokens__ag")!.style.fontFamily).toContain("Georgia");
     const fast = row(all, "fast");
     expect(fast.querySelector(".komo-tokens__pv")!.childElementCount).toBe(0);
-    expect(fast.title).toContain("150ms");
+    expect(fast.getAttribute("aria-label")).toContain("150ms");
     // Secondary details remain accessible without adding extra visible rows.
-    expect(row(all, "tint").title).toContain("hover");
+    expect(row(all, "tint").getAttribute("aria-label")).toContain("hover");
     expect(row(all, "Primary").querySelector(".komo-tokens__desc")).toBeNull();
-    expect(row(all, "Primary").title).toContain("Body copy");
+    expect(row(all, "Primary").getAttribute("aria-label")).toContain("Body copy");
     expect(picker()!.querySelector("[role=listbox]")!.getAttribute("aria-label")).toBe("Tokens for none");
   });
 
@@ -87,8 +90,10 @@ describe("token picker", () => {
 
   it("shows the field's tokens by default and every token with Show all", () => {
     const { names, picker } = mount();
-    const widen = picker()!.querySelector<HTMLButtonElement>(".komo-tokens__bar button")!;
-    expect(widen.textContent).toBe("Show all");
+    // "Show all" sits under the list.
+    const widen = picker()!.querySelector<HTMLButtonElement>(".komo-tokens__widen")!;
+    expect(widen.previousElementSibling!.getAttribute("role")).toBe("listbox");
+    expect(widen.textContent).toBe(`Show all ${tokens.length} tokens`);
     expect(widen.getAttribute("aria-pressed")).toBe("false");
     widen.click();
     expect(widen.getAttribute("aria-pressed")).toBe("true");
@@ -165,8 +170,9 @@ describe("token picker", () => {
       ],
     });
     await vi.waitFor(() => expect(rows()[0].querySelectorAll(".komo-tokens__sw > span")).toHaveLength(1));
-    await vi.waitFor(() => expect(rows()[0].title).toContain("Light"));
-    expect(rows()[0].title).toContain("Light #1f1f1f, Dark #f1efeb");
+    await vi.waitFor(() => expect(rows()[0].getAttribute("aria-label")).toContain("Light"));
+    expect(rows()[0].getAttribute("aria-label")).toContain("Light #1f1f1f, Dark #f1efeb");
+    expect(rows()[0].querySelector(".komo-tokens__sub")!.textContent).toContain("Light #1f1f1f, Dark #f1efeb");
     expect(rows()[1].querySelectorAll(".komo-tokens__sw > span")).toHaveLength(1);
   });
 
@@ -175,7 +181,7 @@ describe("token picker", () => {
     const { rows } = mount({ tokens: [token] });
     const option = rows()[0];
     expect(option.querySelector("[data-unresolved]")?.textContent).toBe("?");
-    expect(option.title).toContain("Unresolved");
+    expect(option.getAttribute("aria-label")).toContain("Unresolved");
     expect(option.getAttribute("aria-label")).toContain(token.ref);
     expect(option.getAttribute("aria-label")).toContain(token.value);
     expect(option.getAttribute("aria-label")).toContain("no swatch available");
@@ -326,5 +332,147 @@ describe("token field suggestions", () => {
     await vi.waitFor(() => expect(label.querySelector(".komo-tokens")).not.toBeNull());
     expect(select.getAttribute("aria-expanded")).toBe("true");
     expect([...label.querySelectorAll(".komo-tokens [role=option]")].map((option) => option.querySelector(".komo-tokens__name > span")!.textContent)).toEqual(["Primary", "secondary"]);
+  });
+});
+
+describe("one popup for tokens and Custom value", () => {
+  afterEach(() => document.body.replaceChildren());
+  const custom = (extra: Partial<NonNullable<TokenPickerOptions["custom"]>> = {}): NonNullable<TokenPickerOptions["custom"]> =>
+    ({ value: "16px", onPreview: vi.fn(() => () => {}), onSelect: vi.fn(), ...extra });
+
+  it("opens on the tokens with a Custom row, and swaps to the editor and back", async () => {
+    const { picker, rows, root, press } = mount({ property: "padding", custom: custom() });
+    const box = picker()!;
+    expect(box.querySelector(".komo-tokens__tabs")).toBeNull();
+    expect(box.querySelector(".komo-tokens__head")!.textContent).toBe("padding");
+    expect(rows().map(row => [row.querySelector(".komo-tokens__pv .komo-tokens__dim") !== null, row.querySelector(".komo-tokens__name")!.textContent])).toEqual([[true, "md"]]);
+    const more = box.querySelector<HTMLButtonElement>(".komo-tokens__more")!;
+    expect(more.hidden).toBe(false);
+    expect(more.textContent).toBe("Custom…16px");
+    expect(box.querySelector<HTMLElement>(".komo-tokens__custom")!.hidden).toBe(true);
+    // Keyboard: past the last token, ArrowDown reaches Custom…; Enter opens it; Back returns.
+    const list = box.querySelector<HTMLElement>(".komo-tokens__list")!;
+    press("ArrowDown", list);
+    expect(root.activeElement).toBe(more);
+    more.click();
+    expect(box.querySelector<HTMLElement>(".komo-tokens__list")!.hidden).toBe(true);
+    expect(box.querySelector<HTMLElement>(".komo-tokens__custom")!.hidden).toBe(false);
+    expect(box.querySelector(".komo-tokens__head")!.textContent).toBe("Custom value");
+    await vi.waitFor(() => expect(box.querySelector(".komo-tokens__custom .komo-custom")).not.toBeNull());
+    expect(box.querySelector("details:not([open]) > summary")!.textContent).toBe("Edit as CSS");
+    await vi.waitFor(() => expect(root.activeElement?.closest(".komo-tokens__custom")).toBeTruthy());
+    const back = box.querySelector<HTMLButtonElement>(".komo-tokens__back")!;
+    expect(back.hidden).toBe(false);
+    back.click();
+    expect(list.hidden).toBe(false);
+    expect(box.querySelector<HTMLElement>(".komo-tokens__custom")!.hidden).toBe(true);
+    expect(back.hidden).toBe(true);
+    expect(root.activeElement).toBe(more);
+    press("ArrowUp", more);
+    expect(root.activeElement).toBe(list);
+  });
+
+  it("opens straight in Custom for a property without tokens, with no way back", async () => {
+    const { picker, root } = mount({ property: "letter-spacing", custom: custom({ value: "0px" }) });
+    const box = picker()!;
+    expect(box.querySelector<HTMLElement>(".komo-tokens__list")!.hidden).toBe(true);
+    expect(box.querySelector<HTMLElement>(".komo-tokens__bar")!.hidden).toBe(true);
+    expect(box.querySelector<HTMLElement>(".komo-tokens__more")!.hidden).toBe(true);
+    expect(box.querySelector<HTMLElement>(".komo-tokens__back")!.hidden).toBe(true);
+    expect(box.querySelector(".komo-tokens__head")!.textContent).toBe("letter-spacing");
+    await vi.waitFor(() => expect(root.activeElement?.closest(".komo-tokens__custom")).toBeTruthy());
+    expect(root.activeElement!.closest("details")).toBeNull();
+  });
+
+  it("names a color's Custom view and shows its swatch and hex on the Custom row", () => {
+    const { picker } = mount({ custom: custom({ value: "#1a2b3c" }) });
+    const more = picker()!.querySelector<HTMLElement>(".komo-tokens__more")!;
+    expect(more.querySelector("i")!.style.getPropertyValue("--c")).toBe("#1a2b3c");
+    expect(more.querySelector("span")!.textContent).toBe("1A2B3C");
+    more.click();
+    expect(picker()!.querySelector(".komo-tokens__head")!.textContent).toBe("Custom colour");
+  });
+
+  it("previews a hovered token and restores the page exactly on leaving the list", () => {
+    const element = document.createElement("p");
+    element.style.setProperty("color", "#123456", "important");
+    const onPreview = vi.fn((token: DesignToken) => {
+      const value = element.style.color, priority = element.style.getPropertyPriority("color");
+      element.style.setProperty("color", token.value, priority);
+      return () => element.style.setProperty("color", value, priority);
+    });
+    const { rows, picker, chosen } = mount({ onPreview });
+    document.body.append(element);
+    rows()[1].dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
+    expect(element.style.color).toBe("rgb(107, 107, 107)");
+    picker()!.querySelector(".komo-tokens__list")!.dispatchEvent(new PointerEvent("pointerleave"));
+    expect(element.style.color).toBe("rgb(18, 52, 86)");
+    expect(element.style.getPropertyPriority("color")).toBe("important");
+    rows()[1].dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
+    expect(onPreview).toHaveBeenCalledTimes(2);
+    expect(chosen).toEqual([]);
+  });
+
+  it("moves with Home and End, and typing on the list filters it", () => {
+    const { press, root, search, names } = mount();
+    const list = root.querySelector<HTMLElement>(".komo-tokens__list")!;
+    expect(root.activeElement).toBe(list);
+    expect(search().hidden).toBe(true);
+    press("End", list);
+    // A search looks through every token, not just the relevant ones.
+    expect(root.getElementById(list.getAttribute("aria-activedescendant")!)!.textContent).toContain("secondary");
+    press("Home", list);
+    expect(root.getElementById(list.getAttribute("aria-activedescendant")!)!.textContent).toContain("Primary");
+    expect(press("s", list).defaultPrevented).toBe(true);
+    expect(search().hidden).toBe(false);
+    expect(search().value).toBe("s");
+    expect(root.activeElement).toBe(search());
+    expect(names()).toContain("secondary");
+    expect(names()).toContain("md");
+    search().value = "";
+    search().dispatchEvent(new Event("input"));
+    expect(search().hidden).toBe(false);
+  });
+
+  it("focuses the search of a long list", () => {
+    const { root, search } = mount({ property: "none" });
+    expect(search().hidden).toBe(false);
+    expect(root.activeElement).toBe(search());
+  });
+
+  it("previews a hovered menu option over a kept Custom value and brings that value back", async () => {
+    vi.stubGlobal("CSS", { supports: () => true });
+    const applied: string[] = [];
+    const onPreview = vi.fn((value: string) => { applied.push(value); return () => { applied.pop(); }; });
+    const { picker } = mount({ property: "font", tokens: [], custom: custom({ value: "500 14px serif", onPreview }) });
+    const weight = await vi.waitFor(() => {
+      const select = picker()!.querySelector<HTMLSelectElement>('select[aria-label="Font weight"]');
+      expect(select).not.toBeNull();
+      return select!;
+    });
+    weight.value = "600";
+    weight.dispatchEvent(new Event("change"));
+    expect(applied).toEqual(["600 14px serif"]);
+    weight.dispatchEvent(new CustomEvent("komo-preview", { detail: "800" }));
+    expect(applied).toEqual(["800 14px serif"]);
+    weight.dispatchEvent(new CustomEvent("komo-preview", { detail: null }));
+    expect(applied).toEqual(["600 14px serif"]);
+    vi.unstubAllGlobals();
+  });
+
+  it("undoes a pending Custom edit before choosing a token, as one change", async () => {
+    const calls: string[] = [];
+    const { rows, picker, chosen } = mount({
+      property: "padding",
+      onSelect: token => calls.push(`select ${token.path}`),
+      custom: custom({ onCommit: value => calls.push(`commit ${value}`), onCancel: () => calls.push("cancel"), onDone: () => calls.push("done") }),
+    });
+    picker()!.querySelector<HTMLElement>(".komo-tokens__more")!.click();
+    await vi.waitFor(() => expect(picker()!.querySelector(".komo-custom")).not.toBeNull());
+    picker()!.querySelector<HTMLElement>(".komo-tokens__back")!.click();
+    rows()[0].click();
+    expect(picker()).toBeNull();
+    expect(calls).toEqual(["cancel", "done", "select space.md"]);
+    expect(chosen).toEqual([]);
   });
 });

@@ -4,6 +4,8 @@
 // empty Design panel. It imports only chunks Design mode already loads, so the
 // shared bundles keep their shape. Comments stay out of the CSS: they would ship.
 import type { DesignEditChange, DesignSystem, DesignToken, TokenAdapter, TokenValueChange } from "./design-system.js";
+import { textEntry } from "./dom.js";
+import { onFrame, previewTarget } from "./frame-target.js";
 
 /** What the Tokens view needs from Design mode. */
 export interface TokenPageHost {
@@ -22,6 +24,7 @@ export interface PageTokens {
   readonly size: number;
   readonly steps: readonly object[];
   undo(): void;
+  redo(): void;
   reset(): void;
   proposal(): string | undefined;
   open(): void;
@@ -41,7 +44,7 @@ export function themeKey(design?: DesignSystem): string | undefined {
   const ids: string[] = [];
   for (const axis of Array.isArray(design?.themes) ? design.themes : []) {
     if (!Array.isArray(axis?.options) || axis.options.length < 2) continue;
-    try { ids.push(String(axis.current())); } catch { /* An axis that throws is left out. */ }
+    try { ids.push(String(axis.current(previewTarget()))); } catch { /* An axis that throws is left out. */ }
   }
   return ids.length ? ids.join("+") : undefined;
 }
@@ -55,6 +58,8 @@ export function tokenEdits(adapter: TokenAdapter, options: { before?(): boolean;
   const before = () => !!options.before?.();
   const edits = new Map<string, TokenEdit>();
   const steps: Array<{ key: string; edit?: TokenEdit }> = [];
+  // Undone steps with the edit they had made, for redo; a new edit clears them.
+  const undone: Array<{ key: string; edit?: TokenEdit }> = [];
   let cleanup: (() => void) | undefined;
   let applied = "";
   const run = (list: TokenEdit[]) => {
@@ -67,7 +72,7 @@ export function tokenEdits(adapter: TokenAdapter, options: { before?(): boolean;
     applied = key;
     try { undo?.(); } catch { /* The page keeps whatever the adapter restored. */ }
     if (changes.length && adapter.previewValues)
-      try { cleanup = adapter.previewValues(changes, theme); } catch { /* An adapter that throws previews nothing. */ }
+      try { cleanup = adapter.previewValues(changes, theme, previewTarget()); } catch { /* An adapter that throws previews nothing. */ }
   };
   const sync = () => run(before() ? [] : [...edits.values()]);
   const others = (key: string) => [...edits].filter(([item]) => item !== key).map(([, edit]) => edit);
@@ -84,6 +89,7 @@ export function tokenEdits(adapter: TokenAdapter, options: { before?(): boolean;
       const previous = edits.get(key);
       if ((previous?.to ?? edit.from) === edit.to) return false;
       steps.push({ key, edit: previous });
+      undone.length = 0;
       if (edit.to === edit.from) edits.delete(key);
       else edits.set(key, edit);
       sync();
@@ -97,6 +103,15 @@ export function tokenEdits(adapter: TokenAdapter, options: { before?(): boolean;
     undo() {
       const step = steps.pop();
       if (!step) return;
+      undone.push({ key: step.key, edit: edits.get(step.key) });
+      if (step.edit) edits.set(step.key, step.edit);
+      else edits.delete(step.key);
+      sync();
+    },
+    redo() {
+      const step = undone.pop();
+      if (!step) return;
+      steps.push({ key: step.key, edit: edits.get(step.key) });
       if (step.edit) edits.set(step.key, step.edit);
       else edits.delete(step.key);
       sync();
@@ -199,6 +214,15 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
   searchBar.append(search);
   const list = make("div", "design-token-page__list");
   view.append(note, searchBar, list);
+  // A row's details show in komo's tooltip beside the panel, or above a narrow sheet, so it never
+  // covers rows or group headings; only without room for either does it sit above the row.
+  const besideRows = (tip: HTMLElement, row: HTMLElement) => {
+    const box = row.getBoundingClientRect(), side = panel.getBoundingClientRect();
+    if (side.left - 16 > tip.offsetWidth) {
+      tip.style.left = `${side.left - 8 - tip.offsetWidth / 2}px`;
+      tip.style.top = `${box.top + (box.height - tip.offsetHeight) / 2}px`;
+    } else if (side.top - 16 > tip.offsetHeight) tip.style.top = `${side.top - 8 - tip.offsetHeight}px`;
+  };
 
   // The footer is Design mode's bar: change count, Before/After, Undo, Reset all and Comment.
   const bar = make("div", "design-inspector__bar design-token-bar");
@@ -240,7 +264,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     const text = proposal();
     if (!text) return;
     resetAll();
-    host.onComment(document.body, text);
+    host.onComment(previewTarget().document.body, text);
   });
   actions.append(undo, reset, comment);
   bar.append(count, compare, status, actions);
@@ -293,6 +317,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
       trigger,
       tokens: targets,
       property: propertyOf(token),
+      title: picker.tokenLabel(token),
       current: current ? current.alias : token.alias,
       onPreview: (target) => edits.preview(change(target.value, target.path)),
       onSelect: (target) => commit(change(target.value, target.path)),
@@ -304,43 +329,50 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     }, true);
   }
 
-  function row(token: DesignToken): HTMLElement {
+  /** The latest listed token per path: rows keep their elements (and an open popup) when values change. */
+  const latest = new Map<string, DesignToken>();
+  function row(listed: DesignToken): HTMLElement {
+    const current = () => latest.get(listed.path) ?? listed;
     const item = make("div", "design-token-row");
     const main = make("button");
     main.type = "button";
     main.setAttribute("aria-haspopup", "dialog");
-    const name = make("b", "", picker.tokenLabel(token));
+    const name = make("b", "", picker.tokenLabel(listed));
     const value = make("i");
     const back = make("button");
     back.type = "button";
     back.title = "Reset to page value";
-    back.setAttribute("aria-label", `Reset ${token.path}`);
+    back.setAttribute("aria-label", `Reset ${listed.path}`);
     back.innerHTML = resetIcon;
     item.append(main, back);
     const update = () => {
-      const current = edits.get(token.path, themeKey(host.design));
-      const alias = current ? current.alias : token.alias;
-      const shown = current?.value ?? token.value;
+      const token = current();
+      name.textContent = picker.tokenLabel(token);
+      const edited = edits.get(token.path, themeKey(host.design));
+      const alias = edited ? edited.alias : token.alias;
+      const shown = edited?.value ?? token.value;
       value.textContent = alias ? labelOf(alias) : shown;
       main.replaceChildren(picker.tokenPreview({ ...token, value: shown }), name, value);
-      main.title = [token.path, token.ref, alias ? `${alias} · ${shown}` : shown, token.description].filter(Boolean).join(" · ");
-      main.setAttribute("aria-label", `${name.textContent}, ${value.textContent}${current ? ", edited" : ""}`);
-      item.toggleAttribute("data-changed", !!current);
-      back.disabled = !current;
+      main.dataset.tip = [token.path, token.ref, alias ? `${alias} · ${shown}` : shown, token.description].filter(Boolean).join(" · ");
+      main.setAttribute("aria-label", `${name.textContent}, ${value.textContent}${edited ? ", edited" : ""}`);
+      item.toggleAttribute("data-changed", !!edited);
+      back.disabled = !edited;
     };
-    main.addEventListener("click", () => edit(token, main));
+    main.addEventListener("click", () => edit(current(), main));
     back.addEventListener("click", () => {
       show(false);
-      edits.reset(token.path, themeKey(host.design));
+      edits.reset(listed.path, themeKey(host.design));
       refresh();
       main.focus({ preventScroll: true });
     });
-    rows.set(token.path, update);
+    rows.set(listed.path, update);
     update();
     return item;
   }
 
+  let shape = "";
   function render() {
+    for (const token of tokens) latest.set(token.path, token);
     const terms = search.value.toLowerCase().split(/\s+/).filter(Boolean);
     const groups = new Map<string, DesignToken[]>([["", []]]);
     for (const token of tokens) {
@@ -350,6 +382,10 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
       const group = token.group ?? "";
       groups.set(group, [...groups.get(group) ?? [], token]);
     }
+    // The same rows in the same order update in place, so a row's open popup stays open.
+    const next = JSON.stringify([...groups].map(([group, members]) => [group, members.map((token) => token.path)]));
+    if (next === shape && rows.size) return refresh();
+    shape = next;
     rows.clear();
     list.replaceChildren();
     let index = 0;
@@ -437,16 +473,26 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
         };
         bar.addEventListener("pointerover", loadTips, { signal });
         bar.addEventListener("focusin", loadTips, { signal });
-        // ← Before, → After, B flips, as in Design mode; never while typing.
-        document.addEventListener("keydown", (event) => {
+        let rowTips = false;
+        const loadRowTips = (event: Event) => {
+          if (!rowTips) exporter.footerTips(list, host.root, signal, event, besideRows);
+          rowTips = true;
+        };
+        list.addEventListener("pointerover", loadRowTips, { signal });
+        list.addEventListener("focusin", loadRowTips, { signal });
+        // ← Before, → After, B flips, as in Design mode. B pauses only in a text field; the
+        // arrows also leave fields, sliders and radios their own.
+        const compareKeys = (event: KeyboardEvent) => {
           const key = event.key.toLowerCase();
           const origin = event.composedPath()[0];
           if (compare.hidden || event.metaKey || event.ctrlKey || event.altKey || !["b", "arrowleft", "arrowright"].includes(key) ||
-            (origin instanceof HTMLElement && (origin.isContentEditable || origin.matches("input,textarea,select,[role=slider],[role=radio]")))) return;
+            textEntry(origin) || key !== "b" && (origin as Element).matches?.("input,select,[role=slider],[role=radio]")) return;
           event.preventDefault();
           event.stopImmediatePropagation();
           show(key === "b" ? !isBefore() : key === "arrowleft");
-        }, { capture: true, signal });
+        };
+        document.addEventListener("keydown", compareKeys, { capture: true, signal });
+        onFrame("keydown", compareKeys, { capture: true, signal });
         render();
         void load();
       }
@@ -457,6 +503,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     get size() { return edits.size; },
     get steps() { return edits.steps; },
     undo() { edits.undo(); refresh(); },
+    redo() { edits.redo(); refresh(); },
     reset: resetAll, proposal, open: page.open,
   });
   return page;

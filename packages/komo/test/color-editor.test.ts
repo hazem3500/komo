@@ -203,6 +203,30 @@ describe("the color editor", () => {
     expect(host.commit).toHaveBeenLastCalledWith("#fc2a00e6");
   });
 
+  it("keeps recent and page colors on one row, and hides the row when there are none", async () => {
+    document.body.innerHTML = '<p style="color:#336699">A</p><p style="color:#c2410c">B</p>';
+    rememberColor("#c2410c");
+    const editor = open("#000000");
+    await vi.waitFor(() => expect(editor.querySelectorAll(".komo-color__swatches button").length).toBeGreaterThan(0));
+    const labels = [...editor.querySelectorAll(".komo-color__swatches button")].map(button => button.getAttribute("aria-label"));
+    expect(labels[0]).toBe("Recent color #c2410c");
+    expect(labels).toContain("Document color #336699");
+    expect(labels.filter(label => label?.endsWith("#c2410c"))).toHaveLength(1);
+    expect(editor.querySelectorAll(".komo-color__swatches small")).toHaveLength(0);
+    editor.remove();
+    localStorage.clear();
+    // An empty page: the editor sits in a shadow root, as komo's does, so only the page is sampled.
+    document.body.innerHTML = "";
+    const komo = document.body.appendChild(document.createElement("div"));
+    komo.setAttribute("data-branch-comments", "");
+    const shadow = komo.attachShadow({ mode: "open" });
+    const empty = pickerEditor({ trigger: document.body, tokens, property: "color", onSelect() {}, custom: { value: "#000000", onPreview: () => () => {}, onSelect() {} } }, host);
+    shadow.append(empty);
+    await new Promise(resolve => setTimeout(resolve, 40));
+    expect(empty.querySelector<HTMLElement>(".komo-color__swatches")!.hidden).toBe(true);
+    expect(empty.querySelectorAll(".komo-color__swatches button")).toHaveLength(0);
+  });
+
   it("offers the token a swatch or value matches", async () => {
     document.body.innerHTML = '<p style="color:#336699">Swatch</p>';
     const editor = open("#000000");
@@ -227,6 +251,8 @@ describe("the live color popup", () => {
     document.body.append(trigger);
     const custom = { value: "#336699", onPreview: vi.fn(() => () => {}), onSelect: vi.fn(), onCommit: vi.fn(), onDone: vi.fn(), onCancel: vi.fn() };
     openTokenPicker({ trigger, tokens, property: "color", onSelect: vi.fn(), custom });
+    // Tokens come first; Custom… swaps in the picker.
+    document.querySelector<HTMLElement>(".komo-tokens__more")!.click();
     await vi.waitFor(() => expect(document.querySelector(".komo-color")).not.toBeNull());
     expect(document.querySelector(".komo-custom")).toBeNull();
     const hex = document.querySelector<HTMLInputElement>('.komo-color input[aria-label="Hex"]')!;
@@ -241,6 +267,8 @@ describe("the live color popup", () => {
     expect(document.querySelector(".komo-tokens")).toBeNull();
 
     openTokenPicker({ trigger, tokens, property: "color", onSelect: vi.fn(), custom });
+    // Tokens come first; Custom… swaps in the picker.
+    document.querySelector<HTMLElement>(".komo-tokens__more")!.click();
     await vi.waitFor(() => expect(document.querySelector(".komo-color")).not.toBeNull());
     const typed = document.querySelector<HTMLInputElement>('.komo-color input[aria-label="Hex"]')!;
     typed.value = "445566";

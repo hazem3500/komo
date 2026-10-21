@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -89,7 +90,7 @@ async function open(mode: string, { theme = "light", viewport = { width: 1280, h
   await tab.goto(`${origin}/?mode=${mode}&theme=${theme}`);
   await tab.waitForFunction(() => !!(window as any).komo);
   await tab.evaluate(() => localStorage.clear());
-  await tab.keyboard.press("d");
+  await openDesign(tab);
   await settle(tab);
   await tab.locator("#card").click();
   await tab.locator('[data-field-property="background-color"] .design-token-binding').waitFor();
@@ -104,8 +105,6 @@ async function picker(tab: Page, property: string) {
   await field.scrollIntoViewIfNeeded();
   await settle(tab);
   await field.locator('input[type="color"]').click();
-  const custom = tab.locator(".komo-tokens__tabs button").filter({ hasText: "Custom" });
-  if (await custom.getAttribute("aria-pressed") !== "true") await custom.click();
   await tab.locator(".komo-color__area").waitFor();
   await settle(tab);
   return tab.locator(".komo-tokens");
@@ -208,9 +207,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("the color picke
     await tab.keyboard.press("Tab");
     const active = () => tab.evaluate(() => {
       const root = [...document.querySelectorAll("*")].find(node => node.shadowRoot?.querySelector(".komo-tokens"))!.shadowRoot!;
-      return [!!root.activeElement?.closest(".komo-tokens"), root.activeElement?.textContent];
+      return [!!root.activeElement?.closest(".komo-tokens"), root.activeElement?.getAttribute("aria-label") || root.activeElement?.textContent];
     });
-    expect(await active()).toEqual([true, "Tokens"]);
+    // The Custom view's first control is its way back to the tokens.
+    expect(await active()).toEqual([true, "Back to tokens"]);
     await tab.keyboard.press("Shift+Tab");
     expect((await active())[0]).toBe(true);
     await tab.keyboard.press("Escape");
@@ -243,19 +243,19 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("the color picke
     await tab.close();
   });
 
-  it.each(["light", "dark"])("stays 240px wide, inside the viewport and off the field near the panel bottom (%s page)", async theme => {
+  it.each(["light", "dark"])("stays 256px wide like every Custom editor, inside the viewport and off the field near the panel bottom (%s page)", async theme => {
     const { tab, errors } = await open(mode, { theme, viewport: { width: 1280, height: 700 } });
     await tab.locator(".design-inspector__controls").evaluate(node => { node.scrollTop = node.scrollHeight; });
     await settle(tab);
     const popup = await picker(tab, "border-color");
     const box = (await popup.boundingBox())!, field = (await tab.locator('[data-field-property="border-color"]').boundingBox())!;
-    expect(box.width).toBeLessThanOrEqual(240);
+    expect(box.width).toBeLessThanOrEqual(256);
     expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.y + box.height).toBeLessThanOrEqual(700);
     expect(box.y + box.height <= field.y || box.y >= field.y + field.height).toBe(true);
     expect(await popup.evaluate(node => node.matches(":popover-open"))).toBe(true);
     // Each part answers hit-tests over the panel beneath it.
-    expect(await popup.evaluate(node => [".komo-color__area", ".komo-color__hue", ".komo-color__alpha", ".komo-color__value", ".komo-tokens__tabs"].every(selector => {
+    expect(await popup.evaluate(node => [".komo-color__area", ".komo-color__hue", ".komo-color__alpha", ".komo-color__value", ".komo-tokens__head"].every(selector => {
       const rect = node.querySelector(selector)!.getBoundingClientRect(), root = node.getRootNode() as ShadowRoot;
       return node.contains(root.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
     }))).toBe(true);

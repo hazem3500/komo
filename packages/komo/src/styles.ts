@@ -3,6 +3,9 @@ import { morphingMenuStyles } from "./morphing-menu-styles.js";
 // pin's tip; hover, focus, a nearby pointer or selection expand them in place.
 const collapsedPin = `.pin:not(.active, .hot, :hover, :focus-visible, [data-near], [data-moving], [data-dragging])`;
 const collapsed = `.pins[data-size] > ${collapsedPin}`;
+// Same-target stacks fan out by swapping custom properties: on hover, focus, the open or
+// highlighted comment, or a tap (data-open). Collapsing waits 150ms so the pointer can travel.
+const fanned = `.pin-stack:is([data-open], :hover, :focus-within, :has(.active, .hot))`;
 // Conversations share one grid (see the --komo-* properties at the end): an outer
 // inset, an avatar column, a gutter to the content column and a trailing action
 // column. Dividers span the content box, never the full bleed.
@@ -455,13 +458,6 @@ ${morphingMenuStyles}
 .morphing-menu[data-vertical="true"] .morphing-menu__separator { width:20px; height:1px; margin:4px 0; }
 .toolbar .morphing-menu__shortcut { position:relative; }
 .morphing-menu__badge { position:absolute; top:4px; left:calc(50% + 3px); min-width:16px; height:16px; padding:0 4px; box-sizing:border-box; border-radius:8px; background:var(--accent,#bda6ef); color:#1d1530; font-size:10px; font-weight:600; line-height:16px; font-variant-numeric:tabular-nums; text-align:center; pointer-events:none; }
-.komo-shortcuts { box-sizing:border-box; width:min(360px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow:auto; padding:20px; border:1px solid #ffffff28; border-radius:16px; background:#232323; color:#f1efeb; font:12px/1.5 system-ui; }
-.komo-shortcuts::backdrop { background:#0006; }
-.komo-shortcuts h2 { font-size:16px; margin:0 0 12px; }
-.komo-shortcuts h3 { font-size:11px; color:#aaa; margin:14px 0 6px; }
-.komo-shortcuts > div { display:flex; justify-content:space-between; gap:12px; padding:6px 0; }
-.komo-shortcuts p { color:#aaa; }
-.komo-shortcuts button { font:inherit; color:inherit; border:1px solid #ffffff30; border-radius:6px; background:#ffffff0a; padding:6px 12px; }
 .toolbar .review-avatar {
   display: grid;
   place-items: center;
@@ -1365,8 +1361,16 @@ ${morphingMenuStyles}
 .selection-menu [aria-checked="false"] svg {
   opacity: 0;
 }
-.selection-menu [aria-checked="true"] {
-  background: #ffffff0b;
+.selection-menu .menu-action {
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+.selection-menu .menu-action svg {
+  order: 1;
+  margin-left: auto;
+  color: #bda6ef;
 }
 .selection-menu .menu-action:last-child {
   margin-top: 0;
@@ -1848,19 +1852,6 @@ textarea {
   .pin, .pins { transition: none; }
 }
 
-.pin-stack {
-  position: fixed; display: flex; align-items: center; padding: 3px;
-  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
-  pointer-events: auto; z-index: 2; isolation: isolate;
-}
-.pin-stack::-webkit-scrollbar { display: none; }
-.pin-stack .pin:not([data-dragging]) {
-  position: relative; flex: 0 0 34px; transform: scale(1);
-  margin-left: -12px;
-}
-.pin-stack .pin:not([data-dragging]):first-child { margin-left: 0; }
-.pin-stack .pin:hover, .pin-stack .pin:focus-visible, .pin-stack .pin.active { z-index: 4; }
-.pins[data-scrolling="true"] .pin-stack { pointer-events: none; }
 
 
 .onboarding-panel { display: grid; gap: 16px; }
@@ -2377,7 +2368,7 @@ textarea {
 :host([data-comments-hidden]) .edge-sidebar[data-collapsed] { visibility: hidden; }
 .morphing-menu__row[aria-pressed="false"] .morphing-menu__icon { visibility: hidden; }
 .pins { --pin-ring: var(--mm-ink); --pin-drop: 0 1px 3px #00000047; }
-.pins[data-page="dark"] { --pin-ring: var(--mm-surface); --pin-drop: 0 0 0 1px #ffffff1a, 0 1px 4px #00000099; }
+.pins[data-page="dark"] { --pin-ring: var(--mm-surface); --pin-drop: 0 0 0 1px #ffffff1a, 0 1px 4px #00000099; --bubble: #ededed; --bubble-ink: #161616; }
 .pins[data-size] > .pin { overflow: visible; background-color: transparent !important; box-shadow: none; transition: transform 180ms cubic-bezier(.22,1,.36,1), width 180ms cubic-bezier(.22,1,.36,1), height 180ms cubic-bezier(.22,1,.36,1); }
 .pins[data-size] > .pin .avatar { box-shadow: 0 0 0 2px var(--pin-ring), 0 3px 10px #0003; transition: all 180ms cubic-bezier(.22,1,.36,1); }
 .pins[data-size] > .pin.active .avatar { box-shadow: 0 0 0 2px var(--pin-ring), 0 0 0 4px #4388ff, 0 4px 14px #0003; }
@@ -2394,6 +2385,34 @@ ${collapsed} .avatar img { display: none; }
 .pins[data-size="dot"][data-breathe] > ${collapsedPin}:not([data-read])::before { content: ""; position: absolute; inset: calc(50% - var(--pin-face) / 2); border-radius: 50%; background: var(--reviewer-accent, #c8b5f4); opacity: 0; pointer-events: none; animation: komo-pin-breathe 1800ms cubic-bezier(.22,1,.36,1) var(--pin-breathe-delay, 0ms) infinite; }
 @keyframes komo-pin-breathe { 0% { opacity: .28; } 75%, 100% { opacity: 0; transform: scale(2.3); } }
 @media (prefers-reduced-motion: reduce) { .pins[data-size] > .pin, .pins[data-size] > .pin .avatar { transition: none; } .pins > .pin::before { display: none; } }
+.pin-stack { position: fixed; width: max-content; display: flex; flex-wrap: wrap-reverse; align-items: flex-end; min-width: 24px; min-height: 24px; max-width: 232px; padding: 2px; pointer-events: auto; z-index: 2; --face: 20px; --gap: -12px; }
+.pins[data-size="dot"] .pin-stack { --face: 12px; --gap: -7px; --ini: none; }
+.pins ${fanned} { --face: 34px; --gap: 4px; --fs: 11px; --img: block; --ini: none; --chip: none; --more: grid; --tail: 5px; --delay: 0s; z-index: 4; }
+.pin-stack[data-pointer="right"] { flex-direction: row-reverse; }
+.pin-stack[data-below] { flex-wrap: wrap; align-items: flex-start; }
+.pin-stack .pin { position: relative; flex: none; width: var(--face); height: var(--face); margin: 2px 0; border-radius: 50%; transform: none; font-size: var(--fs, 0); overflow: visible; box-shadow: 0 0 0 2px var(--pin-ring), var(--pin-drop); transition: .18s cubic-bezier(.22,1,.36,1) var(--delay, .15s); transition-property: width, height, margin; }
+.pin-stack .pin + .pin { margin-left: var(--gap); }
+.pin-stack[data-pointer="right"] .pin + .pin { margin: 2px var(--gap) 2px 0; }
+.pin-stack .pin:first-child { border-radius: 50% 50% 50% var(--tail, 50%); }
+.pin-stack[data-pointer="right"] .pin:first-child { border-radius: 50% 50% var(--tail, 50%) 50%; }
+.pin-stack .avatar::after { content: attr(data-initial); display: var(--ini, block); font-size: 10px; }
+.pin-stack img { display: var(--img, none); }
+.pin-stack[data-more] .pin:nth-child(n+2) { display: var(--more, none); }
+.pin-stack .pin.active { box-shadow: 0 0 0 2px var(--pin-ring), 0 0 0 4px #4388ff, 0 4px 14px #0003; }
+.pin-stack[data-more]::after, .pin-cluster > summary { display: var(--chip, grid); place-content: center; align-self: center; height: 16px; margin: 0 4px; padding: 0 5px; border-radius: 9px; background: var(--bubble, #252522); color: var(--bubble-ink, #fff); font: 650 10px system-ui, sans-serif; box-shadow: 0 0 0 2px var(--pin-ring), var(--pin-drop); }
+.pin-stack[data-more]::after { content: attr(data-more); }
+.pin-cluster { position: fixed; z-index: 2; translate: -50% -50%; pointer-events: auto; }
+.pin-cluster > summary { min-width: 26px; height: 26px; margin: 0; border-radius: 13px; font-size: 12px; }
+.pin-cluster:is(:hover, [open]) > summary { scale: 1.1; }
+.pin-cluster > summary:focus-visible { outline: 2px solid #f48120; outline-offset: 3px; }
+.pin-cluster .menu-action { max-width: 300px; }
+.pin-cluster .menu-action:last-child { margin: 0; }
+.pin-cluster .menu-action:last-child::before { content: none; }
+.pin-cluster [popover] { max-height: min(320px, 100dvh - 16px); overflow: auto; }
+.pin-cluster .avatar { width: 20px; height: 20px; font-size: 9px; }
+.pin-cluster span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pins[data-scrolling="true"] :is(.pin-stack, .pin-cluster) { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .pin-stack .pin { transition: none; } }
 
 :host { --komo-inset: 16px; --komo-avatar: 24px; --komo-gutter: 8px; --komo-action: 28px; }
 :host(.review-open) .panel { --komo-inset: 24px; padding-inline: var(--komo-inset); }
@@ -2453,7 +2472,7 @@ ${collapsed} .avatar img { display: none; }
 .new-comment-composer .draft-body { grid-template-columns: var(--komo-avatar) minmax(0, 1fr) var(--komo-action); column-gap: var(--komo-gutter); }
 .new-comment-composer .draft-body:not(:has(.avatar)) { grid-template-columns: minmax(0, 1fr) var(--komo-action); }
 .dialog .new-comment-composer .draft-body .send { justify-self: center; }
-.new-comment-composer .draft-proposal { margin-right: calc(var(--komo-action) + var(--komo-gutter)); }
+.new-comment-composer .draft-proposal { margin-right: calc(var(--komo-action) + var(--komo-gutter)); max-height: min(45dvh, 360px); min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .thread-navigation { margin: 0 var(--komo-inset) 12px; padding: 10px 12px; border: 1px solid #8883; border-radius: 8px; color: #aaa; }
 .account-layer .account-dialog { --komo-inset: 24px; }
 `;

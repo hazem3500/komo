@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // Pending edits in real Chrome. Escape keeps element previews pending (Before while
 // closed, After on return), and page token edits do the same: after re-entering they
@@ -41,7 +42,7 @@ beforeAll(async () => {
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
     if (path === "/") {
       response.setHeader("content-type", "text/html");
-      response.end(`<html><style>:root{--color-text:#131213;--color-surface:240 240 240}body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:70px}#card{width:240px;height:96px;padding:16px;background:rgb(var(--color-surface));color:var(--color-text);font:16px sans-serif}</style><main><article id="card">Example card</article></main><script type="module" src="/entry.js"></script></html>`);
+      response.end(`<html><style>:root{--color-text:#131213;--color-surface:240 240 240}body{margin:0}main{min-height:calc(100vh - 80px);box-sizing:border-box;padding:70px}#card{width:240px;height:96px;padding:16px;background:rgb(var(--color-surface));color:var(--color-text);font:16px sans-serif}</style><main><article id="card">Example card</article></main><script type="module" src="/entry.js"></script></html>`);
       return;
     }
     try {
@@ -63,6 +64,20 @@ afterAll(async () => {
 
 const light = "rgb(240, 240, 240)", orange = "rgb(255, 128, 0)";
 
+/** A press on empty canvas (the page root's blank area, or outside the page) deselects; re-entry brings the selection back. */
+async function deselect(page: import("playwright-core").Page) {
+  const point = await page.evaluate(() => {
+    for (let y = innerHeight - 4; y > 0; y -= 24) for (let x = 4; x < innerWidth; x += 24) {
+      const node = document.elementFromPoint(x, y);
+      if (node === document.body || node === document.documentElement || node === document.querySelector("main")) return [x, y];
+    }
+    return null;
+  });
+  if (!point) throw new Error("No empty canvas to click");
+  await page.mouse.click(point[0], point[1]);
+  await page.locator(".design-inspector__empty").waitFor();
+}
+
 describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token and geometry edits in %s", mode => {
   it("shows pending token edits after Escape, shares Undo, Before/After, Comment and Reset all, and keeps Layout fields current", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
@@ -82,6 +97,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     const field = (property: string) => page.locator(`.design-inspector [data-property="${property}"]`);
     const tool = (name: string) => bar.getByRole("button", { name, exact: true });
     const editSurface = async () => {
+      if (!await page.locator(".design-inspector__empty").count()) await deselect(page);
       await page.getByRole("button", { name: /^Edit tokens/ }).click();
       // The colour editor keeps each value as it is typed; clicking the row again closes it.
       await row("surface").locator("button").first().click();
@@ -92,30 +108,34 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
       await page.locator(".komo-color").waitFor({ state: "detached" });
       expect(await background()).toBe(orange);
     };
-    // Shift+Left steps ten local CSS pixels, so the resize is exact in every mode.
+    // Ctrl+Shift+Left on the focused selection steps ten local CSS pixels, so the resize is exact in
+    // every mode; holding the arrow down keeps the four steps in one gesture.
     const narrow = async () => {
       // Editing in the panel hides the handles until the canvas is targeted again.
       await card.hover();
-      const handle = page.getByRole("button", { name: "Resize width", exact: true });
-      await handle.waitFor();
-      await handle.focus();
-      await page.keyboard.press("Enter");
-      for (let step = 0; step < 4; step++) await page.keyboard.press("Shift+ArrowLeft");
-      await page.keyboard.press("Enter");
+      const selection = page.locator(".design-geometry__frame");
+      await selection.waitFor();
+      await selection.focus();
+      await page.keyboard.down("Control");
+      await page.keyboard.down("Shift");
+      for (let step = 0; step < 4; step++) await page.keyboard.down("ArrowLeft");
+      await page.keyboard.up("ArrowLeft");
+      await page.keyboard.up("Shift");
+      await page.keyboard.up("Control");
     };
 
-    await page.keyboard.press("d");
+    await openDesign(page);
     await editSurface();
 
     // Escape shows Before while closed; re-entering puts the tokens back, and says so.
     await page.keyboard.press("Escape");
     await expect.poll(background).toBe(light);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await expect.poll(background).toBe(orange);
-    expect(await page.locator(".design-inspector__pending p").textContent()).toBe("1 token change has pending runtime previews. Undo, Reset or reload to restore.");
+    expect(await page.locator(".design-inspector__pending h3").textContent()).toBe("1 unsaved change");
     await card.click();
     await chip.waitFor();
-    expect(await chip.textContent()).toBe("Token changes · 1");
+    expect(await chip.getAttribute("aria-label")).toBe("Token changes · 1 change");
     expect(await count.textContent()).toBe("1 change");
 
     // The chip is a keyboard-reachable link back to the Tokens view.
@@ -162,7 +182,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     await field("width").fill("180");
     await field("width").press("Enter");
     await page.keyboard.press("Escape");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await editSurface();
     await card.click();
     expect(await count.textContent()).toBe("2 changes");
@@ -186,22 +206,22 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     expect(posted.body).toContain("\n\nProposed token changes (preview only)\nToken: color.surface #f0f0f0 → #ff8000\nToken adapter: css-variables");
     expect(await card.getAttribute("style")).toBeNull();
 
-    // Reset all previews clears element and token previews together.
+    // Discard all clears element and token previews together.
     // Posting selects the new thread, and D would open it in Design mode; start again from a fresh page.
     await page.reload();
     await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await editSurface();
     await card.click();
     await narrow();
     // Escape on a resize handle cancels the gesture, so leave with the close button.
     await page.getByRole("button", { name: "Exit design mode", exact: true }).click();
-    await page.keyboard.press("d");
+    await openDesign(page);
     const pending = page.locator(".design-inspector__pending");
-    expect(await pending.locator("p").textContent()).toBe("1 element and 1 token change have pending runtime previews. Undo, Reset or reload to restore.");
+    expect(await pending.locator("h3").textContent()).toBe("2 unsaved changes");
     await page.screenshot({ path: join(tmpdir(), `komo-pending-edits-${mode}-pending.png`) });
-    await pending.getByRole("button", { name: "Reset all previews", exact: true }).click();
-    expect([await background(), await card.getAttribute("style")]).toEqual([light, null]);
+    await pending.getByRole("button", { name: "Discard all", exact: true }).click();
+    await expect.poll(async () => [await background(), await card.getAttribute("style")]).toEqual([light, null]);
     await pending.waitFor({ state: "hidden" });
 
     await page.evaluate(() => (window as any).komo.destroy());

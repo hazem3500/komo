@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -99,7 +100,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await page.locator('[data-menu-item="more"]').evaluate((el:HTMLElement)=>{el.focus();el.click()});
       await page.locator('[data-menu-item="shortcuts"]').evaluate((el:HTMLElement)=>{el.focus();el.click()});
       await expect.poll(() => page.locator('dialog.komo-shortcuts[open]').count()).toBe(1);
-      const restore = page.locator('dialog.komo-shortcuts div').filter({ hasText: 'Restore feedback' });
+      const restore = page.locator('dialog.komo-shortcuts .komo-shortcuts__row').filter({ hasText: 'Restore feedback' });
       expect(await restore.getByRole('img', { name: 'Shift + J', exact: true }).count()).toBe(1);
       expect(await restore.locator('kbd').last().textContent()).toBe('J');
       await page.keyboard.press('Escape');
@@ -120,9 +121,9 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     try {
       await page.goto(origin + '/?mode=reflow&case=semantic&baseline=classes');
       await page.waitForFunction(() => !!(window as any).komo);
-      await page.keyboard.press('d'); await page.locator('#target').click();
+      await openDesign(page); await page.locator('#target').click();
       await page.locator('[data-field-property="color"] select[data-picker]').click();
-      await page.getByRole('button',{name:'Custom',exact:true}).click();
+      await page.locator('.komo-tokens__more').click();
       const value=page.getByRole('textbox',{name:'Hex',exact:true});
       await expect.poll(()=>value.inputValue()).toBe('CCCCCC');
       await page.evaluate(()=>(window as any).radiusQA.theme('light'));
@@ -138,9 +139,9 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await page.waitForFunction(() => !!(window as any).komo);
       const target = page.locator('#target');
       const original = await target.evaluate(el => [el.className, el.getAttribute('style')]);
-      await page.keyboard.press('d'); await target.click();
+      await openDesign(page); await target.click();
       await page.locator('[data-field-property="color"] select[data-picker]').click();
-      await page.getByRole('button', { name: 'Custom', exact: true }).click();
+      await page.locator('.komo-tokens__more').click();
       const value = page.getByRole('textbox', { name: 'Hex', exact: true });
       await expect.poll(() => value.inputValue(), { timeout: 4000 }).toBe('CCCCCC');
       // Each switch lands while the previous refresh may still be settling.
@@ -165,9 +166,9 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await page.waitForFunction(() => !!(window as any).komo);
       const target=page.locator('#target');
       const before=await target.evaluate(el=>[el.className,el.getAttribute('style')]);
-      await page.keyboard.press('d'); await target.click();
+      await openDesign(page); await target.click();
       await page.locator('[data-field-property="color"] select[data-picker]').click();
-      await page.getByRole('button',{name:'Custom',exact:true}).click();
+      await page.locator('.komo-tokens__more').click();
       await page.getByRole('textbox',{name:'Hex',exact:true}).fill('336699');
       const opacity=page.getByRole('textbox',{name:'Opacity',exact:true});
       await opacity.fill('50'); await opacity.press('Enter');
@@ -184,9 +185,10 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     try {
       await page.goto(origin+'/?mode=reflow&case=semantic&baseline=classes');
       await page.waitForFunction(()=>!!(window as any).komo);
-      await page.keyboard.press('d');await page.locator('#target').click();
+      await openDesign(page);await page.locator('#target').click();
       const trigger=page.locator('[data-field-property="color"] select[data-picker]');
-      await trigger.click();await page.getByRole('button',{name:'Custom',exact:true}).click();
+      await trigger.click();
+      await page.locator('.komo-tokens__more').click();
       await page.getByRole('textbox',{name:'Hex',exact:true}).fill('336699');
       const input=page.getByRole('textbox',{name:'Opacity',exact:true});
       await input.fill('50');
@@ -205,14 +207,15 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     try {
       await page.goto(origin+'/?mode=reflow');await page.waitForFunction(()=>!!(window as any).komo);
       const target=page.locator('#target');const state=()=>target.evaluate(el=>[el.className,el.getAttribute('style')]);const original=await state();
-      await page.keyboard.press('d');await target.click();
+      await openDesign(page);await target.click();
       const trigger=page.locator('[data-field-property="color"] select[data-picker]');
-      await trigger.click();await page.getByRole('button',{name:'Custom',exact:true}).click();
+      await trigger.click();
+      await page.locator('.komo-tokens__more').click();
       await page.getByRole('textbox',{name:'Hex',exact:true}).fill('336699');
       const opacity=page.getByRole('textbox',{name:'Opacity',exact:true});
       await opacity.fill('50');await opacity.press('Enter');
       await trigger.click();await expect.poll(()=>page.locator('.komo-tokens').count()).toBe(0);const custom=await state();
-      await trigger.click();await page.getByRole('button',{name:'Tokens',exact:true}).click();
+      await trigger.click();
       await page.locator('.komo-tokens [role=option]').filter({hasText:'Primary'}).first().click();const token=await state();
       expect(await target.evaluate(el=>getComputedStyle(el).color)).toBe('rgb(105, 65, 198)');
       await page.getByRole('button',{name:'Edit color value',exact:true}).click();
@@ -232,7 +235,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       try {
         await page.goto(origin + `/?mode=${mode}`);
         await page.waitForFunction(() => !!(window as any).komo);
-        await page.keyboard.press('d'); await page.locator('#target').click();
+        await openDesign(page); await page.locator('#target').click();
         await page.evaluate(() => {
           const dialog = document.createElement('dialog'); dialog.id = 'host-dialog';
           dialog.textContent = 'Synthetic host dialog'; document.body.append(dialog); dialog.showModal();
@@ -281,9 +284,10 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
           await page.waitForFunction(() => !!(window as any).komo);
           const target = page.locator('#target');
           const original = await target.evaluate(el => [el.className, el.getAttribute('style')]);
-          await page.keyboard.press('d'); await target.click();
+          await openDesign(page); await target.click();
           const trigger = page.locator('[data-field-property="color"] select[data-picker]');
-          await trigger.click(); await page.getByRole('button', { name: 'Custom', exact: true }).click();
+          await trigger.click();
+          await page.locator('.komo-tokens__more').click();
           if (kind === 'format') await page.getByRole('combobox', { name: 'Color format', exact: true }).selectOption('CSS');
           const input = page.getByRole('textbox', { name: kind === 'format' ? 'CSS color' : 'Hex', exact: true });
           await input.waitFor();
@@ -307,8 +311,6 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
             expect(await input.getAttribute('aria-invalid')).toBe('true');
             await input.press('Escape');
           } else {
-            await page.getByRole('button', { name: 'Tokens', exact: true }).click();
-            await page.getByRole('button', { name: 'Custom', exact: true }).click();
             await input.press('Enter');
             expect(await target.evaluate(el => getComputedStyle(el).color)).toBe(kind === 'dirty' ? 'rgb(17, 34, 51)' : kind === 'offToken' ? 'rgb(204, 204, 204)' : 'rgb(85, 85, 85)');
             const undo = page.locator('button[aria-label="Undo"]');
@@ -318,7 +320,8 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
             expect(await undo.isDisabled()).toBe(true);
           }
           expect(await target.evaluate(el => [el.className, el.getAttribute('style')])).toEqual(original);
-          await trigger.click(); await page.getByRole('button', { name: 'Custom', exact: true }).click();
+          await trigger.click();
+          await page.locator('.komo-tokens__more').click();
           await input.waitFor(); await input.press('Escape');
           expect(await target.evaluate(el => [el.className, el.getAttribute('style')])).toEqual(original);
           expect(await trigger.evaluate(el => (el.getRootNode() as ShadowRoot).activeElement === el)).toBe(true);
@@ -334,11 +337,12 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       try {
         await page.goto(origin + '/?case=semantic&baseline=classes');
         await page.waitForFunction(() => !!(window as any).komo);
-        await page.keyboard.press('d'); await page.locator('#target').click();
+        await openDesign(page); await page.locator('#target').click();
         const target = page.locator('#target');
         const original = await target.evaluate(el => [el.className, el.getAttribute('style')]);
         const trigger = page.locator('[data-field-property="color"] select[data-picker]');
-        await trigger.click(); await page.getByRole('button', { name: 'Custom', exact: true }).click();
+        await trigger.click();
+        await page.locator('.komo-tokens__more').click();
         const popup = page.locator('.komo-tokens');
         const area = page.getByRole('slider', { name: 'Saturation and brightness', exact: true });
         const hue = page.getByRole('slider', { name: 'Hue', exact: true });
@@ -352,7 +356,8 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
         await expect.poll(() => popup.count()).toBe(0);
         const committed = await target.evaluate(el => [el.className, el.getAttribute('style')]);
         expect(committed).not.toEqual(original);
-        await trigger.click(); await page.getByRole('button', { name: 'Custom', exact: true }).click();
+        await trigger.click();
+        await page.locator('.komo-tokens__more').click();
         await hue.waitFor(); await hue.focus();
         const beforeKey = await input.inputValue();
         await hue.press('ArrowRight');
@@ -383,11 +388,11 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await page.waitForFunction(() => !!(window as any).komo);
       const target = page.locator("#target");
       const original = await target.evaluate(node => [node.className, node.getAttribute("style")]);
-      await page.keyboard.press("d");
+      await openDesign(page);
       await target.click();
       const trigger = page.locator('[data-field-property="color"] select[data-picker]');
       await trigger.click();
-      await page.getByRole("button", { name: "Custom", exact: true }).click();
+      await page.locator('.komo-tokens__more').click();
       const popup = page.locator(".komo-tokens");
       const format = page.getByRole("combobox", { name: "Color format", exact: true });
       await format.waitFor();
@@ -397,7 +402,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
         expect(bounds.y >= field.y + field.height || bounds.y + bounds.height <= field.y).toBe(true);
         expect(bounds.y).toBeGreaterThanOrEqual(0);
         expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
-        expect(bounds.width).toBeLessThanOrEqual(240);
+        expect(bounds.width).toBeLessThanOrEqual(256);
         expect(await format.evaluate(node => {
           const rect = node.getBoundingClientRect();
           return (node.getRootNode() as ShadowRoot).elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === node;
@@ -423,7 +428,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       expect(await target.evaluate(node => [node.className, node.getAttribute("style")])).toEqual(original);
       expect(await trigger.evaluate(node => (node.getRootNode() as ShadowRoot).activeElement === node)).toBe(true);
       await trigger.click();
-      await page.getByRole("button", { name: "Custom", exact: true }).click();
+      await page.locator('.komo-tokens__more').click();
       await red.fill("51");
       await page.getByRole("textbox", { name: "Green", exact: true }).fill("102");
       await page.getByRole("textbox", { name: "Blue", exact: true }).fill("153");
@@ -441,15 +446,16 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     } finally { await page.close(); }
   });
 
-  it("labels the numeric radius editor range without rejecting a full-radius token", async () => {
+  it("labels the numeric radius field with its unit inside, without rejecting a full-radius token", async () => {
     const page = await browser.newPage({ reducedMotion: "reduce" });
     page.setDefaultTimeout(4000);
     try {
       await page.goto(origin + '/?case=radius');
       await page.waitForFunction(() => !!(window as any).komo);
-      await page.keyboard.press('d'); await page.locator('#other').click();
+      await openDesign(page); await page.locator('#other').click();
       const field = page.locator('[data-field-property="border-radius"]');
-      expect(await field.locator('.design-field__label').textContent()).toBe('Corner radius · px · scrub 0–96');
+      expect(await field.locator('.design-field__label').textContent()).toBe('Corner radius');
+      await expect.poll(() => field.locator('.design-field__unit').textContent()).toBe('px');
       await field.locator('select[data-picker]').click();
       await page.locator('.komo-tokens [role=option]').filter({ hasText: 'Full' }).click();
       expect(await page.locator('#other').evaluate(el => parseFloat(getComputedStyle(el).borderTopLeftRadius))).toBeGreaterThan(96);

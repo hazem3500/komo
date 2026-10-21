@@ -1240,7 +1240,8 @@ it("still closes the Floating sidebar when commenting", async () => {
 
 it("outlines a hovered or focused list card's target and raises its pin", async () => {
   const { CommentsApi } = await import("../src/api");
-  const config = { ...options, onboarding: undefined };
+  // Both pins share one point; draw them apart so each can be raised.
+  const config = { ...options, onboarding: undefined, pins: { cluster: false } };
   const api = new CommentsApi(config);
   api.save({ token: "hover-session", user: { id: "hover", name: "Hover Reviewer", verified: true } });
   const anchor = { selector: "#target", text: "", x: 0.5, y: 0.5, width: 0, height: 0, pageX: 0, pageY: 0, viewportWidth: 1200 };

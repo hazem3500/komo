@@ -66,6 +66,24 @@ describe("tokenEdits", () => {
     expect(calls).toHaveLength(6);
   });
 
+  it("redoes undone token steps in order, and a new edit clears them", () => {
+    const edits = tokenEdits(fake());
+    edits.set(change("color.a", "#111111"));
+    edits.set(change("color.a", "#333333"));
+    edits.undo();
+    edits.undo();
+    expect(edits.size).toBe(0);
+    edits.redo();
+    expect(edits.get("color.a")?.to).toBe("#111111");
+    edits.redo();
+    expect(edits.get("color.a")?.to).toBe("#333333");
+    expect(edits.steps).toHaveLength(2);
+    edits.undo();
+    edits.set(change("color.b", "#222222"));
+    edits.redo();
+    expect(edits.get("color.a")?.to).toBe("#111111");
+  });
+
   it("drops an edit back to the page value and ignores repeats", () => {
     const log: string[] = [];
     const edits = tokenEdits(fake(log));
@@ -173,9 +191,12 @@ describe("token proposals", () => {
       expect(live).toBe(0);
     });
 
-    it("has no switch without an adapter that previews values", () => {
-      expect(render().button("After")).toBeUndefined();
-      expect(render({ tokens: { id: "plain", list: () => tokens, resolve: () => ({}) } }).button("After")).toBeUndefined();
+    it("keeps After off, with a reason, without an adapter that previews values", () => {
+      for (const design of [undefined, { tokens: { id: "plain", list: () => tokens, resolve: () => ({}) } }]) {
+        const after = render(design).button("After")!;
+        expect(after.disabled).toBe(true);
+        expect(after.title).toBe("This change can't be previewed here");
+      }
     });
 
     it("names each token by its label, else the path's last part, with the full path and theme in komo's tooltip", () => {
@@ -240,17 +261,14 @@ describe("Tokens view in Design mode", () => {
     await vi.waitFor(() => expect(shadow.querySelectorAll(".design-token-row").length).toBeGreaterThan(0));
   }
   const exact = '.komo-custom input[aria-label="CSS value"], .komo-color input[aria-label="Hex"]';
-  // Colors type into the live color editor and keep on close; other values use Apply.
+  // Every Custom editor applies live: typing previews and the popup keeps the value when it closes.
   async function custom(label: string, value: string) {
     rowFor(label).querySelector<HTMLButtonElement>("button")!.click();
     await vi.waitFor(() => expect(shadow.querySelector(exact)).not.toBeNull());
     const input = $<HTMLInputElement>(exact);
-    const color = !!input.closest(".komo-color");
-    input.value = color ? value.replace("#", "") : value;
+    input.value = input.closest(".komo-color") ? value.replace("#", "") : value;
     input.dispatchEvent(new Event("input"));
-    return () => color
-      ? document.body.dispatchEvent(new Event("pointerdown", { bubbles: true, composed: true }))
-      : button($(".komo-custom"), "Apply custom").click();
+    return () => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true, composed: true }));
   }
   const bar = () => $(".design-token-bar");
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -318,7 +336,11 @@ describe("Tokens view in Design mode", () => {
     await openView();
     rowFor("Primary").querySelector<HTMLButtonElement>("button")!.click();
     await vi.waitFor(() => expect(shadow.querySelector('.komo-tokens [role="option"]')).not.toBeNull());
-    expect(button($(".komo-tokens__tabs"), "Tokens").getAttribute("aria-pressed")).toBe("true");
+    // One popup: the alias targets first, with Custom… under them; no tabs.
+    expect(shadow.querySelector(".komo-tokens__tabs")).toBeNull();
+    expect($(".komo-tokens__head").textContent).toBe("Primary");
+    expect($<HTMLElement>(".komo-tokens__more").hidden).toBe(false);
+    expect($<HTMLElement>(".komo-tokens__custom").hidden).toBe(true);
     const options = [...shadow.querySelectorAll<HTMLElement>('.komo-tokens [role="option"]')];
     expect(options.map((option) => option.getAttribute("aria-selected"))).toEqual(["true", "false"]);
     options[1].click();
@@ -425,11 +447,11 @@ describe("Tokens view in Design mode", () => {
 
     it("counts them beside the element's own changes behind a chip that opens the Tokens view", async () => {
       await pendingAfterExit();
-      expect($(".design-inspector__pending p").textContent).toBe("1 token change has pending runtime previews. Undo, Reset or reload to restore.");
+      expect($(".design-inspector__pending h3").textContent).toBe("1 unsaved change");
       await pick();
       expect(count()).toBe("1 change");
       expect(chip().hidden).toBe(false);
-      expect(chip().textContent).toBe("Token changes · 1");
+      expect(chip().getAttribute("aria-label")).toBe("Token changes · 1 change");
       expect(chip().tagName).toBe("BUTTON");
       layout("flex");
       expect(count()).toBe("2 changes");
@@ -459,7 +481,7 @@ describe("Tokens view in Design mode", () => {
       expect(button(elementBar(), "Undo").disabled).toBe(true);
     });
 
-    it("flips with Before/After, and Reset all previews clears both", async () => {
+    it("flips with Before/After, and Discard all clears both", async () => {
       await pendingAfterExit();
       await pick();
       layout("flex");
@@ -478,8 +500,9 @@ describe("Tokens view in Design mode", () => {
       controller.setActive(false);
       controller.setActive(true);
       await flush();
-      expect($(".design-inspector__pending p").textContent).toBe("1 element and 1 token change have pending runtime previews. Undo, Reset or reload to restore.");
-      button($(".design-inspector__pending"), "Reset all previews").click();
+      expect($(".design-inspector__pending h3").textContent).toBe("2 unsaved changes");
+      button($(".design-inspector__pending"), "Discard all").click();
+      await flush();
       expect([active, hero().style.display]).toEqual([null, ""]);
       expect($(".design-inspector__pending").hidden).toBe(true);
       expect(button($(".design-inspector__empty"), "Edit tokens")).toBeTruthy();

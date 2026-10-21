@@ -86,6 +86,18 @@ export interface OffToken {
 
 export type TokenUsage = TokenRef | OffToken;
 
+/**
+ * The page that previews and theme switches apply to: this document, or the
+ * document of Frame's same-origin viewport iframe while it shows the page.
+ * Adapters that write to the page (inject a stylesheet, set a class or a
+ * variable on <html>) should write to `target.document` / `target.root`.
+ */
+export interface PreviewTarget {
+  document: Document;
+  /** The target document's root element. */
+  root: HTMLElement;
+}
+
 export interface TokenAdapter {
   /** Stable id recorded on proposals, e.g. "css-variables" or "tailwind". */
   id: string;
@@ -118,7 +130,7 @@ export interface TokenAdapter {
    * only the changes for it. Without this method, the Tokens view records edits
    * as proposals, labelled "No live preview".
    */
-  previewValues?(changes: TokenValueChange[], theme?: string): () => void;
+  previewValues?(changes: TokenValueChange[], theme?: string, target?: PreviewTarget): () => void;
   /**
    * For token sets that change at runtime: call `onChange` when `list()` would
    * return something different, and stop when the returned function runs. komo
@@ -146,10 +158,10 @@ export interface ThemeAxis {
   id: string;
   label?: string;
   options: ThemeOption[];
-  /** The option currently applied to the page. */
-  current(): string;
+  /** The option currently applied to the page; `target` is the page komo is reviewing. */
+  current(target?: PreviewTarget): string;
   /** Switch the page to `optionId`. komo restores the original option when Design mode closes. */
-  apply(optionId: string): void;
+  apply(optionId: string, target?: PreviewTarget): void;
   /** Notify when the host changes this axis outside the inspector, including state held outside the DOM. */
   subscribe?(listener: () => void): () => void;
 }
@@ -210,8 +222,15 @@ export interface ComponentAdapter {
 }
 
 export interface DesignSystem {
-  /** Opt in to experimental, reversible page-element move AND resize previews. Default false. */
+  /** Opt in to experimental, reversible page-element previews: Figma-style resize handles and moves between elements. Default false. */
   experimentalGeometry?: boolean;
+  /**
+   * Canvas selection color for Design mode's hover and selection outlines, resize handles and move
+   * feedback, e.g. "#0c93f5" (the default) or "rebeccapurple". The panel keeps komo's accent. It
+   * applies with `experimentalGeometry`; the `--komo-selection` custom property on komo's host
+   * element sets it from CSS either way.
+   */
+  selectionColor?: string;
   tokens?: TokenAdapter;
   themes?: ThemeAxis[];
   components?: ComponentAdapter;
@@ -282,4 +301,25 @@ export type DesignEditChange =
       from?: string;
       to?: string;
       effects?: string[];
+    }
+  /**
+   * A structural move previewed with experimental geometry: put the element
+   * (`target`, a selector) at `to.index` among `to.parent`'s element children,
+   * counted from 0 without the element itself. `position` says whether it landed
+   * before or after a sibling, or inside a container. Apply it in source by
+   * moving the element's markup; nothing moved in the page.
+   */
+  | {
+      kind: "move";
+      target?: string;
+      label?: string;
+      from: DesignMovePlace;
+      to: DesignMovePlace & { position: "before" | "after" | "inside" };
     };
+/** A parent (selector, reviewer label, component name) and an index among its element children. */
+export interface DesignMovePlace {
+  parent: string;
+  index: number;
+  label?: string;
+  component?: string;
+}

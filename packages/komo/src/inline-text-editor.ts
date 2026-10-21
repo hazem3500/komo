@@ -23,7 +23,7 @@ export interface InlineTextEditResult {
 /** Restore text without touching markup: nested elements keep their nodes, so React keeps its references. */
 function setText(element: HTMLElement, text: string, nodes?: TextSnapshot) {
   if (nodes) restoreText(nodes, element);
-  else if (element.firstChild instanceof Text && !element.childElementCount) element.firstChild.data = text;
+  else if (element.firstChild?.nodeType === Node.TEXT_NODE && !element.childElementCount) (element.firstChild as Text).data = text;
 }
 
 export interface InlineTextEditor {
@@ -57,6 +57,7 @@ export interface InlineTextTools {
   handleKey(event: KeyboardEvent): boolean;
   hasChanges(element: HTMLElement): boolean;
   undo(): HTMLElement | null;
+  redo(): HTMLElement | null;
   reset(element: HTMLElement): void;
   reconcile(element: HTMLElement, text: string): void;
   proposal(element: HTMLElement): string | undefined;
@@ -142,6 +143,7 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
     },
     hasChanges(element) { return history.original(element) !== undefined; },
     undo() { const element = history.undo(); options.onChange(); return element; },
+    redo() { const element = history.redo(); options.onChange(); return element; },
     reset(element) { history.reset(element); options.onChange(); },
     reconcile(element, text) { history.reconcile(element, text); options.onChange(); },
     proposal(element) { return history.proposal(element); },
@@ -157,12 +159,12 @@ export function bindInlineTextTools(options: InlineTextToolsOptions): InlineText
 }
 
 function caretAtPoint(element: HTMLElement, x: number, y: number) {
-  const position = document.caretPositionFromPoint?.(x, y);
-  const range = position ? document.createRange() : document.caretRangeFromPoint?.(x, y);
+  const position = element.ownerDocument.caretPositionFromPoint?.(x, y);
+  const range = position ? element.ownerDocument.createRange() : element.ownerDocument.caretRangeFromPoint?.(x, y);
   if (position && range) range.setStart(position.offsetNode, position.offset);
   if (!range || !element.contains(range.startContainer)) return;
   range.collapse(true);
-  const selection = document.getSelection();
+  const selection = element.ownerDocument.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
 }
@@ -184,7 +186,7 @@ export function canEditText(element: HTMLElement): boolean {
 
 function caretOffset(element: HTMLElement): number {
   const current = element.textContent ?? "";
-  const selection = document.getSelection();
+  const selection = element.ownerDocument.getSelection();
   const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
   if (!range || !element.contains(range.commonAncestorContainer)) return -1;
   return range.startContainer === element
@@ -196,9 +198,9 @@ function caretOffset(element: HTMLElement): number {
 
 function placeCaret(element: HTMLElement, offset: number) {
   const node = element.firstChild;
-  const selection = document.getSelection();
+  const selection = element.ownerDocument.getSelection();
   if (!node || !selection) return;
-  const range = document.createRange();
+  const range = element.ownerDocument.createRange();
   range.setStart(node, Math.min(offset, node.textContent?.length ?? 0));
   range.collapse(true);
   selection.removeAllRanges();
@@ -274,7 +276,7 @@ export async function startInlineTextEditor(
       startContainer: caretRange.startContainer, endContainer: caretRange.endContainer,
       startOffset: caretRange.startOffset, endOffset: caretRange.endOffset,
     });
-    const selection = document.getSelection();
+    const selection = element.ownerDocument.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(caretRange);
   };
@@ -284,7 +286,7 @@ export async function startInlineTextEditor(
     if (composing || event.isComposing || event.inputType === "insertCompositionText") return;
     if (event.inputType === "insertLineBreak" || event.inputType === "insertParagraph") {
       event.preventDefault();
-      const selection = document.getSelection();
+      const selection = element.ownerDocument.getSelection();
       const range = event.getTargetRanges()[0] ?? (selection?.rangeCount ? selection.getRangeAt(0) : null);
       if (range) replace(range, "\n");
       input();
@@ -305,7 +307,7 @@ export async function startInlineTextEditor(
   const paste = (event: ClipboardEvent) => {
     event.preventDefault();
     const text = event.clipboardData?.getData("text/plain") ?? "";
-    const selection = document.getSelection();
+    const selection = element.ownerDocument.getSelection();
     if (selection?.rangeCount) replace(selection.getRangeAt(0), text);
     input();
   };
@@ -330,8 +332,8 @@ export async function startInlineTextEditor(
   element.style.setProperty("box-shadow", "none", "important");
   element.style.setProperty("white-space", "pre-wrap", "important");
   element.focus({ preventScroll: true });
-  const selection = document.getSelection();
-  const range = document.createRange();
+  const selection = element.ownerDocument.getSelection();
+  const range = element.ownerDocument.createRange();
   const last = snapshotText(element).reverse().find(([node]) => !node.parentElement?.closest(lockedText))?.[0];
   if (last) range.setStart(last, last.length);
   else range.selectNodeContents(element);

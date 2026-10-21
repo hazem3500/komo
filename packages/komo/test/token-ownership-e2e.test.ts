@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -96,12 +97,11 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const target = page.locator("#target"), original = await target.evaluate(node => node.style.cssText);
     const value = () => target.evaluate(node => getComputedStyle(node).color);
     const theme = (id: string) => page.evaluate(id => (window as any).radiusQA.theme(id), id);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await target.click();
     const trigger = page.locator('[data-field-property="color"] select[data-picker]');
     const choose = async () => {
       await trigger.click();
-      await page.getByRole("button", { name: "Tokens", exact: true }).click();
       await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Accent" }).click();
     };
     const dark = baseline.startsWith("named") ? "rgb(255, 0, 0)" : "rgb(204, 204, 204)";
@@ -144,7 +144,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await theme("dark");
     await expect.poll(() => trigger.getAttribute("title")).toContain("#eeeeee");
     expect(await value()).toBe(dark);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await expect.poll(value).toBe("rgb(238, 238, 238)");
     await page.getByRole("button", { name: "Reset", exact: true }).click();
     expect(await value()).toBe(dark);
@@ -180,7 +180,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const target = page.locator("#target"), original = await target.getAttribute("style");
     const value = () => target.evaluate(node => getComputedStyle(node).color);
     const theme = (id: string) => page.evaluate(id => document.documentElement.setAttribute("data-review-mode", id), id);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await target.click();
     const field = page.locator('[data-field-property="color"]');
     const trigger = field.locator("select[data-picker]");
@@ -223,7 +223,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await page.keyboard.press("v");
     await theme("dark");
     await expect.poll(value).toBe("rgb(187, 187, 187)");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await expect.poll(value).toBe("rgb(193, 168, 255)");
     const fill = page.locator('[data-field-property="background-color"]');
     await fill.getByRole("button", { name: "Edit background-color value", exact: true }).click();
@@ -263,9 +263,8 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     page.setDefaultTimeout(4000);
     await page.goto(`${origin}/?mode=${mode}&case=radius`);
     await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d");
+    await openDesign(page);
     const target = page.locator("#target");
-    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
     const pick = await target.boundingBox();
     await page.mouse.click(pick!.x + pick!.width * 0.75, pick!.y + pick!.height / 2);
     const field = page.locator('[data-field-property="border-radius"]');
@@ -403,7 +402,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await page.goto(`${origin}/?mode=${mode}`);
     await page.waitForFunction(() => !!(window as any).komo);
     const original = await page.locator("#target").getAttribute("style");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.locator("#target").click();
     const field = page.locator(`[data-field-property="${property}"]`);
     const input = field.locator(`input[data-property="${property}"]`);
@@ -416,7 +415,6 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const open = async () => {
       await field.locator("select[data-picker]").click();
       await page.locator(".komo-tokens").waitFor();
-      await page.getByRole("button", { name: "Tokens", exact: true }).click();
     };
     const primary = page.locator('.komo-tokens [role="option"]').filter({ hasText: "Primary" });
     await field.locator("select[data-picker]").waitFor();
@@ -444,7 +442,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     expect(await value()).toBe("rgb(36, 104, 255)");
     await page.keyboard.press("v");
     expect(await value()).toBe("rgb(87, 84, 86)");
-    await page.keyboard.press("d");
+    await openDesign(page);
     expect(await value()).toBe("rgb(36, 104, 255)");
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     expect(await value()).toBe("rgb(105, 65, 198)");

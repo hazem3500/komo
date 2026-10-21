@@ -1,4 +1,5 @@
-import { popupBounds, popupStyles, previewStyle, watchPopup } from "./design-popup.js";
+import { popupStyles, previewStyle, watchPopup } from "./design-popup.js";
+import { stillPreview } from "./host-motion.js";
 // Komo-styled popups for the Design panel's native selects. The select stays the
 // focusable trigger and the value store, so `.value`, `change`, `disabled` and
 // labels keep working; only its system popup is replaced by a listbox that lives
@@ -6,10 +7,12 @@ import { popupBounds, popupStyles, previewStyle, watchPopup } from "./design-pop
 // select in a container, including ones added later (props, tokens, theme).
 // The trigger's chevron ships here too, so a select only looks custom once it is.
 // Comments stay out of the CSS string: they would ship in the bundle.
-const css = `.design-field>select{appearance:none;padding-right:20px;cursor:pointer;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 7px center/8px no-repeat}.komo-select{width:max-content;max-height:240px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px;line-height:1.2}.komo-select[popover]{position:fixed;inset:auto;margin:0;border:0}.komo-select [role=option]{display:flex;align-items:center;gap:8px;min-height:26px;padding:0 8px;border-radius:6px;white-space:nowrap;cursor:pointer}.komo-select [role=option] span{flex:1;overflow:hidden;text-overflow:ellipsis}.komo-select [data-active]{background:#ffffff14;color:#f1efeb}.komo-select [aria-selected=true]{color:#f1efeb}.komo-select [aria-selected=true]::after{content:'';flex:none;width:7px;height:3.5px;margin:-3px 1px 0 0;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-select [aria-disabled=true]{opacity:.4;cursor:default}.komo-select small{display:block;padding:8px 8px 4px;color:#77736f;font-size:10px;font-weight:500}.komo-select [role=group]+[role=group],.komo-select [role=option]+[role=group]{margin-top:4px;border-top:1px solid #ffffff0d}@media (pointer:coarse){.komo-select{font-size:13px}.komo-select [role=option]{min-height:40px}}`;
+const css = `.design-field>select{appearance:none;padding-right:20px;cursor:pointer;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 7px center/8px no-repeat}.komo-select{width:max-content;max-height:240px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px;line-height:1.2}.komo-select[popover]{position:fixed;inset:auto;margin:0;border:0}.komo-select [role=option]{display:flex;align-items:center;gap:8px;box-sizing:border-box;min-height:28px;padding:0 8px;border-radius:6px;white-space:nowrap;cursor:pointer}.komo-select [role=option] span{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}.komo-select [role=option]::after{content:'';flex:none;width:7px;height:3.5px;margin:-3px 1px 0 0;border:solid transparent;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-select [data-active]{background:#ffffff14;color:#f1efeb}.komo-select [aria-selected=true]{color:#f1efeb}.komo-select [aria-selected=true]::after{border-color:#bda6ef}.komo-select [aria-disabled=true]{opacity:.4;cursor:default}.komo-select small{display:block;padding:8px 8px 4px;color:#77736f;font-size:10px;font-weight:500}.komo-select [role=group]+[role=group],.komo-select [role=option]+[role=group]{margin-top:4px;border-top:1px solid #ffffff0d}@media (pointer:coarse){.komo-select{font-size:13px}.komo-select [role=option]{min-height:40px}}`;
 
 const containers = new WeakSet<HTMLElement>();
 const targets = new WeakMap<HTMLElement, HTMLElement | SVGElement>();
+/** komo's review shortcuts per container; with B and ?, a focused select leaves them to their shortcut (design-keyboard.ts). */
+const shortcuts = new WeakMap<HTMLElement, (event: KeyboardEvent) => boolean>();
 const styled = new WeakSet<Node>();
 let count = 0;
 let current: { select: HTMLSelectElement; close(): void } | undefined;
@@ -18,8 +21,9 @@ let current: { select: HTMLSelectElement; close(): void } | undefined;
  * Replace the system popup of every select inside `container`, now and later.
  * Called on each render, it also closes a popup whose select was just replaced.
  */
-export function attach(container: HTMLElement, element?: HTMLElement | SVGElement): void {
+export function attach(container: HTMLElement, element?: HTMLElement | SVGElement, reserved?: (event: KeyboardEvent) => boolean): void {
   if (element) targets.set(container, element);
+  if (reserved) shortcuts.set(container, reserved);
   if (current && !current.select.isConnected) current.close();
   // Style the root the panel is in now; a container rendered detached gets it on a later call.
   const root = container.getRootNode();
@@ -63,9 +67,12 @@ export function attach(container: HTMLElement, element?: HTMLElement | SVGElemen
   container.addEventListener("keydown", (event) => {
     const select = target(event);
     if (!select || current?.select === select || event.ctrlKey || event.metaKey) return;
-    if (!["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) return;
+    // A letter opens the list on its first match, instead of the select changing unseen.
+    const letter = event.key.length === 1 && event.key !== " " && !event.altKey;
+    if (letter && (/^[b?]$/i.test(event.key) || shortcuts.get(container)?.(event))) return;
+    if (!letter && !["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) return;
     event.preventDefault();
-    open(select, targets.get(container));
+    open(select, targets.get(container), letter ? event.key : "");
   }, true);
 }
 
@@ -82,7 +89,7 @@ function toggle(select: HTMLSelectElement, element?: HTMLElement | SVGElement) {
 }
 
 
-function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): void {
+function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement, letter = ""): void {
   current?.close();
   // Only presses made on the open list count as drags, so an assistive click is never one.
   press = undefined;
@@ -102,6 +109,8 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
     if (option.title) node.title = option.title;
     const label = document.createElement("span");
     label.textContent = option.label;
+    // An option styled with its own face or weight shows as a sample.
+    label.style.cssText = option.style.cssText;
     node.append(label);
     parent.append(node);
     items.push({ node, option });
@@ -135,11 +144,11 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
       restorePreview();
       const { value, selected } = items[index].option;
       // A style select previews on the element; any other (a component prop) hears komo-preview,
-      // its value while an option is active and null once it is not.
-      if (!selected && element && property) undoPreview = previewStyle(element, property, value);
-      else if (!selected) {
-        select.dispatchEvent(new CustomEvent("komo-preview", { detail: value }));
-        undoPreview = () => select.dispatchEvent(new CustomEvent("komo-preview", { detail: null }));
+      // its value while an option is active and null once it is not. komo drives each step, so
+      // the element's own transitions hold still until the host has rendered it.
+      if (!selected) {
+        const preview = (detail: string | null) => select.dispatchEvent(new CustomEvent("komo-preview", { detail }));
+        undoPreview = stillPreview(element, () => element && property ? previewStyle(element, property, value) : (preview(value), () => preview(null)));
       }
     }
     items[active]?.node.removeAttribute("data-active");
@@ -179,6 +188,15 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
   current = { select, close };
   let typed = "";
   let typedAt = 0;
+  // Type-ahead: repeat a letter to cycle, or type a prefix within a second.
+  const ahead = (key: string, at: number) => {
+    typed = at - typedAt < 1000 ? typed + key.toLowerCase() : key.toLowerCase();
+    typedAt = at;
+    const start = Math.max(0, enabled.indexOf(active) + (typed[1] ? 0 : 1));
+    const order = [...enabled.slice(start), ...enabled.slice(0, start)];
+    const match = order.find((index) => items[index].option.label.toLowerCase().startsWith(typed));
+    if (match !== undefined) activate(match);
+  };
   addEventListener("keydown", (event) => {
     if (!select.isConnected || event.composedPath()[0] !== select) return close();
     const key = event.key;
@@ -189,15 +207,9 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
     else if (key === "End" || key === "PageDown") activate(enabled[enabled.length - 1]);
     else if (key === "Escape") close();
     else if (key === "Enter" || key === " " && !typed) choose(active);
-    else if (key.length === 1) {
-      // Type-ahead: repeat a letter to cycle, or type a prefix within a second.
-      typed = event.timeStamp - typedAt < 1000 ? typed + key.toLowerCase() : key.toLowerCase();
-      typedAt = event.timeStamp;
-      const start = Math.max(0, enabled.indexOf(active) + (typed[1] ? 0 : 1));
-      const order = [...enabled.slice(start), ...enabled.slice(0, start)];
-      const match = order.find((index) => items[index].option.label.toLowerCase().startsWith(typed));
-      if (match !== undefined) activate(match);
-    } else return;
+    else if (key.length === 1) ahead(key, event.timeStamp);
+    // ← and → would change a native select's value on some platforms; the open list owns them.
+    else if (key !== "ArrowLeft" && key !== "ArrowRight") return;
     event.preventDefault();
     event.stopImmediatePropagation();
   }, { capture: true, signal });
@@ -206,7 +218,13 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
     if (!path.includes(list) && !path.includes(select)) close();
   }, { capture: true, signal });
   // Scroll events stay inside komo's shadow root, so the panel's own scrolling is heard there.
-  const scrolled = (event: Event) => { if (event.target !== list) close(); };
+  // Scrolling that moves the select closes its list. A scroll that brought the select into view
+  // before the list opened (focusing it, or the panel keeping its place) arrives later; it is kept.
+  let at: DOMRect | undefined;
+  const scrolled = (event: Event) => {
+    const now = select.getBoundingClientRect();
+    if (event.target !== list && (!at || Math.abs(now.top - at.top) + Math.abs(now.left - at.left) > 1)) close();
+  };
   addEventListener("scroll", scrolled, { capture: true, signal });
   select.getRootNode().addEventListener("scroll", scrolled, { capture: true, signal });
   addEventListener("resize", close, { signal });
@@ -244,10 +262,10 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
   select.setAttribute("aria-expanded", "true");
   select.setAttribute("aria-controls", id);
   // A select laid over a small icon anchors to its whole field instead.
+  at = select.getBoundingClientRect();
   const anchor = (select.offsetWidth < 60 ? host : select).getBoundingClientRect();
-  const box = popupBounds(host);
-  // As wide as the trigger, or its longest option, within the panel.
-  const width = Math.min(Math.max(anchor.width, list.offsetWidth + 2, 120), box.right - box.left - 8);
+  // As wide as the trigger, or its longest option and the check column, within the viewport.
+  const width = Math.min(Math.max(anchor.width, list.offsetWidth + 2, 120), innerWidth - 16);
   const below = innerHeight - anchor.bottom - 8;
   const above = anchor.top - 8;
   const height = list.scrollHeight;
@@ -256,9 +274,12 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
   const shown = Math.min(height, 240, room);
   list.style.width = `${width}px`;
   list.style.maxHeight = `${Math.min(240, room)}px`;
-  list.style.left = `${Math.max(box.left + 4, Math.min(anchor.left, box.right - width - 4))}px`;
+  list.style.left = `${Math.max(8, Math.min(anchor.left, innerWidth - width - 8))}px`;
   list.style.top = `${up ? anchor.top - shown - 4 : anchor.bottom + 4}px`;
   list.toggleAttribute("data-up", up);
+  // Only the viewport cap may shorten a label; then the row names it in full.
+  for (const { node, option } of items) if (!node.title && node.firstElementChild!.scrollWidth > node.firstElementChild!.clientWidth) node.title = option.label;
   activate(items.findIndex((item) => item.option.selected && !item.option.disabled), false);
   if (active < 0) step(0);
+  if (letter) ahead(letter, performance.now());
 }

@@ -4,8 +4,9 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium, type Browser } from "playwright-core";
+import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -55,8 +56,27 @@ afterAll(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
+const handle = (page: Page, name: string) => page.locator(`.design-geometry__handle[data-handle=${name}]`);
+/** Wake the canvas (panel clicks leave it undecorated), then drag a handle by a screen delta. */
+async function drag(page: Page, name: string, dx: number, dy: number, cancel = false) {
+  await page.locator('#target').hover();
+  await handle(page, name).waitFor({ state: 'visible' });
+  const box = (await handle(page, name).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy, { steps: 5 });
+  if (cancel) await page.keyboard.press('Escape');
+  await page.mouse.up();
+}
+/** Ctrl + arrow presses on the focused selection, each a committed resize step. */
+async function keys(page: Page, ...presses: string[]) {
+  await page.locator('#target').hover();
+  await page.locator('.design-geometry__frame').focus();
+  for (const press of presses) await page.keyboard.press(press);
+}
+
 describe.skipIf(!chrome)('experimental geometry', () => {
-  it.each(['normal', 'frame', 'frame-scaled', 'narrow'])('native move, resize, cancel, grouped undo, comparison, Browse and reset: %s', async mode => {
+  it.each(['normal', 'frame', 'frame-scaled', 'narrow'])('handle resize, cancel, undo, keyboard, comparison, Browse and reset: %s', async mode => {
     const page = await browser.newPage({ viewport: { width: mode === 'narrow' ? 500 : 1280, height: 900 }, reducedMotion: 'reduce' });
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -64,59 +84,38 @@ describe.skipIf(!chrome)('experimental geometry', () => {
     try {
       await page.goto(`${origin}/?${mode}`);
       await page.waitForFunction(() => !!(window as any).komo);
-      await page.keyboard.press('d');
+      await openDesign(page);
       await page.locator('#target').click();
-      const move = page.getByRole('button', { name: 'Move', exact: true });
-      await move.waitFor({ state: 'visible' });
+      await handle(page, 'se').waitFor({ state: 'visible' });
       const target = page.locator('#target');
       const baseline = await target.getAttribute('style');
       const before = await target.boundingBox();
-      const sibling = await page.locator('#next').boundingBox();
-      const drag = async (handle: ReturnType<typeof page.locator>, dx: number, dy: number, cancel = false) => {
-        const box = await handle.boundingBox();
-        expect(box).not.toBeNull();
-        await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
-        await page.mouse.down();
-        await page.mouse.move(box!.x + box!.width / 2 + dx, box!.y + box!.height / 2 + dy, { steps: 5 });
-        if (cancel) await page.keyboard.press('Escape');
-        await page.mouse.up();
-      };
-      await drag(move, 33, 23, true);
+      await drag(page, 'se', 33, 23, true);
       expect(await target.getAttribute('style')).toBe(baseline);
-      await drag(move, 33, 23);
-      let moved = await target.boundingBox();
-      expect(moved!.x - before!.x).toBeCloseTo(33, 0);
-      expect(moved!.y - before!.y).toBeCloseTo(23, 0);
-      expect((await page.locator('#next').boundingBox())!.y).toBe(sibling!.y);
-      const movedStyle = await target.getAttribute('style');
-      await drag(page.getByRole('button', { name: 'Resize width and height', exact: true }), 44, 35);
-      expect((await target.boundingBox())!.width - moved!.width).toBeCloseTo(44, 0);
-      expect((await target.boundingBox())!.height - moved!.height).toBeCloseTo(35, 0);
+      await drag(page, 'se', 44, 35);
+      const sized = (await target.boundingBox())!;
+      expect(sized.x).toBeCloseTo(before!.x, 0);
+      expect(sized.width - before!.width).toBeCloseTo(44, 0);
+      expect(sized.height - before!.height).toBeCloseTo(35, 0);
+      const sizedStyle = await target.getAttribute('style');
+      await drag(page, 'e', 20, 0);
+      expect((await target.boundingBox())!.width - sized.width).toBeCloseTo(20, 0);
       await page.getByRole('button', { name: 'Undo', exact: true }).click();
-      expect(await target.getAttribute('style')).toBe(movedStyle);
-      await target.hover();
-      await move.focus();
-      await page.keyboard.press('Enter');
-      await page.keyboard.press('ArrowRight');
-      await page.keyboard.press('ArrowDown');
-      await page.keyboard.press('Escape');
-      expect(await target.getAttribute('style')).toBe(movedStyle);
-      await page.keyboard.press('Enter');
-      await page.keyboard.press('ArrowRight');
-      await page.keyboard.press('Enter');
-      expect((await target.boundingBox())!.x).toBeGreaterThan(moved!.x);
+      expect(await target.getAttribute('style')).toBe(sizedStyle);
+      await keys(page, 'Control+ArrowRight');
+      expect((await target.boundingBox())!.width).toBeGreaterThan(sized.width);
       await page.getByRole('button', { name: 'Undo', exact: true }).click();
-      expect(await target.getAttribute('style')).toBe(movedStyle);
+      expect(await target.getAttribute('style')).toBe(sizedStyle);
       await page.getByRole('button', { name: 'Before', exact: true }).click();
       expect(await target.getAttribute('style')).toBe(baseline);
       await page.getByRole('button', { name: 'After', exact: true }).click();
-      expect(await target.getAttribute('style')).toBe(movedStyle);
+      expect(await target.getAttribute('style')).toBe(sizedStyle);
       await page.keyboard.press('d');
       expect(await target.getAttribute('style')).toBe(baseline);
-      await page.keyboard.press('d');
-      expect(await target.getAttribute('style')).toBe(movedStyle);
+      await openDesign(page);
+      expect(await target.getAttribute('style')).toBe(sizedStyle);
       await target.hover();
-      await move.waitFor({ state: 'visible' });
+      await handle(page, 'se').waitFor({ state: 'visible' });
       await page.screenshot({ path: join(directory, `geometry-${mode}.png`) });
       await page.getByRole('button', { name: 'Reset', exact: true }).click();
       expect(await target.getAttribute('style')).toBe(baseline);
@@ -133,7 +132,7 @@ describe.skipIf(!chrome)('experimental geometry', () => {
     try {
       await page.goto(`${origin}/?off`);
       await page.waitForFunction(() => !!(window as any).komo);
-      await page.keyboard.press('d');
+      await openDesign(page);
       await page.locator('#target').click();
       await page.locator('.design-inspector__target').waitFor();
       expect(await page.locator('.design-geometry').count()).toBe(0);
@@ -153,26 +152,35 @@ describe.skipIf(!chrome)('geometry ownership and guards', () => {
       const target = page.locator('#target');
       await target.evaluate(node => node.setAttribute('style', 'transform:scale(1.2,1.1);translate:5% 8px !important;transition:opacity 2s linear !important'));
       const baseline = await target.getAttribute('style');
-      await page.keyboard.press('d');
+      await openDesign(page);
       await target.click();
-      const move = page.getByRole('button', { name: 'Move', exact: true });
-      await move.waitFor();
-      await move.focus(); await page.keyboard.press('Enter'); await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter');
+      await keys(page, 'Control+ArrowRight');
       const prior = await target.getAttribute('style');
-      const rect = await target.boundingBox();
-      const box = await move.boundingBox();
-      await page.mouse.move(box!.x + 10, box!.y + 10); await page.mouse.down();
-      await page.mouse.move(box!.x + 43, box!.y + 33);
-      const moved = await target.boundingBox();
-      expect(moved!.x - rect!.x).toBeCloseTo(33, 0);
-      expect(moved!.y - rect!.y).toBeCloseTo(23, 0);
-      await page.mouse.wheel(0, 40); await page.waitForTimeout(100);
-      expect((await target.boundingBox())!.y).toBeCloseTo(moved!.y, 0);
+      const rect = (await target.boundingBox())!;
+      const box = (await handle(page, 'se').boundingBox())!;
+      await page.mouse.move(box.x + 8, box.y + 8); await page.mouse.down();
+      await page.mouse.move(box.x + 41, box.y + 31);
+      const sized = (await target.boundingBox())!;
+      expect(sized.width - rect.width).toBeCloseTo(33, 0);
+      expect(sized.height - rect.height).toBeCloseTo(23, 0);
+      // Scrolling under a held handle keeps the dragged edge under the pointer.
+      // The wheel resolves before Chrome scrolls; wait for the page's scroll event, which
+      // runs after komo's own scroll listener has moved the held edge.
+      await page.evaluate(() => { (window as any).wheeled = new Promise<void>(resolve => {
+        const done = () => { if (scrollY < 40) return; removeEventListener('scroll', done, true); resolve(); };
+        addEventListener('scroll', done, true);
+      }); });
+      await page.mouse.wheel(0, 40);
+      await page.evaluate(() => (window as any).wheeled);
+      const scrolled = (await target.boundingBox())!;
+      // The host's centred scale drifts the box a little as it grows; it no longer scrolls away.
+      expect(Math.abs(scrolled.y + scrolled.height - (sized.y + sized.height))).toBeLessThan(3);
+      expect(scrolled.height - sized.height).toBeGreaterThan(30);
       await page.keyboard.press('Escape'); await page.mouse.up();
       expect(await target.getAttribute('style')).toBe(prior);
       await page.getByRole('button', { name: 'Undo', exact: true }).click();
       expect(await target.getAttribute('style')).toBe(baseline);
-      await target.hover(); await move.focus(); await page.keyboard.press('Enter'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+      await keys(page, 'Control+ArrowDown');
       await target.evaluate(node => { (window as any).oldGeometryTarget = node; const replacement = node.cloneNode(true) as HTMLElement; replacement.removeAttribute('style'); node.replaceWith(replacement); });
       await page.waitForTimeout(60);
       expect(await page.locator('.design-inspector__target').textContent()).toBe('Select an element');
@@ -182,38 +190,38 @@ describe.skipIf(!chrome)('geometry ownership and guards', () => {
       expect(await target.getAttribute('style')).toBeNull();
     } finally { await page.close(); }
   });
-  it.each(['rotate(5deg)', 'skewX(5deg)', 'rotateY(10deg)', 'scale(-1,1)'])('explains unsupported transform %s without changing host', async transform => {
+  it.each(['rotate(5deg)', 'skewX(5deg)', 'rotateY(10deg)', 'scale(-1,1)'])('explains unsupported transform %s in the panel without changing host', async transform => {
     const page = await browser.newPage();
     page.setDefaultTimeout(5000);
     try {
       await page.goto(origin); await page.waitForFunction(() => !!(window as any).komo);
       await page.locator('#target').evaluate((node, value) => (node as HTMLElement).style.transform = value, transform);
       const baseline = await page.locator('#target').getAttribute('style');
-      await page.keyboard.press('d'); await page.locator('#target').click();
-      await page.locator('.design-geometry p').waitFor();
-      expect(await page.locator('.design-geometry p').textContent()).toBe("Rotated, skewed, 3D or mirrored boxes can't be previewed.");
-      expect(await page.getByRole('button', { name: 'Move', exact: true }).isVisible()).toBe(false);
+      await openDesign(page); await page.locator('#target').click();
+      const reason = page.locator('.design-inspector .design-geometry-note p');
+      await reason.waitFor();
+      expect(await reason.textContent()).toBe("Rotated, skewed, 3D or mirrored boxes can't be previewed.");
+      expect(await page.locator('.design-geometry__handle:visible').count()).toBe(0);
+      // The box can still move between elements, so its outline stays, without resize handles.
+      expect(await page.locator('.design-geometry__frame').isVisible()).toBe(true);
       expect(await page.locator('#target').getAttribute('style')).toBe(baseline);
     } finally { await page.close(); }
   });
 });
 
 describe.skipIf(!chrome)('geometry proposal handoff', () => {
-  it('transfers move and both dimensions into a comment and cancels the draft exactly', async () => {
+  it('transfers both dimensions into a comment and cancels the draft exactly', async () => {
     const page = await browser.newPage({ reducedMotion: 'reduce' });
     page.setDefaultTimeout(5000);
     try {
       await page.goto(origin); await page.waitForFunction(() => !!(window as any).komo);
-      await page.keyboard.press('d'); await page.locator('#target').click();
-      for (const name of ['Move', 'Resize width and height']) {
-        const handle = page.getByRole('button', { name, exact: true });
-        await handle.waitFor(); await handle.focus();
-        await page.keyboard.press('Enter'); await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
-      }
+      await openDesign(page); await page.locator('#target').click();
+      await keys(page, 'Control+ArrowRight', 'Control+ArrowDown');
       await page.locator('.design-inspector__actions').getByRole('button', { name: 'Comment', exact: true }).click();
       await page.waitForSelector('.draft-proposal .design-toggle');
       const proposal = await page.locator('.draft-proposal').textContent();
-      expect(proposal).toContain('translate'); expect(proposal).toContain('width'); expect(proposal).toContain('height');
+      expect(proposal).toContain('width'); expect(proposal).toContain('height');
+      expect(proposal).not.toContain('translate');
       await page.keyboard.press('Escape');
       expect(await page.locator('#target').getAttribute('style')).toBeNull();
       await page.evaluate(() => (window as any).komo.destroy());
@@ -228,19 +236,17 @@ describe.skipIf(!chrome)('geometry transaction boundaries', () => {
     page.setDefaultTimeout(5000);
     try {
       await page.goto(origin); await page.waitForFunction(() => !!(window as any).komo);
-      await page.keyboard.press('d'); await page.locator('#target').click();
-      const handle = page.getByRole('button', { name: 'Resize width and height', exact: true });
-      await handle.waitFor();
-      const box = await handle.boundingBox();
-      await page.mouse.move(box!.x + 10, box!.y + 10); await page.mouse.down();
-      await page.mouse.move(box!.x + 40, box!.y + 40);
-      await handle.dispatchEvent('pointercancel', { pointerId: 1 });
+      await openDesign(page); await page.locator('#target').click();
+      const corner = handle(page, 'se');
+      await corner.waitFor();
+      const box = (await corner.boundingBox())!;
+      await page.mouse.move(box.x + 8, box.y + 8); await page.mouse.down();
+      await page.mouse.move(box.x + 40, box.y + 40);
+      await corner.dispatchEvent('pointercancel', { pointerId: 1 });
       await page.mouse.up();
       expect(await page.locator('#target').getAttribute('style')).toBeNull();
       expect(await page.locator('.design-inspector [aria-label=Undo]').isEnabled()).toBe(false);
-      await handle.focus(); await page.keyboard.press('Enter');
-      for (let i = 0; i < 25; i++) { await page.keyboard.press('Shift+ArrowLeft'); await page.keyboard.press('Shift+ArrowUp'); }
-      await page.keyboard.press('Enter');
+      await keys(page, ...Array.from({ length: 25 }, () => ['Control+Shift+ArrowLeft', 'Control+Shift+ArrowUp']).flat());
       const dimensions = await page.locator('#target').evaluate(node => [(node as HTMLElement).style.width, (node as HTMLElement).style.height]);
       expect(dimensions).toEqual(['24px', '24px']);
       await page.getByRole('button', { name: 'Reset', exact: true }).click();

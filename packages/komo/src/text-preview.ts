@@ -16,14 +16,14 @@ export function snapshotText(element: HTMLElement): TextSnapshot {
 
 /** Replace only within one text node, preserving host markup and event owners. */
 export function insertText(element: HTMLElement, range: StaticRange, text: string): Range | null {
-  const node = range.startContainer === element && element.childNodes.length === 1 ? element.firstChild : range.startContainer;
-  if (!(node instanceof Text) || range.startContainer !== range.endContainer || !element.contains(node) || node.parentElement?.closest(lockedText)) return null;
+  const node = (range.startContainer === element && element.childNodes.length === 1 ? element.firstChild : range.startContainer) as Text | null;
+  if (node?.nodeType !== Node.TEXT_NODE || range.startContainer !== range.endContainer || !element.contains(node) || node.parentElement?.closest(lockedText)) return null;
   const offset = range.startContainer === element ? (range.startOffset ? node.length : 0) : range.startOffset;
   const end = range.endContainer === element ? (range.endOffset ? node.length : 0) : range.endOffset;
   const removed = end - offset;
   const insertion = text.replace(/\r\n?/g, "\n").slice(0, Math.max(0, 500 - (element.textContent ?? "").length + removed));
   node.replaceData(offset, removed, insertion);
-  const caret = document.createRange();
+  const caret = element.ownerDocument.createRange();
   caret.setStart(node, offset + insertion.length);
   caret.collapse(true);
   return caret;
@@ -47,7 +47,7 @@ export function holdText(element: HTMLElement, nodes: TextSnapshot, onLost?: () 
     observer.disconnect();
     observer.observe(element, { childList: true, characterData: true, subtree: true });
     // An owner can disappear without changing its subtree; follow attachment through shadow hosts too.
-    for (let parent: Node | null = element.parentNode; parent; parent = parent.parentNode ?? (parent instanceof ShadowRoot ? parent.host : null))
+    for (let parent: Node | null = element.parentNode; parent; parent = parent.parentNode ?? ((parent as ShadowRoot).host ?? null))
       observer.observe(parent, { childList: true });
   };
   watch();
@@ -92,6 +92,7 @@ export interface TextPreviewHistory {
   restoreAll(): void;
   showBefore(on: boolean, retain?: boolean): void;
   undo(): HTMLElement | null;
+  redo(): HTMLElement | null;
   pause(element: HTMLElement): void;
   resume(element: HTMLElement): void;
 }
@@ -99,6 +100,8 @@ export interface TextPreviewHistory {
 export function createTextPreviewHistory(): TextPreviewHistory {
   const originals = new Map<HTMLElement, { text: string; nodes: TextSnapshot; whitespace: string }>();
   const edits: InlineTextEditResult[] = [];
+  // Undone edits with the text they showed and their element's original, for redo.
+  const undone: Array<[InlineTextEditResult, TextSnapshot, { text: string; nodes: TextSnapshot; whitespace: string } | undefined]> = [];
   const previews = new Map<HTMLElement, () => void>();
   const current = new Map<HTMLElement, TextSnapshot>();
   const pause = (element: HTMLElement) => { previews.get(element)?.(); previews.delete(element); };
@@ -109,6 +112,7 @@ export function createTextPreviewHistory(): TextPreviewHistory {
     resume(element) { const nodes = current.get(element); if (nodes) show(element, nodes); },
     record(result) {
       if (result.reactProp || result.before === result.after) return;
+      undone.length = 0;
       if (!originals.has(result.element)) originals.set(result.element, { text: result.before, nodes: result.nodes ?? snapshotText(result.element), whitespace: getComputedStyle(result.element).whiteSpace || "normal" });
       const multiline = current.get(result.element)?.multiline;
       if (result.nodes) result.nodes.multiline = multiline;
@@ -129,6 +133,7 @@ export function createTextPreviewHistory(): TextPreviewHistory {
       clear(element);
       for (let index = edits.length - 1; index >= 0; index--)
         if (edits[index].element === element) edits.splice(index, 1);
+      undone.length = 0;
     },
     proposal(element) {
       const before = originals.get(element)?.text;
@@ -142,7 +147,7 @@ export function createTextPreviewHistory(): TextPreviewHistory {
       for (const [element, { nodes }] of originals) restoreText(nodes, element);
       originals.clear();
       current.clear();
-      edits.length = 0;
+      edits.length = undone.length = 0;
     },
     showBefore(on, retain = true) {
       for (const [element, original] of originals) {
@@ -153,6 +158,7 @@ export function createTextPreviewHistory(): TextPreviewHistory {
     undo() {
       const edit = edits.pop();
       if (!edit) return null;
+      undone.push([edit, current.get(edit.element) ?? snapshotText(edit.element), originals.get(edit.element)]);
       pause(edit.element);
       restoreText(edit.nodes ?? [], edit.element);
       if (originals.get(edit.element)?.text === edit.before) clear(edit.element);
@@ -162,6 +168,15 @@ export function createTextPreviewHistory(): TextPreviewHistory {
         current.set(edit.element, nodes);
         show(edit.element, nodes);
       }
+      return edit.element;
+    },
+    redo() {
+      const [edit, nodes, original] = undone.pop() ?? [];
+      if (!edit || !nodes) return null;
+      if (original && !originals.has(edit.element)) originals.set(edit.element, original);
+      edits.push(edit);
+      current.set(edit.element, nodes);
+      show(edit.element, nodes);
       return edit.element;
     },
   };

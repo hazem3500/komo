@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // The Tokens view in real Chrome: page-wide edits through discoverCssTokens'
 // injected stylesheet, per theme option, Before/After, Undo, Reset, a page
@@ -78,22 +79,15 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     const row = (name: string) => page.locator(".design-token-row").filter({ has: page.locator("b").getByText(name, { exact: true }) });
     const bar = page.locator(".design-token-bar");
     const count = bar.locator(".design-inspector__count");
-    // Colors type into the live color editor and keep when the popup closes; lengths use the
-    // typed number field, then Apply.
+    // Every Custom editor applies live: Enter keeps the value and the popup takes it when it closes.
     const custom = async (name: string, value: string) => {
       await row(name).locator("button").first().click();
       const length = /^([\d.]+)px$/.exec(value);
-      if (length) {
-        await page.locator('.komo-custom input[type="number"]').first().fill(length[1]);
-        await page.getByRole("button", { name: "Apply custom", exact: true }).click();
-        await page.locator(".komo-custom").waitFor({ state: "detached" });
-      } else {
-        const input = page.locator('.komo-color input[aria-label="Hex"]');
-        await input.fill(value.replace("#", ""));
-        await input.press("Enter");
-        await row(name).locator("button").first().click();
-        await page.locator(".komo-color").waitFor({ state: "detached" });
-      }
+      const input = length ? page.locator(".komo-custom .komo-typed__field input").first() : page.locator('.komo-color input[aria-label="Hex"]');
+      await input.fill(length ? length[1] : value.replace("#", ""));
+      await input.press("Enter");
+      await row(name).locator("button").first().click();
+      await page.locator(".komo-tokens").waitFor({ state: "detached" });
     };
     // The Tokens header shows one light/dark switch: one click flips it.
     const theme = async (label: string) => {
@@ -102,7 +96,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
       await expect.poll(() => toggle.getAttribute("aria-label")).toBe(`Theme: ${label}`);
     };
 
-    await page.keyboard.press("d");
+    await openDesign(page);
     const open = page.getByRole("button", { name: "Edit tokens", exact: true });
     await open.waitFor();
     await page.screenshot({ path: join(tmpdir(), `komo-token-page-${mode}-empty.png`) });
@@ -121,9 +115,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     expect(await row("surface").getAttribute("data-changed")).toBe("");
     expect(await count.textContent()).toBe("1 change");
 
-    // An alias is repointed from the Tokens tab.
+    // An alias is repointed from the token list, with Custom… under it; there are no tabs.
     await row("text").locator("button").first().click();
-    expect(await page.locator(".komo-tokens__tabs").getByRole("button", { name: "Tokens", exact: true }).getAttribute("aria-pressed")).toBe("true");
+    expect(await page.locator(".komo-tokens__tabs").count()).toBe(0);
+    expect(await page.locator(".komo-tokens__more").isVisible()).toBe(true);
     await page.locator('.komo-tokens [role="option"]').filter({ hasText: "gray-700" }).click();
     expect((await look()).color).toBe("rgb(68, 68, 68)");
     expect(await row("text").locator("i").textContent()).toBe("gray-700");
@@ -212,7 +207,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
 
     // Destroy leaves the page exactly as it was.
     await page.keyboard.press("Escape");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.getByRole("button", { name: "Edit tokens", exact: true }).click();
     await custom("surface", "#00ff00");
     expect((await look()).background).toBe("rgb(0, 255, 0)");
@@ -230,7 +225,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?mode=${mode}`);
     await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.getByRole("button", { name: "Edit tokens", exact: true }).click();
     const rows = page.locator(".design-token-row");
     await rows.nth(2).waitFor();
