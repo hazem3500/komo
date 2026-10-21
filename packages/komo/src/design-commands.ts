@@ -22,9 +22,16 @@ export function designCommands(mac = isMac()) {
     command("Child element", "ArrowDown", canvas, { alt: true }),
     command("Inspect focused element", "Enter", canvas),
     command("Exit Design mode", "Escape", canvas),
-    // Ctrl+arrows switch spaces on macOS, so ⌘ there; Alt stays parent and child.
+    // M focuses the selection, so Alt+arrows there move it while Alt+arrows on the canvas keep
+    // selecting parent and child. Ctrl+arrows switch spaces on macOS, so ⌘ resizes there.
+    command("Focus selection to move or resize", "M", canvas),
+    command("Move before previous sibling", "ArrowUp", geometry, { alt: true }),
+    command("Move after next sibling", "ArrowDown", geometry, { alt: true }),
+    command("Move out, after its parent", "ArrowUp", geometry, { alt: true, shift: true }),
+    command("Move into previous sibling", "ArrowDown", geometry, { alt: true, shift: true }),
     command("Resize width (Shift: 10px)", "ArrowRight", geometry, mac ? { meta: true } : { ctrl: true }),
     command("Resize height (Shift: 10px)", "ArrowDown", geometry, mac ? { meta: true } : { ctrl: true }),
+    command("Back to the canvas", "Escape", geometry),
     command("Commit text", "Enter", text),
     command("New line", "Enter", text, { shift: true }),
     command("Cancel text edit", "Escape", text),
