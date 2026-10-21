@@ -303,6 +303,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
       trigger,
       tokens: targets,
       property: propertyOf(token),
+      title: picker.tokenLabel(token),
       current: current ? current.alias : token.alias,
       onPreview: (target) => edits.preview(change(target.value, target.path)),
       onSelect: (target) => commit(change(target.value, target.path)),

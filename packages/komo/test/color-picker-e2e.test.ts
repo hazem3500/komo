@@ -104,8 +104,6 @@ async function picker(tab: Page, property: string) {
   await field.scrollIntoViewIfNeeded();
   await settle(tab);
   await field.locator('input[type="color"]').click();
-  const custom = tab.locator(".komo-tokens__tabs button").filter({ hasText: "Custom" });
-  if (await custom.getAttribute("aria-pressed") !== "true") await custom.click();
   await tab.locator(".komo-color__area").waitFor();
   await settle(tab);
   return tab.locator(".komo-tokens");
@@ -255,7 +253,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("the color picke
     expect(box.y + box.height <= field.y || box.y >= field.y + field.height).toBe(true);
     expect(await popup.evaluate(node => node.matches(":popover-open"))).toBe(true);
     // Each part answers hit-tests over the panel beneath it.
-    expect(await popup.evaluate(node => [".komo-color__area", ".komo-color__hue", ".komo-color__alpha", ".komo-color__value", ".komo-tokens__tabs"].every(selector => {
+    expect(await popup.evaluate(node => [".komo-color__area", ".komo-color__hue", ".komo-color__alpha", ".komo-color__value", ".komo-tokens__head"].every(selector => {
       const rect = node.querySelector(selector)!.getBoundingClientRect(), root = node.getRootNode() as ShadowRoot;
       return node.contains(root.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
     }))).toBe(true);

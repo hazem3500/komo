@@ -196,7 +196,10 @@ if (report.optionalSelectMenu.gzip > 3_125)
 // 4,975: the popup opens in the top layer, follows its field, refreshes Custom when the field settles and leaves a select open inside it to its own list.
 // 5,275: color fields open a 240px popup with live commits, finish or cancel the edit on close,
 // and keep a value for hosts without live commits (4,932 -> 5,123), plus ~3%.
-if (report.optionalTokenPicker.gzip > 5_275)
+// 5,600: one popup replaces the Tokens and Custom tabs: a header, token values in each row, an
+// inline Custom value section, a restore when the pointer leaves the list, Home/End and
+// type-to-filter (5,222 -> 5,440), plus ~3%.
+if (report.optionalTokenPicker.gzip > 5_600)
   throw new Error("komo's token picker chunk exceeds its gzip budget.");
 // The Tokens view (every token with nothing selected, per-theme edits, its footer and page
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and

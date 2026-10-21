@@ -86,8 +86,10 @@ const regions = (popup: Locator) => popup.evaluate(node => {
   center("channel label", ".komo-color__channels span");
   center("document colors heading", ".komo-color__swatches small");
   center("swatch", ".komo-color__swatches button");
-  const tabs = node.querySelector(".komo-tokens__tabs")?.getBoundingClientRect();
-  if (tabs) points.push(["tabs bar padding", tabs.left + 1, tabs.top + tabs.height / 2]);
+  const head = node.querySelector(".komo-tokens__head")?.getBoundingClientRect();
+  if (head) points.push(["header padding", head.left + 1, head.top + head.height / 2]);
+  const label = node.querySelector(".komo-tokens__label:not([hidden])")?.getBoundingClientRect();
+  if (label) points.push(["Custom value heading", label.left + label.width / 2, label.top + label.height / 2]);
   points.push(["top left padding", box.left + 7, box.top + 7], ["bottom right padding", box.right - 7, box.bottom - 7], ["left edge", box.left + 3, box.top + box.height / 2]);
   const row = node.querySelector(".komo-color__row")?.getBoundingClientRect(), value = node.querySelector(".komo-color__value")?.getBoundingClientRect();
   if (row && value) points.push(["gap between sliders and value row", box.left + box.width / 2, (row.bottom + value.top) / 2]);
@@ -124,8 +126,6 @@ describe.skipIf(!chrome).each(["Fit", "100%"].flatMap(zoom => ["css-variables", 
       toggle = field.locator("select[data-picker]");
       await toggle.click();
       await tab.locator(".komo-tokens").waitFor();
-      const custom = tab.locator(".komo-tokens__tabs button").filter({ hasText: "Custom" });
-      if (await custom.count() && await custom.getAttribute("aria-pressed") !== "true") await custom.click();
     }
     const popup = tab.locator(".komo-tokens");
     await popup.locator(".komo-color__swatches button").first().waitFor();
@@ -163,10 +163,6 @@ describe.skipIf(!chrome).each(["Fit", "100%"].flatMap(zoom => ["css-variables", 
     await expect.poll(() => popup.count()).toBe(0);
     await toggle.click();
     await popup.waitFor();
-    if (where !== "Tokens view row") {
-      const custom = tab.locator(".komo-tokens__tabs button").filter({ hasText: "Custom" });
-      if (await custom.getAttribute("aria-pressed") !== "true") await custom.click();
-    }
     await popup.locator(".komo-color__area").waitFor();
     await toggle.click();
     await expect.poll(() => popup.count()).toBe(0);

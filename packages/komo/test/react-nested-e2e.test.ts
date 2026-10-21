@@ -106,7 +106,6 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await field.locator("select[data-picker]").click();
     const popup = page.locator(".komo-tokens");
     await popup.waitFor();
-    await popup.getByRole("button", { name: "Tokens", exact: true }).click();
     const search = popup.getByRole("combobox", { name: "Search tokens for color", exact: true });
     await search.fill("Primary");
     await popup.evaluate(node => (window as any).popupQA.tokens = node);
@@ -125,7 +124,6 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     expect(await target.getAttribute("class")).toBe(baseline.className);
     expect(await target.getAttribute("style")).toBe(baseline.style);
     await field.locator("select[data-picker]").click();
-    await popup.getByRole("button", { name: "Tokens", exact: true }).click();
     await popup.getByRole("option").filter({ hasText: "Primary" }).click();
     expect(await target.evaluate(node => getComputedStyle(node).color)).toBe("rgb(180, 35, 24)");
     await page.getByRole("button", { name: "Undo", exact: true }).click();

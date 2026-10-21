@@ -137,7 +137,8 @@ it("edits a typography token as family, weight, size and line height, with or wi
   expect(fontParts("calc(1rem + 1px) serif")).toBeUndefined();
   expect(fontValue({ style: "", weight: "700", size: "1rem", lineHeight: "", family: "serif" })).toBe("700 1rem serif");
   const e = editor("font", "500 0.875rem/1.43", undefined, [{ path: "font.body", type: "fontFamily", value: '"Body Face", sans-serif', label: "Body" }]);
-  expect(e.box.querySelector(".komo-typed__title")!.textContent).toBe("Typography");
+  // The popup header names the editor, so the editor itself has no title.
+  expect(e.box.querySelector("strong")).toBeNull();
   expect(e.box.querySelector(".komo-typed__hint")).toBeNull();
   expect(e.box.querySelector("details")!.open).toBe(false);
   expect(e.box.querySelector("summary")!.textContent).toBe("Edit as CSS");
