@@ -528,6 +528,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `sessionDomain` | `string` | Host-only | Explicit trusted parent domain; all sibling hosts can receive the session. Empty string disables sharing. |
 | `sessionEndpoint` | `string` | `endpoint` | Canonical API identity for trusted gateways to the same service; never share across independent APIs. |
 | `avatar` | `(user: { id, name }) => string \| undefined` | None | Photo URL for signed-in reviewers the server has none for, such as IAP sign-in. HTTPS only; guests keep their initial. |
+| `snapshots` | `{ image?, html?, maxBytes?, redact?(element) }` | Off | Save an image and/or trimmed HTML of the commented element with each new thread. See [Comment snapshots](#comment-snapshots). |
 
 Google sign-in uses the account photo (`picture`) automatically, loaded from `lh3.googleusercontent.com`. Under a restrictive CSP, allow that host (or your `avatar` host) in `img-src`; blocked or failed photos fall back to the initial.
 
@@ -582,6 +583,28 @@ komo renders in a shadow root, so page listeners see its events as coming from k
 - **Escape.** Escape from feedback fields and controls is marked handled in the host's own window before document capture listeners run. Feedback still receives it to close its composer or menu; Radix's document handler leaves the host dialog open. This also works when feedback runs inside an iframe.
 
 Other capture-phase listeners still run. Set `isolateEvents: false` if your app needs to observe feedback events or handle Escape itself.
+
+### Comment snapshots
+
+Snapshots are off by default. Turn on each kind you want:
+
+```ts
+snapshots: {
+  image: true,
+  html: true,
+  maxBytes: 250_000,
+  redact: (element) => element.matches(".account-balance"),
+}
+```
+
+When a signed-in reviewer starts a comment, komo captures the commented element in the page, in Frame's viewport iframe when it shows the page. Capture needs a server that supports [element snapshots](#element-snapshots); guests capture only when the project allows guest snapshots. The capture code loads on demand. Each kind uploads as its own file once the thread is saved and never holds up the comment: if an upload fails, the comment still posts and komo logs a note to the console.
+
+- **`image`** is a WebP image of the element with 16px of padding, at most 1200px wide and `maxBytes` in size (250,000 by default). Quality steps down from 0.8, then the size. komo draws the element itself, with no extension or third-party library: it copies the element with its computed styles into an SVG `foreignObject` and draws that to a canvas, after `document.fonts.ready`. An image from another origin without CORS would taint the canvas, so komo saves the HTML instead, starting with a comment that says why.
+- **`html`** is the element's `outerHTML`, trimmed to about 20 KB. Scripts, styles and inline event handlers are removed, and long attribute values and text are cut short.
+- **Redaction.** Input, textarea and password values never appear in either snapshot. `redact(element)` returning true replaces that element's text with `[redacted]`.
+- **Privacy.** komo's own UI is never captured. Add `data-komo-no-snapshot` to any element to keep it out: a comment inside it captures nothing, and inside a captured element it shows as an empty box.
+
+Limits: the image shows the element at the top of its scroll position and up to 2,000px tall. It leaves out iframes, shadow DOM contents, `<use>` references to sprites outside the element, and web fonts served from another origin without CORS, which fall back to a local font. A target with more than 3,000 elements gets no image.
 
 ### CLI
 

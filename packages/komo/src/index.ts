@@ -476,6 +476,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     guests = false,
     guestResolve = false,
     apiTokens = false;
+  // The server's snapshot support from /config; older servers have none.
+  let snapshotLimits: import("./snapshot.js").SnapshotLimits | undefined;
   // The Account panel's API tokens view keeps its node (and a shown secret) until left.
   let tokenView: import("./account-tokens.js").TokenView | undefined;
   let tokenLoad: Promise<HTMLElement> | undefined;
@@ -570,6 +572,17 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     return found.length !== 1 || (anchored && found.includes(anchored)) ? (anchored ?? found[0] ?? null) : found[0];
   };
+  /**
+   * Opt-in snapshots of a new comment's target load in their own chunk, when the server
+   * supports them and for signed-in reviewers (guests only if the server allows them).
+   * `snapshot(anchor)` captures once per draft anchor and resolves to
+   * `{ image?: data URL, html?, note? }`, so the composer can show it; posting
+   * uploads it once the thread exists.
+   */
+  const snapshot = (anchor: Anchor, post?: (kind: string, body: Blob) => Promise<unknown>) =>
+    options.snapshots && snapshotLimits && api.user && (api.user.verified || snapshotLimits.guests)
+      ? import("./snapshot.js").then((module) => module.snapshotFor(anchor, resolveAnchor, options.snapshots!, snapshotLimits!, post), () => null)
+      : undefined;
   /** Short text for pins and previews; design proposals read as a summary, not raw text. */
   const commentText = (body: string) =>
     designProposal.test(body)
@@ -4775,6 +4788,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       send.disabled = pending || !input.value.trim();
       if (!input.closest<HTMLElement>(".sidebar-replies")?.hidden) resizeInput();
     });
+    // Start the target's snapshot while the reviewer writes.
+    if (!thread && draft) void snapshot(draft);
     if (proposal) {
       const card = el("div", "draft-proposal");
       card.textContent = proposal;
@@ -4866,6 +4881,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       const tags = draftTags;
       const note = draftText;
       const proposal = draftProposal;
+      const client = api;
       const item: Thread = {
         id: `pending-${crypto.randomUUID()}`,
         page: page(),
@@ -4889,6 +4905,8 @@ export function initComments(options: CommentsOptions): CommentsController {
             "POST",
             { page: item.page, anchor, body: comment.body, ...(tags.length ? { tags } : {}) },
           );
+          // Snapshots follow the saved thread and never hold up or fail the post.
+          void snapshot(anchor, (kind, body) => client.request(`threads/${result.id}/snapshot?kind=${kind}`, "POST", body, body.type));
           // The initial message ID is returned so queued edits target the persisted comment.
           const saved =
             result.commentId ??
@@ -6957,6 +6975,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       guestResolve: boolean;
       private?: boolean;
       tokens?: boolean;
+      snapshots?: import("./snapshot.js").SnapshotLimits;
     };
     // Settle a stored session before starting reads: an expired token clears
     // session-bound reads, including a config launched alongside restore.
@@ -6996,6 +7015,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     guestResolve = config.guestResolve;
     privateProject = !!config.private;
     apiTokens = config.tokens === true;
+    snapshotLimits = config.snapshots;
     // The list may already have failed with an expected anonymous 401.
     // Publish auth options before awaiting it so an open account can sign in.
     render();
