@@ -50,7 +50,7 @@ beforeAll(async () => {
       window.portalQA={styles:()=>ids.map(id=>document.getElementById(id).getAttribute('style'))};
       window.mountPortalQA=()=>initKomo({endpoint:location.origin,project:'portal-layout',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000});
       // These cases cover the unscaled in-place frame: the space beside the comments.
-      localStorage.setItem('branch-comments:frame-size:portal-layout:example/review',JSON.stringify({size:'available'}));
+      localStorage.setItem('branch-comments:frame-size:portal-layout:example/review',JSON.stringify({v:2,size:'available'}));
       window.komo=window.mountPortalQA();
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -62,7 +62,7 @@ beforeAll(async () => {
       window.clicks=[];
       for(const button of document.querySelectorAll('button'))button.addEventListener('click',()=>window.clicks.push(button.id));
       window.shellQA={styles:()=>[...document.querySelectorAll('main,#app,#nav,#sheet,body,html')].map(node=>node.getAttribute('style')),rules:()=>[...document.styleSheets].flatMap(sheet=>[...sheet.cssRules].map(rule=>rule.cssText))};
-      localStorage.setItem('branch-comments:frame-size:shell-layout:example/review',JSON.stringify({size:'available'}));
+      localStorage.setItem('branch-comments:frame-size:shell-layout:example/review',JSON.stringify({v:2,size:'available'}));
       window.komo=initKomo({endpoint:location.origin,project:'shell-layout',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "shell", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",

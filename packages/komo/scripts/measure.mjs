@@ -149,7 +149,9 @@ await writeFile(
 // filter, two-column groups, mode-first order, focus trap and its own styles) is all in its
 // on-demand chunk (+1,746 measured on 0.9.59: 219,703 -> 221,449; 222,942 on 0.9.65). Its
 // styles left the mount bundle, so initial shrinks 85 bytes. Leaves room for geometry keys (#146).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 223_200)
+// 223,200 -> 223,500: remembered Frame sizes are versioned and clamped, and only explicit choices
+// are stored (+157 in the frame-size chunk).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 223_500)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

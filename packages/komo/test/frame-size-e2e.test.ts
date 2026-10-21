@@ -246,6 +246,32 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     await page.close();
   });
 
+  it("ignores a size saved by an older version and remembers only explicit choices", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    const key = "branch-comments:frame-size:frame-size:example/review";
+    const stored = () => page.evaluate((key) => localStorage.getItem(key), key);
+    await page.goto(`${origin}/`);
+    await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({ size: [879, 848], actual: false })), key);
+    await open(page);
+    const state = await frame(page);
+    expectFitted(state, [1280, 800]);
+    expect(state.label).toBe("Desktop · 1280 × 800");
+    expect(state.scale).toBe("67%");
+    expect(state.note).toBe(false);
+    // The old entry is gone, and opening at the default stores nothing.
+    expect(await stored()).toBeNull();
+    await page.reload();
+    await open(page);
+    expect(await stored()).toBeNull();
+    await choose(page, "Tablet");
+    expect(JSON.parse((await stored())!)).toEqual({ v: 2, size: [768, 1024], actual: false });
+    // Choosing the window again forgets the entry instead of pinning the default.
+    await choose(page, "Your window");
+    expect(await stored()).toBeNull();
+    await context.close();
+  });
+
   it("resizes with edge and corner handles and arrow keys, and remembers the size per project", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await open(page);
