@@ -686,9 +686,9 @@ Without `pageRoot`, a sole existing content element with a layout box enables Fr
 
 The `@hazem3500/komo/server` export loads built ESM in Node and includes Worker handler types. Wrangler selects the original TypeScript through the `workerd` condition; keep `nodejs_compat` enabled. Package metadata is available at `@hazem3500/komo/package.json`.
 
-### Experimental page-element resize
+### Experimental page-element resize and move
 
-Resize is **off by default**. Opt in explicitly in the public configuration:
+Both are **off by default**. Opt in explicitly in the public configuration:
 
 ```ts
 initKomo({
@@ -700,10 +700,17 @@ initKomo({
 This loads geometry tools lazily in Design mode. A supported selection gets a 1px outline on its border box and Figma-style handles: four corners and four edge midpoints, 8px squares with 16px hit areas and resize cursors, centred on the outline and pushed outward where padding is thinner than half a handle, so they never cover content. Only applicable handles appear: aspect-locked boxes get corners only, and an axis pinned by equal `min-`/`max-` sizes has no handles. Boxes under 40px drop the midpoint squares; their edges still drag. Handles, outline and the readout keep their on-screen size at any Frame zoom.
 
 - **Drag** any handle. A W × H chip shows below the selection. The moving edge snaps to the parent's content edges and centre and to siblings' edges across the flow within 4px, with a thin guide; hold **Alt/Option** to resize freely. **Shift** on a corner keeps the box's proportions. Escape cancels.
-- **Keyboard:** focus the selection (Tab) and press **Ctrl+arrows** (or **⌘+arrows** on macOS, where Ctrl+arrows switch spaces) to resize from the bottom-right by one local CSS pixel, Shift for ten; snapped grid items step one track. Plain arrows and **Alt+arrows** keep their Design meaning (sibling and parent/child selection). Each step is announced politely, for example "Resized: width 241px".
+- **Keyboard:** press **M** on the canvas (or Tab) to focus the selection, then **Ctrl+arrows** (or **⌘+arrows** on macOS, where Ctrl+arrows switch spaces) to resize from the bottom-right by one local CSS pixel, Shift for ten; snapped grid items step one track. Escape returns to the canvas, where plain arrows and **Alt+arrows** keep their Design meaning (sibling and parent/child selection). Each step is announced politely, for example "Resized: width 241px".
 - Minimum dimensions are 16 CSS pixels, or the border and padding footprint when larger. Each completed gesture is one chronological Undo. The panel's Layout fields (Width, Height and the rest) show the new values as soon as a gesture commits, and again after Undo, Reset and Before/After. A field edit after a resize joins the same history; the proposal then reports the field's net value instead of the superseded resize.
 
-These are reversible runtime CSS proposals, not source or backend edits. Nothing is moved, reparented or reordered. Undo returns to the previous preview; Reset restores the host baseline, including the exact original `style` attribute. Before/After, Browse suspension and Comment transfer use the existing Design proposal lifecycle. Handles disappear while the clean editing gate is active; target the canvas again to show them. The flag does not resize comment pins or the page-preview Frame.
+**Move** changes an element's place among other elements; it is never free-form:
+
+- **Drag** the selection itself (the cursor shows `move` over it). A press only becomes a drag after 4px, so a click still selects and a double-click still edits text. While dragging, an insertion line sits between siblings along the parent's flow (stacked or side by side, including flex rows, columns and grid order), a dashed outline marks a container you would drop *into*, and a chip names the spot, for example "After Button “Month”" or "Into div#panel · position 2". The nearest valid target wins: never into text runs, `display: contents` wrappers, form or replaced elements, komo's own UI, or the element itself. Escape cancels.
+- **Keyboard**, on the focused selection: **Alt/⌥+↑** moves before the previous sibling and **Alt/⌥+↓** after the next one (← and → work too); **Alt/⌥+Shift+↑** moves out, after its parent; **Alt/⌥+Shift+↓** moves into the previous sibling as its last child. Each move is announced, for example "Moved before List item “One”".
+- **Preview without moving nodes:** the page's renderer keeps owning its DOM. komo hides the original in place (`display: none`) so the layout reflows, and inserts an inert, `aria-hidden` stand-in with the original's computed styles inlined at the destination. The stand-in follows renderer commits (text, style and sibling changes) and is removed on Before, Undo, Reset, leaving Design mode and destroy, which restore the original exactly.
+- **Limits**, each with its reason and **Select parent** in the panel: the page and app roots (`html`, `body` and its direct children), SVG shapes, table sections, and elements inside inline text runs. Table rows only move within their section and cells within a row of their table.
+
+These are reversible runtime previews, not source or backend edits. Nothing in the page is reparented or reordered. Undo returns to the previous preview; Reset restores the host baseline, including the exact original `style` attribute. Before/After, Browse suspension and Comment transfer use the existing Design proposal lifecycle. Handles disappear while the clean editing gate is active; target the canvas again to show them. The flag does not resize comment pins or the page-preview Frame.
 
 How each layout previews:
 
@@ -720,6 +727,14 @@ Layout: flex item, row
 - Resize (flex-basis) width: 260px → 240px · width overrides flex: 1 1 0% · sets flex-basis: 240px · sets flex-grow: 0
 ```
 
-The CLI reads these lines into `geometry` DesignEdit changes with `mode` (`size`, `flex-basis` or `span`), the values, `layout` and `effects`. Earlier proposals with `Move (translate)` or `Move (offset)` lines still parse and render as `translate`/`offset` changes; the current UI no longer produces free-form moves.
+A move adds a human line and the places agents need, as selectors and indexes among element children (counted from 0, without the element):
+
+```text
+- Move Button “Invite”: from Toolbar “Views” (3rd) → Sidebar (1st)
+From: #toolbar · index 2
+To: #side > nav · index 0 · inside · component SideNav
+```
+
+The hidden original's `display` is not proposed as a style change. The CLI reads these lines into `geometry` DesignEdit changes with `mode` (`size`, `flex-basis` or `span`), the values, `layout` and `effects`, and moves into `move` changes (`target`, `label`, `from` and `to` with `parent`, `index`, `position` and any `component`), telling agents to move the element's markup in source. Earlier proposals with `Move (translate)` or `Move (offset)` lines still parse and render as `translate`/`offset` changes; the current UI no longer produces free-form moves.
 
 Supported targets are HTML boxes and SVG roots in normal flow, flex or grid, or relatively, absolutely, fixed or sticky positioned, through positive axis-aligned 2D scale chains and normal, reflow or explicitly scaled Frames. Pointer deltas are converted to local CSS pixels, and scroll during pointer capture is accounted for. Only boxes that can't be previewed are excluded, each with its own reason in the panel and a **Select parent** action that picks the nearest resizable ancestor: inline text boxes, SVG shapes inside an SVG, `display: contents` or unrendered elements, table cells and rows, boxes split across lines or columns, rotated/skewed/3D/mirrored chains, and geometry animations in progress. This is deliberately not a universal layout editor.

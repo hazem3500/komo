@@ -5,6 +5,7 @@ export function designCommands(mac = /Mac|iPhone|iPad/.test(navigator.platform))
     label, group, shortcut: { key, label: key, alt: false, shift: false, ctrl: false, meta: false, ...modifiers },
   });
   const canvas = "Design · canvas selection";
+  const focus = "Focused selection · experimental geometry";
   return [
     command("Previous sibling", "ArrowLeft", canvas),
     command("Next sibling", "ArrowRight", canvas),
@@ -15,9 +16,16 @@ export function designCommands(mac = /Mac|iPhone|iPad/.test(navigator.platform))
     command("After", "ArrowRight", "Focused comparison controls"),
     command("Inspect focused element", "Enter", canvas),
     command("Exit design mode", "Escape", canvas),
-    // Experimental geometry: Ctrl+arrows switch spaces on macOS, so ⌘ there; Alt stays parent/child.
-    command("Resize width (Shift: 10px)", "ArrowRight", "Focused selection · experimental geometry", mac ? { meta: true } : { ctrl: true }),
-    command("Resize height (Shift: 10px)", "ArrowDown", "Focused selection · experimental geometry", mac ? { meta: true } : { ctrl: true }),
+    // Experimental geometry. M focuses the selection, so Alt+arrows there move it while Alt+arrows on
+    // the canvas keep selecting parent and child. Ctrl+arrows switch spaces on macOS, so ⌘ resizes there.
+    command("Focus selection to move or resize", "M", "Design · canvas selection"),
+    command("Move before previous sibling", "ArrowUp", focus, { alt: true }),
+    command("Move after next sibling", "ArrowDown", focus, { alt: true }),
+    command("Move out, after its parent", "ArrowUp", focus, { alt: true, shift: true }),
+    command("Move into previous sibling", "ArrowDown", focus, { alt: true, shift: true }),
+    command("Resize width (Shift: 10px)", "ArrowRight", focus, mac ? { meta: true } : { ctrl: true }),
+    command("Resize height (Shift: 10px)", "ArrowDown", focus, mac ? { meta: true } : { ctrl: true }),
+    command("Back to the canvas", "Escape", focus),
     command("Commit text preview", "Enter", "Inline text editor"),
     command("New line", "Enter", "Inline text editor", { shift: true }),
     command("Cancel text preview", "Escape", "Inline text editor"),

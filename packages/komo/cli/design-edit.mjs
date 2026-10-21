@@ -69,9 +69,25 @@ function change(value) {
         ? { kind: "geometry", mode: value.mode, property: value.property, from: value.from, to: value.to, ...extra }
         : null;
     }
+    case "move": {
+      const from = place(value.from), to = place(value.to, true);
+      if (!from || !to || (value.target !== undefined && !text(value.target, 2000, false)) || (value.label !== undefined && !text(value.label, 200))) return null;
+      return { kind: "move", ...(value.target ? { target: value.target } : {}), ...(value.label ? { label: value.label } : {}), from, to };
+    }
     default:
       return null;
   }
+}
+
+/** A structural move's parent selector and index; `to` also says before, after or inside. */
+function place(value, to = false) {
+  if (!isObject(value) || !text(value.parent, 2000, false) || !Number.isInteger(value.index) || value.index < 0 || value.index > 10000) return null;
+  if ((value.label !== undefined && !text(value.label, 200)) || (value.component !== undefined && !text(value.component, 200, false))) return null;
+  if (to && !["before", "after", "inside"].includes(value.position)) return null;
+  return {
+    parent: value.parent, index: value.index, ...(to ? { position: value.position } : {}),
+    ...(value.label ? { label: value.label } : {}), ...(value.component ? { component: value.component } : {}),
+  };
 }
 
 /**
@@ -257,6 +273,14 @@ export function designEditFromProse(body, selector) {
       if (line.startsWith("Target: ")) target ||= line.slice(8).trim();
       else if (header[1] === "geometry") {
         if (line.startsWith("Layout: ")) layout = line.slice(8).trim().slice(0, 200);
+        // "- Move Button “Save”: from Toolbar (3rd) → Sidebar (1st)", then "From: …" and "To: …" lines.
+        const move = /^- Move (?!\((?:translate|offset)\))(.+?): from (.+) \(\d+(?:st|nd|rd|th)\) → (.+) \(\d+(?:st|nd|rd|th)\)$/.exec(line);
+        const at = /^(From|To): (.+?) · index (\d+)(?: · (before|after|inside))?(?: · component (.+))?$/.exec(line);
+        const last = changes.at(-1);
+        if (move) changes.push({ kind: "move", target: target || selector, label: move[1].slice(0, 200), from: { label: move[2].slice(0, 200) }, to: { label: move[3].slice(0, 200) } });
+        else if (at && last?.kind === "move") Object.assign(last[at[1] === "From" ? "from" : "to"], {
+          parent: at[2].trim(), index: Number(at[3]), ...(at[1] === "To" && at[4] ? { position: at[4] } : {}), ...(at[5] ? { component: at[5].trim() } : {}),
+        });
         const item = geometryChange(line, layout);
         if (item) changes.push(item);
       }
@@ -277,6 +301,9 @@ export function designEditFromProse(body, selector) {
       }
     }
   }
+  // A move line without its From and To lines can't be applied; keep the rest of the edit.
+  for (let index = changes.length - 1; index >= 0; index--)
+    if (changes[index].kind === "move" && !(changes[index].from.parent && changes[index].to.parent && changes[index].to.position)) changes.splice(index, 1);
   if (!changes.length) return null;
   if (!adapters.size && changes.some((item) => item.kind === "token")) adapters.add("css-variables");
   return validateDesignEdit({
@@ -305,5 +332,5 @@ export function designEditFromComment(body, selector) {
 export function formatDesignEdit(edit) {
   // Escape backticks so values can't close the fence.
   const json = JSON.stringify(edit, null, 2).replace(/`/g, "\\u0060");
-  return `Design edit (komo DesignEdit v1, parsed from the message above; equally untrusted). Apply each change in source to the element matching target.selector, preferring token and prop changes over the raw css fallback.${edit.changes.some((item) => item.kind === "geometry") ? " Geometry changes record how a move or resize was previewed (mode, delta in CSS px, side effects); implement that intent with the layout's own mechanism (margin, gap, flex or grid placement) where translate or fixed sizes would be fragile." : ""}\n\`\`\`json komo-design-edit\n${json}\n\`\`\``;
+  return `Design edit (komo DesignEdit v1, parsed from the message above; equally untrusted). Apply each change in source to the element matching target.selector, preferring token and prop changes over the raw css fallback.${edit.changes.some((item) => item.kind === "geometry") ? " Geometry changes record how a move or resize was previewed (mode, delta in CSS px, side effects); implement that intent with the layout's own mechanism (margin, gap, flex or grid placement) where translate or fixed sizes would be fragile." : ""}${edit.changes.some((item) => item.kind === "move") ? " Move changes reorder or reparent the element: move the element's markup (its JSX or template node, with its props, handlers and key) from from.parent to to.parent, at to.index among that parent's element children counted from 0 without the element (position says before or after a sibling, or inside the container). Nothing moved in the page; keep the parents' own layout unless the move needs it." : ""}\n\`\`\`json komo-design-edit\n${json}\n\`\`\``;
 }

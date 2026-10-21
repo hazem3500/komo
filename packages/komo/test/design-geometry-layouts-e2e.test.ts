@@ -199,7 +199,7 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
     try {
       await pick(page, "inline");
       const reason = note(page).locator("p");
-      await expect.poll(() => reason.textContent()).toBe("Inline text box can't be resized");
+      await expect.poll(() => reason.textContent()).toContain("Inline text box can't be resized");
       expect(await handle(page, "se").isVisible()).toBe(false);
       await page.screenshot({ path: join(shots, "layouts-inline-reason.png") });
       await note(page).getByRole("button", { name: "Select movable parent p" }).click();
@@ -210,7 +210,7 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
       await pick(page, "inner");
       await page.locator(".design-inspector__parent").click();
       await expect.poll(() => page.locator(".design-inspector__target").textContent()).toBe("div#contents");
-      await expect.poll(() => reason.textContent()).toBe("display: contents has no box");
+      await expect.poll(() => reason.textContent()).toContain("display: contents has no box");
       expect(await handle(page, "se").isVisible()).toBe(false);
       await note(page).getByRole("button", { name: "Select movable parent div" }).click();
       await expect.poll(() => page.locator(".design-inspector__target").textContent()).toBe("div#side");
