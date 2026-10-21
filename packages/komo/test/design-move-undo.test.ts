@@ -76,6 +76,22 @@ describe("structural move undo", () => {
     expect(two.getAttribute("style")).toBeNull();
   });
 
+  it("keeps two stand-ins at the same end of a parent in a stable order, and undoes the later one first", () => {
+    const f = fixture();
+    const one = f.element("one"), two = f.element("two");
+    f.select("one");
+    f.move.key(one, true, false);
+    f.move.key(one, true, false);
+    expect(f.order()).toEqual(["Two", "Three", "One*"]);
+    f.select("two");
+    f.move.key(two, true, false);
+    const settled = f.order();
+    expect(settled).toEqual(["Three", "One*", "Two*"]);
+    for (let pass = 0; pass < 3; pass++) { f.move.sync(); expect(f.order()).toEqual(settled); }
+    f.undo();
+    expect(f.order()).toEqual(["Two", "Three", "One*"]);
+  });
+
   it("keeps a host style attribute exact through move, undo and a cleared history", () => {
     const f = fixture();
     const one = f.element("one");

@@ -336,6 +336,101 @@ describe.skipIf(!chrome)("structural move", () => {
     } finally { await page.close(); }
   });
 
+  it("undoes drag and keyboard moves with ⌘Z / Ctrl+Z, one at a time, from the focused selection and the canvas", async () => {
+    const { page, errors } = await open();
+    try {
+      const restored = async () => {
+        await expect.poll(() => clones(page)).toBe(0);
+        expect(await order(page, "list")).toEqual(["One", "Two", "Three"]);
+        expect(await page.locator("#one, #two, #three").evaluateAll(nodes => nodes.map(node => node.getAttribute("style")))).toEqual([null, null, null]);
+      };
+      // Drag, release, ⌘Z: the stand-in goes, the original returns and stays selected.
+      await pick(page, "one");
+      await drag(page, "one", "three", 0.5, 0.8);
+      expect(await order(page, "list")).toEqual(["Two", "Three", "One*"]);
+      await page.keyboard.press("ControlOrMeta+z");
+      await restored();
+      expect(await page.locator(".design-inspector__target").textContent()).toMatch(/#one$/);
+      await expect.poll(async () => Math.abs(((await page.locator(".design-geometry__frame").boundingBox())?.y ?? 0) - (await page.locator("#one").boundingBox())!.y)).toBeLessThan(1);
+      // Design mode has no redo: ⌘⇧Z changes nothing.
+      await page.keyboard.press("ControlOrMeta+Shift+z");
+      await restored();
+
+      // Keyboard: M, ⌥↓, then ⌘Z with the selection still focused, and again after Escape.
+      await pick(page, "two");
+      await page.keyboard.press("m");
+      await page.keyboard.press("Alt+ArrowDown");
+      expect(await order(page, "list")).toEqual(["One", "Three", "Two*"]);
+      await page.keyboard.press("ControlOrMeta+z");
+      await restored();
+      expect(await page.evaluate(() => document.querySelector("[data-branch-comments]")!.shadowRoot!.activeElement?.className)).toBe("design-geometry__frame");
+      await page.keyboard.press("Alt+ArrowUp");
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("ControlOrMeta+z");
+      await restored();
+
+      // Consecutive moves undo one at a time; a panel edit after a move undoes first.
+      await page.keyboard.press("m");
+      await page.keyboard.press("Alt+ArrowUp");
+      await page.keyboard.press("Alt+ArrowDown");
+      await page.keyboard.press("Alt+ArrowDown");
+      expect(await order(page, "list")).toEqual(["One", "Three", "Two*"]);
+      const width = page.locator('.design-inspector [data-property="width"]').first();
+      await width.fill("120");
+      await width.press("Enter");
+      await expect.poll(() => page.locator("#list [data-komo-move-clone]").evaluate(node => (node as HTMLElement).style.width)).toBe("120px");
+      // Leave the text field, which keeps its own ⌘Z.
+      await page.locator(".design-inspector__target").click();
+      for (const expected of [["One", "Three", "Two*"], ["One", "Two*", "Three"], ["Two*", "One", "Three"]]) {
+        await page.keyboard.press("ControlOrMeta+z");
+        await expect.poll(() => order(page, "list")).toEqual(expected);
+      }
+      expect(await page.locator("#list [data-komo-move-clone]").evaluate(node => (node as HTMLElement).style.width)).not.toBe("120px");
+      // Before/After still work after an undo, and the proposal follows the remaining move.
+      await inspector(page, "Before").click();
+      await expect.poll(() => order(page, "list")).toEqual(["One", "Two", "Three"]);
+      await inspector(page, "After").click();
+      await expect.poll(() => order(page, "list")).toEqual(["Two*", "One", "Three"]);
+      await page.keyboard.press("ControlOrMeta+z");
+      await restored();
+
+      // Reset all restores everything.
+      await pick(page, "three");
+      await drag(page, "three", "one", 0.5, 0.2);
+      await pick(page, "today");
+      await drag(page, "today", "month", 0.8, 0.5);
+      await page.locator(".design-inspector__close").click();
+      await page.keyboard.press("d");
+      await page.locator(".design-inspector__pending").getByRole("button", { name: "Reset all previews" }).click();
+      await restored();
+      expect(await order(page, "toolbar")).toEqual(["Today", "Week", "Month"]);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  });
+
+  it("drops the move line from the proposal once the move is undone", async () => {
+    const { page, errors } = await open();
+    try {
+      await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+      await pick(page, "today");
+      await drag(page, "today", "month", 0.8, 0.5);
+      await pick(page, "week");
+      await drag(page, "week", "month", 0.8, 0.5);
+      // Two stand-ins at the end of one parent keep a stable order.
+      expect(await order(page, "toolbar")).toEqual(["Month", "Today*", "Week*"]);
+      await page.waitForTimeout(100);
+      expect(await order(page, "toolbar")).toEqual(["Month", "Today*", "Week*"]);
+      await page.keyboard.press("ControlOrMeta+z");
+      await page.locator(".design-inspector__close").click();
+      await page.keyboard.press("d");
+      await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy pending proposals" }).click();
+      const text = await page.evaluate(() => navigator.clipboard.readText());
+      expect(text).toContain("- Move Button “Today”");
+      expect(text).not.toContain("- Move Button “Week”");
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  });
+
   it("records the move for agents and the CLI, without a display row", async () => {
     const { page, errors } = await open();
     try {
