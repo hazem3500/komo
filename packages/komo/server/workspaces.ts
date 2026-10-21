@@ -2,6 +2,7 @@ import { check, string, originAllowed } from "./validation";
 import type { Identity } from "../src/types";
 import { pruneAudit } from "./tokens";
 import { editedOrigins, siteEdits } from "./project-sites";
+import { HOSTED_SNAPSHOT_BYTES } from "./snapshots";
 export type Project = {
   repo: string;
   origins: string[];
@@ -12,6 +13,10 @@ export type Project = {
   suspended?: boolean;
   writesPerDay?: number;
   retainedCommentsPerUser?: number;
+  /** Let guest sessions attach element snapshots. Off unless set. */
+  allowGuestSnapshots?: boolean;
+  /** Total snapshot bytes stored per project. */
+  maxSnapshotBytes?: number;
 };
 
 export function retainReviewerComments(
@@ -73,6 +78,7 @@ export async function projectConfig(
     requireOwner: true,
     suspended: !!row.suspended,
     writesPerDay: 500,
+    maxSnapshotBytes: HOSTED_SNAPSHOT_BYTES,
   };
 }
 export async function googleOwner(env: Env, project: string, user: Identity) {
