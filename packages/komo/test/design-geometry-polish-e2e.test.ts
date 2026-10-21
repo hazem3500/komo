@@ -51,7 +51,7 @@ beforeAll(async () => {
       const params=new URLSearchParams(location.search);
       const frame=params.has('frame');
       if(!frame)document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'polish',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:params.has('scaled')},design:{experimentalGeometry:true,selectionColor:params.get('color')||undefined},restoreOpen:false,pollInterval:60000});
+      window.komo=initKomo({endpoint:location.origin,project:'polish',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:params.has('scaled')},design:{experimentalGeometry:true,selectionColor:params.get('color')||undefined},restoreOpen:false,pollInterval:60000,shortcuts:params.get('visibility')?{visibility:params.get('visibility')}:undefined});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -263,9 +263,9 @@ describe.skipIf(!chrome)("geometry polish", () => {
       await page.keyboard.up("h");
       expect(await hiddenNow()).toBe(false);
       const eye = page.locator(".design-inspector__eye");
-      expect(await eye.getAttribute("aria-label")).toBe("Hide selection");
+      expect(await eye.getAttribute("aria-label")).toBe("Hide selection (H)");
       await eye.click();
-      expect([await hiddenNow(), await eye.getAttribute("aria-label"), await eye.getAttribute("aria-pressed")]).toEqual([true, "Show selection", "true"]);
+      expect([await hiddenNow(), await eye.getAttribute("aria-label"), await eye.getAttribute("aria-pressed")]).toEqual([true, "Show selection (H)", "true"]);
       await eye.click();
       expect(await hiddenNow()).toBe(false);
       // Shortcut help lists the key with the Design keys.
@@ -285,6 +285,40 @@ describe.skipIf(!chrome)("geometry polish", () => {
       await page.keyboard.press("d");
       await page.keyboard.press("h");
       expect(await host.evaluate(node => node.hasAttribute("data-komo-overlays-hidden"))).toBe(false);
+      expect(errors).toEqual([]);
+    } finally { await page.close(); }
+  });
+
+  it("peeks with a configured Shift+H: tap toggles, hold peeks, releasing Shift or losing focus ends it, and the eye names the key", async () => {
+    const { page, errors } = await open("visibility=Shift%2BH");
+    try {
+      await pick(page, "card");
+      const host = page.locator("[data-branch-comments]");
+      const hidden = () => host.evaluate(node => node.hasAttribute("data-komo-overlays-hidden"));
+      await page.keyboard.press("h");
+      expect(await hidden()).toBe(false);
+      await page.keyboard.press("Shift+H");
+      expect(await hidden()).toBe(true);
+      await page.keyboard.press("Shift+H");
+      expect(await hidden()).toBe(false);
+      // Hold, then let go of Shift before the letter.
+      await page.keyboard.down("Shift");
+      await page.keyboard.down("H");
+      await page.waitForTimeout(450);
+      expect(await hidden()).toBe(true);
+      await page.keyboard.up("Shift");
+      expect(await hidden()).toBe(false);
+      await page.keyboard.up("H");
+      expect(await hidden()).toBe(false);
+      // Focus leaving mid-hold ends the peek.
+      await page.keyboard.down("Shift");
+      await page.keyboard.down("H");
+      await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+      expect(await hidden()).toBe(false);
+      await page.keyboard.up("H");
+      await page.keyboard.up("Shift");
+      const mac = await page.evaluate(() => /mac|iphone|ipad/i.test(navigator.platform));
+      expect(await page.locator(".design-inspector__eye").getAttribute("aria-label")).toBe(`Hide selection (${mac ? "⇧H" : "Shift+H"})`);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   });

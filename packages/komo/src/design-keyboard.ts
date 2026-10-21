@@ -45,8 +45,13 @@ export function designKeyboard(options: {
       const focused = root?.activeElement ?? document.activeElement;
       const field = focused?.closest<HTMLElement>("[data-field-property]")?.dataset.fieldProperty;
       undo.click();
+      // Undo from the canvas or the focused selection keeps the selection drawn, like any canvas key.
+      const selected = options.selected();
+      if (selected && (!path.includes(options.host) || focused?.matches(".design-geometry__frame"))) options.select(selected);
       const back = focused?.isConnected ? focused : field && root?.querySelector(`[data-field-property="${CSS.escape(field)}"] ${focused!.localName}`);
       if (back instanceof HTMLElement) back.focus({ preventScroll: true });
+      // Undo moves focus to its button; from the canvas, give it back so canvas keys keep working.
+      if (!path.includes(options.host)) (root?.activeElement as HTMLElement | null)?.blur();
       return true;
     }
     // A field cancels its own preview on Escape. Checked before defaultPrevented:
