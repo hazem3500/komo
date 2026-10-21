@@ -141,6 +141,38 @@ describe("Properties hierarchy", () => {
     expect(caption.title).toBe("accessibleDescriptionOverride");
   });
 
+  it("drops a switch's unset state as soon as it is toggled, even while focused", () => {
+    const { panel, changes } = mount({ label: "Save", variant: "primary", disabled: false });
+    const loading = panel.querySelector<HTMLInputElement>('[aria-label="Button loading"]')!;
+    expect(loading.hasAttribute("data-unset")).toBe(true);
+    loading.focus();
+    loading.click();
+    expect(document.activeElement).toBe(loading);
+    expect(changes.at(-1)).toMatchObject({ loading: true });
+    expect(loading.checked).toBe(true);
+    expect(loading.hasAttribute("data-unset")).toBe(false);
+    expect(loading.title).toBe("");
+    loading.click();
+    expect(changes.at(-1)).toMatchObject({ loading: false });
+    expect(loading.checked).toBe(false);
+    expect(loading.hasAttribute("data-unset")).toBe(false);
+  });
+
+  it("styles the switch thumb only at the track's edges, with unset as its own state", () => {
+    const host = document.body.appendChild(document.createElement("div")).attachShadow({ mode: "open" });
+    const element = document.body.appendChild(document.createElement("button"));
+    registerInspectableRoot(element, definition, { label: "Save", variant: "primary", disabled: false }, () => {});
+    host.append(createReactPropsPanel(element, () => {}, host)!);
+    const css = [...host.querySelectorAll("style")].map(style => style.textContent).join("");
+    const thumb = [...css.matchAll(/\.design-react-switch[^{,]*::before\{([^}]*)\}/g)].map(match => match[1]!);
+    // Off sits 2px in from the start; on moves exactly the travel (28 - 12 - 2 * 2); unset has no thumb.
+    expect(thumb.join(";")).toMatch(/left:2px/);
+    expect(thumb.join(";")).toMatch(/width:12px/);
+    expect([...css.matchAll(/translate:([^;}]+)/g)].map(match => match[1])).toEqual(["12px"]);
+    expect(css).toContain(".design-react-switch[data-unset]::before{display:none}");
+    expect(css).toMatch(/prefers-reduced-motion:reduce\)\{[^}]*design-react-switch[^}]*\{transition:none\}/);
+  });
+
   it("suppresses the body when a component has no editable props", () => {
     const { panel } = mount({}, { ...definition, props: [{ name: "onPress", kind: "unsupported", required: false, typeLabel: "() => void" }] });
     expect(panel.hasAttribute("data-empty")).toBe(true);

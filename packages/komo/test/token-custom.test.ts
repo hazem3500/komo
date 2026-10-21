@@ -49,7 +49,12 @@ it("opens unbound values in Custom, allows Tab, and restores before a single cus
   input.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   expect(document.querySelector(".komo-tokens")).not.toBeNull();
   expect(commit).not.toHaveBeenCalled();
-  document.querySelector<HTMLButtonElement>(".komo-custom button")!.click();
+  // No Apply button: Enter keeps the value, and a host without live commits takes it on close.
+  expect(document.querySelector(".komo-custom button")).toBeNull();
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  expect(value).toBe("monospace");
+  expect(commit).not.toHaveBeenCalled();
+  document.body.dispatchEvent(new Event("pointerdown", { bubbles: true, composed: true }));
   expect(commit).toHaveBeenCalledExactlyOnceWith("monospace");
   expect(document.querySelector(".komo-tokens")).toBeNull();
   close();

@@ -151,7 +151,7 @@ export function designProposal(
  * Footer controls use the toolbar's tooltip surface, like the Comments header.
  * Loaded on the bar's first hover or focus, which `first` replays.
  */
-export function footerTips(bar: HTMLElement, root: ShadowRoot, signal: AbortSignal, first: Event) {
+export function footerTips(bar: HTMLElement, root: ShadowRoot, signal: AbortSignal, first: Event, place?: (tip: HTMLElement, target: HTMLElement) => void) {
   if (signal.aborted) return;
   const tip = el("div", "morphing-menu__tooltip sidebar-tooltip");
   tip.setAttribute("aria-hidden", "true");
@@ -172,12 +172,13 @@ export function footerTips(bar: HTMLElement, root: ShadowRoot, signal: AbortSign
       const half = tip.offsetWidth / 2;
       tip.style.left = `${Math.max(8 + half, Math.min(document.documentElement.clientWidth - 8 - half, box.left + box.width / 2))}px`;
       tip.style.top = `${box.top - 8 - tip.offsetHeight}px`;
+      place?.(tip, button);
       tip.dataset.open = "true";
     }, tip.dataset.open ? 0 : 400);
   };
   bar.addEventListener("pointerover", show, { signal });
   bar.addEventListener("focusin", show, { signal });
-  for (const type of ["pointerleave", "pointerdown", "focusout"]) bar.addEventListener(type, hide, { signal });
+  for (const type of ["pointerleave", "pointerdown", "focusout", "scroll"]) bar.addEventListener(type, hide, { signal });
   signal.addEventListener("abort", () => {
     hide();
     tip.remove();

@@ -240,17 +240,14 @@ describe("Tokens view in Design mode", () => {
     await vi.waitFor(() => expect(shadow.querySelectorAll(".design-token-row").length).toBeGreaterThan(0));
   }
   const exact = '.komo-custom input[aria-label="CSS value"], .komo-color input[aria-label="Hex"]';
-  // Colors type into the live color editor and keep on close; other values use Apply.
+  // Every Custom editor applies live: typing previews and the popup keeps the value when it closes.
   async function custom(label: string, value: string) {
     rowFor(label).querySelector<HTMLButtonElement>("button")!.click();
     await vi.waitFor(() => expect(shadow.querySelector(exact)).not.toBeNull());
     const input = $<HTMLInputElement>(exact);
-    const color = !!input.closest(".komo-color");
-    input.value = color ? value.replace("#", "") : value;
+    input.value = input.closest(".komo-color") ? value.replace("#", "") : value;
     input.dispatchEvent(new Event("input"));
-    return () => color
-      ? document.body.dispatchEvent(new Event("pointerdown", { bubbles: true, composed: true }))
-      : button($(".komo-custom"), "Apply custom").click();
+    return () => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true, composed: true }));
   }
   const bar = () => $(".design-token-bar");
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
