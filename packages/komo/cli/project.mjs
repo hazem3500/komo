@@ -31,13 +31,23 @@ export async function runProject(action, flags, request, config, cwd) {
       tables: {},
     };
     let revision;
-    for (const table of ["users", "threads", "comments", "reactions"]) {
+    for (const table of ["users", "threads", "comments", "reactions", "snapshots"]) {
       snapshot.tables[table] = [];
       let offset = 0;
       do {
-        const page = await request(
-          `project/export?table=${table}&offset=${offset}${revision === undefined ? "" : `&revision=${revision}`}`
-        );
+        let page;
+        try {
+          page = await request(
+            `project/export?table=${table}&offset=${offset}${revision === undefined ? "" : `&revision=${revision}`}`
+          );
+        } catch (error) {
+          // Servers released before snapshots have no snapshot table to export.
+          if (table === "snapshots" && /Invalid export table/.test(String(error?.message))) {
+            delete snapshot.tables.snapshots;
+            break;
+          }
+          throw error;
+        }
         revision = page.revision;
         snapshot.tables[table].push(...page.rows);
         offset = page.next;
@@ -67,9 +77,14 @@ export async function runProject(action, flags, request, config, cwd) {
     )
       throw Error("Use a version 1 komo export.");
     let imported = 0;
-    for (const kind of ["users", "threads", "comments", "reactions"]) {
+    for (const kind of ["users", "threads", "comments", "reactions", "snapshots"]) {
+      // Exports made before snapshots existed have no snapshot table.
+      if (kind === "snapshots" && snapshot.tables[kind] === undefined) continue;
       if (!Array.isArray(snapshot.tables[kind]))
         throw Error(`Missing ${kind} table.`);
+      // A snapshot record can be up to about 350 KB of base64; send one at a time.
+      const batchBytes = kind === "snapshots" ? 360000 : 15000;
+      const recordBytes = kind === "snapshots" ? 360000 : 16000;
       let records = [];
       const send = async () => {
         if (records.length) {
@@ -90,16 +105,16 @@ export async function runProject(action, flags, request, config, cwd) {
               kind,
               records: [...records, row],
             })
-          ) > 15000 ||
-          records.length >= 50
+          ) > batchBytes ||
+          records.length >= (kind === "snapshots" ? 1 : 50)
         )
           await send();
         if (
           Buffer.byteLength(
             JSON.stringify({ source: snapshot.project, kind, records: [row] })
-          ) > 16000
+          ) > recordBytes
         )
-          throw Error(`An imported ${kind} record exceeds 16 KB.`);
+          throw Error(`An imported ${kind} record exceeds ${recordBytes / 1000} KB.`);
         records.push(row);
       }
       await send();

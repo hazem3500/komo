@@ -31,7 +31,8 @@
     "server/iap.ts",
     "server/tokens.ts",
     "server/account-page.ts",
-    "server/public-env.ts"
+    "server/public-env.ts",
+    "server/snapshots.ts"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

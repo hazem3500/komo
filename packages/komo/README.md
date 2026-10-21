@@ -454,8 +454,10 @@ Starter limits per owner/workspace:
 | Write requests per project | 500/day |
 | Request body | 16 KiB |
 | Comment / reviewer name | 4,000 / 60 characters |
+| Element snapshots per thread | One image (256 KiB) and one HTML capture (32 KiB) |
+| Snapshot storage | 5 MiB, counted within the storage budget |
 
-The storage budget accounts for text, anchors, reactions, and a fixed profile allowance per member. It is deliberately conservative, not a measurement of D1 disk usage. Soft-deleting or resolving a comment does not reset its quota. Inline file attachments are not supported; avatars have a bounded representation.
+The storage budget accounts for text, anchors, reactions, element snapshots, and a fixed profile allowance per member. It is deliberately conservative, not a measurement of D1 disk usage. Soft-deleting or resolving a comment does not reset its quota. Element snapshots are the only attachments; avatars have a bounded representation.
 
 The service also applies per-IP and per-user limits, database-enforced quotas, owner-approved site restrictions, payload validation, project suspension, hourly cleanup, and a global daily request ceiling. Edge rate limiting runs before database work. These controls bound ordinary abuse; Google accounts and CORS do not eliminate automated abuse. The service remains a starter offering, not an unlimited storage service. Project exports, imports, and quota recovery are available below. Billing upgrades are not implemented yet.
 
@@ -635,8 +637,20 @@ Branch detection also supports `CF_PAGES_BRANCH`, `WORKERS_CI_BRANCH`, `VERCEL_G
 | `bootstrapHash` | Generated | SHA-256 owner-claim key hash. |
 | `suspended` | `false` | Disable a project. |
 | `writesPerDay` | `10000` self-hosted | Daily write-request allowance; hosted uses 500. |
+| `allowGuestSnapshots` | `false` | Let guest sessions attach element snapshots to their own threads. |
+| `maxSnapshotBytes` | `52428800` (50 MiB) | Total snapshot bytes stored per project; hosted uses 5 MiB. |
 
 Worker bindings: `DB` (D1), optional `EDGE_LIMIT` (rate limiter). Variables: `PROJECTS`, `GOOGLE_CLIENT_ID`, optional `GITHUB_CLIENT_ID`, `KOMO_HOSTED="true"` to enable hosted provisioning, and `KOMO_PAUSED="true"` to pause service requests. Store `GOOGLE_CLIENT_SECRET` and optional `GITHUB_CLIENT_SECRET` as Worker secrets. Hosted configuration uses an hourly cleanup trigger. `/health` remains available while paused.
+
+### Element snapshots
+
+A comment can carry a snapshot of its target element: one image (`image/webp` or `image/png`, up to 256 KiB) and one trimmed HTML capture (`text/html`, UTF-8, up to 32 KiB) per thread. Capture is opt-in on the client. **Snapshots may contain page content and user data**, so treat them like the comments they belong to.
+
+- `POST /threads/:id/snapshot?kind=image|html` takes the raw file with its `Content-Type`, or `multipart/form-data` with `kind` and `file` fields. A new upload replaces the thread's previous snapshot of that kind. Uploads need a session with write access to the project; guests are refused unless the project sets `allowGuestSnapshots`, and then only on their own threads. The thread's author or a signed-in reviewer can replace or `DELETE /threads/:id/snapshot/:kind`.
+- `GET /threads/:id/snapshot/:kind` needs a session, even on link-access projects, and returns `Cache-Control: private`, `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`. HTML is always served as `text/plain`; show it to agents or in a sandboxed viewer, never as live markup.
+- Thread listings add `snapshot: { image?, html? }` URLs when a thread has snapshots. `/config` reports `snapshots: { guests, maxImageBytes, maxHtmlBytes }`.
+
+Snapshots are deleted with their thread, by clearing resolved threads, retention, or project deletion. Exports include them, base64-encoded. Their bytes count toward database quotas, and each project stores at most `maxSnapshotBytes` of snapshots. Uploads share the write rate limits, plus 60 per reviewer every ten minutes.
 
 ## Source context
 
@@ -721,7 +735,7 @@ To migrate, export from your source, set up a destination using `npx @hazem3500/
 npx @hazem3500/komo project import --file /path/to/comments.json
 ```
 
-Exports include threads, replies, reactions, anchors, and historical profiles across all pages and branches, including resolved feedback. They exclude sessions, credentials, verified emails, and membership. Imports use the destination repository and keep imported authors unverified. Retrying the same export is safe; existing imported records are not overwritten. Destination quotas still apply. Export retries are required if feedback changes while downloading. Keep export files private.
+Exports include threads, replies, reactions, element snapshots, anchors, and historical profiles across all pages and branches, including resolved feedback. They exclude sessions, credentials, verified emails, and membership. Imports use the destination repository and keep imported authors unverified. Retrying the same export is safe; existing imported records are not overwritten. Destination quotas still apply. Export retries are required if feedback changes while downloading. Keep export files private.
 
 Upgrade self-hosted deployments with `npm install @hazem3500/komo@latest` then `npx @hazem3500/komo deploy`; the CLI applies bundled database migrations before redeploying. Self-hosted project removal is controlled by your Worker configuration. Account-wide data requests remain available at ty@offbr.co.
 
