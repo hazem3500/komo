@@ -151,7 +151,11 @@ await writeFile(
 // styles left the mount bundle, so initial shrinks 85 bytes. Leaves room for geometry keys (#146).
 // 223,200 -> 223,500: remembered Frame sizes are versioned and clamped, and only explicit choices
 // are stored (+157 in the frame-size chunk).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 223_500)
+// 223,500 -> 225,600: posted design proposals preview every kind on the page (resizes with what
+// they also set, structural moves through a stand-in, React props through the component editor),
+// say why After is unavailable, and outline the change and a move's origin (223,365 -> 225,383).
+// It all lives in the on-demand design comment chunk; initial +86 for the host's blocked reasons.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 225_600)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
