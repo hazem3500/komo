@@ -208,7 +208,8 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement, let
     else if (key === "Escape") close();
     else if (key === "Enter" || key === " " && !typed) choose(active);
     else if (key.length === 1) ahead(key, event.timeStamp);
-    else return;
+    // ← and → would change a native select's value on some platforms; the open list owns them.
+    else if (key !== "ArrowLeft" && key !== "ArrowRight") return;
     event.preventDefault();
     event.stopImmediatePropagation();
   }, { capture: true, signal });

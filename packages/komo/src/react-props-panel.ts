@@ -74,6 +74,8 @@ export { cssVariableTokens } from "./design-tokens.js";
 
 const originals = new Map<DesignTarget, Map<string, InspectableScalar>>();
 const edits = new Map<DesignTarget, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();
+/** Undone prop edits, newest last, for redo; a new edit on the element clears them. */
+const undone = new Map<DesignTarget, Array<{ propName: string; before: InspectableScalar; after: InspectableScalar }>>();
 /** Move only prop state; DOM styles, tokens and text keep their original ownership. */
 export function retainReactPropTarget(element: DesignTarget): DesignTarget | null {
   const next = currentInspectableElement(element);
@@ -1014,6 +1016,7 @@ export function undoReactProp(element: DesignTarget): void {
   if (!edit || !component) return;
   const initial = history!.find(item => item.propName === edit.propName)!.before;
   history!.pop();
+  undone.set(element, [...undone.get(element) ?? [], edit]);
   component.setProps({ ...component.props, [edit.propName]: edit.before });
   let baseline = originals.get(element);
   if (!baseline) originals.set(element, baseline = new Map());
@@ -1023,6 +1026,25 @@ export function undoReactProp(element: DesignTarget): void {
   }
   else baseline.set(edit.propName, initial);
   if (!baseline.size) originals.delete(element);
+}
+
+/** Put back the last undone prop value on this element. */
+export function redoReactProp(element: DesignTarget): void {
+  element = retainReactPropTarget(element) ?? element;
+  const edit = undone.get(element)?.pop();
+  const component = inspectableFor(element);
+  if (!edit || !component) return;
+  component.setProps({ ...component.props, [edit.propName]: edit.after });
+  let baseline = originals.get(element);
+  if (!baseline) originals.set(element, baseline = new Map());
+  const initial = baseline.has(edit.propName) ? baseline.get(edit.propName) : edit.before;
+  if (Object.is(initial, edit.after)) {
+    baseline.delete(edit.propName);
+    component.releaseProps?.([edit.propName]);
+  } else baseline.set(edit.propName, initial);
+  if (!baseline.size) originals.delete(element);
+  if (!edits.has(element)) edits.set(element, []);
+  edits.get(element)!.push(edit);
 }
 
 /** Undo every prop, token and theme preview, and put switched themes back, e.g. when Design mode closes. */
@@ -1375,6 +1397,7 @@ function recordChange(
   let elementEdits = edits.get(element);
   if (!elementEdits) edits.set(element, (elementEdits = []));
   elementEdits.push({ propName, before, after: value });
+  undone.delete(element);
   onEdit(() => undoReactProp(element));
   return true;
 }

@@ -99,7 +99,7 @@ import {
   reducedMotion,
   setAvatarResolver,
 } from "./dom.js";
-import { matchesShortcut, resolveShortcuts, type Shortcut } from "./shortcuts.js";
+import { matchesShortcut, resolveDesignKeys, resolveShortcuts, type Shortcut } from "./shortcuts.js";
 import { isMac, renderKbd } from "./kbd.js";
 import { styles } from "./styles.js";
 import type {
@@ -158,6 +158,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
   setAvatarResolver(options.avatar);
   const shortcuts = resolveShortcuts(options.shortcuts);
+  const designKeys = resolveDesignKeys(options.shortcuts);
   const hostPinSize = options.pins?.size ?? "full";
   if (!pinSizes.includes(hostPinSize))
     throw new Error(`Invalid komo pins.size: "${hostPinSize}".`);
@@ -2782,7 +2783,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     void import("./shortcut-help.js").then(({ showShortcutHelp }) => showShortcutHelp(shadow, [
       ...helpItems.map(({ label, shortcut, group }) => ({ label, shortcut, group: group === "Comments & view" ? "Comments" : "General" })),
       { label: "Restore feedback", shortcut: shortcuts.restore, group: "General" },
-    ], designEnabled, designActive ? "design" : commentMode ? "comment" : undefined));
+    ], designEnabled, designActive ? "design" : commentMode ? "comment" : undefined, designKeys));
   }
   function renderToolbar() {
     toolbar.style.display = toolbarDismissed ? "none" : "";
@@ -5952,7 +5953,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             root: shadow,
             panelRoot: sidebar,
             host,
-            shortcutHelp: openShortcutHelp, visibility: shortcuts.visibility,
+            shortcutHelp: openShortcutHelp, visibility: shortcuts.visibility, keys: designKeys,
             reservedKey: event => Object.values(shortcuts).some(shortcut => matchesShortcut(event, shortcut)),
             design: options.design,
             sourceHref: sourceLink,

@@ -135,14 +135,14 @@ const cases: [string, (page: Page) => Promise<void>, Outcome][] = [
   ["canvas", page => page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); }), fire],
   ["panel button", page => panel(page, '.design-inspector button[aria-label="Copy CSS"], .design-inspector button:not([disabled])[title="Copy CSS"]'), fire],
   ["switch", page => inject(page, '<button type="button" role="switch" aria-checked="false">Wrap</button>'), fire],
-  ["closed select", page => panel(page, '[data-field-property="font-weight"] select'), { ...fire, escape: false }],
+  ["closed select", page => panel(page, '[data-field-property="font-weight"] select'), fire],
   ["open listbox", async page => { await panel(page, '[data-field-property="font-weight"] select'); await page.keyboard.press("ArrowDown"); await page.locator(".komo-select").waitFor(); }, pause],
   ["text input", page => panel(page, '[data-field-property="width"] input'), pause],
-  ["textarea", page => page.locator("#notes").focus(), { ...pause, escape: true }],
+  // Escape in a text field lets go of focus first; the next one leaves.
+  ["textarea", page => page.locator("#notes").focus(), pause],
   ["inline text edit", async page => { await page.locator("#target").dblclick(); await page.locator('#target[contenteditable="true"]').waitFor(); }, pause],
   ["scrub field, idle", page => inject(page, '<input type="text" data-scrub readonly aria-label="Scrub" value="10">'), fire],
-  // Outside a property field nothing owns Escape, so it still leaves Design mode.
-  ["scrub field, editing", page => inject(page, '<input type="text" data-scrub data-editing aria-label="Scrub" value="10">'), { ...pause, escape: true }],
+  ["scrub field, editing", page => inject(page, '<input type="text" data-scrub data-editing aria-label="Scrub" value="10">'), pause],
 ];
 
 describe.skipIf(!chrome)("Design mode shortcuts by focus target, with real keys", () => {
