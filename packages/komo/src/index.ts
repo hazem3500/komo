@@ -9,7 +9,8 @@ import { resolveConfig, type KomoConfig } from "./config.js";
 export type { KomoConfig } from "./config.js";
 import { adaptivePolling } from "./polling.js";
 import { pinDirection } from "./pin-direction.js";
-import { pinStacks } from "./pin-stacks.js";
+import { byAge, collisions, hitArea, pinStacks, stackWidth } from "./pin-stacks.js";
+import type { PinUnit } from "./pin-groups.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
 import { createFramePortals, preserveFrameStyles } from "./frame-portals.js";
 import { createFrameViewport } from "./frame-viewport.js";
@@ -573,6 +574,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     designProposal.test(body)
       ? (summarizeDesign?.(body) ?? (void loadDesignComments(), "Design change"))
       : body;
+  const firstLine = (body: string) => commentText(body).trim().split("\n")[0]!.slice(0, 100);
   let draftText = "",
     // A Design mode proposal attached to the new comment, shown as a change card.
     draftProposal = "",
@@ -3050,6 +3052,25 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   let pinsScrolling = false;
   let pinScrollTimer = 0;
+  // Stacks and collision bubbles load the first time a page has one to draw; until then
+  // their pins wait, so a crowded row never flashes uncollapsed.
+  let grouping = options.pins?.cluster !== false;
+  let pinGroups: typeof import("./pin-groups.js") | undefined;
+  let groupsLoading = false;
+  function loadGroups() {
+    if (groupsLoading) return;
+    groupsLoading = true;
+    void import("./pin-groups.js")
+      .then((module) => (pinGroups = module), () => (grouping = false))
+      .then(() => {
+        pinSnapshot = "";
+        renderPins();
+      });
+  }
+  const pinBounds = () =>
+    framed
+      ? frameRect()
+      : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
   function renderPins(force = false) {
     const off = hidden || commentsHidden;
     if (off) cancelPinMove();
@@ -3074,9 +3095,18 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
     if (density === "dot") breathe(visible);
     const anchors = anchorPass();
-    const stacks = pinStacks(visible, (thread) =>
-      anchors.resolve(thread.anchor),
-    );
+    // Same-target threads share their persistent owner (the anchorTarget adapter's, else
+    // komo's); the page itself is no shared target.
+    const owners = new Map<string, Element>();
+    const stacks = grouping
+      ? pinStacks(visible, (thread) => {
+          const element = anchors.resolve(thread.anchor);
+          const owner = element && commentAnchorTarget(element, surface, options.anchorTarget);
+          if (!owner || owner === surface || owner === document.body) return null;
+          owners.set(thread.id, owner);
+          return owner;
+        })
+      : new Map<string, Thread[]>();
     const positions = visible.map((thread) => {
       const rect = anchors.locate(thread.anchor);
       if (rect.y < -rect.height - 40 || rect.y > window.innerHeight + 40)
@@ -3102,32 +3132,36 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     const snapshot = JSON.stringify([
       selected,
+      density,
       draft && anchors.locate(draft),
       positions.map(({ thread, rect, blocked }) => [
         thread.id,
         rect,
         blocked,
         pinDirection(rect, window.innerWidth),
+        stacks.get(thread.id)?.[0].id,
       ]),
     ]);
     if (snapshot === pinSnapshot) return;
     pinSnapshot = snapshot;
     // A hover card previewing After changes the page itself; keep it open.
     if (!designModule?.isPreviewing(hoverPreviewKey)) hidePreview();
-    const scrollOffsets = new Map(
-      Array.from(pins.querySelectorAll<HTMLElement>(".pin-stack"), (stack) => [
-        stack.dataset.stack,
-        stack.scrollLeft,
-      ]),
-    );
+    const focused = shadow.activeElement?.matches(".pins :focus-visible")
+      ? (shadow.activeElement as HTMLElement).dataset
+      : undefined;
+    const listed = pins.querySelector<HTMLElement>(".pin-cluster[open]")?.dataset.cluster;
     pins.replaceChildren();
     // Rebuilt pins pick up the breath where the previous ones left it.
     if ("breathe" in pins.dataset)
       pins.style.setProperty("--pin-breathe-delay", `${(breatheStart - performance.now()) % 1800}ms`);
-    const stackElements = new Map<string, HTMLElement>();
     const measured = new Map(
       positions.map((position) => [position.thread.id, position]),
     );
+    const bounds = pinBounds();
+    // Each unit is a lone pin or a same-target stack at its oldest thread's anchor. Moved
+    // pins keep their own place: they never stack or merge.
+    const units: PinUnit[] = [];
+    const grouped = new Set<Thread[]>();
     for (const { thread, rect, blocked } of positions) {
       // Never draw a pin at stale page coordinates; the sidebar lists it instead.
       if (!rect.attached) continue;
@@ -3140,7 +3174,6 @@ export function initComments(options: CommentsOptions): CommentsController {
       )
         continue;
       if (placement.blocked) continue;
-      const number = threads.indexOf(thread) + 1;
       if (rect.width && rect.height) {
         const area = el("div", "area");
         Object.assign(area.style, {
@@ -3152,10 +3185,30 @@ export function initComments(options: CommentsOptions): CommentsController {
         });
         pins.append(area);
       }
+      const stack = leader?.rect.attached ? group! : null;
+      if (stack && grouped.has(stack)) continue;
+      const at = placement.rect;
+      // A stack fans out away from the nearer edge of the page.
+      const right = stack
+        ? at.x - 9 + Math.min(stack.length, 6) * 38 > bounds.right
+        : pinDirection(at, window.innerWidth) === "right";
+      if (stack) grouped.add(stack);
+      units.push({
+        threads: stack ?? [thread],
+        rect: at,
+        right,
+        owner: stack ? owners.get(stack[0].id) : undefined,
+        box: thread.anchor.unstacked || thread.id === selected
+          ? null
+          : hitArea(at.x, at.y, right, stack ? stackWidth(stack.length, density === "dot" ? 12 : 20) : 24),
+      });
+    }
+    const pinFor = (thread: Thread, rect: (typeof positions)[number]["rect"]) => {
+      const number = threads.indexOf(thread) + 1;
       const first = thread.comments[0];
       const pin = button(
         first
-          ? `Comment ${number} by ${first.author.name}: ${commentText(first.body).trim().split("\n")[0]!.slice(0, 100)}`
+          ? `Comment ${number} by ${first.author.name}: ${firstLine(first.body)}`
           : `Comment ${number}`,
         () => selectThread(thread),
         `pin${thread.id === selected ? " active" : ""}${thread.id === hotCard ? " hot" : ""}${thread.resolved ? " resolved" : ""}${rect.attached ? "" : " detached"}`,
@@ -3241,7 +3294,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           expanded && !compactSidebar
             ? 396
             : 12;
-        const place = placeCard(pin.getBoundingClientRect(), pinPreview.offsetWidth || 320, pinPreview.offsetHeight, {
+        const place = placeCard(pinEdges(pin), pinPreview.offsetWidth || 320, pinPreview.offsetHeight, {
           left: 12,
           top: 12,
           right: window.innerWidth - right,
@@ -3284,40 +3337,42 @@ export function initComments(options: CommentsOptions): CommentsController {
         previewTimer = window.setTimeout(hidePreview, 120);
       });
       pin.dataset.thread = thread.id;
-      pin.dataset.pointer = pinDirection(placement.rect, window.innerWidth);
-      Object.assign(pin.style, { left: `${rect.x}px`, top: `${rect.y}px` });
-      if (group && leader?.rect.attached && !leader.blocked) {
-        let stack = stackElements.get(group[0].id);
-        if (!stack) {
-          stack = el("div", "pin-stack");
-          stack.dataset.stack = group[0].id;
-          stack.setAttribute("role", "group");
-          stack.setAttribute(
-            "aria-label",
-            `${group.length} comments on this component`,
+      return pin;
+    };
+    const context = {
+      root: shadow,
+      bounds,
+      pin: (thread: Thread) => pinFor(thread, measured.get(thread.id)!.rect),
+      summary: (thread: Thread) => firstLine(thread.comments[0]?.body ?? ""),
+      open: (thread: Thread) => selectThread(thread),
+      menu: actionMenu,
+    };
+    // Pins on distinct targets whose 24px hit areas overlap at the current scale merge.
+    for (const members of grouping ? collisions(units.map((unit) => unit.box)) : units.map((_, index) => [index])) {
+      const unit = units[members[0]];
+      if (members.length > 1 || unit.threads.length > 1) {
+        if (!pinGroups) loadGroups();
+        else
+          pins.append(
+            members.length > 1
+              ? pinGroups.bubble(members.map((index) => units[index]), members.flatMap((index) => units[index].threads).sort(byAge), context)
+              : pinGroups.stack(unit, context),
           );
-          const width = Math.min(178, 40 + (group.length - 1) * 22);
-          Object.assign(stack.style, {
-            left: `${Math.max(4, Math.min(leader.rect.x - 25, window.innerWidth - width - 8))}px`,
-            top: `${leader.rect.y - 34}px`,
-            maxWidth: `${width}px`,
-          });
-          stack.addEventListener("scroll", () => {
-            hidePreview();
-            positionDialog();
-          });
-          stackElements.set(group[0].id, stack);
-          pins.append(stack);
-        }
-        pin.style.left = "";
-        pin.style.top = "";
-        pin.style.order = String(group.indexOf(thread));
-        pin.style.marginLeft = group[0].id === thread.id ? "0" : "-12px";
-        stack.append(pin);
-      } else pins.append(pin);
+      } else {
+        const pin = context.pin(unit.threads[0]);
+        pin.dataset.pointer = unit.right ? "right" : "left";
+        Object.assign(pin.style, { left: `${unit.rect.x}px`, top: `${unit.rect.y}px` });
+        pins.append(pin);
+      }
     }
-    for (const [id, stack] of stackElements)
-      stack.scrollLeft = scrollOffsets.get(id) ?? 0;
+    // Keyboard focus survives a redraw; an open bubble list follows its bubble.
+    if (focused?.thread || focused?.cluster)
+      pins
+        .querySelector<HTMLElement>(
+          focused.thread ? `.pin[data-thread="${CSS.escape(focused.thread)}"]` : `[data-cluster="${CSS.escape(focused.cluster!)}"]`,
+        )
+        ?.focus({ preventScroll: true });
+    if (listed) pins.querySelector<HTMLDetailsElement>(`[data-cluster="${CSS.escape(listed)}"]`)?.setAttribute("open", "");
     if (pins.dataset.size && nearPoint) markNear();
     if (draft && draft.width > 0 && draft.height > 0) {
       const rect = locateAnchor(draft);
@@ -5690,7 +5745,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     const anchor = draft ?? (thread && onThreadPage(thread) ? thread.anchor : null);
     // Areas and design changes are about a region: open beside it, not over it.
     let around: { left: number; top: number; right: number; bottom: number } | undefined;
-    let pinRect: DOMRect | undefined;
+    let pinRect: ReturnType<typeof pinEdges> | undefined;
     const pin =
       draggedPin?.id === selected
         ? draggedPin
@@ -5712,7 +5767,7 @@ export function initComments(options: CommentsOptions): CommentsController {
                 pins.querySelector<HTMLElement>(
                   `[data-thread="${CSS.escape(selected)}"]`,
                 );
-              pinRect = indicator ? indicator.getBoundingClientRect() : undefined;
+              pinRect = indicator ? pinEdges(indicator) : undefined;
               return indicator ? indicatorPoint(indicator, rect) : rect;
             })()
           : null;
@@ -5937,6 +5992,16 @@ export function initComments(options: CommentsOptions): CommentsController {
     controller.select(target);
     controller.setReturnAction({ label: "Back to comment", run: () => setDesignMode(false) });
   }
+  // Cards beside a stacked pin clear the whole fanned row, so the other pins stay reachable.
+  function pinEdges(pin: Element) {
+    const stack = pin.parentElement!;
+    if (!stack.matches(".pin-stack")) return pin.getBoundingClientRect();
+    const rect = stack.getBoundingClientRect();
+    const width = Math.min(stack.children.length, 6) * 38 + 4;
+    const left = stack.dataset.pointer === "right" ? rect.right - width : rect.left;
+    const top = stack.hasAttribute("data-below") ? rect.top : rect.bottom - 38;
+    return { left, right: left + width, top, bottom: top + 38, width };
+  }
   function indicatorPoint(
     pin: HTMLElement,
     fallback: { x: number; y: number },
@@ -5978,7 +6043,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     Object.assign(pin.style, { position: "fixed", margin: "0", left: `${point.x}px`, top: `${point.y}px` });
     pinMove = module.startPinMove({
       root: shadow, pin, point,
-      bounds: () => framed ? frameRect() : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight },
+      bounds: pinBounds,
       preview(point) {
         pin.dataset.pointer = pinDirection(point, window.innerWidth);
         pin.style.left = `${point.x}px`;

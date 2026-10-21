@@ -155,12 +155,18 @@ await writeFile(
 // styles left the mount bundle, so initial shrinks 85 bytes. Leaves room for geometry keys (#146).
 // 223,200 -> 223,500: remembered Frame sizes are versioned and clamped, and only explicit choices
 // are stored (+157 in the frame-size chunk).
+// 223,500 -> 225,810: pin stacks and collision bubbles (pins.cluster). Grouping, the 24px collision pass
+// and the stack/bubble styles run at mount (initial +1,218: 82,457 -> 83,675); drawing stacks and bubbles
+// is a ~1,100-byte chunk loaded the first time a page has a group, and the bubble's list reuses the
+// comment action menu. Styles stay in the shared sheet: in the chunk they cost ~1,000 more in total.
+// Measured locally: main 223,370 -> 225,680 (+2,310); main's 130 bytes of headroom are kept.
 // 223,500 -> 227,900: Frame's Viewport mode (frame.mode "iframe"). The iframe, its load checks, fallback
 // reasons and the frame geometry are their own chunk (below). Initial grows ~1,650: komo's page reads
 // reach the frame through frame-target.ts (cross-realm checks, a listener registry, identity geometry the
 // chunk replaces; ~620 in the shared core chunk) and Frame's layout keeps the viewport hooks (~1,000). The
 // size bar's Viewport / In place switch and reason note add ~420 to the frame-size chunk (227,768 measured on main with #156 and #158).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 227_900)
+// 225,810 -> 230,200: both of the above together (230,073 measured with pin stacks and Viewport mode).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 230_200)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

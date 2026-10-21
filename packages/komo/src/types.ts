@@ -105,6 +105,13 @@ export interface KomoPins {
    * size expands to full on hover, focus, a nearby pointer, or selection.
    */
   size?: PinSize;
+  /**
+   * Consolidate crowded pins (default true). Comments on the same target draw as one
+   * avatar stack that fans out on hover, focus or tap; pins on different targets that
+   * would overlap merge into a count bubble that lists them. Records and anchors never
+   * change; false draws every pin at its own anchor.
+   */
+  cluster?: boolean;
 }
 
 /** Optional review features. Each defaults to true; false removes it from the UI. */
