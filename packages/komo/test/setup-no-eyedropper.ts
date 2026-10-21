@@ -46,5 +46,7 @@ chromium.launch = async (options) => guardBrowser(await launch(withFlag(options)
 const persistent = chromium.launchPersistentContext.bind(chromium);
 chromium.launchPersistentContext = async (dir, options) => guardContext(await persistent(dir, withFlag(options)));
 
-// jsdom and happy-dom files get the same stub.
-if (typeof window !== "undefined") new Function(eyeDropperStub)();
+// A DOM environment that models secure contexts gets the same stub. jsdom has neither
+// `isSecureContext` nor an EyeDropper, so there is nothing native to reach there, and a stub would
+// make code that checks both throw on the missing global.
+if (typeof window !== "undefined" && "isSecureContext" in globalThis) new Function(eyeDropperStub)();
