@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -96,7 +97,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const target = page.locator("#target"), original = await target.evaluate(node => node.style.cssText);
     const value = () => target.evaluate(node => getComputedStyle(node).color);
     const theme = (id: string) => page.evaluate(id => (window as any).radiusQA.theme(id), id);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await target.click();
     const trigger = page.locator('[data-field-property="color"] select[data-picker]');
     const choose = async () => {
@@ -179,7 +180,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const target = page.locator("#target"), original = await target.getAttribute("style");
     const value = () => target.evaluate(node => getComputedStyle(node).color);
     const theme = (id: string) => page.evaluate(id => document.documentElement.setAttribute("data-review-mode", id), id);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await target.click();
     const field = page.locator('[data-field-property="color"]');
     const trigger = field.locator("select[data-picker]");
@@ -262,7 +263,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     page.setDefaultTimeout(4000);
     await page.goto(`${origin}/?mode=${mode}&case=radius`);
     await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d");
+    await openDesign(page);
     const target = page.locator("#target");
     await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
     const pick = await target.boundingBox();
@@ -402,7 +403,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await page.goto(`${origin}/?mode=${mode}`);
     await page.waitForFunction(() => !!(window as any).komo);
     const original = await page.locator("#target").getAttribute("style");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.locator("#target").click();
     const field = page.locator(`[data-field-property="${property}"]`);
     const input = field.locator(`input[data-property="${property}"]`);

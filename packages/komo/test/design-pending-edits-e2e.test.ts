@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // Pending edits in real Chrome. Escape keeps element previews pending (Before while
 // closed, After on return), and page token edits do the same: after re-entering they
@@ -123,7 +124,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
       await page.keyboard.up("Control");
     };
 
-    await page.keyboard.press("d");
+    await openDesign(page);
     await editSurface();
 
     // Escape shows Before while closed; re-entering puts the tokens back, and says so.
@@ -209,7 +210,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     // Posting selects the new thread, and D would open it in Design mode; start again from a fresh page.
     await page.reload();
     await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await editSurface();
     await card.click();
     await narrow();

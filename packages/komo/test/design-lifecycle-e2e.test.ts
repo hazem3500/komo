@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -84,8 +85,7 @@ describe.skipIf(!chrome).each([false, true])("SVG lifecycle in Frame=%s", frame 
       await page.locator(".design-inspector__target").click();
     };
     const computed = (selector: string) => page.locator(selector).evaluate(node => getComputedStyle(node).color);
-    await page.keyboard.press("d");
-    await page.waitForSelector('.design-inspector[aria-hidden="false"]');
+    await openDesign(page);
     await edit("#shape", "#ef3340", true);
     await page.keyboard.press("v");
     expect(await page.locator("#shape").getAttribute("style")).toBe(original);

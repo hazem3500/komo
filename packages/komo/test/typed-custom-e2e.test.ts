@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find((path): path is string => !!path && existsSync(path));
 let directory: string, origin: string, server: Server, browser: Browser;
 const evidence = process.env.KOMO_TYPED_EVIDENCE;
@@ -53,7 +54,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     page.setDefaultTimeout(5000);
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d"); await page.locator("#target").click();
+    await openDesign(page); await page.locator("#target").click();
     const target = page.locator("#target"), undo = page.locator('.design-inspector__actions [aria-label="Undo"]');
     const original = await target.getAttribute("style");
     let opened = "";
@@ -181,7 +182,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
     await page.goto(`${origin}/?mode=${mode}&inline`); await page.waitForFunction(() => !!(window as any).komo);
     const target = page.locator("#target"), original = await target.getAttribute("style");
-    await page.keyboard.press("d"); await target.click();
+    await openDesign(page); await target.click();
     const open = async () => {
       await page.locator('[data-field-property="width"] select[data-picker]').click();
       await page.locator(".komo-tokens").waitFor(); if (await page.locator(".komo-tokens__more").isVisible()) await page.locator(".komo-tokens__more").click();
@@ -200,7 +201,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(5000);
     await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d"); await page.locator("#target").click();
+    await openDesign(page); await page.locator("#target").click();
     await page.locator('[data-field-property="width"] select[data-picker]').click();
     await page.locator(".komo-tokens").waitFor(); if (await page.locator(".komo-tokens__more").isVisible()) await page.locator(".komo-tokens__more").click();
     const unit = page.locator('.komo-custom select[aria-label="Width unit"]');

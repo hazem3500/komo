@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -102,8 +103,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       document.querySelector('main')!.append(area);
       area.addEventListener('click', () => (window as any).textQA.actions++);
     });
-    await page.keyboard.press('d');
-    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await openDesign(page);
     for (const id of ['native-button', 'native-link', 'native-summary']) for (const key of ['Enter', 'Space']) {
       await page.locator(`#${id}`).focus();
       await page.keyboard.press(key);
@@ -144,6 +144,32 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.close();
   });
 
+  it("opens the inspector within 2s even while its selection keys are still loading", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    let release!: () => void;
+    const loaded = new Promise<void>(resolve => { release = resolve; });
+    let requested = 0;
+    await page.route(/\/design-export[^/]*\.js$/, async route => { requested ||= Date.now(); await loaded; await route.continue(); });
+    try {
+      await page.goto(`${origin}/?react=${version}&mode=floating`);
+      await page.locator('#target').waitFor();
+      await page.keyboard.press('d');
+      await expect.poll(() => requested).not.toBe(0);
+      await page.locator('.design-inspector[aria-hidden="false"]').waitFor({ timeout: 4000 });
+      expect(Date.now() - requested).toBeGreaterThanOrEqual(1500);
+      // The held chunk then arrives and Enter inspects the focused link as usual.
+      release();
+      await expect.poll(() => page.locator('.design-inspector__actions [aria-label="Undo"] svg').count()).toBe(1);
+      await page.locator('#target').focus();
+      await page.keyboard.press('Enter');
+      expect(await page.locator('.design-inspector__target').textContent()).toContain('#target');
+      await page.evaluate(() => (window as any).komo.destroy());
+    } finally {
+      release();
+      await page.close();
+    }
+  });
+
   it("keeps source-formatting newlines at baseline geometry in Before and Undo", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     await page.goto(`${origin}/?react=${version}&mode=floating`);
@@ -162,8 +188,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       await page.locator('#target[contenteditable="true"]').waitFor();
     };
     const compare = page.locator('.design-inspector__compare');
-    await page.keyboard.press('d');
-    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await openDesign(page);
     await page.locator('#target').click({ position: { x: 5, y: 5 } });
     await start();
     await page.keyboard.type(' edited');
@@ -204,8 +229,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.goto(`${origin}/?react=${version}&mode=floating&bridge=1`);
     const target = page.locator('#bridge[data-komo-text-prop]');
     await target.waitFor();
-    await page.keyboard.press('d');
-    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await openDesign(page);
     await target.click();
     const tab = page.getByRole('tab', { name: 'Design', exact: true });
     if (await tab.count()) await tab.click();
@@ -232,8 +256,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       sibling.id = 'sibling'; sibling.textContent = 'Next element'; sibling.style.marginTop = '1200px';
       document.querySelector('#target')!.after(sibling);
     });
-    await page.keyboard.press('d');
-    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await openDesign(page);
     await page.locator('#target').click({ position: { x: 5, y: 5 } });
     await page.keyboard.press('Tab');
     expect(await page.locator('.design-inspector__target').textContent()).toBe('p#sibling');
@@ -255,8 +278,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     await page.goto(`${origin}/?react=${version}&mode=floating`);
     await page.locator('#target').waitFor();
-    await page.keyboard.press('d');
-    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await openDesign(page);
     await page.locator('#target').click({ position: { x: 5, y: 5 } });
     const designTab = page.getByRole('tab', { name: 'Design', exact: true });
     if (await designTab.count()) await designTab.click();
@@ -390,8 +412,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       await page.getByRole("button", { name: "Edit selected text inline", exact: true }).click();
       await page.locator('#target[contenteditable="true"]').waitFor();
     };
-    await page.keyboard.press("d");
-    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await openDesign(page);
     await target.click({ position: { x: 5, y: 5 } });
     await start();
     expect(await target.evaluate(node => getComputedStyle(node).outlineColor)).toBe("rgb(189, 166, 239)");

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // The Tokens view in real Chrome: page-wide edits through discoverCssTokens'
 // injected stylesheet, per theme option, Before/After, Undo, Reset, a page
@@ -95,7 +96,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
       await expect.poll(() => toggle.getAttribute("aria-label")).toBe(`Theme: ${label}`);
     };
 
-    await page.keyboard.press("d");
+    await openDesign(page);
     const open = page.getByRole("button", { name: "Edit tokens", exact: true });
     await open.waitFor();
     await page.screenshot({ path: join(tmpdir(), `komo-token-page-${mode}-empty.png`) });
@@ -224,7 +225,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?mode=${mode}`);
     await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.getByRole("button", { name: "Edit tokens", exact: true }).click();
     const rows = page.locator(".design-token-row");
     await rows.nth(2).waitFor();

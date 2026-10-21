@@ -5,6 +5,7 @@ import { createServer, type Server } from "node:http";
 import { extname, join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // Drives the real examples/react-props demo in Chrome, built once against React 19 and once
 // against React 18: pick an unregistered component in Design mode and read what it shows.
@@ -54,7 +55,7 @@ async function open(react: 18 | 19, viewport: { width: number; height: number },
 
 /** Enter Design mode and pick `selector`; resolves to the panel's discovered-props group text. */
 async function pick(page: Page, selector: string, position?: { x: number; y: number }) {
-  await page.keyboard.press("d");
+  await openDesign(page);
   await page.waitForFunction(() => !!document.querySelector(".design-active"));
   await page.click(selector, position ? { position } : undefined);
   await page.waitForFunction(() => [...document.querySelectorAll("*")].some((node) => node.shadowRoot?.querySelector(".design-react-group")));
@@ -147,7 +148,7 @@ describe.skipIf(!chrome).each([18, 19] as const)("react-fiber adapter in the dem
     await page.route(/ts\.net/, (route) => route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: "[]" }));
     await page.goto(`${origin}/examples/react-props/index.html?components=badge&react=${react}`);
     await page.waitForSelector(".team-badge");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.waitForFunction(() => !!document.querySelector(".design-active"));
     await page.click(".team-badge", { position: { x: 4, y: 4 } });
     await page.waitForTimeout(800);

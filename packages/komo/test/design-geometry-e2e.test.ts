@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -83,7 +84,7 @@ describe.skipIf(!chrome)('experimental geometry', () => {
     try {
       await page.goto(`${origin}/?${mode}`);
       await page.waitForFunction(() => !!(window as any).komo);
-      await page.keyboard.press('d'); await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+      await openDesign(page);
       await page.locator('#target').click();
       await handle(page, 'se').waitFor({ state: 'visible' });
       const target = page.locator('#target');
@@ -131,7 +132,7 @@ describe.skipIf(!chrome)('experimental geometry', () => {
     try {
       await page.goto(`${origin}/?off`);
       await page.waitForFunction(() => !!(window as any).komo);
-      await page.keyboard.press('d'); await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+      await openDesign(page);
       await page.locator('#target').click();
       await page.locator('.design-inspector__target').waitFor();
       expect(await page.locator('.design-geometry').count()).toBe(0);
@@ -151,7 +152,7 @@ describe.skipIf(!chrome)('geometry ownership and guards', () => {
       const target = page.locator('#target');
       await target.evaluate(node => node.setAttribute('style', 'transform:scale(1.2,1.1);translate:5% 8px !important;transition:opacity 2s linear !important'));
       const baseline = await target.getAttribute('style');
-      await page.keyboard.press('d'); await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+      await openDesign(page);
       await target.click();
       await keys(page, 'Control+ArrowRight');
       const prior = await target.getAttribute('style');
@@ -189,7 +190,7 @@ describe.skipIf(!chrome)('geometry ownership and guards', () => {
       await page.goto(origin); await page.waitForFunction(() => !!(window as any).komo);
       await page.locator('#target').evaluate((node, value) => (node as HTMLElement).style.transform = value, transform);
       const baseline = await page.locator('#target').getAttribute('style');
-      await page.keyboard.press('d'); await page.locator('.design-inspector[aria-hidden="false"]').waitFor(); await page.locator('#target').click();
+      await openDesign(page); await page.locator('#target').click();
       const reason = page.locator('.design-inspector .design-geometry-note p');
       await reason.waitFor();
       expect(await reason.textContent()).toBe("Rotated, skewed, 3D or mirrored boxes can't be previewed.");
@@ -207,7 +208,7 @@ describe.skipIf(!chrome)('geometry proposal handoff', () => {
     page.setDefaultTimeout(5000);
     try {
       await page.goto(origin); await page.waitForFunction(() => !!(window as any).komo);
-      await page.keyboard.press('d'); await page.locator('.design-inspector[aria-hidden="false"]').waitFor(); await page.locator('#target').click();
+      await openDesign(page); await page.locator('#target').click();
       await keys(page, 'Control+ArrowRight', 'Control+ArrowDown');
       await page.locator('.design-inspector__actions').getByRole('button', { name: 'Comment', exact: true }).click();
       await page.waitForSelector('.draft-proposal .design-toggle');
@@ -228,7 +229,7 @@ describe.skipIf(!chrome)('geometry transaction boundaries', () => {
     page.setDefaultTimeout(5000);
     try {
       await page.goto(origin); await page.waitForFunction(() => !!(window as any).komo);
-      await page.keyboard.press('d'); await page.locator('.design-inspector[aria-hidden="false"]').waitFor(); await page.locator('#target').click();
+      await openDesign(page); await page.locator('#target').click();
       const corner = handle(page, 'se');
       await corner.waitFor();
       const box = (await corner.boundingBox())!;

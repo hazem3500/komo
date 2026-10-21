@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -88,7 +89,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     const target = page.locator("main button");
     await target.waitFor();
     const baseline = await target.evaluate(node => ({ style: node.getAttribute("style"), className: node.className, color: getComputedStyle(node).color, display: getComputedStyle(node).display }));
-    await page.keyboard.press("d");
+    await openDesign(page);
     await target.click();
     await page.locator('[data-property="display"]').click();
     const layout = page.locator(".komo-select");
@@ -141,7 +142,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await target.waitFor();
     const baselineStyle = await target.getAttribute("style");
     await target.evaluate(node => (window as any).originalLeaf = node);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await target.click();
     const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
     await variant.evaluate(node => (window as any).originalControl = node);
@@ -209,7 +210,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
       const target = page.locator("main button");
       await target.waitFor();
       const style = await target.getAttribute("style");
-      await page.keyboard.press("d");
+      await openDesign(page);
       await target.click();
       const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
       const label = page.getByRole("textbox", { name: "ActionButton aria-label", exact: true });
@@ -255,7 +256,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await page.goto(`${origin}/?react=${version}&replace`);
     const target = page.locator("main button");
     await target.waitFor();
-    await page.keyboard.press("d");
+    await openDesign(page);
     await target.click();
     const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
     await variant.fill("primary");
@@ -283,8 +284,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await page.goto(`${origin}/?react=${version}${frame ? "&frame" : ""}`);
     await page.locator("main button").waitFor();
     await page.waitForFunction(() => Number(document.querySelector("output")?.textContent) > 1);
-    await page.keyboard.press("d");
-    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await openDesign(page);
     await page.locator("main button").click();
     const variant = page.getByRole("textbox", { name: "ActionButton variant", exact: true });
     await variant.fill("primary");
