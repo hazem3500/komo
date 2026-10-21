@@ -258,6 +258,12 @@ export interface CommentsOptions {
      */
     defaultMode?: "iframe" | "transform";
     iframeUrl?(location: Location): string;
+    /**
+     * Single-copy Viewport (with mode "iframe"): Viewport reloads this page as a
+     * shell for komo, so the app runs once, in the frame. Requires the app's entry
+     * to skip mounting when `isShell(project)` from `@hazem3500/komo/shell` is true.
+     */
+    shell?: boolean;
   };
   /**
    * Stop komo's own pointer, focus, wheel and typing events at its host
