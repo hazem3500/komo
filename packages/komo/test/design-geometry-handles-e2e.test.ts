@@ -277,7 +277,11 @@ describe.skipIf(!chrome)("Figma-style geometry handles", () => {
       const live = page.locator(".design-geometry__live");
       expect(await live.getAttribute("role")).toBe("status");
       await frameOf(page).focus();
-      expect(await frameOf(page).getAttribute("aria-label")).toBe("Move or resize div#card: Alt or ⌥ + arrows move, Ctrl or ⌘ + arrows resize, Shift for 10px");
+      // The label names the shipped keys in the platform's glyphs only.
+      const mac = await page.evaluate(() => /mac|iphone|ipad/i.test(navigator.platform));
+      expect(await frameOf(page).getAttribute("aria-label")).toBe(mac
+        ? "Move or resize div#card: ⌥↑/↓ move, ⌥⇧↑/↓ move out or into, ⌘ arrows resize, ⇧⌘ arrows by 10px"
+        : "Move or resize div#card: Alt+↑/↓ move, Alt+Shift+↑/↓ move out or into, Ctrl+arrows resize, Ctrl+Shift+arrows by 10px");
       await page.keyboard.press("Control+ArrowRight");
       expect(await card.evaluate(node => node.style.width)).toBe("241px");
       await expect.poll(() => live.textContent()).toBe("Resized: width 241px");

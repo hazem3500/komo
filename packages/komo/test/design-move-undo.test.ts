@@ -195,10 +195,12 @@ describe("Undo shortcut on the focused selection", () => {
     const root = host.attachShadow({ mode: "open" });
     root.innerHTML = '<div id="compare" hidden></div><div class="design-geometry"><div class="design-geometry__frame" tabindex="0" role="group"></div></div><button id="undo">Undo</button><input>';
     const undo = root.querySelector<HTMLButtonElement>("#undo")!;
-    const clicks = vi.fn();
+    // Design mode's Undo focuses itself, as the panel button does.
+    const clicks = vi.fn(() => undo.focus());
     undo.addEventListener("click", clicks);
+    const select = vi.fn();
     const handle = designKeyboard({ host, compare: root.querySelector<HTMLElement>("#compare")!, selected: () => document.querySelector<DesignTarget>("#target"),
-      select: () => {}, compareBefore: () => {}, undo, root, signal: cleanup.signal });
+      select, compareBefore: () => {}, undo, root, signal: cleanup.signal });
     document.addEventListener("keydown", event => { handle(event); }, { signal: cleanup.signal });
     const frame = root.querySelector<HTMLElement>(".design-geometry__frame")!;
     frame.focus();
@@ -211,6 +213,8 @@ describe("Undo shortcut on the focused selection", () => {
     expect(press(mac ? { metaKey: true } : { ctrlKey: true }).defaultPrevented).toBe(true);
     expect(clicks).toHaveBeenCalledTimes(1);
     expect(root.activeElement).toBe(frame);
+    // The selection stays drawn: Design mode re-selects it, as canvas keys do.
+    expect(select).toHaveBeenCalledTimes(1);
     // Design mode has no redo: ⌘⇧Z is left alone.
     expect(press(mac ? { metaKey: true, shiftKey: true } : { ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false);
     // A text field keeps its own undo.
@@ -220,5 +224,8 @@ describe("Undo shortcut on the focused selection", () => {
     frame.blur();
     press(mac ? { metaKey: true } : { ctrlKey: true }, document.body);
     expect(clicks).toHaveBeenCalledTimes(2);
+    expect(select).toHaveBeenCalledTimes(2);
+    // Focus returns to the canvas, so arrows, M and B keep working.
+    expect(root.activeElement).toBeNull();
   });
 });

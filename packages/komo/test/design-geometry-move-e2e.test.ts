@@ -370,6 +370,8 @@ describe.skipIf(!chrome)("structural move", () => {
       await restored();
 
       // Consecutive moves undo one at a time; a panel edit after a move undoes first.
+      // Focus went back to the canvas, so canvas keys still work.
+      expect(await page.evaluate(() => document.querySelector("[data-branch-comments]")!.shadowRoot!.activeElement)).toBeNull();
       await page.keyboard.press("m");
       await page.keyboard.press("Alt+ArrowUp");
       await page.keyboard.press("Alt+ArrowDown");

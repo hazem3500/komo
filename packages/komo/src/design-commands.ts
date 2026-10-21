@@ -30,8 +30,9 @@ export function designCommands(mac = isMac(), visibility?: Shortcut | null) {
     command("Move after next sibling", "ArrowDown", geometry, { alt: true }),
     command("Move out, after its parent", "ArrowUp", geometry, { alt: true, shift: true }),
     command("Move into previous sibling", "ArrowDown", geometry, { alt: true, shift: true }),
-    command("Resize width (Shift: 10px)", "ArrowRight", geometry, mac ? { meta: true } : { ctrl: true }),
-    command("Resize height (Shift: 10px)", "ArrowDown", geometry, mac ? { meta: true } : { ctrl: true }),
+    command("Resize width", "ArrowRight", geometry, mac ? { meta: true } : { ctrl: true }),
+    command("Resize height", "ArrowDown", geometry, mac ? { meta: true } : { ctrl: true }),
+    command("Resize by 10px", "ArrowRight", geometry, mac ? { meta: true, shift: true } : { ctrl: true, shift: true }),
     command("Back to the canvas", "Escape", geometry),
     // The comments visibility key, reused in Design mode for the selection overlays.
     ...(visibility ? [{ label: "Hide or show selection · hold to peek", group: canvas, shortcut: visibility }] : []),

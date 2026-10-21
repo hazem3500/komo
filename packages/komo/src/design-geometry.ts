@@ -290,6 +290,12 @@ export function bindGeometry(hooks: Hooks) {
   const visibility = hooks.options.visibility;
   const keys = visibility ? ` (${shortcutKeys(visibility).keys.join(isMac() ? '' : '+')})` : '';
   /** A tap toggled the overlays; a hold (over 350ms) peeked, so its release puts them back. */
+  // Labels name the shipped keys in the platform's own glyphs: ⌥⇧⌘ on Apple platforms, Alt, Shift and Ctrl elsewhere.
+  const command = isMac() ? 'Meta' : 'Control';
+  // Modifiers in the order shortcut help shows them: Control, Alt, Shift, Meta.
+  const chord = (mods: string[], key: string) => (mods = ['Control', 'Alt', 'Shift', 'Meta'].filter(mod => mods.includes(mod)), isMac())
+    ? `${mods.map(mod => ({ Alt: '⌥', Shift: '⇧', Meta: '⌘' } as Record<string, string>)[mod]).join('')}${key.length > 3 ? ' ' : ''}${key}`
+    : `${mods.map(mod => mod === 'Control' ? 'Ctrl' : mod).join('+')}+${key}`;
   const release = (at: number) => { if (held && at - held.at > 350) peek(held.was); held = undefined; };
   const eye = Object.assign(document.createElement('button'), { type: 'button', className: 'design-inspector__eye' });
   /** Hide every Design overlay (selection, hover outline, pins and move feedback), or show them again. */
@@ -583,7 +589,7 @@ export function bindGeometry(hooks: Hooks) {
     const info = boxInfo(element);
     axes = reason || moved ? [false, false] : info.axes;
     const label = `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}`;
-    frame.setAttribute('aria-label', `${still ? 'Resize' : 'Move or resize'} ${label}: ${still ? '' : 'Alt or ⌥ + arrows move, '}Ctrl or ⌘ + arrows resize, Shift for 10px`);
+    frame.setAttribute('aria-label', `${still ? 'Resize' : 'Move or resize'} ${label}: ${still ? '' : `${chord(['Alt'], '↑/↓')} move, ${chord(['Alt', 'Shift'], '↑/↓')} move out or into, `}${chord([command], 'arrows')} resize, ${chord(['Shift', command], 'arrows')} by 10px`);
     // The outline sits on the border box in whole device pixels; each square centres on its 1px line.
     const dpr = devicePixelRatio || 1, whole = (value: number) => Math.round(value * dpr) / dpr;
     const left = whole(rect.left), top = whole(rect.top), right = whole(rect.right), bottom = whole(rect.bottom);
