@@ -191,18 +191,24 @@ it("shows primary font and only real token choices, retaining quoted fallback st
   expect(e.commit).toHaveBeenCalledExactlyOnceWith('"Other, Face", monospace');
 });
 
-it.each([{ property: "padding", label: "Padding", kind: "length" as const, max: 200 }, { property: "display", label: "Layout", kind: "select" as const, values: ["flex", "grid"] }])("routes $property Custom through the existing field transaction", field => {
+it.each([{ property: "padding", label: "Padding", kind: "length" as const, max: 200 }, { property: "font-family", label: "Font family", kind: "text" as const }])("routes $property Custom through the existing field transaction", field => {
   const element = document.createElement("div"); document.body.append(element);
   const context = { element, begin: vi.fn(), apply: vi.fn(), commit: vi.fn() };
   const box = fieldControl(field, context), control = box.querySelector<HTMLElement>("[data-property]")!;
   const custom = customPickerValue(element, field.property, control)!;
   expect(custom.field).toBe(field);
-  const undo = custom.onPreview(field.kind === "length" ? "2rem" : "grid"); undo(); expect(element.getAttribute("style")).toBeNull();
-  const value = field.kind === "length" ? "calc(1rem + 2px)" : "grid";
+  const undo = custom.onPreview(field.kind === "length" ? "2rem" : "serif"); undo(); expect(element.getAttribute("style")).toBeNull();
+  const value = field.kind === "length" ? "calc(1rem + 2px)" : "serif";
   custom.onSelect(value);
   expect(context.begin).toHaveBeenCalledExactlyOnceWith(control, field.property);
   expect(context.apply).toHaveBeenCalledExactlyOnceWith(control, field.property, value);
   expect(context.commit).toHaveBeenCalledExactlyOnceWith(control, field.property);
+});
+
+it.each([{ property: "display", label: "Layout", kind: "select" as const, values: ["flex", "grid"] }, { property: "opacity", label: "Opacity", kind: "text" as const }])("gives $property no Custom popup: the field is its editor", field => {
+  const element = document.createElement("div"); document.body.append(element);
+  const box = fieldControl(field, { element, begin() {}, apply() {}, commit() {} });
+  expect(customPickerValue(element, field.property, box.querySelector<HTMLElement>("[data-property]"))).toBeUndefined();
 });
 
 it("keeps live values as one pending edit that the popup closing finishes", () => {

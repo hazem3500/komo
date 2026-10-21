@@ -100,6 +100,8 @@ export function customPickerValue(element: DesignTarget, property: string, input
   if (!(input instanceof HTMLInputElement || input instanceof HTMLSelectElement)) return;
   const registered = fields.get(input);
   if (!registered && (input instanceof HTMLSelectElement || input.type === "number")) return;
+  // Keyword fields and opacity are their own editors: a token list only, no Custom popup.
+  if (registered?.field.kind === "select" || property === "opacity") return;
   return {
     // Read when asked, so an open popup can follow a settled transition or theme.
     get value() { return (!/color|^(fill|stroke)$/.test(property) && element.style.getPropertyValue(property).trim()) || getComputedStyle(element).getPropertyValue(property).trim(); },
@@ -146,6 +148,7 @@ export function inputValue(field: Field, control: Control): string | null {
     if (!/^(auto|normal|(?:\d+(?:\.\d+)?)(?:px|%|vw|vh|rem|em)?)$/.test(value)) return null;
     return field.kind === "size" && /^[\d.]+$/.test(value) ? `${value}px` : value;
   }
-  return validStyleValue(field.property, value);
+  // A plain number of letter spacing is pixels, as the arrows and scrub write it.
+  return validStyleValue(field.property, field.property === "letter-spacing" && /^-?[\d.]+$/.test(value) ? `${value}px` : value);
 }
 
