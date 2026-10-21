@@ -6,6 +6,7 @@
  * state callback so preview changes go through React's normal render cycle.
  */
 import type { ComponentEditor, ComponentIdentity, ComponentProperty } from "./design-system.js";
+import { frameBridge, publishFrameBridge } from "./frame-target.js";
 
 export type InspectableScalar = string | number | boolean | undefined;
 
@@ -71,6 +72,9 @@ export function adaptComponentEditor(identity: ComponentIdentity, editor: Compon
 
 /** Resolve only an adapter's renderer-proven instance; registered text owners never migrate. */
 export function currentInspectableElement(element: Element): Element | null {
+  // A root registered in Frame's viewport iframe answers from that realm's registry.
+  const bridged = frameBridge(element)?.currentInspectableElement;
+  if (bridged) return bridged(element as never) as Element | null;
   const entry = adapted.get(element);
   if (!entry || entry.editor.available?.() === false) return null;
   const next = entry.editor.currentElement?.();
@@ -184,6 +188,8 @@ export function updateInspectableRoot(
 export function inspectableFor(
   target: Element | null,
 ): RegisteredInspectableComponent | null {
+  const bridged = frameBridge(target)?.inspectableFor;
+  if (bridged) return bridged(target as never) as RegisteredInspectableComponent | null;
   const registeredComponent = target && registered.get(target);
   if (registeredComponent &&
     target.getAttribute("data-komo-inspectable") === registeredComponent.definition.id
@@ -202,3 +208,6 @@ export function inspectableAncestor(
   }
   return null;
 }
+
+// Inside Frame's viewport iframe, komo in the parent window reads this realm's registrations.
+publishFrameBridge({ inspectableFor, currentInspectableElement });
