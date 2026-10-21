@@ -33,6 +33,9 @@ const geometry = (await readdir("dist"))
 const liveColors = (await readdir("dist"))
   .filter((file) => /^live-colors.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const fieldControls = (await readdir("dist"))
+  .filter((file) => /^field-controls.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const typedEditor = (await readdir("dist"))
   .filter((file) => /^token-custom.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
@@ -94,6 +97,7 @@ const report = {
   optionalAccountTokens: await sizes(new Set(accountTokens)),
   optionalFrameViewport: await sizes(new Set(frameIframe)),
   optionalLiveColors: await sizes(new Set(liveColors)),
+  optionalFieldControls: await sizes(new Set(fieldControls)),
   optionalColorEditor: await sizes(new Set(colorEditor)),
   optionalTypedEditor: await sizes(new Set(typedEditor)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
@@ -196,7 +200,9 @@ if (report.optionalInlineTextEditing.gzip > 3_100)
 // The select trigger's chevron moved to the select menu chunk below (4,271 -> ~4,140).
 // 4,375: color fields fetch their settled-value sync (live-colors, below) and read a bound token's value (4,246 -> 4,321).
 // 4,625: field-label.ts moved into this chunk with the picker (it left a shared chunk the panel already loaded, because the typed Custom editor stopped importing it with the old color form).
-if (report.optionalDesignPanel.gzip > 4_625)
+// 4,800: letter spacing and opacity fields, per-field scrub steps, no Custom popup for keyword
+// fields and the fetch of the field controls chunk below (4,591 -> 4,677), plus ~3%.
+if (report.optionalDesignPanel.gzip > 4_800)
   throw new Error("komo's design panel chunk exceeds its gzip budget.");
 // The Design panel's styled select popups (listbox, keyboard, flip and check marks)
 // load as their own chunk beside the panel, so neither the panel nor the entry grows.
@@ -252,6 +258,10 @@ if (report.optionalFrameViewport.gzip > 2_300)
   throw new Error("komo's Viewport mode chunk exceeds its gzip budget.");
 // Color fields re-read the element once hover, focus, theme and transitions settle; fetched with the
 // panel as its own chunk. 704 measured, plus ~3%.
+// In-row field controls (icon segments for text alignment and border style, weight samples,
+// unit suffixes) are fetched with the panel, like the select menu. 1,834 measured, plus ~3%.
+if (report.optionalFieldControls.gzip > 1_900)
+  throw new Error("komo's field controls chunk exceeds its gzip budget.");
 if (report.optionalLiveColors.gzip > 725)
   throw new Error("komo's live color field chunk exceeds its gzip budget.");
 // The Custom color picker (area, sliders, eyedropper, value row with five formats, document and
