@@ -61,7 +61,9 @@ it("moves among eligible same-parent siblings, including SVG roots and inner sha
   expect(f.compareBefore).not.toHaveBeenCalled();
 });
 
-it.each(['input', 'textarea', 'select', 'button', '[contenteditable]', 'slider', 'radio', 'spinbutton', 'tree', 'treeitem', 'listbox', 'option', 'combobox', 'menu', 'menuitem', 'dialog', 'tab', 'grid', 'textbox', 'switch', 'checkbox'])('leaves %s and descendants alone', kind => {
+// Arrows stay with every widget; B pauses only in text entry and fires from any other control.
+const typing = ['input', 'textarea', '[contenteditable]', 'listbox', 'textbox'];
+it.each(['input', 'textarea', 'select', 'button', '[contenteditable]', 'slider', 'radio', 'spinbutton', 'tree', 'treeitem', 'listbox', 'option', 'combobox', 'menu', 'menuitem', 'dialog', 'tab', 'grid', 'textbox', 'switch', 'checkbox'])('leaves arrows to %s and its descendants, and B only to text entry', kind => {
   const f = fixture();
   const native = ['input', 'textarea', 'select', 'button'].includes(kind);
   const widget = document.createElement(native ? kind : 'div');
@@ -70,9 +72,10 @@ it.each(['input', 'textarea', 'select', 'button', '[contenteditable]', 'slider',
   const child = document.createElement('span');
   widget.append(child);
   document.body.append(widget);
-  for (const target of [widget, child]) for (const key of ['ArrowLeft', 'ArrowRight', 'b']) expect(f.press(key, target).defaultPrevented).toBe(false);
+  for (const target of [widget, child]) for (const key of ['ArrowLeft', 'ArrowRight']) expect(f.press(key, target).defaultPrevented).toBe(false);
+  expect(f.press('b', widget).defaultPrevented).toBe(!typing.includes(kind));
   expect(f.select).not.toHaveBeenCalled();
-  expect(f.compareBefore).not.toHaveBeenCalled();
+  expect(f.compareBefore).toHaveBeenCalledTimes(typing.includes(kind) ? 0 : 1);
 });
 
 it("only compares arrows on its controls, leaves owned surfaces alone and respects configured bindings/composition", () => {

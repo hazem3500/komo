@@ -22,6 +22,7 @@ export function designCommands(mac = isMac()) {
     command("Child element", "ArrowDown", canvas, { alt: true }),
     command("Inspect focused element", "Enter", canvas),
     command("Exit Design mode", "Escape", canvas),
+    command("Undo last preview", "z", canvas, mac ? { meta: true } : { ctrl: true }),
     // Ctrl+arrows switch spaces on macOS, so ⌘ there; Alt stays parent and child.
     command("Resize width (Shift: 10px)", "ArrowRight", geometry, mac ? { meta: true } : { ctrl: true }),
     command("Resize height (Shift: 10px)", "ArrowDown", geometry, mac ? { meta: true } : { ctrl: true }),

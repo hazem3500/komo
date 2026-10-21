@@ -64,7 +64,7 @@ it("labels the dialog by its pinned title and lists only bound commands, with ge
   expect([...row("Select inner element").querySelectorAll("kbd")].map(node => node.textContent)).toHaveLength(1);
   expect(row("Select inner element").querySelector(".komo-kbd span")?.textContent).toBe("Click");
   expect(row("Edit text").querySelectorAll("kbd")).toHaveLength(0);
-  expect(help.querySelector(".komo-shortcuts__body")?.lastElementChild?.textContent).toMatch(/pause while you type/);
+  expect(help.querySelector(".komo-shortcuts__body")?.lastElementChild?.textContent).toBe("Shortcuts pause while typing in a text field.");
   expect(root.activeElement).toBe(help.querySelector(".komo-shortcuts__body"));
 });
 
