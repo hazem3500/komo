@@ -74,6 +74,8 @@ const regions = (popup: Locator) => popup.evaluate(node => {
   const center = (name: string, selector: string) => {
     const part = node.querySelector(selector);
     if (!part) return;
+    // With tokens above the picker the popup may scroll; the part is brought into its view first.
+    part.scrollIntoView({ block: "nearest" });
     const rect = part.getBoundingClientRect();
     points.push([name, rect.left + rect.width / 2, rect.top + rect.height / 2]);
   };

@@ -171,7 +171,8 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 225_810)
 // Passing select and the geometry proposal section to that chunk adds ~10 bytes (7,093 measured).
 // 7,350: geometry's structural move needs Design mode's click selection and Before state, and the
 // hidden original's display stays out of proposals and Copy CSS (7,234 -> 7,320 measured).
-if (report.optionalDesignMode.gzip > 7_350)
+// 7,375: the entry imports chunks by hashed name, so a lazy chunk's new content can move it a byte (7,350 -> 7,351).
+if (report.optionalDesignMode.gzip > 7_375)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).

@@ -208,7 +208,8 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("the color picke
       const root = [...document.querySelectorAll("*")].find(node => node.shadowRoot?.querySelector(".komo-tokens"))!.shadowRoot!;
       return [!!root.activeElement?.closest(".komo-tokens"), root.activeElement?.textContent];
     });
-    expect(await active()).toEqual([true, "Tokens"]);
+    // The first control is the token section's Show all; there is no tab bar.
+    expect(await active()).toEqual([true, "Show all"]);
     await tab.keyboard.press("Shift+Tab");
     expect((await active())[0]).toBe(true);
     await tab.keyboard.press("Escape");
