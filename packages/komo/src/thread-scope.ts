@@ -5,12 +5,7 @@ export function inPersistentRegion(
   element: Element,
   options: Pick<CommentsOptions, "persistentRegions" | "isPersistent">,
 ): boolean {
-  try {
-    if (options.isPersistent?.(element)) return true;
-  } catch {
-    /* A failing host hook keeps the comment on its own page. */
-  }
-  return !!options.persistentRegions?.some((selector) => {
+  return !!options.isPersistent?.(element) || !!options.persistentRegions?.some((selector) => {
     try {
       return !!element.closest(selector);
     } catch {

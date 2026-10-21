@@ -66,7 +66,7 @@ export function agentPrompt(
     const anchor = thread.anchor;
     lines.push(`### Thread ${value(thread.id)} — Open`);
     if (thread.scope === "all")
-      lines.push("Shown on: every page where the target exists (persistent layout)");
+      lines.push("Shown on: all pages with this target");
     lines.push(`CSS selector: ${value(anchor.selector)}`);
     if (anchor.source) lines.push(`Source reference: ${value(anchor.source)}`);
     for (const [key, label] of Object.entries({

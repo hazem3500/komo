@@ -144,7 +144,8 @@ await writeFile(
 // loads); the frame-size chunk +630 (Available space, the zoom readout, the "Layout follows your
 // browser window" note and its tooltip). Measured locally: main 219,704 -> 220,715.
 // 221,100: the pending-token chip and Layout field sync (#139) landed alongside (+~300).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 221_100)
+// 221,450: all-pages comments on persistent layout (scope at create, page membership, list label, the … toggle) must run at mount: 221,020 -> 221,433.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 221_450)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

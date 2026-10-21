@@ -52,18 +52,11 @@ describe("persistent regions", () => {
       inPersistentRegion(at("body"), { isPersistent: (element) => element.id === "body" }),
     ).toBe(true);
   });
-  it("keeps comments on their page when a selector or host hook fails", () => {
+  it("skips invalid selectors instead of failing the comment", () => {
     document.body.innerHTML = '<nav><a id="link">Home</a></nav>';
     const link = document.getElementById("link")!;
     expect(inPersistentRegion(link, { persistentRegions: ["[[invalid", "nav"] })).toBe(true);
     expect(inPersistentRegion(link, { persistentRegions: ["[[invalid"] })).toBe(false);
-    expect(
-      inPersistentRegion(link, {
-        isPersistent: () => {
-          throw Error("host failure");
-        },
-      }),
-    ).toBe(false);
   });
 });
 
@@ -102,7 +95,7 @@ describe("agent prompt", () => {
     const prompt = agentPrompt([thread("all", "/a", "all"), thread("other", "/a")], { ...context, page: "/b" })!;
     expect(prompt).toContain('### Thread "all"');
     expect(prompt).toContain('## Page "/a"');
-    expect(prompt).toContain("Shown on: every page where the target exists");
+    expect(prompt).toContain("Shown on: all pages with this target");
     expect(prompt).not.toContain('### Thread "other"');
     expect(agentPrompt([thread("other", "/a")], context)).not.toContain("Shown on:");
   });
