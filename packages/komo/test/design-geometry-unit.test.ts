@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { eligibleAncestor, geometryProposal, geometryReason, spanFor, type GeometryChange } from "../src/design-geometry.js";
+import { WAIT, eligibleAncestor, geometryProposal, geometryReason, spanFor, type GeometryChange } from "../src/design-geometry.js";
 import { parseDesignComment } from "../src/design-comment.js";
 // @ts-expect-error CLI modules are plain JavaScript.
 import { designEditFromComment, formatDesignEdit, parseDesignEdit } from "../cli/design-edit.mjs";
@@ -44,6 +44,25 @@ describe("geometry eligibility reasons", () => {
     vi.restoreAllMocks();
     layout(2);
     expect(geometryReason($("#empty"))).toBe("Boxes split across lines or columns can't be previewed.");
+  });
+
+  it("waits only for running motion that moves or sizes the box, and never for a komo preview", () => {
+    layout();
+    html(`<button id="button">Example</button><div data-komo-still><span id="held" style="display:block">x</span></div>`);
+    const running = (...keys: string[]) => ({ playState: "running", effect: { getKeyframes: () => [Object.fromEntries([["offset", 0], ["easing", "ease"], ...keys.map(key => [key, "1px"])])] } });
+    const animate = (element: Element, ...animations: unknown[]) => { element.getAnimations = (() => animations) as unknown as Element["getAnimations"]; };
+    // A color, fill or border-color transition leaves every edge where it is.
+    animate($("#button"), running("color", "backgroundColor", "borderTopColor", "borderLeftColor", "borderBottomRightRadius"));
+    expect(geometryReason($("#button"))).toBeNull();
+    for (const key of ["width", "maxHeight", "borderTopWidth", "transform", "translate", "top", "insetInlineStart", "flexBasis", "gridColumnEnd"]) {
+      animate($("#button"), running("color"), running(key));
+      expect(geometryReason($("#button")), key).toBe(WAIT);
+    }
+    animate($("#button"), { ...running("width"), playState: "finished" });
+    expect(geometryReason($("#button"))).toBeNull();
+    // komo holds motion while it previews; whatever runs there is its own doing.
+    animate($("#held"), running("width"));
+    expect(geometryReason($("#held"))).toBeNull();
   });
 
   it("selects the nearest movable ancestor for Select parent", () => {

@@ -1,4 +1,5 @@
 import { previewMessage, changePreviewStyles, inlineStyleSnapshot } from './design-preview.js';
+import { STILL } from './host-motion.js';
 import type { DesignTarget } from './design-target.js';
 import { bindMove, moveLines, moveReason, type MoveRecord } from './design-move.js';
 import { isMac, shortcutKeys } from './kbd.js';
@@ -54,6 +55,10 @@ function boxParent(element: Element) {
   return node;
 }
 
+export const WAIT = "Wait for this element's animation to finish.";
+/** A wait shows only once host motion has lasted this long; most transitions end sooner. */
+const SETTLE = 400;
+
 /** Why a box can't be previewed, or null. Each reason names the element's own problem. */
 export function geometryReason(element: Element | null): string | null {
   if (!element?.isConnected) return 'Select an element on the page.';
@@ -78,9 +83,10 @@ export function geometryReason(element: Element | null): string | null {
     if ((style.rotate && style.rotate !== 'none') || (transform && (!transform.is2D || transform.b || transform.c || transform.a <= 0 || transform.d <= 0)) ||
         scale.length > 2 || scale.some(value => !(value > 0)))
       return "Rotated, skewed, 3D or mirrored boxes can't be previewed.";
-    if (node.getAnimations?.().some(animation => animation.playState === 'running' &&
-        (animation.effect as KeyframeEffect | null)?.getKeyframes?.().some(frame => Object.keys(frame).some(key => /transform|translate|scale|rotate|width|height|inset|left|top|right|bottom|flex|grid/i.test(key)))))
-      return "Wait for this element's animation to finish.";
+    // Only motion that moves or sizes the box counts (border-top-color is no edge), and none komo is previewing.
+    if (!node.closest(`[${STILL}]`) && node.getAnimations?.().some(animation => animation.playState === 'running' &&
+        (animation.effect as KeyframeEffect | null)?.getKeyframes?.().some(frame => Object.keys(frame).some(key => /^(transform|translate|scale|rotate|inset|left|top|right|bottom|flex|grid)|(width|height)$/i.test(key)))))
+      return WAIT;
   }
   return null;
 }
@@ -250,7 +256,7 @@ export function bindGeometry(hooks: Hooks) {
   const surface = document.createElement('div');
   surface.className = 'design-geometry';
   const style = document.createElement('style');
-  style.textContent = `.design-geometry{--komo-sel:var(--komo-selection,#0c93f5);position:fixed;inset:0;pointer-events:none;z-index:2}.design-geometry[hidden],.design-geometry [hidden],.design-geometry-note[hidden],.design-geometry-note [hidden]{display:none}.design-geometry:not([data-on])>:not(.design-geometry__live){display:none}.design-outline[data-kind=selected]:has(~.design-geometry[data-on]:not([hidden])){outline:0}:host(.design-active[data-komo-overlays-hidden]) :is(.design-geometry,.design-outline,.pins){visibility:hidden}.design-geometry>*{position:fixed;box-sizing:border-box}.design-geometry__frame{border:1px solid var(--komo-sel);outline:0}.design-geometry__frame:focus-visible{box-shadow:0 0 0 2px color-mix(in oklab,var(--komo-sel) 35%,transparent)}.design-geometry__frame,.design-geometry__handle{transition:opacity .12s ease}.design-geometry__handle{opacity:0;pointer-events:auto;touch-action:none}.design-geometry:is([data-near],[data-active],[data-focus]) .design-geometry__handle{opacity:1}.design-geometry[data-quiet] .design-geometry__handle{opacity:0;pointer-events:none}.design-geometry[data-quiet] .design-geometry__frame{opacity:.4}.design-geometry[data-preview] .design-geometry__frame{opacity:0}.design-geometry__handle::before{content:'';position:absolute;left:var(--x);top:var(--y);width:${SQUARE}px;height:${SQUARE}px;box-sizing:border-box;border-radius:1px;background:#fff;border:1px solid var(--komo-sel);box-shadow:0 1px 2px #0000001f}.design-geometry__handle:hover::before,.design-geometry__handle[data-active]::before{background:var(--komo-sel)}.design-geometry__handle[data-small]::before{display:none}[data-handle=n],[data-handle=s]{cursor:ns-resize}[data-handle=e],[data-handle=w]{cursor:ew-resize}[data-handle=nw],[data-handle=se]{cursor:nwse-resize}[data-handle=ne],[data-handle=sw]{cursor:nesw-resize}.design-geometry__guide{background:var(--komo-selection,#0c93f5)}.design-geometry__readout{translate:-50% 0;padding:2px 6px;border-radius:4px;background:var(--komo-sel);color:#fff;font:500 11px/16px system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 1px 3px #0003}.design-geometry[data-dragging] :is(.design-geometry__handle,.design-geometry__guide){display:none}.design-geometry__line{background:var(--komo-sel);border-radius:1px}.design-geometry__drop{border:2px dashed var(--komo-sel);border-radius:4px}.design-geometry__chip{translate:none}.design-geometry__live{width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}@media (prefers-reduced-motion:reduce){.design-geometry__frame,.design-geometry__handle{transition:none}}.design-geometry-note{display:grid;gap:8px;padding:0 12px 12px;color:#a19d97;font-size:11px;line-height:1.45}.design-geometry-note p{margin:0}.design-geometry-note div{display:flex;flex-wrap:wrap;gap:6px}.design-geometry-note button{height:24px;padding:0 8px;border-radius:6px;background:#ffffff0f;color:#e9e6e1;font-size:11px}.design-geometry-note button:hover{background:#ffffff1a}.design-geometry-note button[aria-pressed=true]{background:color-mix(in oklab,var(--accent,#bda6ef) 32%,transparent)}.design-inspector__eye{display:grid;place-items:center;flex:none;min-width:28px;height:28px;border-radius:7px;color:#909090}.design-inspector__eye:hover{background:#161616;color:#eee}.design-inspector__eye svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.3}`;
+  style.textContent = `.design-geometry{--komo-sel:var(--komo-selection,#0c93f5);position:fixed;inset:0;pointer-events:none;z-index:2}.design-geometry[hidden],.design-geometry [hidden],.design-geometry-note[hidden],.design-geometry-note [hidden]{display:none}.design-geometry:not([data-on])>:not(.design-geometry__live){display:none}.design-outline[data-kind=selected]:has(~.design-geometry[data-on]:not([hidden])){outline:0}:host(.design-active[data-komo-overlays-hidden]) :is(.design-geometry,.design-outline,.pins){visibility:hidden}.design-geometry>*{position:fixed;box-sizing:border-box}.design-geometry__frame{border:1px solid var(--komo-sel);outline:0}.design-geometry__frame:focus-visible{box-shadow:0 0 0 2px color-mix(in oklab,var(--komo-sel) 35%,transparent)}.design-geometry__frame,.design-geometry__handle{transition:opacity .12s ease}.design-geometry__handle{opacity:0;pointer-events:auto;touch-action:none}.design-geometry:is([data-near],[data-active],[data-focus]) .design-geometry__handle{opacity:1}.design-geometry[data-quiet] .design-geometry__handle{opacity:0;pointer-events:none}.design-geometry[data-quiet] .design-geometry__frame{opacity:.4}.design-geometry[data-preview] .design-geometry__frame{opacity:0}.design-geometry__handle::before{content:'';position:absolute;left:var(--x);top:var(--y);width:${SQUARE}px;height:${SQUARE}px;box-sizing:border-box;border-radius:1px;background:#fff;border:1px solid var(--komo-sel);box-shadow:0 1px 2px #0000001f}.design-geometry__handle:hover::before,.design-geometry__handle[data-active]::before{background:var(--komo-sel)}.design-geometry__handle[data-small]::before{display:none}[data-handle=n],[data-handle=s]{cursor:ns-resize}[data-handle=e],[data-handle=w]{cursor:ew-resize}[data-handle=nw],[data-handle=se]{cursor:nwse-resize}[data-handle=ne],[data-handle=sw]{cursor:nesw-resize}.design-geometry__guide{background:var(--komo-selection,#0c93f5)}.design-geometry__readout{translate:-50% 0;padding:2px 6px;border-radius:4px;background:var(--komo-sel);color:#fff;font:500 11px/16px system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 1px 3px #0003}.design-geometry[data-dragging] :is(.design-geometry__handle,.design-geometry__guide){display:none}.design-geometry__line{background:var(--komo-sel);border-radius:1px}.design-geometry__drop{border:2px dashed var(--komo-sel);border-radius:4px}.design-geometry__chip{translate:none}.design-geometry__live{width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}@media (prefers-reduced-motion:reduce){.design-geometry__frame,.design-geometry__handle{transition:none}}.design-geometry-note{display:grid;gap:8px;padding:0 12px 12px;color:#a19d97;font-size:11px;line-height:1.45}.design-geometry-note p{margin:0}.design-geometry-note div{display:flex;flex-wrap:wrap;gap:6px}.design-geometry-note button{height:24px;padding:0 8px;border-radius:6px;background:#ffffff0f;color:#e9e6e1;font-size:11px}.design-geometry-note button:hover{background:#ffffff1a}.design-geometry-note button[aria-pressed=true]{background:color-mix(in oklab,var(--accent,#bda6ef) 32%,transparent)}.design-inspector__eye{display:grid;place-items:center;flex:none;min-width:28px;height:28px;border-radius:7px;color:#909090}.design-inspector__eye:hover{background:#161616;color:#eee}.design-inspector__eye svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.3}.design-geometry-wait{order:1;width:5px;height:5px;margin-left:4px;border-radius:50%;background:#e7c27d;opacity:.7}`;
   const frame = node('div', 'design-geometry__frame', surface);
   frame.tabIndex = 0;
   frame.setAttribute('role', 'group');
@@ -277,6 +283,12 @@ export function bindGeometry(hooks: Hooks) {
   const snap = action('Snap to grid tracks');
   snap.setAttribute('aria-pressed', 'false');
   snap.title = 'Resize changes grid-column-end / grid-row-end spans instead of width and height';
+  // Host motion that outlasts SETTLE shows as a dot by the Layout title, so the panel never reflows for it.
+  const wait = node('i', 'design-geometry-wait', note) as HTMLElement;
+  wait.title = WAIT;
+  wait.setAttribute('role', 'img');
+  wait.setAttribute('aria-label', WAIT);
+  let waitFrom = 0, waitTimer = 0;
   hooks.options.root.append(style, surface);
   let gesture: Gesture | undefined;
   let rejected: Element | null = null;
@@ -557,16 +569,28 @@ export function bindGeometry(hooks: Hooks) {
     outline = null;
     // The panel note stays while the canvas is undecorated, so its own buttons stay clickable.
     note.hidden = !element?.isConnected;
+    wait.hidden = true;
     if (!visible) finish(true);
     if (!element?.isConnected) return;
     if (element !== rejected) rejected = null;
     // A moved element shows through its stand-in: outline it there, without resize handles.
-    const box = move.shown(element), moved = box !== element;    const reason = moved ? null : geometryReason(element) ?? (rejected ? "Host styles override this preview. Select the parent or another element." : null);
+    const box = move.shown(element), moved = box !== element;
+    const found = moved ? null : geometryReason(element);
+    // A running animation only blocks resizing; it is named once it has lasted, re-checked until it ends.
+    const moving = found === WAIT, now = performance.now();
+    waitFrom = moving ? waitFrom || now : 0;
+    clearTimeout(waitTimer);
+    if (moving) waitTimer = window.setTimeout(render, SETTLE);
+    const waiting = moving && now - waitFrom >= SETTLE;
+    const reason = moving || moved ? null : found ?? (rejected ? "Host styles override this preview. Select the parent or another element." : null);
     const still = moveReason(element, box);
-    if ((reason || moved) && gesture) finish(true);
+    if ((reason || moved || moving) && gesture) finish(true);
     const panel = hooks.panel();
     const home = [...panel.querySelectorAll('.design-section')].find(section => section.querySelector('summary')?.textContent === 'Layout') ?? panel;
     if (note.parentElement !== home) home.append(note);
+    const title = home !== panel && home.querySelector('summary');
+    if (title && wait.parentElement !== title) title.append(wait);
+    wait.hidden = !waiting;
     const ancestor = reason || still ? eligibleAncestor(element) : null;
     parent.hidden = !ancestor;
     if (ancestor) parent.setAttribute('aria-label', `Select movable parent ${ancestor.tagName.toLowerCase()}`);
@@ -584,10 +608,10 @@ export function bindGeometry(hooks: Hooks) {
     note.hidden = text.hidden && parent.hidden && snap.hidden;
     const rect = box.getBoundingClientRect();
     const bounds = hooks.options.bounds?.(box) ?? { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
-    if ((reason && still) || !visible || rect.right <= bounds.left || rect.left >= bounds.right || rect.bottom <= bounds.top || rect.top >= bounds.bottom) return;
+    if (((reason || waiting) && still) || !visible || rect.right <= bounds.left || rect.left >= bounds.right || rect.bottom <= bounds.top || rect.top >= bounds.bottom) return;
     surface.setAttribute('data-on', '');
     const info = boxInfo(element);
-    axes = reason || moved ? [false, false] : info.axes;
+    axes = reason || moved || waiting ? [false, false] : info.axes;
     const label = `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}`;
     frame.setAttribute('aria-label', `${still ? 'Resize' : 'Move or resize'} ${label}: ${still ? '' : `${chord(['Alt'], '↑/↓')} move, ${chord(['Alt', 'Shift'], '↑/↓')} move out or into, `}${chord([command], 'arrows')} resize, ${chord(['Shift', command], 'arrows')} by 10px`);
     // The outline sits on the border box in whole device pixels; each square centres on its 1px line.
@@ -714,7 +738,7 @@ export function bindGeometry(hooks: Hooks) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) release(Infinity); }, { signal: controller.signal });
   readout.hidden = guides[0].hidden = guides[1].hidden = true;
   render();
-  hooks.signal.addEventListener('abort', () => { finish(true); controller.abort(); cancelAnimationFrame(pending); peek(false); surface.remove(); style.remove(); note.remove(); eye.remove(); }, { once: true });
+  hooks.signal.addEventListener('abort', () => { finish(true); controller.abort(); clearTimeout(waitTimer); cancelAnimationFrame(pending); peek(false); surface.remove(); style.remove(); note.remove(); eye.remove(); wait.remove(); }, { once: true });
   return {
     render, cancel: () => finish(true),
     /** The geometry section for this element's proposal, from the gestures still in history. */
