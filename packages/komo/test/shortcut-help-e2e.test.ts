@@ -249,9 +249,9 @@ describe.skipIf(!chrome)("keyboard shortcut help", () => {
     await filter.click();
     await filter.pressSequentially("parent");
     const visible = () => help(page).locator(".komo-shortcuts__row:visible > span:first-child").allTextContents();
-    expect(await visible()).toEqual(["Parent element"]);
+    expect(await visible()).toEqual(["Parent element", "Move out, after its parent"]);
     await filter.fill("esc");
-    expect(await visible()).toEqual(["Exit Design mode", "Cancel text edit"]);
+    expect(await visible()).toEqual(["Exit Design mode", "Back to the canvas", "Cancel text edit"]);
     await shot(page, "filter-esc");
     await filter.fill("");
     await filter.press("?");

@@ -149,7 +149,9 @@ await writeFile(
 // filter, two-column groups, mode-first order, focus trap and its own styles) is all in its
 // on-demand chunk (+1,746 measured on 0.9.59: 219,703 -> 221,449; 222,942 on 0.9.65). Its
 // styles left the mount bundle, so initial shrinks 85 bytes. Leaves room for geometry keys (#146).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 223_200)
+// 223,200 -> 223,500: remembered Frame sizes are versioned and clamped, and only explicit choices
+// are stored (+157 in the frame-size chunk).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 223_500)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -158,7 +160,9 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 223_200)
 // toolbar-style tooltips and header/footer polish (~870 bytes). The panel chunk has no room either.
 // 7,300: the hook that lazy-loads default-off experimental geometry (its own chunk) (~10 bytes).
 // Passing select and the geometry proposal section to that chunk adds ~10 bytes (7,093 measured).
-if (report.optionalDesignMode.gzip > 7_300)
+// 7,350: geometry's structural move needs Design mode's click selection and Before state, and the
+// hidden original's display stays out of proposals and Copy CSS (7,234 -> 7,320 measured).
+if (report.optionalDesignMode.gzip > 7_350)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).
@@ -199,7 +203,11 @@ if (report.optionalTokenPage.gzip > 4_950)
 // for thin padding and tiny boxes), a W × H readout, resize snapping to parent and sibling edges with
 // guides, Ctrl/⌘+arrow resize with a live region, and notes moved into the panel. Free-form Move and
 // its translate/offset fallback left the chunk (6,725 -> 8,141 measured), plus ~3%.
-if (report.optionalGeometry.gzip > 8_400)
+// 12,500: structural move between elements (src/design-move.ts, bundled into this chunk): body drag
+// with a click threshold, nearest-valid drop targets per flow with an insertion line, container
+// outline and label chip, inert computed-style stand-ins that follow renderer commits, Alt+arrow
+// moves on the focused selection, limits, and the move proposal lines (8,141 -> 12,137), plus ~3%.
+if (report.optionalGeometry.gzip > 12_500)
   throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
 // API tokens load only when "API tokens" is opened in the Account panel; nothing else imports
 // the chunk. 5,671 measured, plus ~3%.

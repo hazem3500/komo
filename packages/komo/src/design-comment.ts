@@ -2,6 +2,7 @@ import { textEntry } from "./dom.js";
 // Loaded on demand: renders Design mode proposals as a change card with a
 // Before/After preview. The comment body stays plain text for agents and the CLI.
 import { isDesignTarget } from "./design-target.js";
+import { elementLabel } from "./element-label.js";
 import { inlineStyleSnapshot, removeEmptyStyle } from "./design-preview.js";
 import { previewText } from "./text-preview.js";
 import { sourceInfo, sourceInfoStyles, type SourceHref } from "./source-info.js";
@@ -129,10 +130,6 @@ export function shortTarget(selector: string): string {
   return (selector.split(">").at(-1) ?? selector).trim().replace(/:nth-of-type\(\d+\)/g, "") || selector;
 }
 
-const ROLES: Record<string, string> = {
-  h: "Heading", a: "Link", button: "Button", img: "Image", p: "Paragraph", li: "List item", input: "Field", textarea: "Field",
-};
-
 /**
  * What a reviewer calls the target: the component name, else its role and
  * accessible name or short text ("Heading “Plan”"), else the bare tag.
@@ -141,12 +138,7 @@ const ROLES: Record<string, string> = {
 export function targetLabel(section: Pick<DesignSection, "component" | "target" | "changes">, element: Element | null): string {
   if (section.component) return section.component;
   const tag = element?.localName ?? /(?:^|[\s>])([a-z][\w-]*)[^\s>]*$/i.exec(section.target ?? "")?.[1]?.toLowerCase() ?? "";
-  const role = element?.getAttribute("role");
-  const kind = role ? `${role[0].toUpperCase()}${role.slice(1)}` : ROLES[/^h[1-6]$/.test(tag) ? "h" : tag];
-  const text = (section.changes.find(item => item.apply?.kind === "text")?.before ?? element?.getAttribute("aria-label") ?? element?.getAttribute("alt") ?? element?.textContent ?? "")
-    .replace(/\s+/g, " ").trim();
-  const name = text.length > 28 ? `${text.slice(0, 27)}…` : text;
-  return [kind, name && `“${name}”`].filter(Boolean).join(" ") || tag || "Element";
+  return elementLabel(element, tag, section.changes.find(item => item.apply?.kind === "text")?.before);
 }
 
 const COLOR = /^(#[0-9a-f]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|oklch\([^)]*\))$/i;

@@ -1,21 +1,28 @@
 import { previewMessage, changePreviewStyles, inlineStyleSnapshot } from './design-preview.js';
 import type { DesignTarget } from './design-target.js';
+import { bindMove, moveLines, moveReason, type MoveRecord } from './design-move.js';
 
 /** One previewed geometry change, as the proposal and DesignEdit record it. */
 export type GeometryChange = {
-  mode: 'translate' | 'offset' | 'size' | 'flex-basis' | 'span';
+  mode: 'translate' | 'offset' | 'size' | 'flex-basis' | 'span' | 'structure';
   /** Layout the element sat in, e.g. "flex item, row". */
   layout: string;
   dx?: number; dy?: number;
   property?: string; from?: string; to?: string;
+  /** A structural move: the element and its place before and after. */
+  move?: MoveRecord;
   effects: string[];
 };
 type Entry = { element?: DesignTarget; kind?: string; property?: string; geometry?: GeometryChange[] };
 type Hooks = {
   signal: AbortSignal;
-  options: Pick<import("./design-mode.js").DesignModeOptions, "root" | "bounds">;
+  options: Pick<import("./design-mode.js").DesignModeOptions, "root" | "bounds" | "host" | "targetAt" | "design" | "reservedKey">;
   selected(): DesignTarget | null;
   select(element: Element): void;
+  /** Select what a click at this point would, as Design mode's canvas does. */
+  pick(x: number, y: number): void;
+  /** The page shows its state without this session's edits (Before, or Design mode suspended). */
+  before(): boolean;
   enabled(): boolean;
   remember(element: DesignTarget, property: string): void;
   track(element: DesignTarget, property: string): void;
@@ -138,7 +145,7 @@ export function geometryProposal(changes: GeometryChange[]) {
   const { moves, sizes, layout } = net(changes);
   const note = (effects: string[]) => effects.map(effect => ` · ${effect}`).join('');
   const lines = [
-    ...moves.map(move => `- Move (${move.mode}): Δx ${px(move.dx!)}, Δy ${px(move.dy!)}${note(move.effects)}`),
+    ...moves.flatMap(move => move.move ? moveLines(move.move) : [`- Move (${move.mode}): Δx ${px(move.dx!)}, Δy ${px(move.dy!)}${note(move.effects)}`]),
     ...sizes.map(size => `- Resize (${size.mode}) ${size.property}: ${size.from} → ${size.to}${note(size.effects)}`),
   ];
   return lines.length ? `Proposed geometry changes (preview only)\nLayout: ${layout}\n${lines.join('\n')}` : undefined;
@@ -154,6 +161,10 @@ function net(changes: GeometryChange[]) {
       const prior = sizes.get(change.property);
       sizes.delete(change.property);
       sizes.set(change.property, { ...change, from: prior?.from ?? change.from });
+    } else if (change.move) {
+      // Structural moves net to the first origin and the last destination.
+      const prior = moves.get(change.mode);
+      moves.set(change.mode, { ...change, move: { ...change.move, from: prior?.move?.from ?? change.move.from } });
     } else {
       const prior = moves.get(change.mode);
       moves.set(change.mode, { ...change, dx: (prior?.dx ?? 0) + change.dx!, dy: (prior?.dy ?? 0) + change.dy!, effects: [...new Set([...prior?.effects ?? [], ...change.effects])] });
@@ -161,7 +172,7 @@ function net(changes: GeometryChange[]) {
   }
   return {
     layout,
-    moves: [...moves.values()].filter(move => round(move.dx!) || round(move.dy!)),
+    moves: [...moves.values()].filter(({ move, dx, dy }) => move ? move.from.parent !== move.to.parent || move.from.index !== move.to.index : round(dx!) || round(dy!)),
     sizes: [...sizes.values()].filter(size => size.from !== size.to),
   };
 }
@@ -236,7 +247,7 @@ export function bindGeometry(hooks: Hooks) {
   const surface = document.createElement('div');
   surface.className = 'design-geometry';
   const style = document.createElement('style');
-  style.textContent = `.design-geometry{position:fixed;inset:0;pointer-events:none;z-index:4}.design-geometry[hidden],.design-geometry [hidden],.design-geometry-note[hidden],.design-geometry-note [hidden]{display:none}.design-geometry:not([data-on])>:not(.design-geometry__live){display:none}.design-outline[data-kind=selected]:has(~.design-geometry[data-on]:not([hidden])){outline:0}.design-geometry>*{position:fixed;box-sizing:border-box}.design-geometry__frame{border:1px solid var(--accent,#bda6ef);outline:0}.design-geometry__frame:focus-visible{box-shadow:0 0 0 3px color-mix(in oklab,var(--accent,#bda6ef) 40%,transparent)}.design-geometry__handle{translate:-50% -50%;width:${HIT}px;height:${HIT}px;pointer-events:auto;touch-action:none}.design-geometry__handle::before{content:'';position:absolute;left:50%;top:50%;width:${SQUARE}px;height:${SQUARE}px;margin:-${SQUARE / 2}px;box-sizing:border-box;background:#fff;border:1px solid var(--accent,#bda6ef)}.design-geometry__handle[data-small]::before{display:none}[data-handle=n],[data-handle=s]{cursor:ns-resize}[data-handle=e],[data-handle=w]{cursor:ew-resize}[data-handle=nw],[data-handle=se]{cursor:nwse-resize}[data-handle=ne],[data-handle=sw]{cursor:nesw-resize}.design-geometry__guide{background:var(--accent,#bda6ef)}.design-geometry__readout{translate:-50% 0;padding:3px 6px;border-radius:6px;background:var(--mm-tooltip-surface,#1f1f1f);color:var(--mm-ink,#f8f7f4);font:500 11px/1.3 system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}.design-geometry__live{width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.design-geometry-note{display:grid;gap:8px;padding:0 12px 12px;color:#a19d97;font-size:11px;line-height:1.45}.design-geometry-note p{margin:0}.design-geometry-note div{display:flex;flex-wrap:wrap;gap:6px}.design-geometry-note button{height:24px;padding:0 8px;border-radius:6px;background:#ffffff0f;color:#e9e6e1;font-size:11px}.design-geometry-note button:hover{background:#ffffff1a}.design-geometry-note button[aria-pressed=true]{background:color-mix(in oklab,var(--accent,#bda6ef) 32%,transparent)}`;
+  style.textContent = `.design-geometry{position:fixed;inset:0;pointer-events:none;z-index:4}.design-geometry[hidden],.design-geometry [hidden],.design-geometry-note[hidden],.design-geometry-note [hidden]{display:none}.design-geometry:not([data-on])>:not(.design-geometry__live){display:none}.design-outline[data-kind=selected]:has(~.design-geometry[data-on]:not([hidden])){outline:0}.design-geometry>*{position:fixed;box-sizing:border-box}.design-geometry__frame{border:1px solid var(--accent,#bda6ef);outline:0}.design-geometry__frame:focus-visible{box-shadow:0 0 0 3px color-mix(in oklab,var(--accent,#bda6ef) 40%,transparent)}.design-geometry__handle{translate:-50% -50%;width:${HIT}px;height:${HIT}px;pointer-events:auto;touch-action:none}.design-geometry__handle::before{content:'';position:absolute;left:50%;top:50%;width:${SQUARE}px;height:${SQUARE}px;margin:-${SQUARE / 2}px;box-sizing:border-box;background:#fff;border:1px solid var(--accent,#bda6ef)}.design-geometry__handle[data-small]::before{display:none}[data-handle=n],[data-handle=s]{cursor:ns-resize}[data-handle=e],[data-handle=w]{cursor:ew-resize}[data-handle=nw],[data-handle=se]{cursor:nwse-resize}[data-handle=ne],[data-handle=sw]{cursor:nesw-resize}.design-geometry__guide{background:var(--accent,#bda6ef)}.design-geometry__readout{translate:-50% 0;padding:3px 6px;border-radius:6px;background:var(--mm-tooltip-surface,#1f1f1f);color:var(--mm-ink,#f8f7f4);font:500 11px/1.3 system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}.design-geometry[data-dragging] :is(.design-geometry__handle,.design-geometry__guide){display:none}.design-geometry__line{background:var(--accent,#bda6ef);border-radius:1px}.design-geometry__drop{border:2px dashed var(--accent,#bda6ef);border-radius:4px}.design-geometry__chip{translate:none}.design-geometry__live{width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.design-geometry-note{display:grid;gap:8px;padding:0 12px 12px;color:#a19d97;font-size:11px;line-height:1.45}.design-geometry-note p{margin:0}.design-geometry-note div{display:flex;flex-wrap:wrap;gap:6px}.design-geometry-note button{height:24px;padding:0 8px;border-radius:6px;background:#ffffff0f;color:#e9e6e1;font-size:11px}.design-geometry-note button:hover{background:#ffffff1a}.design-geometry-note button[aria-pressed=true]{background:color-mix(in oklab,var(--accent,#bda6ef) 32%,transparent)}`;
   const frame = node('div', 'design-geometry__frame', surface);
   frame.tabIndex = 0;
   frame.setAttribute('role', 'group');
@@ -272,6 +283,19 @@ export function bindGeometry(hooks: Hooks) {
   // A later field edit of the same property supersedes a resize: the style rows carry the net value.
   const recorded = (element: DesignTarget) => hooks.history.reduce<GeometryChange[]>((list, entry) => entry.element !== element ? list
     : entry.geometry ? [...list, ...entry.geometry] : entry.property ? list.filter(change => change.property !== entry.property) : list, []);
+  const move = bindMove({
+    signal: controller.signal, host: hooks.options.host, targetAt: hooks.options.targetAt, history: hooks.history as never,
+    selected: hooks.selected, pick: hooks.pick, enabled: hooks.enabled, before: hooks.before,
+    remember: hooks.remember, track: hooks.track, update: hooks.update,
+    component: element => hooks.tokens()?.designContext(element as DesignTarget, hooks.options.design).find(line => line.startsWith('Component: '))?.slice(11).replace(/ \(.*\)$/, ''),
+    layout: element => layoutOf(element).label,
+    announce: text => { live.textContent = text; },
+    drag(delta) {
+      surface.toggleAttribute('data-dragging', !!delta);
+      frame.style.translate = delta ? `${delta[0]}px ${delta[1]}px` : '';
+    },
+  });
+  surface.append(...move.nodes);
   const said = (changes: GeometryChange[]) => changes.map(change => `${change.property} ${change.to}`).join(', ');
 
   function finish(cancel = false) {
@@ -477,6 +501,7 @@ export function bindGeometry(hooks: Hooks) {
   }
 
   function render() {
+    move.sync();
     const element = hooks.selected();
     const visible = hooks.enabled() && !!element?.isConnected;
     surface.hidden = !visible;
@@ -486,28 +511,31 @@ export function bindGeometry(hooks: Hooks) {
     if (!visible) finish(true);
     if (!element?.isConnected) return;
     if (element !== rejected) rejected = null;
-    const reason = geometryReason(element) ?? (rejected ? "Host styles override this preview. Select the parent or another element." : null);
-    if (reason && gesture) finish(true);
+    // A moved element shows through its stand-in: outline it there, without resize handles.
+    const box = move.shown(element), moved = box !== element;    const reason = moved ? null : geometryReason(element) ?? (rejected ? "Host styles override this preview. Select the parent or another element." : null);
+    const still = moveReason(element, box);
+    if ((reason || moved) && gesture) finish(true);
     const panel = hooks.panel();
     const home = [...panel.querySelectorAll('.design-section')].find(section => section.querySelector('summary')?.textContent === 'Layout') ?? panel;
     if (note.parentElement !== home) home.append(note);
-    const ancestor = reason ? eligibleAncestor(element!) : null;
+    const ancestor = reason || still ? eligibleAncestor(element) : null;
     parent.hidden = !ancestor;
     if (ancestor) parent.setAttribute('aria-label', `Select movable parent ${ancestor.tagName.toLowerCase()}`);
-    snap.hidden = !!reason || layoutOf(element!).kind !== 'grid';
+    snap.hidden = !!reason || moved || layoutOf(element).kind !== 'grid';
     snap.setAttribute('aria-pressed', String(snapping));
-    const { moves, sizes } = net(recorded(element!));
-    text.textContent = reason ?? [...new Set([...gesture?.changes ?? [], ...moves, ...sizes].flatMap(change => change.effects))].join(' · ');
+    const { moves, sizes } = net(recorded(element));
+    const done = moves.flatMap(change => change.move ? [moveLines(change.move)[0].slice(2)] : []);
+    text.textContent = [reason, still].filter(Boolean).join(' · ') || [...new Set([...done, ...[...gesture?.changes ?? [], ...moves, ...sizes].flatMap(change => change.effects)])].join(' · ');
     text.hidden = !text.textContent;
     note.hidden = text.hidden && parent.hidden && snap.hidden;
-    const rect = element!.getBoundingClientRect();
-    const bounds = hooks.options.bounds?.(element!) ?? { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
-    if (reason || !visible || rect.right <= bounds.left || rect.left >= bounds.right || rect.bottom <= bounds.top || rect.top >= bounds.bottom) return;
+    const rect = box.getBoundingClientRect();
+    const bounds = hooks.options.bounds?.(box) ?? { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+    if ((reason && still) || !visible || rect.right <= bounds.left || rect.left >= bounds.right || rect.bottom <= bounds.top || rect.top >= bounds.bottom) return;
     surface.setAttribute('data-on', '');
-    const info = boxInfo(element!);
-    axes = info.axes;
-    const label = `${element!.tagName.toLowerCase()}${element!.id ? `#${element!.id}` : ''}`;
-    frame.setAttribute('aria-label', `Resize ${label}: Ctrl or ⌘ + arrows, Shift for 10px`);
+    const info = boxInfo(element);
+    axes = reason || moved ? [false, false] : info.axes;
+    const label = `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}`;
+    frame.setAttribute('aria-label', `${still ? 'Resize' : 'Move or resize'} ${label}: ${still ? '' : 'Alt or ⌥ + arrows move, '}Ctrl or ⌘ + arrows resize, Shift for 10px`);
     Object.assign(frame.style, {
       left: px(rect.left), top: px(rect.top), width: px(rect.width), height: px(rect.height),
       clipPath: `inset(${[bounds.top - rect.top, rect.right - bounds.right, rect.bottom - bounds.bottom, bounds.left - rect.left].map(value => px(Math.max(0, value))).join(' ')})`,
@@ -555,11 +583,22 @@ export function bindGeometry(hooks: Hooks) {
     handle.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); });
   }
   frame.addEventListener('blur', () => { if (gesture?.keyboard) finish(); });
-  // Capture before Design mode's document handler. With the selection focused, Ctrl or ⌘ + arrows
-  // resize from the bottom-right (Shift for 10px); Alt + arrows stay Design mode's parent/child keys.
+  // Capture before Design mode's document handler. On the canvas, M focuses the selection; there,
+  // Alt + arrows move it between elements and Ctrl or ⌘ + arrows resize it from the bottom-right
+  // (Shift for 10px), and Escape returns to the canvas. On the canvas, arrows keep selecting.
   window.addEventListener('keydown', event => {
-    const arrow = ARROWS[event.key];
-    if (!(event.key === 'Escape' && gesture) && (event.composedPath()[0] !== frame || !arrow || !(event.ctrlKey || event.metaKey) || event.altKey)) return;
+    const arrow = ARROWS[event.key], path = event.composedPath(), focused = path[0] === frame;
+    const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+    const typing = path.some(node => node instanceof Element && node.matches('input,textarea,select,[contenteditable]:not([contenteditable=false])'));
+    const element = hooks.selected();
+    let run: (() => void) | undefined;
+    if (!gesture && focused && event.key === 'Escape') run = () => frame.blur();
+    else if (plain && event.key.toLowerCase() === 'm' && !focused && !typing && !path.includes(hooks.options.host) && surface.hasAttribute('data-on') && !hooks.options.reservedKey?.(event))
+      run = () => frame.focus({ preventScroll: true });
+    else if (focused && arrow && element && event.altKey && !event.ctrlKey && !event.metaKey && !gesture)
+      run = () => move.key(element, arrow[0] + arrow[1] > 0, event.shiftKey);
+    if (run) { event.preventDefault(); event.stopImmediatePropagation(); run(); return; }
+    if (!(event.key === 'Escape' && gesture) && (!focused || !arrow || !(event.ctrlKey || event.metaKey) || event.altKey)) return;
     event.preventDefault(); event.stopImmediatePropagation();
     if (!arrow) return finish(true);
     const kind = arrow[0] ? 1 : 2;
@@ -595,6 +634,8 @@ export function bindGeometry(hooks: Hooks) {
   return {
     render, cancel: () => finish(true),
     /** The geometry section for this element's proposal, from the gestures still in history. */
-    proposal: (element: DesignTarget) => geometryProposal(recorded(element)),
+    proposal: (element: DesignTarget) => { move.detach(); return geometryProposal(recorded(element)); },
+    /** True while a structural move hides the element; its `display` row is not a style proposal. */
+    moved: (element: DesignTarget) => recorded(element).some(change => change.move),
   };
 }

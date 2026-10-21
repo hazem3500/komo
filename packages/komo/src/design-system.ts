@@ -210,7 +210,7 @@ export interface ComponentAdapter {
 }
 
 export interface DesignSystem {
-  /** Opt in to experimental, reversible page-element resize previews with Figma-style handles. Default false. */
+  /** Opt in to experimental, reversible page-element previews: Figma-style resize handles and moves between elements. Default false. */
   experimentalGeometry?: boolean;
   tokens?: TokenAdapter;
   themes?: ThemeAxis[];
@@ -282,4 +282,25 @@ export type DesignEditChange =
       from?: string;
       to?: string;
       effects?: string[];
+    }
+  /**
+   * A structural move previewed with experimental geometry: put the element
+   * (`target`, a selector) at `to.index` among `to.parent`'s element children,
+   * counted from 0 without the element itself. `position` says whether it landed
+   * before or after a sibling, or inside a container. Apply it in source by
+   * moving the element's markup; nothing moved in the page.
+   */
+  | {
+      kind: "move";
+      target?: string;
+      label?: string;
+      from: DesignMovePlace;
+      to: DesignMovePlace & { position: "before" | "after" | "inside" };
     };
+/** A parent (selector, reviewer label, component name) and an index among its element children. */
+export interface DesignMovePlace {
+  parent: string;
+  index: number;
+  label?: string;
+  component?: string;
+}
