@@ -187,7 +187,8 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     const frame = await viewportFrame(page);
     await comment(page, "card-3", "From the viewport");
     const pin = page.locator('.pin[data-thread="thread-1"]');
-    await pin.waitFor();
+    // The pin re-renders as the new thread saves; wait until it's shown on the card.
+    await expect.poll(async () => !!(await pin.boundingBox())).toBe(true);
     expectOn(await pin.boundingBox(), await framed(page, "card-3"), "viewport pin at Fit");
     await page.screenshot({ path: join(shots, "viewport-pin-fit.png") });
     // 100%: the frame pans inside its port, and the pin follows the card.
