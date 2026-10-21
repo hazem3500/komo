@@ -182,7 +182,8 @@ export function mountFrameSize(
   let pointer: { x: number; y: number } | null = null;
   const change = (next: Choice, zoom: boolean, persist = true, own = separate) => {
     // Fit to 100% keeps the selection, or the point last under the pointer, where it was.
-    if (zoom && !actual && current && lastBox) {
+    // (In place only: the viewport iframe's port scrolls itself and starts at the frame's top-left.)
+    if (zoom && !actual && current && lastBox && !state.active) {
       const point = hooks.anchor?.() ?? pointer ?? {
         x: current.left + (current.width * current.scale) / 2,
         y: current.top + (current.height * current.scale) / 2,
@@ -596,7 +597,9 @@ export function mountFrameSize(
       );
       range = view.pan ? [Math.max(0, view.width * view.scale - box.width), Math.max(0, view.height * view.scale - box.height)] : [0, 0];
       pan = clampPan(pan, range);
-      return (current = { ...view, left: view.left - pan[0], top: view.top - pan[1] });
+      // The stage pan moves the in-place frame; the viewport iframe's port scrolls natively instead.
+      const offset = state.active ? [0, 0] : pan;
+      return (current = { ...view, left: view.left - offset[0], top: view.top - offset[1] });
     },
     sized: size !== "window" || actual,
     get separate() {
@@ -676,7 +679,7 @@ export function mountFrameSize(
         const index = bar.axis === "x" ? 0 : 1;
         const length = (index ? box.height : box.width) - 12;
         const span = range[index] * zoom;
-        bar.track.hidden = !view.pan || span < 1;
+        bar.track.hidden = !view.pan || span < 1 || state.active;
         if (bar.track.hidden) continue;
         bar.length = length;
         bar.thumbLength = Math.max(32, (length * length) / (length + span));
