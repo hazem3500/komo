@@ -203,8 +203,8 @@ await writeFile(
 // 1a9efe3, plus ~100 for CI's measurement.
 // 236,050 -> 236,200: design proposals (#172), Design mode keys (#170) and #167 with #171 together,
 // 236,061 measured on main bc089fe, plus ~100 for CI's measurement.
-// 236,200 -> 240,750: opt-in comment snapshots, a 4,297-byte on-demand chunk (below) plus ~110 in initial for the gate and upload hook (240,608 measured on main 2fc9081).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 240_750)
+// 236,200 -> 241,100: opt-in comment snapshots, a 4,561-byte on-demand chunk (below) plus ~150 in initial for the /config gate, raw-body uploads and the hook (240,969 measured on main 4d26ac1 with #177).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 241_100)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -297,8 +297,8 @@ if (report.optionalGeometry.gzip > 14_400)
 // the chunk. 5,671 measured, plus ~3%.
 if (report.optionalAccountTokens.gzip > 5_850)
   throw new Error("komo's API tokens chunk exceeds its gzip budget.");
-// Comment snapshots (SVG foreignObject image, trimmed HTML, upload) load only when snapshots are on and a signed-in reviewer starts a comment. 4,297 measured, plus ~3%.
-if (report.optionalSnapshots.gzip > 4_425)
+// Comment snapshots (SVG foreignObject image, trimmed HTML, raw-file uploads) load only when snapshots are on, the server supports them and a reviewer starts a comment. 4,561 measured, plus ~3%.
+if (report.optionalSnapshots.gzip > 4_700)
   throw new Error("komo's comment snapshot chunk exceeds its gzip budget.");
 // Viewport mode loads only when Frame opens with frame.mode "iframe": the iframe, its stage, the
 // same-origin and fallback checks (X-Frame-Options, frame-ancestors, cross-origin redirects, timeout) and

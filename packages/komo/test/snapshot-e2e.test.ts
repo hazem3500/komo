@@ -78,7 +78,8 @@ afterAll(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-type Upload = { thread: string; kind: "image" | "html"; data: string; note?: string };
+/** An upload as the server receives it: the raw file, here as a data URL (image) or text (HTML). */
+type Upload = { thread: string; kind: "image" | "html"; type: string; data: string };
 /** The comments API, mocked: threads save, and snapshot uploads are recorded (or fail). */
 async function mockApi(page: Page, failUploads = false) {
   const threads: { id: string; body: string }[] = [];
@@ -91,10 +92,13 @@ async function mockApi(page: Page, failUploads = false) {
     const method = request.method();
     const snapshot = path.match(/^\/threads\/([^/]+)\/snapshot$/);
     if (snapshot && method === "POST") {
-      uploads.push({ thread: snapshot[1]!, ...request.postDataJSON() });
+      const kind = new URL(request.url()).searchParams.get("kind") as Upload["kind"];
+      const type = request.headers()["content-type"] ?? "";
+      const body = request.postDataBuffer() ?? Buffer.alloc(0);
+      uploads.push({ thread: snapshot[1]!, kind, type, data: kind === "image" ? `data:${type};base64,${body.toString("base64")}` : body.toString("utf8") });
       return failUploads
-        ? route.fulfill({ status: 500, json: { error: "Snapshot storage is unavailable" } })
-        : route.fulfill({ json: { ok: true } });
+        ? route.fulfill({ status: 413, json: { error: "The image snapshot exceeds 256 KiB." } })
+        : route.fulfill({ status: 201, json: { ok: true, kind, size: body.length, url: `${origin}/api${path}/${kind}` } });
     }
     if (path === "/threads" && method === "POST") {
       const id = `thread-${threads.length + 1}`;
@@ -105,7 +109,7 @@ async function mockApi(page: Page, failUploads = false) {
       return route.fulfill({ json: { id, commentId: `${id}-comment` } });
     }
     if (path === "/me") return route.fulfill({ json: { user } });
-    if (path === "/config") return route.fulfill({ json: { guests: true, guestResolve: true } });
+    if (path === "/config") return route.fulfill({ json: { guests: true, guestResolve: true, snapshots: { guests: false, maxImageBytes: 262_144, maxHtmlBytes: 32_768 } } });
     if (path === "/threads") return route.fulfill({ json: { threads: saved } });
     return route.fulfill({ json: {} });
   });
@@ -176,7 +180,8 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     expect(chunks).toHaveLength(1);
     expect(api.uploads.every((upload) => upload.thread === "thread-1")).toBe(true);
     const image = api.uploads.find((upload) => upload.kind === "image")!;
-    expect(image.data).toMatch(/^data:image\/webp;base64,/);
+    expect(image.type).toBe("image/webp");
+    expect(api.uploads.find((upload) => upload.kind === "html")!.type).toBe("text/html;charset=utf-8");
     const bytes = decoded(image.data);
     expect(bytes.subarray(0, 4).toString()).toBe("RIFF");
     expect(bytes.subarray(8, 12).toString()).toBe("WEBP");
@@ -228,9 +233,9 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     await page.keyboard.type("Busy grid");
     await page.keyboard.press("Enter");
     await waitFor(() => api.uploads.length >= 1 && api.uploads.some((upload) => upload.kind === "html"));
-    await waitFor(() => api.uploads.length === 2 || api.uploads.some((upload) => !!upload.note));
+    await waitFor(() => api.uploads.length === 2 || api.uploads.some((upload) => upload.data.startsWith("<!-- komo:")));
     const image = api.uploads.find((upload) => upload.kind === "image");
-    expect(image, JSON.stringify(api.uploads.map(({ kind, note }) => ({ kind, note })))).toBeTruthy();
+    expect(image, JSON.stringify(api.uploads.map(({ kind, data }) => ({ kind, data: data.slice(0, 80) })))).toBeTruthy();
     expect(decoded(image!.data).length).toBeLessThanOrEqual(12_000);
     await keep("busy", image!.data);
     const pixels = await inspect(page, image!.data, palette);
@@ -247,7 +252,9 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     await comment(page, (await page.locator("#foreign").boundingBox())!, "Logo looks off");
     await waitFor(() => api.uploads.length >= 1);
     await page.waitForTimeout(300);
-    expect(api.uploads).toEqual([{ thread: "thread-1", kind: "html", data: expect.stringContaining("Foreign image"), note: "cross-origin" }]);
+    expect(api.uploads).toEqual([{ thread: "thread-1", kind: "html", type: "text/html;charset=utf-8", data: expect.stringContaining("Foreign image") }]);
+    // The HTML says why there is no image.
+    expect(api.uploads[0]!.data).toMatch(/^<!-- komo: no image snapshot, the element shows images from another origin\. -->/);
     await page.close();
   }, 60_000);
 

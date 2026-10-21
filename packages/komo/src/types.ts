@@ -156,14 +156,14 @@ export interface KomoToolbar {
 
 /**
  * Opt-in snapshots of a new comment's target, saved with its thread. Off unless a
- * kind is set to true. Only signed-in reviewers capture; guests never do.
+ * kind is set to true. Needs server support; guests capture only when the project allows it.
  */
 export interface KomoSnapshots {
   /** A WebP image of the element and some padding, at most 1200px wide. */
   image?: boolean;
   /** The element's trimmed outerHTML (about 20 KB at most), with typed values redacted. */
   html?: boolean;
-  /** Largest image in bytes; quality, then size, step down to fit. Defaults to 250,000. */
+  /** Largest image in bytes; quality, then size, step down to fit. Defaults to 250,000, and never exceeds the server's limit. */
   maxBytes?: number;
   /**
    * Return true to redact an element's text in both snapshots, beyond the input,

@@ -7,7 +7,7 @@
 // document, which is Frame's viewport iframe when the page is framed.
 import type { KomoSnapshots } from "./types.js";
 
-/** Why the image was left out; sent with the HTML so the thread can say so. */
+/** Why the image was left out; the HTML snapshot then starts with a comment saying so. */
 export type SnapshotNote = "cross-origin" | "too-large" | "unsupported" | "failed";
 export interface CapturedSnapshot {
   /** A `data:image/webp` URL of the element and some padding. */
@@ -424,18 +424,38 @@ export async function snapshotImage(element: Element, options: KomoSnapshots = {
   throw new Skip("too-large");
 }
 
+/** The server's snapshot support, from `/config`. */
+export interface SnapshotLimits {
+  /** Whether guest sessions may attach snapshots. */
+  guests: boolean;
+  maxImageBytes: number;
+  maxHtmlBytes: number;
+}
+
+/** Why the image is missing, kept at the top of the HTML snapshot for readers and agents. */
+const NOTES: Record<SnapshotNote, string> = {
+  "cross-origin": "the element shows images from another origin",
+  "too-large": "the element is too large to draw",
+  unsupported: "this browser can't encode WebP",
+  failed: "it couldn't be drawn",
+};
+export const noteComment = (note: SnapshotNote) => `<!-- komo: no image snapshot, ${NOTES[note]}. -->`;
+
 /**
  * Capture what the options ask for. Returns null when there is nothing to keep:
  * the target is gone, is komo's own UI, or sits in a no-snapshot region. An image
- * that can't be read (another origin's pixels) falls back to the HTML, with a note.
+ * that can't be read (another origin's pixels) falls back to the HTML, which then
+ * starts with a comment saying why.
  */
 export async function captureSnapshot(
   element: Element | null,
   options: KomoSnapshots,
+  htmlLimit = HTML_LIMIT,
 ): Promise<CapturedSnapshot | null> {
   if (!element?.isConnected || skipped(element)) return null;
   const result: CapturedSnapshot = {};
-  const html = () => snapshotHtml(element, options.redact);
+  // Room for the note, should the image fall back.
+  const html = () => snapshotHtml(element, options.redact, htmlLimit - 120);
   // The markup is read at once, as the reviewer saw it.
   if (options.html) result.html = html();
   if (options.image) {
@@ -448,42 +468,47 @@ export async function captureSnapshot(
     } catch (error) {
       result.note = error instanceof Skip ? error.reason : "failed";
       if (result.note === "cross-origin") result.html ??= html();
+      if (result.html) result.html = noteComment(result.note) + result.html;
     }
   }
-  return result.image || result.html || result.note ? result : null;
+  return result.image || result.html ? result : null;
 }
 
-/** What `POST threads/:id/snapshot` receives, once per kind. */
-export interface SnapshotUpload {
-  kind: "image" | "html";
-  /** The image's data URL, or the HTML. */
-  data: string;
-  /** With the HTML, why the image is missing. */
-  note?: SnapshotNote;
-}
+/** A data URL's bytes, without fetch (which a host's connect-src may block). */
+const dataBlob = (url: string) => {
+  const [head, data] = url.split(",") as [string, string];
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: head.slice(5, head.indexOf(";")) });
+};
 
 const captures = new WeakMap<object, Promise<CapturedSnapshot | null>>();
 /**
  * The snapshot of a draft's target, captured once per anchor: the composer reads it
- * for a preview, and posting passes `post` to upload each kind after the thread is
- * saved. Never rejects; a failed upload is logged and the comment stays posted.
+ * for a preview, and posting passes `post` to upload each kind as its raw file after
+ * the thread is saved. Never rejects; a failed upload is logged and the comment stays posted.
  */
 export function snapshotFor<Anchor extends object>(
   anchor: Anchor,
   resolve: (anchor: Anchor) => Element | null,
   options: KomoSnapshots,
-  post?: (body: SnapshotUpload) => Promise<unknown>,
+  limits: SnapshotLimits,
+  post?: (kind: "image" | "html", body: Blob) => Promise<unknown>,
 ): Promise<CapturedSnapshot | null> {
   let capture = captures.get(anchor);
   if (!capture) {
-    capture = options.image || options.html ? captureSnapshot(resolve(anchor), options).catch(() => null) : Promise.resolve(null);
+    const shot = { ...options, maxBytes: Math.min(options.maxBytes ?? IMAGE_BYTES, limits.maxImageBytes || Infinity) };
+    capture = options.image || options.html
+      ? captureSnapshot(resolve(anchor), shot, Math.min(HTML_LIMIT, limits.maxHtmlBytes || Infinity)).catch(() => null)
+      : Promise.resolve(null);
     captures.set(anchor, capture);
   }
   if (post)
     void capture.then(async (shot) => {
       for (const kind of ["image", "html"] as const)
         if (shot?.[kind])
-          await post({ kind, data: shot[kind]!, ...(kind === "html" && shot.note ? { note: shot.note } : {}) }).catch(
+          await post(kind, kind === "image" ? dataBlob(shot.image!) : new Blob([shot.html!], { type: "text/html;charset=utf-8" })).catch(
             (reason: unknown) =>
               console.info(`komo: the comment posted without its ${kind} snapshot.`, reason instanceof Error ? reason.message : reason),
           );

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initComments } from "../src/index";
-import { captureSnapshot, HTML_LIMIT, PLACEHOLDER, skipped, snapshotFor, snapshotHtml } from "../src/snapshot";
+import { captureSnapshot, HTML_LIMIT, noteComment, PLACEHOLDER, skipped, snapshotFor, snapshotHtml } from "../src/snapshot";
 import type { CommentsController, CommentsOptions } from "../src/types";
 
 const fixture = (html: string) => {
@@ -95,25 +95,39 @@ describe("snapshot capture", () => {
     expect(await captureSnapshot(null, { html: true })).toBeNull();
   });
 
+  const limits = { guests: false, maxImageBytes: 262_144, maxHtmlBytes: 32_768 };
   it("captures nothing when no kind is turned on, and once per anchor", async () => {
     const root = fixture(`<p>Hello</p>`);
     const resolve = vi.fn(() => root.firstElementChild);
-    expect(await snapshotFor({}, resolve, {})).toBeNull();
+    expect(await snapshotFor({}, resolve, {}, limits)).toBeNull();
     expect(resolve).not.toHaveBeenCalled();
     const anchor = {};
-    const first = snapshotFor(anchor, resolve, { html: true });
-    expect(snapshotFor(anchor, resolve, { html: true })).toBe(first);
+    const first = snapshotFor(anchor, resolve, { html: true }, limits);
+    expect(snapshotFor(anchor, resolve, { html: true }, limits)).toBe(first);
     expect(await first).toEqual({ html: "<p>Hello</p>" });
     expect(resolve).toHaveBeenCalledTimes(1);
   });
 
-  it("uploads each kind after capture and logs a failed upload quietly", async () => {
-    const root = fixture(`<p>Hello</p>`);
+  it("keeps the HTML within the server's limit", async () => {
+    const root = fixture(Array.from({ length: 400 }, (_, i) => `<p>Row ${i} ${"x".repeat(30)}</p>`).join(""));
+    const shot = await snapshotFor({}, () => root, { html: true }, { ...limits, maxHtmlBytes: 4_000 });
+    expect(new TextEncoder().encode(shot!.html!).length).toBeLessThanOrEqual(4_000);
+  });
+
+  it("says why the image is missing at the top of the HTML", () => {
+    expect(noteComment("cross-origin")).toBe("<!-- komo: no image snapshot, the element shows images from another origin. -->");
+  });
+
+  it("uploads each kind as its raw file after capture, and logs a failed upload quietly", async () => {
+    const root = fixture(`<p>Héllo</p>`);
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
-    const post = vi.fn(() => Promise.reject(new Error("Snapshot storage is full")));
-    await snapshotFor({}, () => root.firstElementChild, { html: true }, post);
+    const post = vi.fn((_kind: string, _body: Blob) => Promise.reject(new Error("Snapshot storage is full")));
+    await snapshotFor({}, () => root.firstElementChild, { html: true }, limits, post);
     await vi.waitFor(() => expect(info).toHaveBeenCalledWith("komo: the comment posted without its html snapshot.", "Snapshot storage is full"));
-    expect(post).toHaveBeenCalledWith({ kind: "html", data: "<p>Hello</p>" });
+    const [kind, body] = post.mock.calls[0]!;
+    expect(kind).toBe("html");
+    expect(body.type).toBe("text/html;charset=utf-8");
+    expect(await body.text()).toBe("<p>Héllo</p>");
     info.mockRestore();
   });
 });
@@ -121,7 +135,9 @@ describe("snapshot capture", () => {
 const measureRect = HTMLElement.prototype.getBoundingClientRect;
 describe("posting with snapshots", () => {
   let controller: CommentsController | undefined;
-  let requests: { path: string; method: string; body?: any }[];
+  let requests: { path: string; method: string; type?: string; body?: string }[];
+  let server: Record<string, unknown>;
+  let failUploads: boolean;
   beforeEach(() => {
     vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
     vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
@@ -129,11 +145,18 @@ describe("posting with snapshots", () => {
     Object.defineProperty(document, "elementsFromPoint", { configurable: true, value: () => [] });
     vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     requests = [];
-    // Reads stay pending; writes succeed.
-    vi.stubGlobal("fetch", vi.fn((url: URL, init?: RequestInit) => {
+    failUploads = false;
+    server = { github: false, guests: true, guestResolve: false, snapshots: { guests: false, maxImageBytes: 262_144, maxHtmlBytes: 32_768 } };
+    // Config loads (post() answers /me); other reads stay pending; writes succeed.
+    vi.stubGlobal("fetch", vi.fn(async (url: URL, init?: RequestInit) => {
       const method = init?.method ?? "GET";
-      requests.push({ path: new URL(url).pathname, method, body: init?.body ? JSON.parse(init.body as string) : undefined });
-      return method === "GET" ? new Promise<Response>(() => {}) : Promise.resolve(Response.json({ id: "thread-1", commentId: "comment-1" }));
+      const { pathname, searchParams } = new URL(url);
+      const body = init?.body instanceof Blob ? await init.body.text() : (init?.body as string | undefined);
+      requests.push({ path: `${pathname}${searchParams.has("kind") ? `?kind=${searchParams.get("kind")}` : ""}`, method, type: (init?.headers as Record<string, string>)?.["Content-Type"], body });
+      if (pathname.endsWith("/snapshot"))
+        return failUploads ? Response.json({ error: "Snapshot storage is full" }, { status: 413 }) : Response.json({ ok: true }, { status: 201 });
+      if (pathname === "/config") return Response.json(server);
+      return method === "GET" ? new Promise<Response>(() => {}) : Response.json({ id: "thread-1", commentId: "comment-1" });
     }));
   });
   afterEach(() => {
@@ -146,7 +169,12 @@ describe("posting with snapshots", () => {
   async function post(snapshots: CommentsOptions["snapshots"], verified = true, wrap = "") {
     const { CommentsApi } = await import("../src/api");
     const config: CommentsOptions = { endpoint: "https://example.test", project: "fixture", repo: "fixture", branch: "main", snapshots };
-    new CommentsApi(config).save({ token: "session", user: { id: "reviewer", name: "Reviewer", verified } });
+    const user = { id: "reviewer", name: "Reviewer", verified };
+    new CommentsApi(config).save({ token: "session", user });
+    const fetch = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const respond = fetch.getMockImplementation()!;
+    fetch.mockImplementation((url: URL, init?: RequestInit) =>
+      new URL(url).pathname === "/me" ? (requests.push({ path: "/me", method: "GET" }), Promise.resolve(Response.json({ user }))) : respond(url, init));
     const target = document.createElement("article");
     target.id = "target";
     target.innerHTML = `<h2>Card</h2><input value="secret">`;
@@ -158,13 +186,16 @@ describe("posting with snapshots", () => {
       return this === target ? new DOMRect(10, 10, 400, 300) : measureRect.call(this);
     });
     controller = initComments(config);
+    // Capture waits for the server's snapshot support.
+    await vi.waitFor(() => expect(requests.some((request) => request.path === "/config")).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 10));
     const shadow = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
     controller.comment(target);
     const input = shadow.querySelector<HTMLTextAreaElement>('[data-focus-key="body"]')!;
     input.value = "Tighten the heading";
     input.dispatchEvent(new Event("input"));
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
-    await vi.waitFor(() => expect(requests.some((request) => request.path.endsWith("/threads") && request.method === "POST")).toBe(true));
+    await vi.waitFor(() => expect(requests.some((request) => request.path === "/threads" && request.method === "POST")).toBe(true));
     // Give a capture and upload every chance to run.
     await new Promise((resolve) => setTimeout(resolve, 50));
     return requests.filter((request) => request.path.includes("/snapshot"));
@@ -178,16 +209,27 @@ describe("posting with snapshots", () => {
     expect(await post({ maxBytes: 1000 })).toEqual([]);
   });
 
-  it("uploads the trimmed HTML after the thread is created for signed-in reviewers", async () => {
+  it("uploads the trimmed HTML as text/html after the thread is created for signed-in reviewers", async () => {
     const uploads = await post({ html: true });
-    expect(uploads).toEqual([{ path: "/threads/thread-1/snapshot", method: "POST", body: { kind: "html", data: expect.stringContaining("<h2>Card</h2>") } }]);
-    expect(uploads[0]!.body.data).not.toContain("secret");
+    expect(uploads).toEqual([{ path: "/threads/thread-1/snapshot?kind=html", method: "POST", type: "text/html;charset=utf-8", body: expect.stringContaining("<h2>Card</h2>") }]);
+    expect(uploads[0]!.body).not.toContain("secret");
     const order = requests.map((request) => request.path);
-    expect(order.indexOf("/threads")).toBeLessThan(order.indexOf("/threads/thread-1/snapshot"));
+    expect(order.indexOf("/threads")).toBeLessThan(order.indexOf("/threads/thread-1/snapshot?kind=html"));
   });
 
-  it("skips guests", async () => {
+  it("skips servers without snapshot support", async () => {
+    delete server.snapshots;
+    expect(await post({ html: true })).toEqual([]);
+  });
+
+  it("skips guests unless the server allows them", async () => {
     expect(await post({ html: true, image: true }, false)).toEqual([]);
+    controller!.destroy();
+    controller = undefined;
+    document.body.replaceChildren();
+    requests = [];
+    server.snapshots = { guests: true, maxImageBytes: 262_144, maxHtmlBytes: 32_768 };
+    expect((await post({ html: true }, false)).map((request) => request.path)).toEqual(["/threads/thread-1/snapshot?kind=html"]);
   });
 
   it("skips a target inside data-komo-no-snapshot", async () => {
@@ -196,15 +238,10 @@ describe("posting with snapshots", () => {
 
   it("still posts the comment when the upload fails", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
-    const fetch = globalThis.fetch as ReturnType<typeof vi.fn>;
-    const respond = fetch.getMockImplementation()!;
-    fetch.mockImplementation((url: URL, init?: RequestInit) =>
-      new URL(url).pathname.endsWith("/snapshot")
-        ? (respond(url, init), Promise.resolve(Response.json({ error: "Snapshots are not available" }, { status: 503 })))
-        : respond(url, init));
+    failUploads = true;
     const uploads = await post({ html: true });
     expect(uploads).toHaveLength(1);
-    await vi.waitFor(() => expect(info).toHaveBeenCalledWith("komo: the comment posted without its html snapshot.", "Snapshots are not available"));
+    await vi.waitFor(() => expect(info).toHaveBeenCalledWith("komo: the comment posted without its html snapshot.", "Snapshot storage is full"));
     const shadow = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
     expect(shadow.textContent).not.toContain("Couldn't save");
   });
