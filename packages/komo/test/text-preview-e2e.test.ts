@@ -122,6 +122,28 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.close();
   });
 
+  it("opens the inspector only once its selection keys have loaded", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    let release!: () => void;
+    const loaded = new Promise<void>(resolve => { release = resolve; });
+    let requested = false;
+    await page.route(/\/design-export[^/]*\.js$/, async route => { requested = true; await loaded; await route.continue(); });
+    await page.goto(`${origin}/?react=${version}&mode=floating`);
+    await page.locator('#target').waitFor();
+    await page.evaluate(() => { document.querySelector('main')!.appendChild(document.createElement('button')).id = 'early-button'; });
+    await page.keyboard.press('d');
+    await expect.poll(() => requested).toBe(true);
+    // Design mode has loaded and requested its selection keys; until they arrive, the inspector stays closed.
+    expect(await page.locator('.design-inspector[aria-hidden="false"]').count()).toBe(0);
+    release();
+    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await page.locator('#early-button').focus();
+    await page.keyboard.press('Enter');
+    expect(await page.locator('.design-inspector__target').textContent()).toContain('#early-button');
+    await page.evaluate(() => (window as any).komo.destroy());
+    await page.close();
+  });
+
   it("keeps source-formatting newlines at baseline geometry in Before and Undo", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     await page.goto(`${origin}/?react=${version}&mode=floating`);
