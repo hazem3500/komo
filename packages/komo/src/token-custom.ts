@@ -9,6 +9,8 @@ export interface CustomHost {
   /** Keeps the value: the end of a scrub, Enter, blur, a menu choice or a toggle. */
   commit(value: string): void;
   token?(token: DesignToken): void;
+  /** A hovered or arrowed menu option, previewed until it is chosen or left (undefined). */
+  hover?(value?: string): void;
 }
 
 /**
@@ -39,7 +41,7 @@ export function pickerEditor(options: TokenPickerOptions, host: CustomHost): HTM
     return true;
   };
   box.append(el("style", "", css), body);
-  const draw = typedCustom(body, property, initial, exact, send, options.custom?.field, options.tokens);
+  const draw = typedCustom(body, property, initial, exact, send, options.custom?.field, options.tokens, value => { if (!gone) host.hover?.(value); });
   return Object.assign(box, {
     live: true as const,
     // Chrome blurs a focused field as the closed popup is removed; that blur keeps nothing.

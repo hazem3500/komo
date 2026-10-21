@@ -328,3 +328,112 @@ describe("token field suggestions", () => {
     expect([...label.querySelectorAll(".komo-tokens [role=option]")].map((option) => option.querySelector(".komo-tokens__name > span")!.textContent)).toEqual(["Primary", "secondary"]);
   });
 });
+
+describe("one popup for tokens and Custom value", () => {
+  afterEach(() => document.body.replaceChildren());
+  const custom = (extra: Partial<NonNullable<TokenPickerOptions["custom"]>> = {}): NonNullable<TokenPickerOptions["custom"]> =>
+    ({ value: "16px", onPreview: vi.fn(() => () => {}), onSelect: vi.fn(), ...extra });
+
+  it("lists matching tokens with sample, label and value above Custom value, with no tabs", async () => {
+    const { picker, rows } = mount({ property: "padding", custom: custom() });
+    const box = picker()!;
+    expect(box.querySelector(".komo-tokens__tabs")).toBeNull();
+    expect(box.querySelector(".komo-tokens__head")!.textContent).toBe("padding");
+    expect(box.hasAttribute("data-merged")).toBe(true);
+    expect(rows().map(row => [row.querySelector(".komo-tokens__pv .komo-tokens__dim") !== null, row.querySelector(".komo-tokens__name")!.textContent, row.querySelector(".komo-tokens__value")!.textContent])).toEqual([[true, "md", "16px"]]);
+    await vi.waitFor(() => expect(box.querySelector(".komo-tokens__custom .komo-custom")).not.toBeNull());
+    expect([...box.children].map(child => child.className)).toEqual(["komo-tokens__head", "komo-tokens__bar", "komo-tokens__list", "komo-tokens__custom"]);
+    expect(box.querySelector<HTMLElement>(".komo-tokens__label")!.hidden).toBe(false);
+    expect(box.querySelector("details:not([open]) > summary")!.textContent).toBe("Edit as CSS");
+  });
+
+  it("skips the token section for a property without tokens and focuses the editor", async () => {
+    const { picker, root } = mount({ property: "letter-spacing", custom: custom({ value: "0px" }) });
+    const box = picker()!;
+    expect(box.querySelector<HTMLElement>(".komo-tokens__list")!.hidden).toBe(true);
+    expect(box.querySelector<HTMLElement>(".komo-tokens__bar")!.hidden).toBe(true);
+    expect(box.querySelector<HTMLElement>(".komo-tokens__label")!.hidden).toBe(true);
+    expect(box.hasAttribute("data-merged")).toBe(false);
+    await vi.waitFor(() => expect(root.activeElement?.closest(".komo-tokens__custom")).toBeTruthy());
+    expect(root.activeElement!.closest("details")).toBeNull();
+  });
+
+  it("previews a hovered token and restores the page exactly on leaving the list", () => {
+    const element = document.createElement("p");
+    element.style.setProperty("color", "#123456", "important");
+    const onPreview = vi.fn((token: DesignToken) => {
+      const value = element.style.color, priority = element.style.getPropertyPriority("color");
+      element.style.setProperty("color", token.value, priority);
+      return () => element.style.setProperty("color", value, priority);
+    });
+    const { rows, picker, chosen } = mount({ onPreview });
+    document.body.append(element);
+    rows()[1].dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
+    expect(element.style.color).toBe("rgb(107, 107, 107)");
+    picker()!.querySelector(".komo-tokens__list")!.dispatchEvent(new PointerEvent("pointerleave"));
+    expect(element.style.color).toBe("rgb(18, 52, 86)");
+    expect(element.style.getPropertyPriority("color")).toBe("important");
+    rows()[1].dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
+    expect(onPreview).toHaveBeenCalledTimes(2);
+    expect(chosen).toEqual([]);
+  });
+
+  it("moves with Home and End, and typing on the list filters it", () => {
+    const { press, root, search, names } = mount();
+    const list = root.querySelector<HTMLElement>(".komo-tokens__list")!;
+    expect(root.activeElement).toBe(list);
+    expect(search().hidden).toBe(true);
+    press("End", list);
+    expect(root.getElementById(list.getAttribute("aria-activedescendant")!)!.textContent).toContain("secondary");
+    press("Home", list);
+    expect(root.getElementById(list.getAttribute("aria-activedescendant")!)!.textContent).toContain("Primary");
+    expect(press("s", list).defaultPrevented).toBe(true);
+    expect(search().hidden).toBe(false);
+    expect(search().value).toBe("s");
+    expect(root.activeElement).toBe(search());
+    expect(names()).toEqual(["secondary"]);
+    search().value = "";
+    search().dispatchEvent(new Event("input"));
+    expect(search().hidden).toBe(false);
+  });
+
+  it("focuses the search of a long list", () => {
+    const { root, search } = mount({ property: "none" });
+    expect(search().hidden).toBe(false);
+    expect(root.activeElement).toBe(search());
+  });
+
+  it("previews a hovered menu option over a kept Custom value and brings that value back", async () => {
+    vi.stubGlobal("CSS", { supports: () => true });
+    const applied: string[] = [];
+    const onPreview = vi.fn((value: string) => { applied.push(value); return () => { applied.pop(); }; });
+    const { picker } = mount({ property: "font", tokens: [], custom: custom({ value: "500 14px serif", onPreview }) });
+    const weight = await vi.waitFor(() => {
+      const select = picker()!.querySelector<HTMLSelectElement>('select[aria-label="Font weight"]');
+      expect(select).not.toBeNull();
+      return select!;
+    });
+    weight.value = "600";
+    weight.dispatchEvent(new Event("change"));
+    expect(applied).toEqual(["600 14px serif"]);
+    weight.dispatchEvent(new CustomEvent("komo-preview", { detail: "800" }));
+    expect(applied).toEqual(["800 14px serif"]);
+    weight.dispatchEvent(new CustomEvent("komo-preview", { detail: null }));
+    expect(applied).toEqual(["600 14px serif"]);
+    vi.unstubAllGlobals();
+  });
+
+  it("undoes a pending Custom edit before choosing a token, as one change", async () => {
+    const calls: string[] = [];
+    const { rows, picker, chosen } = mount({
+      property: "padding",
+      onSelect: token => calls.push(`select ${token.path}`),
+      custom: custom({ onCommit: value => calls.push(`commit ${value}`), onCancel: () => calls.push("cancel"), onDone: () => calls.push("done") }),
+    });
+    await vi.waitFor(() => expect(picker()!.querySelector(".komo-custom")).not.toBeNull());
+    rows()[0].click();
+    expect(picker()).toBeNull();
+    expect(calls).toEqual(["cancel", "done", "select space.md"]);
+    expect(chosen).toEqual([]);
+  });
+});

@@ -128,8 +128,6 @@ async function openCustom(tab: Page, property: string) {
   await trigger.focus();
   await tab.keyboard.press("Enter");
   await tab.locator(".komo-tokens").waitFor();
-  const custom = tab.locator(".komo-tokens__tabs button").filter({ hasText: "Custom" });
-  if (await custom.getAttribute("aria-pressed") !== "true") await custom.evaluate(node => (node as HTMLButtonElement).click());
   await tab.locator(".komo-tokens .komo-color").waitFor();
 }
 
