@@ -243,7 +243,10 @@ if (report.optionalSelectMenu.gzip > 3_300)
 // 5,600: one popup replaces the Tokens and Custom tabs: a header, token values in each row, an
 // inline Custom value section, a restore when the pointer leaves the list, Home/End and
 // type-to-filter (5,222 -> 5,440), plus ~3%.
-if (report.optionalTokenPicker.gzip > 5_600)
+// 6,375: popups open on their tokens and swap to Custom on demand: a back header, a Custom… row with
+// the current value, Show all under the list, an active row's path and value instead of a tooltip,
+// and a viewport-capped height with one scroll area (5,458 -> 6,183 measured), plus ~3%.
+if (report.optionalTokenPicker.gzip > 6_375)
   throw new Error("komo's token picker chunk exceeds its gzip budget.");
 // The Tokens view (every token with nothing selected, per-theme edits, its footer and page
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and

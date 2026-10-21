@@ -206,10 +206,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("the color picke
     await tab.keyboard.press("Tab");
     const active = () => tab.evaluate(() => {
       const root = [...document.querySelectorAll("*")].find(node => node.shadowRoot?.querySelector(".komo-tokens"))!.shadowRoot!;
-      return [!!root.activeElement?.closest(".komo-tokens"), root.activeElement?.textContent];
+      return [!!root.activeElement?.closest(".komo-tokens"), root.activeElement?.getAttribute("aria-label") || root.activeElement?.textContent];
     });
-    // The first control is the token section's Show all; there is no tab bar.
-    expect(await active()).toEqual([true, "Show all"]);
+    // The Custom view's first control is its way back to the tokens.
+    expect(await active()).toEqual([true, "Back to tokens"]);
     await tab.keyboard.press("Shift+Tab");
     expect((await active())[0]).toBe(true);
     await tab.keyboard.press("Escape");

@@ -61,6 +61,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
       opened = property;
       const trigger = page.locator(`[data-field-property="${property}"] select[data-picker]`);
       await trigger.click();
+      await page.locator(".komo-tokens").waitFor(); if (await page.locator(".komo-tokens__more").isVisible()) await page.locator(".komo-tokens__more").click();
       await page.locator(".komo-custom").waitFor();
     };
     // No Apply button: Enter keeps the value, and closing the popup makes the visit one history entry.
@@ -102,7 +103,8 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.keyboard.press("Escape"); expect(await target.getAttribute("style")).toBe(original);
     await open("width"); await number.fill("8"); await keep(number);
     expect(await page.locator('[data-field-property="width"]').getAttribute("data-token-mode")).toBe("custom");
-    await open("width"); await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Small" }).click();
+    // Tokens come first: the chip opens on them.
+    await page.locator('[data-field-property="width"] select[data-picker]').click(); await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Small" }).click();
     expect(await page.locator('[data-field-property="width"]').getAttribute("data-token-mode")).not.toBe("custom");
     await undo.click();
     expect(await page.locator('[data-field-property="width"]').getAttribute("data-token-mode")).toBe("custom");
@@ -139,9 +141,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     if (evidence) await page.screenshot({ path: join(evidence, `shadow-${mode}-${width}.png`) });
     // Every control is inside the popup's visible area: nothing sits under a footer or past the viewport.
     const reach = await page.locator(".komo-custom").evaluate(box => {
-      const popup = box.closest(".komo-tokens")!.getBoundingClientRect(), body = box.querySelector<HTMLElement>(".komo-custom__body")!;
+      const popup = box.closest(".komo-tokens")!.getBoundingClientRect(), body = box.closest(".komo-tokens")!.querySelector<HTMLElement>(".komo-tokens__custom")!;
       const root = box.getRootNode() as ShadowRoot;
-      // Scrolls only the popup's own body to each control, then hit-tests its center.
+      // Scrolls only the popup's one scroll area to each control, then hit-tests its center.
       return [...box.querySelectorAll<HTMLElement>("input,select,button,summary")].filter(node => node.getClientRects().length && !node.matches("details:not([open]) :not(summary)")).filter(node => {
         const frame = body.getBoundingClientRect();
         let rect = node.getBoundingClientRect();
@@ -182,6 +184,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.keyboard.press("d"); await target.click();
     const open = async () => {
       await page.locator('[data-field-property="width"] select[data-picker]').click();
+      await page.locator(".komo-tokens").waitFor(); if (await page.locator(".komo-tokens__more").isVisible()) await page.locator(".komo-tokens__more").click();
     };
     const number = page.locator(".komo-tokens").getByRole("textbox", { name: "Width", exact: true });
     await open(); await number.fill("140");
@@ -199,6 +202,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).komo);
     await page.keyboard.press("d"); await page.locator("#target").click();
     await page.locator('[data-field-property="width"] select[data-picker]').click();
+    await page.locator(".komo-tokens").waitFor(); if (await page.locator(".komo-tokens__more").isVisible()) await page.locator(".komo-tokens__more").click();
     const unit = page.locator('.komo-custom select[aria-label="Width unit"]');
     await unit.click();
     const menu = page.locator(".komo-select");

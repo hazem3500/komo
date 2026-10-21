@@ -121,20 +121,24 @@ describe.skipIf(!chrome).each([1280, 390])("the font size row at %ipx", width =>
     await tab.close();
   });
 
-  it("opens the token list alone from the chip, with Edit as CSS collapsed", async () => {
+  it("opens the token list from the chip, with only Edit as CSS, collapsed, under Custom…", async () => {
     const { tab, row, errors } = await open(width);
     await row.locator("select[data-picker]").click();
     const popup = tab.locator(".komo-tokens");
     await popup.waitFor();
-    await popup.locator(".komo-custom").waitFor({ state: "attached" });
+    await popup.getByRole("option").first().waitFor();
     expect(await popup.getByRole("option").allTextContents()).toEqual([expect.stringContaining("Body"), expect.stringContaining("Large")]);
     // No second heading, label or value field: the row already holds them.
     expect(await popup.locator(".komo-tokens__head").isVisible()).toBe(false);
-    expect(await popup.getByText("Custom value", { exact: true }).isVisible()).toBe(false);
-    expect(await popup.locator(".komo-custom input:visible").count()).toBe(0);
+    expect(await popup.locator(".komo-custom").count()).toBe(0);
+    // Custom… holds only Edit as CSS, collapsed, with a way back.
+    await popup.locator(".komo-tokens__more").click();
     const advanced = popup.locator("details.komo-typed__advanced");
+    await advanced.waitFor();
+    expect(await popup.locator(".komo-custom input:visible").count()).toBe(0);
     expect(await advanced.locator("summary").textContent()).toBe("Edit as CSS");
     expect(await advanced.evaluate(node => (node as HTMLDetailsElement).open)).toBe(false);
+    await popup.getByRole("button", { name: "Back to tokens", exact: true }).click();
     // Hovering a token previews it; choosing it binds it.
     await popup.getByRole("option").filter({ hasText: "Large" }).click();
     await expect.poll(() => tab.locator("#card").evaluate(node => getComputedStyle(node).fontSize)).toBe("18px");

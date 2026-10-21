@@ -146,7 +146,7 @@ export function matchingToken(rgba: Rgba, tokens: readonly DesignToken[], proper
   })());
 }
 
-const css = `.komo-color{display:grid;gap:8px;padding:8px}.komo-color__area{position:relative;aspect-ratio:4/3;border-radius:6px;background:linear-gradient(to top,#000,#0000),linear-gradient(to right,#fff,#0000),var(--hue);cursor:crosshair;touch-action:none}.komo-color__area>i,.komo-color__track>i{position:absolute;width:12px;height:12px;box-sizing:border-box;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #0006,inset 0 0 0 1px #0004;translate:-50% -50%;pointer-events:none}.komo-color__row{display:flex;align-items:center;gap:8px}.komo-color__tools{display:flex;align-items:center;gap:4px}.komo-color__sliders{display:grid;flex:1;gap:8px;min-width:0}.komo-color__track{position:relative;height:10px;border-radius:5px;cursor:pointer;touch-action:none}.komo-color__track>i{top:50%;width:14px;height:14px}.komo-color__hue{background:linear-gradient(to right,red,#ff0,lime,cyan,blue,#f0f,red)}.komo-color__alpha,.komo-color__chip,.komo-color__swatches button{background:linear-gradient(var(--color),var(--color)),repeating-conic-gradient(#ffffff40 0 25%,#ffffff12 0 50%) 0 0/8px 8px}.komo-color__alpha{background:linear-gradient(to right,#0000,var(--solid)),repeating-conic-gradient(#ffffff40 0 25%,#ffffff12 0 50%) 0 0/8px 8px}.komo-color__chip{width:20px;height:20px;border-radius:5px;box-shadow:inset 0 0 0 1px #ffffff26}.komo-color__drop{display:grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:5px;background:none;color:#b5b1ab;cursor:pointer}.komo-color__drop:hover{background:#ffffff14;color:#f1efeb}.komo-color__drop svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}.komo-color__value{display:flex;gap:4px;min-width:0}.komo-color__value select{flex:none;width:64px;height:24px;padding:0 16px 0 6px;border:0;border-radius:5px;box-shadow:none;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 5px center/8px no-repeat;color:#f1efeb;font:inherit;cursor:pointer}.komo-color__channels{display:flex;flex:1;min-width:0;border-radius:5px;background:#ffffff0a}.komo-color__channels label{display:flex;flex:1;align-items:center;min-width:0}.komo-color__channels label:first-child{flex:2.2}.komo-color__channels[data-format=RGB] label:first-child,.komo-color__channels[data-format=HSL] label:first-child,.komo-color__channels[data-format=HSB] label:first-child{flex:1}.komo-color__channels span{flex:none;width:12px;color:#77736f;font-size:9px;text-align:center;cursor:ew-resize;user-select:none;touch-action:none}.komo-color__channels span:hover{color:#e9e6e1}.komo-color__channels input{width:100%;min-width:0;height:24px;box-sizing:border-box;padding:0 2px;border:0;border-radius:0;outline:0;box-shadow:none;background:none;color:#f1efeb;font:inherit;font-variant-numeric:tabular-nums}.komo-color__channels input:focus,.komo-color__channels input:focus-visible{outline:0;box-shadow:none}.komo-color__channels:hover{box-shadow:inset 0 0 0 1px #ffffff1c}.komo-color__channels:focus-within{box-shadow:inset 0 0 0 1px #bda6ef}.komo-color__channels [aria-invalid=true]{color:#f8a898}.komo-tokens .komo-color small{position:static;display:block;margin:2px 0 4px;padding:0;background:none;color:#77736f;font-size:10px}.komo-color__swatches>div{display:flex;flex-wrap:wrap;gap:4px}.komo-color__swatches button{width:16px;height:16px;padding:0;border:0;border-radius:4px;box-shadow:inset 0 0 0 1px #ffffff26;cursor:pointer}.komo-color__match{display:flex;align-items:center;gap:6px;color:#b5b1ab;font-size:10px}.komo-color__match span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.komo-color__match button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.komo-color [role=slider]:focus-visible,.komo-color button:focus-visible{outline:1px solid #bda6ef;outline-offset:2px}.komo-color select:focus-visible{outline:0;box-shadow:inset 0 0 0 1px #bda6ef}@media (pointer:coarse){.komo-color__track{height:16px}.komo-color__value select,.komo-color__channels input{height:32px}.komo-color__swatches button{width:24px;height:24px}}`;
+const css = `.komo-color{display:grid;gap:8px;padding:8px}.komo-color__area{position:relative;aspect-ratio:4/3;border-radius:6px;background:linear-gradient(to top,#000,#0000),linear-gradient(to right,#fff,#0000),var(--hue);cursor:crosshair;touch-action:none}.komo-color__area>i,.komo-color__track>i{position:absolute;width:12px;height:12px;box-sizing:border-box;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #0006,inset 0 0 0 1px #0004;translate:-50% -50%;pointer-events:none}.komo-color__row{display:flex;align-items:center;gap:8px}.komo-color__tools{display:flex;align-items:center;gap:4px}.komo-color__sliders{display:grid;flex:1;gap:8px;min-width:0}.komo-color__track{position:relative;height:10px;border-radius:5px;cursor:pointer;touch-action:none}.komo-color__track>i{top:50%;width:14px;height:14px}.komo-color__hue{background:linear-gradient(to right,red,#ff0,lime,cyan,blue,#f0f,red)}.komo-color__alpha,.komo-color__chip,.komo-color__swatches button{background:linear-gradient(var(--color),var(--color)),repeating-conic-gradient(#ffffff40 0 25%,#ffffff12 0 50%) 0 0/8px 8px}.komo-color__alpha{background:linear-gradient(to right,#0000,var(--solid)),repeating-conic-gradient(#ffffff40 0 25%,#ffffff12 0 50%) 0 0/8px 8px}.komo-color__chip{width:20px;height:20px;border-radius:5px;box-shadow:inset 0 0 0 1px #ffffff26}.komo-color__drop{display:grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:5px;background:none;color:#b5b1ab;cursor:pointer}.komo-color__drop:hover{background:#ffffff14;color:#f1efeb}.komo-color__drop svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}.komo-color__value{display:flex;gap:4px;min-width:0}.komo-color__value select{flex:none;width:64px;height:24px;padding:0 16px 0 6px;border:0;border-radius:5px;box-shadow:none;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 5px center/8px no-repeat;color:#f1efeb;font:inherit;cursor:pointer}.komo-color__channels{display:flex;flex:1;min-width:0;border-radius:5px;background:#ffffff0a}.komo-color__channels label{display:flex;flex:1;align-items:center;min-width:0}.komo-color__channels label:first-child{flex:2.2}.komo-color__channels[data-format=RGB] label:first-child,.komo-color__channels[data-format=HSL] label:first-child,.komo-color__channels[data-format=HSB] label:first-child{flex:1}.komo-color__channels span{flex:none;width:12px;color:#77736f;font-size:9px;text-align:center;cursor:ew-resize;user-select:none;touch-action:none}.komo-color__channels span:hover{color:#e9e6e1}.komo-color__channels input{width:100%;min-width:0;height:24px;box-sizing:border-box;padding:0 2px;border:0;border-radius:0;outline:0;box-shadow:none;background:none;color:#f1efeb;font:inherit;font-variant-numeric:tabular-nums}.komo-color__channels input:focus,.komo-color__channels input:focus-visible{outline:0;box-shadow:none}.komo-color__channels:hover{box-shadow:inset 0 0 0 1px #ffffff1c}.komo-color__channels:focus-within{box-shadow:inset 0 0 0 1px #bda6ef}.komo-color__channels [aria-invalid=true]{color:#f8a898}.komo-tokens .komo-color small{position:static;display:block;margin:2px 0 4px;padding:0;background:none;color:#77736f;font-size:10px}.komo-color__swatches>div{display:flex;gap:4px;overflow:hidden}.komo-color__swatches button{width:16px;height:16px;padding:0;border:0;border-radius:4px;box-shadow:inset 0 0 0 1px #ffffff26;cursor:pointer}.komo-color__match{display:flex;align-items:center;gap:6px;color:#b5b1ab;font-size:10px}.komo-color__match span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.komo-color__match button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.komo-color [role=slider]:focus-visible,.komo-color button:focus-visible{outline:1px solid #bda6ef;outline-offset:2px}.komo-color select:focus-visible{outline:0;box-shadow:inset 0 0 0 1px #bda6ef}@media (pointer:coarse){.komo-color__track{height:16px}.komo-color__value select,.komo-color__channels input{height:32px}.komo-color__swatches button{width:24px;height:24px}}`;
 
 const DROPPER = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m9.5 3.5 3 3M11 2a1.4 1.4 0 0 1 2 2l-1.5 1.5-2-2zM10 5 4 11l-1 3 3-1 6-6"/></svg>';
 
@@ -382,7 +382,8 @@ export function pickerEditor(options: TokenPickerOptions, host: ColorEditorHost)
     node.onpointerdown = event => {
       if (event.button) return;
       event.preventDefault();
-      node.focus({ preventScroll: true });
+      // A pointer focuses without a ring; the ring is for the keyboard.
+      node.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
       node.setPointerCapture?.(event.pointerId);
       at(event);
       node.onpointermove = at;
@@ -413,24 +414,25 @@ export function pickerEditor(options: TokenPickerOptions, host: ColorEditorHost)
   drive(hue, x => { h = x * 360; }, linear(x => { h = x; }, () => h, 360));
   drive(alpha, x => { a = x; }, linear(x => { a = x / 100; }, () => a * 100, 100));
 
-  /** Swatches load after the popup has painted, so sampling the page never delays it. */
+  /** Swatches load after the popup has painted, so sampling the page never delays it: one row,
+   * recent colors first, then the page's own; nothing at all when there are none. */
   const fill = () => {
-    const groups = [["Document colors", documentColors()], ["Recent", recentColors()]] as const;
-    swatches.replaceChildren(...groups.filter(([, colors]) => colors.length).flatMap(([title, colors]) => {
-      const list = el("div");
-      list.setAttribute("role", "group");
-      list.setAttribute("aria-label", title);
-      list.append(...colors.map(color => {
-        const button = el("button");
-        button.type = "button";
-        button.title = color;
-        button.setAttribute("aria-label", `${title === "Recent" ? "Recent" : "Document"} color ${color}`);
-        button.style.setProperty("--color", color);
-        button.onclick = () => { if (read(color)) change(true); };
-        return button;
-      }));
-      return [el("small", "", title), list];
+    const recent = recentColors(), seen = new Set(recent.map(color => color.toLowerCase()));
+    const colors = [...recent.map(color => [color, "Recent"]), ...documentColors().filter(color => !seen.has(color.toLowerCase())).map(color => [color, "Document"])].slice(0, 8);
+    const list = el("div");
+    list.setAttribute("role", "group");
+    list.setAttribute("aria-label", "Recent and page colors");
+    list.append(...colors.map(([color, kind]) => {
+      const button = el("button");
+      button.type = "button";
+      button.title = color;
+      button.setAttribute("aria-label", `${kind} color ${color}`);
+      button.style.setProperty("--color", color);
+      button.onclick = () => { if (read(color)) change(true); };
+      return button;
     }));
+    swatches.replaceChildren(...colors.length ? [list] : []);
+    swatches.hidden = !colors.length;
   };
   setTimeout(() => { if (box.isConnected) fill(); }, 16);
 

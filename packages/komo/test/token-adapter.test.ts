@@ -291,9 +291,9 @@ describe("custom token adapter in Design mode", () => {
     await vi.waitFor(() => expect(shadow.querySelector(".komo-tokens")).not.toBeNull());
     const search = shadow.querySelector<HTMLInputElement>(".komo-tokens input")!;
     const press = (key: string) => search.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true }));
-    const primary = shadow.querySelector<HTMLElement>('.komo-tokens [role="option"][title*="text-primary"]')!;
+    const primary = shadow.querySelector<HTMLElement>('.komo-tokens [role="option"][aria-label*="text-primary"]')!;
     expect(shadow.querySelectorAll('.komo-tokens [role="option"]')).toHaveLength(2);
-    expect(shadow.querySelector('.komo-tokens [aria-selected="true"]')?.getAttribute("title")).toContain("text-secondary");
+    expect(shadow.querySelector('.komo-tokens [aria-selected="true"]')?.getAttribute("aria-label")).toContain("text-secondary");
     for (let i = 0; i < 12; i++) {
       primary.dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
       expect(label.className).toBe("text-primary");

@@ -128,6 +128,7 @@ describe.skipIf(!chrome).each(["Fit", "100%"].flatMap(zoom => ["css-variables", 
       toggle = field.locator("select[data-picker]");
       await toggle.click();
       await tab.locator(".komo-tokens").waitFor();
+      await tab.locator(".komo-tokens__more").click();
     }
     const popup = tab.locator(".komo-tokens");
     await popup.locator(".komo-color__swatches button").first().waitFor();
@@ -165,6 +166,7 @@ describe.skipIf(!chrome).each(["Fit", "100%"].flatMap(zoom => ["css-variables", 
     await expect.poll(() => popup.count()).toBe(0);
     await toggle.click();
     await popup.waitFor();
+    if (where !== "Tokens view row") await popup.locator(".komo-tokens__more").click();
     await popup.locator(".komo-color__area").waitFor();
     await toggle.click();
     await expect.poll(() => popup.count()).toBe(0);

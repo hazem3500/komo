@@ -336,11 +336,11 @@ describe("Tokens view in Design mode", () => {
     await openView();
     rowFor("Primary").querySelector<HTMLButtonElement>("button")!.click();
     await vi.waitFor(() => expect(shadow.querySelector('.komo-tokens [role="option"]')).not.toBeNull());
-    // One popup: the alias targets first, then Custom value; no tabs.
+    // One popup: the alias targets first, with Custom… under them; no tabs.
     expect(shadow.querySelector(".komo-tokens__tabs")).toBeNull();
     expect($(".komo-tokens__head").textContent).toBe("Primary");
-    expect($<HTMLElement>(".komo-tokens__label").hidden).toBe(false);
-    expect($(".komo-tokens").hasAttribute("data-merged")).toBe(true);
+    expect($<HTMLElement>(".komo-tokens__more").hidden).toBe(false);
+    expect($<HTMLElement>(".komo-tokens__custom").hidden).toBe(true);
     const options = [...shadow.querySelectorAll<HTMLElement>('.komo-tokens [role="option"]')];
     expect(options.map((option) => option.getAttribute("aria-selected"))).toEqual(["true", "false"]);
     options[1].click();

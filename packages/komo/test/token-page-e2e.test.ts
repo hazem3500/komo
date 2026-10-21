@@ -114,10 +114,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     expect(await row("surface").getAttribute("data-changed")).toBe("");
     expect(await count.textContent()).toBe("1 change");
 
-    // An alias is repointed from the token list above Custom value; there are no tabs.
+    // An alias is repointed from the token list, with Custom… under it; there are no tabs.
     await row("text").locator("button").first().click();
     expect(await page.locator(".komo-tokens__tabs").count()).toBe(0);
-    expect(await page.locator(".komo-tokens__label").isVisible()).toBe(true);
+    expect(await page.locator(".komo-tokens__more").isVisible()).toBe(true);
     await page.locator('.komo-tokens [role="option"]').filter({ hasText: "gray-700" }).click();
     expect((await look()).color).toBe("rgb(68, 68, 68)");
     expect(await row("text").locator("i").textContent()).toBe("gray-700");

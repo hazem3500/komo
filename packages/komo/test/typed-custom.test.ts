@@ -120,6 +120,9 @@ it("switches Drop and Inner, hides, removes and adds layers, each kept at once",
   expect(readableColor("rgb(255, 0, 0)")).toBe("#ff0000");
   expect(readableColor("rgb(0 0 0 / 50%)")).toBe("#000000 · 50%");
   expect(readableColor("")).toBe("currentColor");
+  // The picker writes hex with alpha; the row shows the same alpha the picker does.
+  expect(readableColor("#d12f2f1f")).toBe("#d12f2f · 12%");
+  expect(readableColor("rgba(209, 47, 47, 0.12)")).toBe("#d12f2f · 12%");
 });
 
 it("keeps a unit suffix with no unitless choice for lengths, and offers no unit only where a value takes one", () => {
