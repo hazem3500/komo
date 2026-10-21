@@ -144,7 +144,8 @@ await writeFile(
 // loads); the frame-size chunk +630 (Available space, the zoom readout, the "Layout follows your
 // browser window" note and its tooltip). Measured locally: main 219,704 -> 220,715.
 // 221,100: the pending-token chip and Layout field sync (#139) landed alongside (+~300).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 221_100)
+// 221,250: a subscribed adapter refreshes only when its list changed, so the color popup stays open (+~125).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 221_250)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -183,7 +184,8 @@ if (report.optionalTokenPicker.gzip > 5_275)
 // The Tokens view (every token with nothing selected, per-theme edits, its footer and page
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and
 // footer chunks, so its own chunk is small. 4,730 measured, plus ~3%.
-if (report.optionalTokenPage.gzip > 4_875)
+// 4,950: rows update in place when the listed tokens keep their order, so an open popup stays open (4,814 -> 4,895).
+if (report.optionalTokenPage.gzip > 4_950)
   throw new Error("komo's Tokens view chunk exceeds its gzip budget.");
 // Experimental move/resize is default off and loads only with design.experimentalGeometry, after
 // Design mode opens; nothing else imports it. It was 3,375 gzip for normal-flow blocks only. Flex and

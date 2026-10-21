@@ -304,43 +304,50 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     }, true);
   }
 
-  function row(token: DesignToken): HTMLElement {
+  /** The latest listed token per path: rows keep their elements (and an open popup) when values change. */
+  const latest = new Map<string, DesignToken>();
+  function row(listed: DesignToken): HTMLElement {
+    const current = () => latest.get(listed.path) ?? listed;
     const item = make("div", "design-token-row");
     const main = make("button");
     main.type = "button";
     main.setAttribute("aria-haspopup", "dialog");
-    const name = make("b", "", picker.tokenLabel(token));
+    const name = make("b", "", picker.tokenLabel(listed));
     const value = make("i");
     const back = make("button");
     back.type = "button";
     back.title = "Reset to page value";
-    back.setAttribute("aria-label", `Reset ${token.path}`);
+    back.setAttribute("aria-label", `Reset ${listed.path}`);
     back.innerHTML = resetIcon;
     item.append(main, back);
     const update = () => {
-      const current = edits.get(token.path, themeKey(host.design));
-      const alias = current ? current.alias : token.alias;
-      const shown = current?.value ?? token.value;
+      const token = current();
+      name.textContent = picker.tokenLabel(token);
+      const edited = edits.get(token.path, themeKey(host.design));
+      const alias = edited ? edited.alias : token.alias;
+      const shown = edited?.value ?? token.value;
       value.textContent = alias ? labelOf(alias) : shown;
       main.replaceChildren(picker.tokenPreview({ ...token, value: shown }), name, value);
       main.title = [token.path, token.ref, alias ? `${alias} · ${shown}` : shown, token.description].filter(Boolean).join(" · ");
-      main.setAttribute("aria-label", `${name.textContent}, ${value.textContent}${current ? ", edited" : ""}`);
-      item.toggleAttribute("data-changed", !!current);
-      back.disabled = !current;
+      main.setAttribute("aria-label", `${name.textContent}, ${value.textContent}${edited ? ", edited" : ""}`);
+      item.toggleAttribute("data-changed", !!edited);
+      back.disabled = !edited;
     };
-    main.addEventListener("click", () => edit(token, main));
+    main.addEventListener("click", () => edit(current(), main));
     back.addEventListener("click", () => {
       show(false);
-      edits.reset(token.path, themeKey(host.design));
+      edits.reset(listed.path, themeKey(host.design));
       refresh();
       main.focus({ preventScroll: true });
     });
-    rows.set(token.path, update);
+    rows.set(listed.path, update);
     update();
     return item;
   }
 
+  let shape = "";
   function render() {
+    for (const token of tokens) latest.set(token.path, token);
     const terms = search.value.toLowerCase().split(/\s+/).filter(Boolean);
     const groups = new Map<string, DesignToken[]>([["", []]]);
     for (const token of tokens) {
@@ -350,6 +357,10 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
       const group = token.group ?? "";
       groups.set(group, [...groups.get(group) ?? [], token]);
     }
+    // The same rows in the same order update in place, so a row's open popup stays open.
+    const next = JSON.stringify([...groups].map(([group, members]) => [group, members.map((token) => token.path)]));
+    if (next === shape && rows.size) return refresh();
+    shape = next;
     rows.clear();
     list.replaceChildren();
     let index = 0;
