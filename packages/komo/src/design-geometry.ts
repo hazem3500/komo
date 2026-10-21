@@ -1,6 +1,7 @@
 import { previewMessage, changePreviewStyles, inlineStyleSnapshot } from './design-preview.js';
 import type { DesignTarget } from './design-target.js';
 import { bindMove, moveLines, moveReason, type MoveRecord } from './design-move.js';
+import { isMac, shortcutKeys } from './kbd.js';
 
 /** One previewed geometry change, as the proposal and DesignEdit record it. */
 export type GeometryChange = {
@@ -285,13 +286,18 @@ export function bindGeometry(hooks: Hooks) {
   let outline: { left: number; top: number; right: number; bottom: number } | null = null;
   let point = { x: -1e4, y: -1e4 }, over: EventTarget[] = [], pending = 0;
   let hidden = false, held: { at: number; was: boolean } | undefined;
+  // The configured visibility key, e.g. " (⇧H)" on Apple platforms or " (Shift+H)" elsewhere.
+  const visibility = hooks.options.visibility;
+  const keys = visibility ? ` (${shortcutKeys(visibility).keys.join(isMac() ? '' : '+')})` : '';
+  /** A tap toggled the overlays; a hold (over 350ms) peeked, so its release puts them back. */
+  const release = (at: number) => { if (held && at - held.at > 350) peek(held.was); held = undefined; };
   const eye = Object.assign(document.createElement('button'), { type: 'button', className: 'design-inspector__eye' });
   /** Hide every Design overlay (selection, hover outline, pins and move feedback), or show them again. */
   function peek(on: boolean) {
     hidden = on;
     hooks.options.host.toggleAttribute('data-komo-overlays-hidden', on);
     eye.setAttribute('aria-pressed', String(on));
-    eye.setAttribute('aria-label', eye.title = on ? 'Show selection' : 'Hide selection');
+    eye.setAttribute('aria-label', eye.title = `${on ? 'Show' : 'Hide'} selection${keys}`);
     eye.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>${on ? '<path d="M2.5 13.5l11-11"/>' : ''}</svg>`;
   }
   peek(false);
@@ -647,7 +653,7 @@ export function bindGeometry(hooks: Hooks) {
     const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
     const typing = path.some(node => node instanceof Element && node.matches('input,textarea,select,[contenteditable]:not([contenteditable=false])'));
     // In Design mode the comments visibility key hides the overlays: a tap toggles, a hold peeks.
-    const key = hooks.options.visibility;
+    const key = visibility;
     if (key && !typing && hooks.options.host.classList.contains('design-active') && event.key.toLowerCase() === key.key
         && event.shiftKey === key.shift && event.altKey === key.alt && event.ctrlKey === key.ctrl && event.metaKey === key.meta) {
       event.preventDefault(); event.stopImmediatePropagation();
@@ -677,7 +683,9 @@ export function bindGeometry(hooks: Hooks) {
   }, { capture: true, signal: controller.signal });
   // macOS sends no arrow keyup while ⌘ is held, so releasing the modifier also commits.
   window.addEventListener('keyup', event => {
-    if (held && event.key.toLowerCase() === hooks.options.visibility?.key) { if (event.timeStamp - held.at > 350) peek(held.was); held = undefined; }
+    // Releasing the letter or any of the combo's modifiers ends a hold; macOS sends no letter keyup while ⌘ is down.
+    if (held && visibility && (event.key.toLowerCase() === visibility.key || (({ Shift: visibility.shift, Alt: visibility.alt, Control: visibility.ctrl, Meta: visibility.meta }) as Record<string, boolean>)[event.key]))
+      release(event.timeStamp);
     if (gesture?.keyboard && /^(Arrow|Control|Meta)/.test(event.key)) finish();
   }, { capture: true, signal: controller.signal });
   window.addEventListener('scroll', () => {
@@ -695,6 +703,9 @@ export function bindGeometry(hooks: Hooks) {
   }, { capture: true, passive: true, signal: controller.signal });
   window.addEventListener('pointermove', event => { point = { x: event.clientX, y: event.clientY }; over = event.composedPath(); later(); }, { capture: true, passive: true, signal: controller.signal });
   for (const type of ['focusin', 'focusout']) window.addEventListener(type, later, { capture: true, signal: controller.signal });
+  // Focus leaving mid-hold never delivers the keyup, so it ends the peek too.
+  window.addEventListener('blur', () => release(Infinity), { signal: controller.signal });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) release(Infinity); }, { signal: controller.signal });
   readout.hidden = guides[0].hidden = guides[1].hidden = true;
   render();
   hooks.signal.addEventListener('abort', () => { finish(true); controller.abort(); cancelAnimationFrame(pending); peek(false); surface.remove(); style.remove(); note.remove(); eye.remove(); }, { once: true });
