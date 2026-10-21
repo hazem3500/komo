@@ -159,7 +159,7 @@ await writeFile(
 // reasons and the frame geometry are their own chunk (below). Initial grows ~1,650: komo's page reads
 // reach the frame through frame-target.ts (cross-realm checks, a listener registry, identity geometry the
 // chunk replaces; ~620 in the shared core chunk) and Frame's layout keeps the viewport hooks (~1,000). The
-// size bar's Viewport / In place switch and reason note add ~420 to the frame-size chunk (227,627 measured).
+// size bar's Viewport / In place switch and reason note add ~420 to the frame-size chunk (227,768 measured on main with #156 and #158).
 if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 227_900)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
