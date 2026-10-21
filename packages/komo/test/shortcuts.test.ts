@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, it } from "vitest";
-import { matchesShortcut, resolveShortcuts } from "../src/shortcuts";
+import { matchesShortcut, resolveDesignKeys, resolveShortcuts } from "../src/shortcuts";
 
 const press = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
 
@@ -68,4 +68,19 @@ it("matches modifiers exactly and falls back to the physical key", () => {
   expect(matchesShortcut(press({ key: "K", shiftKey: true }), restore)).toBe(true);
   expect(matchesShortcut(press({ key: "K", shiftKey: true, metaKey: true }), restore)).toBe(false);
   expect(matchesShortcut(press({ key: "k" }), null)).toBe(false);
+});
+
+it("resolves Design mode's Before/After and selection keys, Tab included, and rejects clashes", () => {
+  const keys = resolveDesignKeys();
+  expect(Object.fromEntries(Object.entries(keys).map(([action, key]) => [action, key?.label]))).toEqual({
+    before: "ArrowLeft", after: "ArrowRight", next: "Tab", prev: "Shift+Tab", parent: "Shift+Enter", child: "Enter",
+  });
+  expect(matchesShortcut(press({ key: "Tab", shiftKey: true }), keys.prev)).toBe(true);
+  expect(matchesShortcut(press({ key: "Enter" }), keys.parent)).toBe(false);
+  const custom = resolveDesignKeys({ compare: { before: "Alt+ArrowLeft", after: false }, select: { next: "J" } });
+  expect([custom.before?.label, custom.after, custom.next?.label]).toEqual(["Alt+ArrowLeft", null, "J"]);
+  expect(() => resolveDesignKeys({ select: { next: "Enter" } })).toThrow(/child and next|next and child/);
+  expect(() => resolveDesignKeys({ compare: { before: "Escape" } })).toThrow(/Invalid/);
+  // Tab stays reserved for the review shortcuts.
+  expect(() => resolveShortcuts({ comment: "Tab" })).toThrow(/Invalid/);
 });

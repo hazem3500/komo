@@ -205,11 +205,15 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
   if (control instanceof HTMLInputElement)
     control.addEventListener("keydown", (event) => { if (event.key === "Enter") control.blur(); });
   box.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !context.cancel) return;
+    if (event.key !== "Escape") return;
+    // Escape cancels the edit, then lets go of the text field, so the next one leaves Design mode.
+    const typed = event.target === control;
+    if (!context.cancel) return typed && control.blur();
     event.preventDefault();
     event.stopImmediatePropagation();
     context.cancel(control, field.property);
     show();
+    if (typed) control.blur();
     queueMicrotask(() => {
       if (box.dataset.tokenMode !== "custom") box.querySelector<HTMLElement>(".design-token-binding select")?.focus();
     });

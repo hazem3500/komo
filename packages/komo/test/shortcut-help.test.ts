@@ -111,7 +111,7 @@ it("filters rows by label or key and says when nothing matches", () => {
   const filter = root.querySelector<HTMLInputElement>('input[aria-label="Filter shortcuts"]')!;
   const type = (value: string) => { filter.value = value; filter.dispatchEvent(new Event("input")); };
   type("parent");
-  expect(visibleRows()).toEqual(["Parent element", "Move out, after its parent"]);
+  expect(visibleRows()).toEqual(["Parent element", "Parent element (alternative)", "Move out, after its parent"]);
   expect(headings().filter((_, index) => !root.querySelectorAll("section")[index]!.hidden)).toEqual(["Design canvas", "Experimental geometry"]);
   type("shift k");
   expect(visibleRows()).toEqual(["Restore feedback"]);

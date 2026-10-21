@@ -2,6 +2,7 @@ import { isDesignTarget, type DesignTarget } from "./design-target.js";
 import { isolated, textEntry } from "./dom.js";
 import { isMac } from "./kbd.js";
 import { isElement, pageDocument } from "./frame-target.js";
+import { matchesShortcut, resolveDesignKeys, type DesignKeys } from "./shortcuts.js";
 
 // Check ancestors in the composed path, including widgets across shadow boundaries.
 export function ownsKeyboard(event: KeyboardEvent, inspect = false): boolean {
@@ -18,11 +19,15 @@ export function designKeyboard(options: {
   select(element: DesignTarget): void;
   compareBefore(before?: boolean): void;
   help?(): void;
-  /** Design mode's Undo; ⌘Z (Ctrl+Z) presses it from anywhere but a text field. */
+  /** Design mode's Undo and Redo; their keys press them from anywhere but a text field. */
   undo?: HTMLButtonElement;
+  redo?: HTMLButtonElement;
+  /** Before/After and selection keys; defaults are ← → and Tab, Shift+Tab, Enter, Shift+Enter. */
+  keys?: DesignKeys;
   root?: ShadowRoot;
   signal?: AbortSignal;
 }) {
+  const keys = options.keys ?? resolveDesignKeys();
   // A closed select's type-ahead would pick an option on komo's own keys (B, ?, the review
   // shortcuts); once every handler has run, those keys never reach it. Other letters still do.
   const guard = (event: KeyboardEvent) => {
@@ -33,40 +38,57 @@ export function designKeyboard(options: {
   const { root, signal } = options;
   addEventListener("keydown", guard, { signal });
   root?.addEventListener("keydown", event => isolated(event, root) && guard(event as KeyboardEvent), { signal });
+  /** Press Undo or Redo, leaving focus where it was; when it redraws a field, on the same control there. */
+  const press = (button: HTMLButtonElement, path: EventTarget[]) => {
+    const focused = root?.activeElement ?? document.activeElement;
+    const field = focused?.closest<HTMLElement>("[data-field-property]")?.dataset.fieldProperty;
+    button.click();
+    // From the canvas or the focused selection, the selection stays drawn, like any canvas key.
+    const selected = options.selected();
+    if (selected && (!path.includes(options.host) || focused?.matches(".design-geometry__frame"))) options.select(selected);
+    const back = focused?.isConnected ? focused : field && root?.querySelector(`[data-field-property="${CSS.escape(field)}"] ${focused!.localName}`);
+    if (back instanceof HTMLElement) back.focus({ preventScroll: true });
+    // The button takes focus; from the canvas, give it back so canvas keys keep working.
+    if (!path.includes(options.host)) (root?.activeElement as HTMLElement | null)?.blur();
+  };
   return (event: KeyboardEvent): boolean => {
     if (event.isComposing || event.keyCode === 229) return false;
     const key = event.key.toLowerCase();
     const path = event.composedPath();
     const typing = textEntry(path[0]);
-    const { undo } = options;
-    // Undo leaves focus where it was; when it redraws a field, on the same control there.
-    if (undo && !undo.disabled && key === "z" && (isMac() ? event.metaKey : event.ctrlKey) && !event.altKey && !event.shiftKey && !typing) {
+    const mod = isMac() ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+    // ⌘Z undoes; ⌘⇧Z (Ctrl+Y or Ctrl+Shift+Z elsewhere) redoes. Text fields keep their own.
+    const button = typing || !mod || event.altKey ? undefined
+      : key === "z" ? (event.shiftKey ? options.redo : options.undo) : key === "y" && !isMac() && !event.shiftKey ? options.redo : undefined;
+    if (button) {
+      if (button.disabled) return false;
       event.preventDefault();
       event.stopImmediatePropagation();
-      const focused = root?.activeElement ?? document.activeElement;
-      const field = focused?.closest<HTMLElement>("[data-field-property]")?.dataset.fieldProperty;
-      undo.click();
-      // Undo from the canvas or the focused selection keeps the selection drawn, like any canvas key.
-      const selected = options.selected();
-      if (selected && (!path.includes(options.host) || focused?.matches(".design-geometry__frame"))) options.select(selected);
-      const back = focused?.isConnected ? focused : field && root?.querySelector(`[data-field-property="${CSS.escape(field)}"] ${focused!.localName}`);
-      if (back instanceof HTMLElement) back.focus({ preventScroll: true });
-      // Undo moves focus to its button; from the canvas, give it back so canvas keys keep working.
-      if (!path.includes(options.host)) (root?.activeElement as HTMLElement | null)?.blur();
+      press(button, path);
       return true;
     }
-    // A field cancels its own preview on Escape. Checked before defaultPrevented:
-    // komo's window-capture isolation already prevents every Escape inside its host.
-    if (key === "escape" && path.some(node => isElement(node) && node.matches("[data-field-property]"))) return true;
+    if (key === "escape") {
+      // The innermost thing closes first: a field's edit, an open popup, then Design mode.
+      // A text field cancels its own edit first and lets go of focus, so the next Escape leaves.
+      if (typing) {
+        if (!path.some(node => isElement(node) && node.matches("[data-field-property]"))) {
+          event.preventDefault();
+          (path[0] as HTMLElement).blur();
+        }
+        return true;
+      }
+      return path.some(node => isElement(node) && node.matches("[popover],[role=listbox]"));
+    }
     if (event.defaultPrevented || options.reserved?.(event)) return false;
     const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
-    const horizontal = key === "arrowleft" || key === "arrowright";
-    const comparison = path.includes(options.compare);
-    // B and ? work from the canvas and any panel control; only true text entry pauses them.
-    if (plain && !options.compare.hidden && (comparison && horizontal || key === "b" && !typing)) {
+    // ← Before and → After anywhere in Design mode, except where arrows edit: text fields, open
+    // lists, sliders and the focused selection, which keeps its Alt+arrow moves.
+    const side = matchesShortcut(event, keys.before) ? true : matchesShortcut(event, keys.after) ? false : undefined;
+    const busy = typing || path.some(node => isElement(node) && node.matches("input[type=range],[role=slider],.design-geometry__frame"));
+    if (!options.compare.hidden && (side !== undefined && !busy || plain && key === "b" && !typing)) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      options.compareBefore(key === "b" ? undefined : key === "arrowleft");
+      options.compareBefore(side);
       return true;
     }
     if (event.key === "?" && options.help && !typing && !event.altKey && !event.ctrlKey && !event.metaKey) {
@@ -75,6 +97,7 @@ export function designKeyboard(options: {
       options.help();
       return true;
     }
+    // Selection keys apply on the page and the selection, never in the panel.
     const inspect = plain && (key === "enter" || key === " ");
     if (path.includes(options.host) || ownsKeyboard(event, inspect)) return false;
     const selected = options.selected();
@@ -82,18 +105,20 @@ export function designKeyboard(options: {
       && element.isConnected && element !== element.ownerDocument.body && element !== element.ownerDocument.documentElement
       && !options.host.contains(element) && !element.matches("script,style,defs,title,desc,metadata,[hidden],[inert]")
       && getComputedStyle(element).display !== "none" && getComputedStyle(element).visibility !== "hidden";
+    const doc = pageDocument(), focus = doc.activeElement;
+    const onSelection = !focus || focus === doc.body || focus === doc.documentElement || focus === selected;
     let next: Element | null = null;
-    if (selected?.isConnected && plain && horizontal) {
-      const direction = key === "arrowleft" ? "previousElementSibling" : "nextElementSibling";
-      next = selected[direction];
-      while (next && !eligible(next)) next = next[direction];
-      // Own the bounded canvas arrow even at an edge; never scroll or wrap.
+    const sibling = matchesShortcut(event, keys.next) ? "nextElementSibling" : matchesShortcut(event, keys.prev) ? "previousElementSibling" : undefined;
+    const alt = event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+    if (selected?.isConnected && sibling) {
+      next = selected[sibling];
+      while (next && !eligible(next)) next = next[sibling];
+      // Own the bounded walk even at an edge; never move focus or wrap.
       event.preventDefault();
       event.stopImmediatePropagation();
-    } else if (selected?.isConnected && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-      if (key === "arrowup") next = selected.parentElement;
-      if (key === "arrowdown") next = [...selected.children].find(eligible) ?? null;
-    } else if (inspect) next = pageDocument().activeElement;
+    } else if (selected?.isConnected && onSelection && (matchesShortcut(event, keys.child) || alt && key === "arrowdown")) next = [...selected.children].find(eligible) ?? null;
+    else if (selected?.isConnected && (matchesShortcut(event, keys.parent) || alt && key === "arrowup")) next = selected.parentElement;
+    else if (inspect) next = focus;
     if (!eligible(next)) return event.defaultPrevented;
     event.preventDefault();
     event.stopImmediatePropagation();
