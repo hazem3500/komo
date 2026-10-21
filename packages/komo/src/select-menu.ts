@@ -63,9 +63,11 @@ export function attach(container: HTMLElement, element?: HTMLElement | SVGElemen
   container.addEventListener("keydown", (event) => {
     const select = target(event);
     if (!select || current?.select === select || event.ctrlKey || event.metaKey) return;
-    if (!["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) return;
+    // A letter opens the list on its first match, instead of the select changing unseen.
+    const letter = event.key.length === 1 && event.key !== " " && !event.altKey;
+    if (!letter && !["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) return;
     event.preventDefault();
-    open(select, targets.get(container));
+    open(select, targets.get(container), letter ? event.key : "");
   }, true);
 }
 
@@ -82,7 +84,7 @@ function toggle(select: HTMLSelectElement, element?: HTMLElement | SVGElement) {
 }
 
 
-function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): void {
+function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement, letter = ""): void {
   current?.close();
   // Only presses made on the open list count as drags, so an assistive click is never one.
   press = undefined;
@@ -181,6 +183,15 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
   current = { select, close };
   let typed = "";
   let typedAt = 0;
+  // Type-ahead: repeat a letter to cycle, or type a prefix within a second.
+  const ahead = (key: string, at: number) => {
+    typed = at - typedAt < 1000 ? typed + key.toLowerCase() : key.toLowerCase();
+    typedAt = at;
+    const start = Math.max(0, enabled.indexOf(active) + (typed[1] ? 0 : 1));
+    const order = [...enabled.slice(start), ...enabled.slice(0, start)];
+    const match = order.find((index) => items[index].option.label.toLowerCase().startsWith(typed));
+    if (match !== undefined) activate(match);
+  };
   addEventListener("keydown", (event) => {
     if (!select.isConnected || event.composedPath()[0] !== select) return close();
     const key = event.key;
@@ -191,15 +202,8 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
     else if (key === "End" || key === "PageDown") activate(enabled[enabled.length - 1]);
     else if (key === "Escape") close();
     else if (key === "Enter" || key === " " && !typed) choose(active);
-    else if (key.length === 1) {
-      // Type-ahead: repeat a letter to cycle, or type a prefix within a second.
-      typed = event.timeStamp - typedAt < 1000 ? typed + key.toLowerCase() : key.toLowerCase();
-      typedAt = event.timeStamp;
-      const start = Math.max(0, enabled.indexOf(active) + (typed[1] ? 0 : 1));
-      const order = [...enabled.slice(start), ...enabled.slice(0, start)];
-      const match = order.find((index) => items[index].option.label.toLowerCase().startsWith(typed));
-      if (match !== undefined) activate(match);
-    } else return;
+    else if (key.length === 1) ahead(key, event.timeStamp);
+    else return;
     event.preventDefault();
     event.stopImmediatePropagation();
   }, { capture: true, signal });
@@ -264,4 +268,5 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
   for (const { node, option } of items) if (!node.title && node.firstElementChild!.scrollWidth > node.firstElementChild!.clientWidth) node.title = option.label;
   activate(items.findIndex((item) => item.option.selected && !item.option.disabled), false);
   if (active < 0) step(0);
+  if (letter) ahead(letter, performance.now());
 }
