@@ -99,7 +99,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await page.locator('[data-menu-item="more"]').evaluate((el:HTMLElement)=>{el.focus();el.click()});
       await page.locator('[data-menu-item="shortcuts"]').evaluate((el:HTMLElement)=>{el.focus();el.click()});
       await expect.poll(() => page.locator('dialog.komo-shortcuts[open]').count()).toBe(1);
-      const restore = page.locator('dialog.komo-shortcuts div').filter({ hasText: 'Restore feedback' });
+      const restore = page.locator('dialog.komo-shortcuts .komo-shortcuts__row').filter({ hasText: 'Restore feedback' });
       expect(await restore.getByRole('img', { name: 'Shift + J', exact: true }).count()).toBe(1);
       expect(await restore.locator('kbd').last().textContent()).toBe('J');
       await page.keyboard.press('Escape');

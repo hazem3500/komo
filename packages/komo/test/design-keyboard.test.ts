@@ -100,8 +100,9 @@ it("shares scoped Help semantics with platform-correct keycaps", () => {
   const parent = commands.find(command => command.label === 'Parent element')!;
   expect(renderKbd(parent.shortcut, true).getAttribute('aria-label')).toBe('Option + ArrowUp');
   expect(renderKbd(parent.shortcut, true).textContent).toBe('⌥↑');
-  expect(renderKbd(commands.find(command => command.label === 'Post comment or proposal')!.shortcut, true).getAttribute('aria-label')).toBe('Command + Enter');
-  expect(commands.filter(command => command.group === 'Focused comparison controls').map(command => command.shortcut.key)).toEqual(['ArrowLeft', 'ArrowRight']);
+  expect(renderKbd(parent.shortcut, false).getAttribute('aria-label')).toBe('Alt + ArrowUp');
+  expect(renderKbd(parent.shortcut, false).textContent).toBe('Alt↑');
+  expect(commands.filter(command => command.group === 'Compare').map(command => command.shortcut.key)).toEqual(['B', 'ArrowLeft', 'ArrowRight']);
   const resize = commands.find(command => command.label.startsWith('Resize width'))!;
   expect(renderKbd(resize.shortcut, true).getAttribute('aria-label')).toBe('Command + ArrowRight');
   expect(renderKbd(designCommands(false).find(command => command.label.startsWith('Resize height'))!.shortcut, false).getAttribute('aria-label')).toBe('Control + ArrowDown');
