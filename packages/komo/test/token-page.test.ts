@@ -447,11 +447,11 @@ describe("Tokens view in Design mode", () => {
 
     it("counts them beside the element's own changes behind a chip that opens the Tokens view", async () => {
       await pendingAfterExit();
-      expect($(".design-inspector__pending p").textContent).toBe("1 token change has pending runtime previews. Undo, Reset or reload to restore.");
+      expect($(".design-inspector__pending h3").textContent).toBe("1 unsaved change");
       await pick();
       expect(count()).toBe("1 change");
       expect(chip().hidden).toBe(false);
-      expect(chip().textContent).toBe("Token changes · 1");
+      expect(chip().getAttribute("aria-label")).toBe("Token changes · 1 change");
       expect(chip().tagName).toBe("BUTTON");
       layout("flex");
       expect(count()).toBe("2 changes");
@@ -481,7 +481,7 @@ describe("Tokens view in Design mode", () => {
       expect(button(elementBar(), "Undo").disabled).toBe(true);
     });
 
-    it("flips with Before/After, and Reset all previews clears both", async () => {
+    it("flips with Before/After, and Discard all clears both", async () => {
       await pendingAfterExit();
       await pick();
       layout("flex");
@@ -500,8 +500,9 @@ describe("Tokens view in Design mode", () => {
       controller.setActive(false);
       controller.setActive(true);
       await flush();
-      expect($(".design-inspector__pending p").textContent).toBe("1 element and 1 token change have pending runtime previews. Undo, Reset or reload to restore.");
-      button($(".design-inspector__pending"), "Reset all previews").click();
+      expect($(".design-inspector__pending h3").textContent).toBe("2 unsaved changes");
+      button($(".design-inspector__pending"), "Discard all").click();
+      await flush();
       expect([active, hero().style.display]).toEqual([null, ""]);
       expect($(".design-inspector__pending").hidden).toBe(true);
       expect(button($(".design-inspector__empty"), "Edit tokens")).toBeTruthy();

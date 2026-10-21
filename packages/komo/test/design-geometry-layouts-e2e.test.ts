@@ -272,7 +272,7 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
       }
       await page.locator(".design-inspector__close").click();
       await page.keyboard.press("d");
-      await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy pending proposals" }).click();
+      await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy changes", exact: true }).click();
       const text = await page.evaluate(() => navigator.clipboard.readText());
       expect(text).toMatch(/Proposed geometry changes \(preview only\)\nTarget: #badge\nLayout: position: relative\n- Resize \(size\) width: [\d.]+px → [\d.]+px/);
       expect(text).toMatch(/- Resize \(size\) width: 160px → 192px · keeps aspect ratio 4 \/ 3/);

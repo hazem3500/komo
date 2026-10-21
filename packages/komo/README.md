@@ -205,7 +205,9 @@ Token: color.accent {color.blue.500} → {color.violet.500}
 Token adapter: css-variables
 ```
 
-Token edits stay pending exactly like element previews. Escape or closing Design mode shows Before while it is closed, and reopening previews the edits again, never silently: with an element selected, the footer count includes them and a **Token changes · N** chip opens the Tokens view. Undo steps through token and element edits in the order they were made, Before/After flips both, the element's **Comment** adds the token section to its comment and then clears both, and **Reset all previews** clears them with the element previews.
+Token edits stay pending exactly like element previews. Escape or closing Design mode shows Before while it is closed, and reopening previews the edits again, never silently: with an element selected, the footer count includes them and a **Token changes · N** chip opens the Tokens view. Undo steps through token and element edits in the order they were made, Before/After flips both, the element's **Comment** adds the token section to its comment and then clears both.
+
+With nothing selected, a card lists what is pending: "N unsaved changes", then one row per changed element and one for token changes, each with its kind and count. Hovering a row outlines its element; clicking it selects the element. **Comment with changes** opens the composer with every change, the copy button copies them, and **Discard all** clears them without a confirm: ⌘Z (Ctrl+Z) brings them back and ⌘⇧Z discards them again, until something else is selected.
 
 The comment's **Token changes** card has the same Before/After switch as an element's card when the adapter implements `previewValues`: Before runs the preview's cleanup, and After previews the edits again. Rows name each token by its label, or else the last part of its path. komo's tooltip shows the full path and theme.
 
