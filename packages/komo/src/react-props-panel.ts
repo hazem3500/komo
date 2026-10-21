@@ -794,7 +794,9 @@ export function createAdapterTokenControl(
     const path = current();
     const token = path ? tokens.find((item) => item.path === path) : undefined;
     select.value = path && available.some((item) => item.path === path) ? path : "";
-    chip.textContent = token ? `Uses ${tokenName(token)}` : path ? `Uses ${path}` : "";
+    // "Uses" is its own node, so a row with its value beside the chip can show the name alone.
+    const name = token ? tokenName(token) : path;
+    chip.replaceChildren(...name ? [el("span", "design-token-chip__verb", "Uses"), ` ${name}`] : []);
     const mode = !path ? "custom" : swapped ? "token" : "connected";
     row.dataset.mode = mode;
     // A bound color field shows its token's value for the current theme, not a mid-transition paint.
