@@ -210,7 +210,8 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 236_050)
 // 7,700 -> 8,150: the Redo button and its stack (each undone entry with how to put it back, cleared by any
 // new edit), keyed tooltips, empty-canvas deselect (also on Frame's viewport backdrop) and the selection
 // restored on re-entry (7,677 -> 8,109 on main 418bc33).
-if (report.optionalDesignMode.gzip > 8_150)
+// 8,150 -> 8,215: the pending changes card's hooks (row hover outline, Discard all held in Before for Undo and Redo); the card itself is in the export chunk (8,103 -> 8,166 on main bc089fe).
+if (report.optionalDesignMode.gzip > 8_215)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).

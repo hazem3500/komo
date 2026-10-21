@@ -121,7 +121,7 @@ describe.skipIf(!chrome).each([false, true])("SVG lifecycle in Frame=%s", frame 
     await page.keyboard.press("Escape");
     await page.keyboard.press("d");
     await deselect(page);
-    await page.getByRole("button", { name: "Reset all previews", exact: true }).click();
+    await page.getByRole("button", { name: "Discard all", exact: true }).click();
     await page.getByRole("button", { name: "Exit design mode", exact: true }).click();
     await page.waitForTimeout(450);
     expect(await page.locator("#shape").getAttribute("style")).toBe(original);

@@ -398,14 +398,14 @@ describe.skipIf(!chrome)("structural move", () => {
       await page.keyboard.press("ControlOrMeta+z");
       await restored();
 
-      // Reset all restores everything.
+      // Discard all restores everything.
       await pick(page, "three");
       await drag(page, "three", "one", 0.5, 0.2);
       await pick(page, "today");
       await drag(page, "today", "month", 0.8, 0.5);
       await page.locator(".design-inspector__close").click();
       await page.keyboard.press("d");
-      await page.locator(".design-inspector__pending").getByRole("button", { name: "Reset all previews" }).click();
+      await page.locator(".design-inspector__pending").getByRole("button", { name: "Discard all", exact: true }).click();
       await restored();
       expect(await order(page, "toolbar")).toEqual(["Today", "Week", "Month"]);
       expect(errors).toEqual([]);
@@ -427,7 +427,7 @@ describe.skipIf(!chrome)("structural move", () => {
       await page.keyboard.press("ControlOrMeta+z");
       await page.locator(".design-inspector__close").click();
       await page.keyboard.press("d");
-      await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy pending proposals" }).click();
+      await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy changes", exact: true }).click();
       const text = await page.evaluate(() => navigator.clipboard.readText());
       expect(text).toContain("- Move Button “Today”");
       expect(text).not.toContain("- Move Button “Week”");
@@ -443,7 +443,7 @@ describe.skipIf(!chrome)("structural move", () => {
       await drag(page, "today", "month", 0.8, 0.5);
       await page.locator(".design-inspector__close").click();
       await page.keyboard.press("d");
-      await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy pending proposals" }).click();
+      await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy changes", exact: true }).click();
       const text = await page.evaluate(() => navigator.clipboard.readText());
       expect(text).toContain("Proposed geometry changes (preview only)\nTarget: #today\nLayout: flex item, row\n- Move Button “Today”: from Toolbar “Views” (1st) → Toolbar “Views” (3rd)\nFrom: #toolbar · index 0\nTo: #toolbar · index 2 · after");
       expect(text).not.toMatch(/display/);
