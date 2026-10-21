@@ -1,4 +1,4 @@
-export { designKeyboard } from "./design-keyboard.js";
+export { designKeyboard, keepFocus } from "./design-keyboard.js";
 import { renderKeycaps } from "./kbd.js";
 import { el, icon } from "./dom.js";
 import { pageDocument } from "./frame-target.js";

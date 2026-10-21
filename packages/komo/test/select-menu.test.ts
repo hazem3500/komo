@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { attach } from "../src/select-menu";
+import { STILL } from "../src/host-motion";
 
 function mount({ grouped = false, disabled = false } = {}) {
   const host = document.createElement("div");
@@ -185,6 +186,43 @@ describe("select menu", () => {
     await new Promise(done => setTimeout(done, 0));
     expect(list()).toBeNull();
     expect(element.style.fontWeight).toBe("500");
+  });
+
+  it("holds the element's own motion while an option previews, and lets go after Escape or a commit", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame"] });
+    try {
+      const { container, select, list, down, pointer, press, changes } = mount();
+      const element = document.body.appendChild(document.createElement("button"));
+      attach(container, element);
+      const previews: Array<[string | null, boolean]> = [];
+      // A component prop hears komo-preview; the hold is already on when it renders.
+      select.addEventListener("komo-preview", (event) => previews.push([(event as CustomEvent<string | null>).detail, element.hasAttribute(STILL)]));
+      const frames = () => { vi.advanceTimersToNextFrame(); vi.advanceTimersToNextFrame(); };
+      down(select);
+      const options = () => list()!.querySelectorAll("[role=option]");
+      pointer("pointermove", options()[0]);
+      pointer("pointermove", options()[2]);
+      // Between options the hold never lapses, however many frames pass.
+      frames();
+      expect(element.hasAttribute(STILL)).toBe(true);
+      press("Escape");
+      expect(previews).toEqual([["calm", true], [null, true], ["quiet", true], [null, true]]);
+      expect(element.hasAttribute(STILL)).toBe(true);
+      frames();
+      expect(element.hasAttribute(STILL)).toBe(false);
+      expect(element.getAttribute("style")).toBeNull();
+      // Enter commits after the opening value is put back; both render while held.
+      down(select);
+      press("ArrowDown");
+      let held: boolean | undefined;
+      select.addEventListener("change", () => { held = element.hasAttribute(STILL); }, { once: true });
+      press("Enter");
+      expect(changes).toEqual(["quiet"]);
+      expect(held).toBe(true);
+      frames();
+      expect(element.hasAttribute(STILL)).toBe(false);
+      expect(element.getAttribute("style")).toBeNull();
+    } finally { vi.useRealTimers(); }
   });
 
   it("selects with a click and keeps the change for a new value only", () => {

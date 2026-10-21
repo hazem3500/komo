@@ -3,6 +3,7 @@ import { el } from "./dom.js";
 import { sourceInfo, sourceInfoStyles, type SourceHref } from "./source-info.js";
 import { previewStyle, watchPopup } from "./design-popup.js";
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
+import { holdHostMotion, stillPreview } from "./host-motion.js";
 import { isHTMLElement, previewTarget } from "./frame-target.js";
 import {
   adaptComponentEditor,
@@ -154,17 +155,21 @@ const componentSource = (component: RegisteredInspectableComponent) => component
   ? `${component.definition.source}${component.definition.line ? `:${component.definition.line}` : ""}` : "";
 /** Before/After for React prop previews and shared theme values. */
 export function showDesignBefore(on: boolean): void {
-  if (on)
-    for (const [element, baseline] of originals) {
-      const component = inspectableFor(element);
-      if (!component) continue;
-      afterProps.set(element, component.props);
-      component.setProps({ ...component.props, ...Object.fromEntries(baseline) });
-    }
-  else for (const [element, props] of afterProps) inspectableFor(element)?.setProps(props);
-  if (!on) afterProps.clear();
-  showThemeBefore(on);
-  showTokenSwapsBefore(on);
+  // Props, theme values and token swaps re-render the page; its own transitions hold still meanwhile.
+  const release = holdHostMotion(previewTarget().root);
+  try {
+    if (on)
+      for (const [element, baseline] of originals) {
+        const component = inspectableFor(element);
+        if (!component) continue;
+        afterProps.set(element, component.props);
+        component.setProps({ ...component.props, ...Object.fromEntries(baseline) });
+      }
+    else for (const [element, props] of afterProps) inspectableFor(element)?.setProps(props);
+    if (!on) afterProps.clear();
+    showThemeBefore(on);
+    showTokenSwapsBefore(on);
+  } finally { release(); }
 }
 
 export function hasReactPropChanges(element: DesignTarget): boolean {
@@ -478,6 +483,29 @@ function themeValues(adapter: TokenAdapter, design?: DesignSystem): (() => Promi
     })))).catch(() => []);
 }
 
+/** Add an id to a control's aria-describedby. */
+function describe(control: Element | null | undefined, id: string): void {
+  const ids = control?.getAttribute("aria-describedby")?.split(" ") ?? [];
+  if (control && !ids.includes(id)) control.setAttribute("aria-describedby", [...ids, id].join(" "));
+}
+
+/**
+ * A field's "Uses …" or "Not from a token · …" caption: plain text its controls are
+ * described by, not a live region, so selecting an element never floods a screen reader.
+ */
+function caption(select: HTMLSelectElement, property: string): HTMLElement {
+  const state = document.createElement("small");
+  state.className = "design-token-binding__state";
+  state.id = `komo-token-${property}-${Math.random().toString(36).slice(2, 8)}`;
+  describe(select, state.id);
+  return state;
+}
+
+/** Deliberate announcements, such as an applied token, go to komo's one polite live region. */
+function announce(from: Element, text: string): void {
+  from.dispatchEvent(new CustomEvent("komo-announce", { detail: text, bubbles: true, composed: true }));
+}
+
 /** Add token references directly to the existing style-property row. */
 export function createElementTokenControl(
   element: DesignTarget,
@@ -508,12 +536,7 @@ export function createElementTokenControl(
   detach.innerHTML = '<svg viewBox="0 0 12 12"><path d="M5 3.5 6.5 2a2.1 2.1 0 0 1 3 3L8 6.5M7 8.5 5.5 10a2.1 2.1 0 0 1-3-3L4 5.5M2 2l8 8"/></svg>';
   const select = document.createElement("select");
   select.setAttribute("aria-label", `Style token for ${property}`);
-  const state = document.createElement("small");
-  state.className = "design-token-binding__state";
-  state.setAttribute("aria-live", "polite");
-  const id = `komo-token-${property}-${Math.random().toString(36).slice(2, 8)}`;
-  state.id = id;
-  select.setAttribute("aria-describedby", id);
+  const state = caption(select, property);
   const custom = document.createElement("option");
   custom.value = "custom";
   custom.textContent = "Custom value";
@@ -542,7 +565,7 @@ export function createElementTokenControl(
     custom: customPickerValue(element, property, row.parentElement?.querySelector("[data-property]")),
     onPreview: token => {
       const target = available.find(item => item.path === token.path)!;
-      return previewStyle(element, property, `var(${target.cssVariable})`);
+      return stillPreview(element, () => previewStyle(element, property, `var(${target.cssVariable})`));
     },
     onSelect: (token) => choose(token.path),
   }));
@@ -563,6 +586,7 @@ export function createElementTokenControl(
         ? `Connected ${declared?.origin === "inline" ? "inline" : "from stylesheet"}`
         : mode === "override" ? `Custom override · was ${was}` : "";
     select.title = state.textContent || "Choose a token";
+    describe(row.parentElement?.querySelector("[data-property]"), state.id);
     // Like the default adapter's resolve(): no token reference means off-token.
     off.hidden = mode !== "custom";
     const value = mode === "custom" ? getComputedStyle(element).getPropertyValue(property).trim() : "";
@@ -587,6 +611,7 @@ export function createElementTokenControl(
         if (applyTokenToElement(source, element, token, property, { recordHistory: false }))
           onEdit(before, element.style.getPropertyValue(property), token.path);
       }
+      announce(row, `${property} uses ${token.path}`);
     } else {
       const control = row.parentElement?.querySelector<HTMLInputElement | HTMLSelectElement>("[data-property]");
       const value = control?.value ?? getComputedStyle(element).getPropertyValue(property).trim();
@@ -749,9 +774,8 @@ export function createAdapterTokenControl(
   populate();
   const dot = offTokenMarker();
   if (off !== undefined) markOffToken(dot, off, match);
-  const state = document.createElement("small");
-  state.className = "design-token-binding__state";
-  state.setAttribute("aria-live", "polite");
+  const state = caption(select, property);
+  describe(input, state.id);
   let detached = false;
   const suggestion = matchSuggestion(label, row);
   const current = () => {
@@ -760,11 +784,11 @@ export function createAdapterTokenControl(
   };
   const picker = pickerTrigger(select, () => ({ tokens, property, current: current(), themes,
     custom: customPickerValue(element, property, input),
-    onPreview: token => {
+    onPreview: token => stillPreview(element, () => {
       const undo = previewToken(adapter, element, property, token);
       refresh?.();
       return () => { undo(); refresh?.(); };
-    }, onSelect: choose }));
+    }), onSelect: choose }));
   const update = () => {
     const swapped = swappedToken(element, property);
     const path = current();
@@ -799,6 +823,7 @@ export function createAdapterTokenControl(
     const fromToken = "path" in from ? tokens.find((item) => item.path === from.path) : undefined;
     onSwap(swapToken(adapter, element, property, token, from, fromToken));
     update();
+    announce(row, `${property} uses ${tokenName(token)}`);
   }
   select.addEventListener("change", () => {
     const token = available.find((item) => item.path === select.value);
@@ -1100,7 +1125,9 @@ export function attachThemeSwitcher(
     const before = currentTheme(axis);
     if (id === before) return;
     if (!themeOriginals.has(axis)) themeOriginals.set(axis, before ?? fallback);
-    themeFocus = axis;
+    // The redrawn control takes focus only from itself; a focused field keeps it.
+    const focused = (control.getRootNode() as ShadowRoot).activeElement;
+    if (!focused || control.contains(focused)) themeFocus = axis;
     try { axis.apply(id, previewTarget()); } catch { /* The page keeps whatever the adapter managed to apply. */ }
     onSwitch();
     sync();

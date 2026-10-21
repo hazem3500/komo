@@ -174,7 +174,11 @@ await writeFile(
 // chunk replaces; ~620 in the shared core chunk) and Frame's layout keeps the viewport hooks (~1,000). The
 // size bar's Viewport / In place switch and reason note add ~420 to the frame-size chunk (227,768 measured on main with #156 and #158).
 // 225,810 -> 230,200: both of the above together (230,073 measured with pin stacks and Viewport mode).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 230_200)
+// 230,200 -> 233,000: a 100% Frame pans inside its stage (scrollbars, wheel chaining from the app's
+// scrollers, Space+drag, stage keys, focus reveal, Fit-to-100% anchoring) and a one-time tip about scaled
+// floating UI, all in the frame-size chunk (~+2,400); initial ~+190 moves the frame and its overlays per
+// pan frame. Measured locally on main 53dedcc: 232,848.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 233_000)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -188,7 +192,10 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 230_200)
 // 7,475: Design mode also listens inside Frame's viewport iframe (pointer, click, keys, scroll) and
 // maps its outlines and picks through it (+~124: 7,320 -> 7,445). The entry imports chunks by hashed
 // name, so a lazy chunk's new content can also move it a byte.
-if (report.optionalDesignMode.gzip > 7_475)
+// 7,700: redraws of the same selection keep focus on the same control (or the selection, never
+// Exit), and moves, Undo and applied tokens reach komo's one live region from here, not core
+// (+~228: 7,445 -> 7,673). The re-resolving itself lives in the keyboard chunk.
+if (report.optionalDesignMode.gzip > 7_700)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).
@@ -208,7 +215,8 @@ if (report.optionalDesignPanel.gzip > 4_800)
 // load as their own chunk beside the panel, so neither the panel nor the entry grows.
 // 3,125: token selects (data-picker) are left to the token picker below (+11 bytes).
 // 3,250: a letter on a closed select opens the list on its first match (3,085 -> 3,154), plus ~3%.
-if (report.optionalSelectMenu.gzip > 3_250)
+// 3,300: with the shared host-motion hold for previews (#151) alongside (3,260 measured).
+if (report.optionalSelectMenu.gzip > 3_300)
   throw new Error("komo's select menu chunk exceeds its gzip budget.");
 // The token picker (search, type previews, sticky groups, lazy rows, keyboard) loads the first
 // time a token field opens. 4,631 measured, plus ~3%. It now also hands its rows' previews and
@@ -246,7 +254,8 @@ if (report.optionalTokenPage.gzip > 5_150)
 // a configurable canvas selection color with a magenta fallback on matching backgrounds, handles shown
 // only near the pointer or with focus and stepping back for the panel, fields and previews, overlay
 // peek/toggle with the visibility key and an eye button, and the first-use move hint (12,191 -> 13,483), plus ~3%.
-if (report.optionalGeometry.gzip > 13_900)
+// 14,200: komo previews hold host motion and a lasting animation shows as a dot by the Layout title (+302: 13,736 -> 14,038 measured).
+if (report.optionalGeometry.gzip > 14_200)
   throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
 // API tokens load only when "API tokens" is opened in the Account panel; nothing else imports
 // the chunk. 5,671 measured, plus ~3%.
