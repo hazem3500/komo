@@ -54,14 +54,26 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.keyboard.press("d"); await page.locator("#target").click();
     const target = page.locator("#target"), undo = page.locator('.design-inspector__actions [aria-label="Undo"]');
     const original = await target.getAttribute("style");
+    let opened = "";
     const open = async (property: string) => {
+      opened = property;
       const trigger = page.locator(`[data-field-property="${property}"] select[data-picker]`);
       await trigger.click(); await page.getByRole("button", { name: "Custom", exact: true }).click();
       await page.locator(".komo-custom").waitFor();
     };
+    // No Apply button: Enter keeps the value, and closing the popup makes the visit one history entry.
+    const keep = async (field: ReturnType<typeof page.locator>) => {
+      await field.press("Enter");
+      await page.locator(`[data-field-property="${opened}"] select[data-picker]`).click();
+      await page.locator(".komo-tokens").waitFor({ state: "detached" });
+    };
+    const close = async () => {
+      await page.locator(`[data-field-property="${opened}"] select[data-picker]`).click();
+      await page.locator(".komo-tokens").waitFor({ state: "detached" });
+    };
     const exact = page.getByRole("textbox", { name: "CSS value", exact: true });
     const advanced = async () => { const details = page.locator(".komo-typed__advanced"); if (!await details.evaluate(node => (node as HTMLDetailsElement).open)) await details.locator("summary").click(); };
-    const apply = page.getByRole("button", { name: "Apply custom", exact: true });
+    expect(await page.getByRole("button", { name: "Apply custom", exact: true }).count()).toBe(0);
     const radiusTrigger = page.locator('[data-field-property="border-radius"] select[data-picker]');
     await radiusTrigger.click();
     await page.locator('.komo-tokens [role="listbox"]').waitFor();
@@ -80,13 +92,13 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await search.press("Enter"); await undo.click();
     expect(await target.getAttribute("class")).toBe("radius-small");
     await open("border-radius");
-    const number = page.getByRole("spinbutton", { name: "Corner radius value" });
+    const number = page.getByRole("textbox", { name: "Corner radius", exact: true });
     await number.fill(""); await page.evaluate(() => (window as any).qa.theme());
-    expect(await number.inputValue()).toBe(""); expect(await apply.isDisabled()).toBe(true);
-    await page.getByRole("spinbutton", { name: "Corner radius value" }).fill("120");
+    expect(await number.inputValue()).toBe(""); expect(await number.getAttribute("aria-invalid")).toBe("true");
+    await number.fill("120");
     expect(await target.evaluate(node => node.style.borderRadius)).toBe("120px"); expect(await undo.isDisabled()).toBe(true);
     await page.keyboard.press("Escape"); expect(await target.getAttribute("style")).toBe(original);
-    await open("border-radius"); await page.getByRole("spinbutton", { name: "Corner radius value" }).fill("8"); await apply.click();
+    await open("border-radius"); await number.fill("8"); await keep(number);
     expect(await page.locator('[data-field-property="border-radius"]').getAttribute("data-token-mode")).toBe("custom");
     await page.getByRole("button", { name: "Use token Small", exact: true }).click();
     expect(await page.locator('[data-field-property="border-radius"]').getAttribute("data-token-mode")).not.toBe("custom");
@@ -97,7 +109,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     expect(await target.evaluate(node => node.style.borderRadius)).toBe("25% 30% / 10px 50%");
     expect(await page.locator('[data-field-property="border-radius"]').getAttribute("data-token-mode")).toBe("custom");
     await undo.click(); expect(await target.getAttribute("style")).toBe(original);
-    await open("padding"); await advanced(); await exact.fill("calc(1rem + 2px)"); await apply.click();
+    await open("padding"); await advanced(); await exact.fill("calc(1rem + 2px)"); await keep(exact);
     expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
     await page.getByRole("button", { name: "Before", exact: true }).click();
     expect(await target.getAttribute("style")).toBe(original);
@@ -106,7 +118,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.keyboard.press("v"); expect(await target.getAttribute("style")).toBe(original);
     await page.keyboard.press("d");
     expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
-    await open("display"); await page.locator('.komo-custom select[aria-label="Layout"]').selectOption("grid"); await apply.click();
+    await open("display"); await page.locator('.komo-custom select[aria-label="Layout"]').selectOption("grid"); await close();
     expect(await target.evaluate(node => node.style.display)).toBe("grid");
     await undo.click(); expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
     await undo.click(); expect(await target.getAttribute("style")).toBe(original);
@@ -114,17 +126,32 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await advanced(); const stack = '"Other, Face", "Fallback Sans", serif'; await exact.fill(stack);
     if (evidence) await page.screenshot({ path: join(evidence, `font-${mode}-${width}.png`) });
     await page.keyboard.press("Escape"); expect(await target.getAttribute("style")).toBe(original);
-    await open("font-family"); await advanced(); await exact.fill(stack); await apply.click();
+    await open("font-family"); await advanced(); await exact.fill(stack); await keep(exact);
     expect(await target.evaluate(node => node.style.fontFamily)).toBe(stack);
     await undo.click(); expect(await target.getAttribute("style")).toBe(original);
     await page.getByRole("button", { name: "Add shadow", exact: true }).click(); await open("box-shadow");
-    await page.getByRole("spinbutton", { name: "X offset value" }).fill("12");
+    const x = page.getByRole("textbox", { name: "Layer 1 x offset", exact: true });
+    await x.fill("12");
     if (evidence) await page.screenshot({ path: join(evidence, `shadow-${mode}-${width}.png`) });
-    const bounds = await apply.boundingBox(); expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(900);
-    expect(bounds!.height).toBeGreaterThanOrEqual(24);
-    await apply.click(); expect(await target.evaluate(node => node.style.boxShadow)).toContain("12px");
+    // Every control is inside the popup's visible area: nothing sits under a footer or past the viewport.
+    const reach = await page.locator(".komo-custom").evaluate(box => {
+      const popup = box.closest(".komo-tokens")!.getBoundingClientRect(), body = box.querySelector<HTMLElement>(".komo-custom__body")!;
+      const root = box.getRootNode() as ShadowRoot;
+      // Scrolls only the popup's own body to each control, then hit-tests its center.
+      return [...box.querySelectorAll<HTMLElement>("input,select,button,summary")].filter(node => node.getClientRects().length && !node.matches("details:not([open]) :not(summary)")).filter(node => {
+        const frame = body.getBoundingClientRect();
+        let rect = node.getBoundingClientRect();
+        if (rect.bottom > frame.bottom) body.scrollTop += rect.bottom - frame.bottom;
+        if (rect.top < frame.top) body.scrollTop -= frame.top - rect.top;
+        rect = node.getBoundingClientRect();
+        const hit = root.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return !(rect.top >= popup.top - 0.5 && rect.bottom <= popup.bottom + 0.5 && rect.bottom <= innerHeight && (hit === node || node.contains(hit) || hit?.contains(node)));
+      }).map(node => node.getAttribute("aria-label") || node.textContent);
+    });
+    expect(reach).toEqual([]);
+    await keep(x); expect(await target.evaluate(node => node.style.boxShadow)).toContain("12px");
     await undo.click(); await undo.click(); expect(await target.getAttribute("style")).toBe(original);
-    await page.getByRole("button", { name: "Add shadow", exact: true }).click(); await open("box-shadow"); await page.getByRole("button", { name: "Add layer", exact: true }).click(); await apply.click();
+    await page.getByRole("button", { name: "Add shadow", exact: true }).click(); await open("box-shadow"); await page.getByRole("button", { name: "Add shadow layer", exact: true }).click(); await close();
     await page.getByRole("button", { name: "Comment", exact: true }).click();
     await page.locator(".draft-proposal .design-toggle").waitFor();
     await page.locator(".draft-proposal").getByRole("button", { name: "Before", exact: true }).click();
@@ -135,9 +162,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await expect.poll(() => target.getAttribute("style")).toBe(original);
     await page.keyboard.press("d");
     await open("border-radius");
-    await page.getByRole("spinbutton", { name: "Corner radius value" }).fill("1");
+    await number.fill("1");
     await page.locator('.komo-custom select[aria-label="Corner radius unit"]').selectOption("rem");
-    await apply.click(); expect(await target.evaluate(node => node.style.borderRadius)).toBe("1rem");
+    await close(); expect(await target.evaluate(node => node.style.borderRadius)).toBe("1rem");
     await page.getByRole("button", { name: "Reset", exact: true }).click();
     expect(await target.getAttribute("style")).toBe(original);
     expect(await target.getAttribute("class")).toBe("radius-small");
@@ -153,10 +180,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
       await page.locator('[data-field-property="border-radius"] select[data-picker]').click();
       await page.getByRole("button", { name: "Custom", exact: true }).click();
     };
-    await open(); await page.getByRole("spinbutton", { name: "Corner radius value" }).fill("140");
+    const number = page.getByRole("textbox", { name: "Corner radius", exact: true });
+    await open(); await number.fill("140");
     await page.keyboard.press("Escape"); expect(await target.getAttribute("style")).toBe(original);
-    await open(); await page.getByRole("spinbutton", { name: "Corner radius value" }).fill("150");
-    await page.getByRole("button", { name: "Apply custom", exact: true }).click();
+    await open(); await number.fill("150"); await number.press("Enter");
     expect(await target.evaluate(node => [node.style.padding,node.style.getPropertyPriority("padding"),node.style.border,node.style.getPropertyPriority("border"),node.style.margin])).toEqual(["1rem 2rem","important","2px solid red","important","3px"]);
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     expect(await target.getAttribute("style")).toBe(original);

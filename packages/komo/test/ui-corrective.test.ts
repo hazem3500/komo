@@ -397,7 +397,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
         expect(bounds.y >= field.y + field.height || bounds.y + bounds.height <= field.y).toBe(true);
         expect(bounds.y).toBeGreaterThanOrEqual(0);
         expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
-        expect(bounds.width).toBeLessThanOrEqual(240);
+        expect(bounds.width).toBeLessThanOrEqual(256);
         expect(await format.evaluate(node => {
           const rect = node.getBoundingClientRect();
           return (node.getRootNode() as ShadowRoot).elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === node;

@@ -200,6 +200,15 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
   searchBar.append(search);
   const list = make("div", "design-token-page__list");
   view.append(note, searchBar, list);
+  // A row's details show in komo's tooltip beside the panel, or above a narrow sheet, so it never
+  // covers rows or group headings; only without room for either does it sit above the row.
+  const besideRows = (tip: HTMLElement, row: HTMLElement) => {
+    const box = row.getBoundingClientRect(), side = panel.getBoundingClientRect();
+    if (side.left - 16 > tip.offsetWidth) {
+      tip.style.left = `${side.left - 8 - tip.offsetWidth / 2}px`;
+      tip.style.top = `${box.top + (box.height - tip.offsetHeight) / 2}px`;
+    } else if (side.top - 16 > tip.offsetHeight) tip.style.top = `${side.top - 8 - tip.offsetHeight}px`;
+  };
 
   // The footer is Design mode's bar: change count, Before/After, Undo, Reset all and Comment.
   const bar = make("div", "design-inspector__bar design-token-bar");
@@ -329,7 +338,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
       const shown = edited?.value ?? token.value;
       value.textContent = alias ? labelOf(alias) : shown;
       main.replaceChildren(picker.tokenPreview({ ...token, value: shown }), name, value);
-      main.title = [token.path, token.ref, alias ? `${alias} · ${shown}` : shown, token.description].filter(Boolean).join(" · ");
+      main.dataset.tip = [token.path, token.ref, alias ? `${alias} · ${shown}` : shown, token.description].filter(Boolean).join(" · ");
       main.setAttribute("aria-label", `${name.textContent}, ${value.textContent}${edited ? ", edited" : ""}`);
       item.toggleAttribute("data-changed", !!edited);
       back.disabled = !edited;
@@ -449,6 +458,13 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
         };
         bar.addEventListener("pointerover", loadTips, { signal });
         bar.addEventListener("focusin", loadTips, { signal });
+        let rowTips = false;
+        const loadRowTips = (event: Event) => {
+          if (!rowTips) exporter.footerTips(list, host.root, signal, event, besideRows);
+          rowTips = true;
+        };
+        list.addEventListener("pointerover", loadRowTips, { signal });
+        list.addEventListener("focusin", loadRowTips, { signal });
         // ← Before, → After, B flips, as in Design mode. B pauses only in a text field; the
         // arrows also leave fields, sliders and radios their own.
         document.addEventListener("keydown", (event) => {

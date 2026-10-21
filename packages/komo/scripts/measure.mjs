@@ -33,6 +33,9 @@ const geometry = (await readdir("dist"))
 const liveColors = (await readdir("dist"))
   .filter((file) => /^live-colors.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const typedEditor = (await readdir("dist"))
+  .filter((file) => /^token-custom.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const colorEditor = (await readdir("dist"))
   .filter((file) => /^color-editor.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
@@ -88,6 +91,7 @@ const report = {
   optionalAccountTokens: await sizes(new Set(accountTokens)),
   optionalLiveColors: await sizes(new Set(liveColors)),
   optionalColorEditor: await sizes(new Set(colorEditor)),
+  optionalTypedEditor: await sizes(new Set(typedEditor)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
   adapterCssVariables: await sizes(new Set(["dist/adapters/css-variables.js"])),
   adapterReactFiber: await sizes(new Set(["dist/adapters/react-fiber.js"])),
@@ -151,7 +155,12 @@ await writeFile(
 // styles left the mount bundle, so initial shrinks 85 bytes. Leaves room for geometry keys (#146).
 // 223,200 -> 223,500: remembered Frame sizes are versioned and clamped, and only explicit choices
 // are stored (+157 in the frame-size chunk).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 223_500)
+// 223,500 -> 225,810: pin stacks and collision bubbles (pins.cluster). Grouping, the 24px collision pass
+// and the stack/bubble styles run at mount (initial +1,218: 82,457 -> 83,675); drawing stacks and bubbles
+// is a ~1,100-byte chunk loaded the first time a page has a group, and the bubble's list reuses the
+// comment action menu. Styles stay in the shared sheet: in the chunk they cost ~1,000 more in total.
+// Measured locally: main 223,370 -> 225,680 (+2,310); main's 130 bytes of headroom are kept.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 225_810)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -193,7 +202,8 @@ if (report.optionalTokenPicker.gzip > 5_275)
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and
 // footer chunks, so its own chunk is small. 4,730 measured, plus ~3%.
 // 4,950: rows update in place when the listed tokens keep their order, so an open popup stays open (4,814 -> 4,895).
-if (report.optionalTokenPage.gzip > 4_950)
+// 5,150: row details use the footer tooltip, placed beside the panel or above a narrow sheet (+~150).
+if (report.optionalTokenPage.gzip > 5_150)
   throw new Error("komo's Tokens view chunk exceeds its gzip budget.");
 // Experimental move/resize is default off and loads only with design.experimentalGeometry, after
 // Design mode opens; nothing else imports it. It was 3,375 gzip for normal-flow blocks only. Flex and
@@ -226,6 +236,12 @@ if (report.optionalLiveColors.gzip > 725)
 // the React color picker it replaces. 6,307 measured, plus ~3%.
 if (report.optionalColorEditor.gzip > 6_500)
   throw new Error("komo's color editor chunk exceeds its gzip budget.");
+// The typed Custom editors (lengths, spacing, radius, shadows, fonts: compact fields with inline
+// units, scrubbing, nudges and live apply) load the first time a non-color Custom tab opens.
+// 3,009 with the Apply form. The compact live fields, Figma-style shadow layer rows (Drop/Inner, swatch,
+// visibility, remove, a sample tile) and the structured typography editor measure 5,698, plus ~3%.
+if (report.optionalTypedEditor.gzip > 5_875)
+  throw new Error("komo's typed Custom editor chunk exceeds its gzip budget.");
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.

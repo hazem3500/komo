@@ -5,7 +5,7 @@ import type { DesignTarget } from "./design-target.js";
 import type { TokenPickerOptions } from "./token-picker.js";
 
 const live = new WeakSet<HTMLElement>();
-const fields = new WeakMap<HTMLElement, { field: Field; declared(): string; seen: string; set(value: string): void; refresh(): void }>();
+const fields = new WeakMap<HTMLElement, { field: Field; declared(): string; seen: string; set(value: string): void; keep(value: string): void; refresh(): void }>();
 
 /** Returns `own`, which runs the field's own edits so syncFields leaves what they show. */
 export function registerCustomField(control: Control, field: Field, context: Pick<PanelContext, "element" | "begin" | "apply" | "commit">, show: () => void) {
@@ -42,6 +42,13 @@ export function registerCustomField(control: Control, field: Field, context: Pic
       context.begin(control, field.property);
       context.apply(control, field.property, value);
       context.commit(control, field.property);
+    });
+    display(value);
+  }, keep(value: string) {
+    // A live value from the popup: part of the field's pending edit, made final when the popup closes.
+    own(() => {
+      context.apply(control, field.property, value);
+      context.commit(control, field.property, false);
     });
     display(value);
   }, refresh() {
@@ -109,12 +116,13 @@ export function customPickerValue(element: DesignTarget, property: string, input
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
     },
-    // The live color picker: every kept value updates one pending edit on the field, the
+    // The live Custom editors: every kept value updates one pending edit on the field, the
     // popup closing makes it one history entry and Escape cancels it, as the field's own Escape does.
     // Per field, so a refreshed popup (new options) still finishes the same edit.
     onCommit(value) {
       if (!live.has(input)) input.dispatchEvent(new Event("focus"));
       live.add(input);
+      if (registered && registered.field.kind !== "color") return registered.keep(value);
       input.value = value;
       input.dispatchEvent(new Event("input", { bubbles: true }));
     },

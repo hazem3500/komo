@@ -152,7 +152,10 @@ export function bindMove(hooks: MoveHooks) {
       const sig = `${element.getAttribute('style')}\n${element.getAttribute('class')}\n${element.innerHTML}`;
       if (entry.sig !== sig) { entry.clone?.remove(); entry.clone = undefined; entry.sig = sig; }
       entry.clone ??= copy(element, entry);
-      if (entry.clone.parentNode !== place.parent || entry.clone.nextSibling !== place.before) place.parent.insertBefore(entry.clone, place.before);
+      // Other stand-ins sharing the spot don't count, or two at one end would swap places forever.
+      let next = entry.clone.nextSibling;
+      while (next instanceof Element && clone(next)) next = next.nextSibling;
+      if (entry.clone.parentNode !== place.parent || next !== place.before) place.parent.insertBefore(entry.clone, place.before);
     }
     const element = hooks.selected();
     const selector = !dragging && hooks.enabled() && element && shown(element) === element && !moveReason(element) && cssSelector(element);

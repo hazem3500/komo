@@ -78,22 +78,15 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     const row = (name: string) => page.locator(".design-token-row").filter({ has: page.locator("b").getByText(name, { exact: true }) });
     const bar = page.locator(".design-token-bar");
     const count = bar.locator(".design-inspector__count");
-    // Colors type into the live color editor and keep when the popup closes; lengths use the
-    // typed number field, then Apply.
+    // Every Custom editor applies live: Enter keeps the value and the popup takes it when it closes.
     const custom = async (name: string, value: string) => {
       await row(name).locator("button").first().click();
       const length = /^([\d.]+)px$/.exec(value);
-      if (length) {
-        await page.locator('.komo-custom input[type="number"]').first().fill(length[1]);
-        await page.getByRole("button", { name: "Apply custom", exact: true }).click();
-        await page.locator(".komo-custom").waitFor({ state: "detached" });
-      } else {
-        const input = page.locator('.komo-color input[aria-label="Hex"]');
-        await input.fill(value.replace("#", ""));
-        await input.press("Enter");
-        await row(name).locator("button").first().click();
-        await page.locator(".komo-color").waitFor({ state: "detached" });
-      }
+      const input = length ? page.locator(".komo-custom .komo-typed__field input").first() : page.locator('.komo-color input[aria-label="Hex"]');
+      await input.fill(length ? length[1] : value.replace("#", ""));
+      await input.press("Enter");
+      await row(name).locator("button").first().click();
+      await page.locator(".komo-tokens").waitFor({ state: "detached" });
     };
     // The Tokens header shows one light/dark switch: one click flips it.
     const theme = async (label: string) => {

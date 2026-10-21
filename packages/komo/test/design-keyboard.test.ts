@@ -109,6 +109,10 @@ it("shares scoped Help semantics with platform-correct keycaps", () => {
   const resize = commands.find(command => command.label.startsWith('Resize width'))!;
   expect(renderKbd(resize.shortcut, true).getAttribute('aria-label')).toBe('Command + ArrowRight');
   expect(renderKbd(designCommands(false).find(command => command.label.startsWith('Resize height'))!.shortcut, false).getAttribute('aria-label')).toBe('Control + ArrowDown');
+  // Shift steps 10px for resize only; help and the focused selection's label name the same keys.
+  expect(renderKbd(commands.find(command => command.label === 'Resize by 10px')!.shortcut, true).textContent).toBe('⇧⌘→');
+  expect(renderKbd(designCommands(false).find(command => command.label === 'Resize by 10px')!.shortcut, false).getAttribute('aria-label')).toBe('Control + Shift + ArrowRight');
+  expect(commands.filter(command => command.label.startsWith('Move ')).map(command => renderKbd(command.shortcut, true).textContent)).toEqual(['⌥↑', '⌥↓', '⌥⇧↑', '⌥⇧↓']);
 });
 
 it("leaves Escape to the nearest property field", () => {
