@@ -101,7 +101,6 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const trigger = page.locator('[data-field-property="color"] select[data-picker]');
     const choose = async () => {
       await trigger.click();
-      await page.getByRole("button", { name: "Tokens", exact: true }).click();
       await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Accent" }).click();
     };
     const dark = baseline.startsWith("named") ? "rgb(255, 0, 0)" : "rgb(204, 204, 204)";
@@ -416,7 +415,6 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const open = async () => {
       await field.locator("select[data-picker]").click();
       await page.locator(".komo-tokens").waitFor();
-      await page.getByRole("button", { name: "Tokens", exact: true }).click();
     };
     const primary = page.locator('.komo-tokens [role="option"]').filter({ hasText: "Primary" });
     await field.locator("select[data-picker]").waitFor();

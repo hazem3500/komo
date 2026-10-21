@@ -98,8 +98,6 @@ async function custom(tab: Page, property: string) {
   await field.scrollIntoViewIfNeeded();
   await settle(tab);
   await trigger(tab, property).click();
-  const tab_ = tab.locator(".komo-tokens__tabs button").filter({ hasText: "Custom" });
-  if (await tab_.getAttribute("aria-pressed") !== "true") await tab_.click();
   await tab.locator(".komo-custom .komo-typed").first().waitFor();
   await settle(tab);
   return tab.locator(".komo-tokens");

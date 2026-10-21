@@ -58,7 +58,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     const open = async (property: string) => {
       opened = property;
       const trigger = page.locator(`[data-field-property="${property}"] select[data-picker]`);
-      await trigger.click(); await page.getByRole("button", { name: "Custom", exact: true }).click();
+      await trigger.click();
       await page.locator(".komo-custom").waitFor();
     };
     // No Apply button: Enter keeps the value, and closing the popup makes the visit one history entry.
@@ -178,7 +178,6 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.keyboard.press("d"); await target.click();
     const open = async () => {
       await page.locator('[data-field-property="border-radius"] select[data-picker]').click();
-      await page.getByRole("button", { name: "Custom", exact: true }).click();
     };
     const number = page.getByRole("textbox", { name: "Corner radius", exact: true });
     await open(); await number.fill("140");
@@ -196,7 +195,6 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).komo);
     await page.keyboard.press("d"); await page.locator("#target").click();
     await page.locator('[data-field-property="border-radius"] select[data-picker]').click();
-    await page.getByRole("button", { name: "Custom", exact: true }).click();
     const unit = page.locator('.komo-custom select[aria-label="Corner radius unit"]');
     await unit.click();
     const menu = page.locator(".komo-select");
@@ -214,7 +212,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await menu.locator("[role=option]").filter({ hasText: /^rem$/ }).click();
     await expect.poll(() => unit.inputValue()).toBe("rem");
     expect(await page.locator(".komo-tokens").count()).toBe(1);
-    expect(await page.locator(".komo-tokens [aria-pressed=true]").textContent()).toBe("Custom");
+    expect(await page.locator(".komo-tokens .komo-custom").count()).toBe(1);
     await page.close();
   });
 

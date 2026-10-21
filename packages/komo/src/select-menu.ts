@@ -103,6 +103,8 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
     if (option.title) node.title = option.title;
     const label = document.createElement("span");
     label.textContent = option.label;
+    // An option styled with its own face or weight shows as a sample.
+    label.style.cssText = option.style.cssText;
     node.append(label);
     parent.append(node);
     items.push({ node, option });

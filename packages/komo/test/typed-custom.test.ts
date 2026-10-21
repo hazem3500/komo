@@ -137,7 +137,8 @@ it("edits a typography token as family, weight, size and line height, with or wi
   expect(fontParts("calc(1rem + 1px) serif")).toBeUndefined();
   expect(fontValue({ style: "", weight: "700", size: "1rem", lineHeight: "", family: "serif" })).toBe("700 1rem serif");
   const e = editor("font", "500 0.875rem/1.43", undefined, [{ path: "font.body", type: "fontFamily", value: '"Body Face", sans-serif', label: "Body" }]);
-  expect(e.box.querySelector(".komo-typed__title")!.textContent).toBe("Typography");
+  // The popup header names the editor, so the editor itself has no title.
+  expect(e.box.querySelector("strong")).toBeNull();
   expect(e.box.querySelector(".komo-typed__hint")).toBeNull();
   expect(e.box.querySelector("details")!.open).toBe(false);
   expect(e.box.querySelector("summary")!.textContent).toBe("Edit as CSS");
@@ -156,6 +157,25 @@ it("edits a typography token as family, weight, size and line height, with or wi
   family.value = '"Body Face", sans-serif';
   family.dispatchEvent(new Event("change"));
   expect(e.commit).toHaveBeenLastCalledWith('700 0.975rem "Body Face", sans-serif');
+});
+
+it("previews a hovered family or weight as the whole value and shows options as samples", () => {
+  const hover = vi.fn();
+  const box = pickerEditor({ trigger: document.body, tokens: [{ path: "font.body", type: "fontFamily", value: '"Body Face", sans-serif', label: "Body" }], property: "font", onSelect() {}, custom: { value: "500 14px/20px serif", onPreview: () => () => {}, onSelect() {} } }, { preview: vi.fn(), commit: vi.fn(), hover });
+  document.body.append(box);
+  const menu = (name: string) => box.querySelector<HTMLSelectElement>(`select[aria-label="${name}"]`)!;
+  const option = (name: string, value: string) => [...menu(name).options].find(item => item.value === value)!;
+  expect(option("Font weight", "800").style.fontWeight).toBe("800");
+  expect(option("Font family", '"Body Face", sans-serif').style.fontFamily).toContain("Body Face");
+  menu("Font weight").dispatchEvent(new CustomEvent("komo-preview", { detail: "800" }));
+  expect(hover).toHaveBeenLastCalledWith("800 14px/20px serif");
+  menu("Font family").dispatchEvent(new CustomEvent("komo-preview", { detail: '"Body Face", sans-serif' }));
+  expect(hover).toHaveBeenLastCalledWith('500 14px/20px "Body Face", sans-serif');
+  menu("Font family").dispatchEvent(new CustomEvent("komo-preview", { detail: null }));
+  expect(hover).toHaveBeenLastCalledWith(undefined);
+  box.destroy();
+  menu("Font weight").dispatchEvent(new CustomEvent("komo-preview", { detail: "300" }));
+  expect(hover).toHaveBeenCalledTimes(3);
 });
 
 it("shows primary font and only real token choices, retaining quoted fallback stacks", () => {

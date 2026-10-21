@@ -126,9 +126,7 @@ describe.skipIf(!chrome).each([{ width: 1280, height: 860 }, { width: 390, heigh
     await radius.scrollIntoViewIfNeeded();
     await settle(tab);
     await radius.locator("select[data-picker]").click();
-    const custom = tab.locator(".komo-tokens__tabs button").filter({ hasText: "Custom" });
-    await custom.waitFor();
-    if (await custom.getAttribute("aria-pressed") !== "true") await custom.click();
+    await tab.locator(".komo-tokens .komo-custom").waitFor();
     const unit = tab.locator(".komo-tokens select").filter({ has: tab.locator("option[value=rem]") }).first();
     await unit.waitFor();
     await settle(tab);

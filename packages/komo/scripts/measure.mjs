@@ -182,7 +182,8 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 230_200)
 // 7,350: geometry's structural move needs Design mode's click selection and Before state, and the
 // hidden original's display stays out of proposals and Copy CSS (7,234 -> 7,320 measured).
 // 7,475: Design mode also listens inside Frame's viewport iframe (pointer, click, keys, scroll) and
-// maps its outlines and picks through it (+~124: 7,320 -> 7,445).
+// maps its outlines and picks through it (+~124: 7,320 -> 7,445). The entry imports chunks by hashed
+// name, so a lazy chunk's new content can also move it a byte.
 if (report.optionalDesignMode.gzip > 7_475)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
@@ -208,7 +209,10 @@ if (report.optionalSelectMenu.gzip > 3_125)
 // 4,975: the popup opens in the top layer, follows its field, refreshes Custom when the field settles and leaves a select open inside it to its own list.
 // 5,275: color fields open a 240px popup with live commits, finish or cancel the edit on close,
 // and keep a value for hosts without live commits (4,932 -> 5,123), plus ~3%.
-if (report.optionalTokenPicker.gzip > 5_275)
+// 5,600: one popup replaces the Tokens and Custom tabs: a header, token values in each row, an
+// inline Custom value section, a restore when the pointer leaves the list, Home/End and
+// type-to-filter (5,222 -> 5,440), plus ~3%.
+if (report.optionalTokenPicker.gzip > 5_600)
   throw new Error("komo's token picker chunk exceeds its gzip budget.");
 // The Tokens view (every token with nothing selected, per-theme edits, its footer and page
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and
