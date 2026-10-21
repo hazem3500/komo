@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -67,7 +68,7 @@ const root = "document.querySelector('[data-branch-comments]').shadowRoot";
 async function design(page: Page) {
   await page.goto(origin);
   await page.waitForFunction(() => !!(window as any).komo);
-  await page.keyboard.press("d");
+  await openDesign(page);
   await page.locator(".design-inspector__empty").waitFor();
   await page.locator("#target").click();
   const weight = page.locator('[data-field-property="font-weight"] select');

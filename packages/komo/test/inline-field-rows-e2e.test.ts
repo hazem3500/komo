@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // Every single-value numeric field works like the font size row: the value stays beside a bound
 // token's chip and scrubs live, and the chip's popup is the token list with Edit as CSS collapsed.
@@ -76,7 +77,7 @@ async function open(width: number, touch = false, target = "#card") {
   tab.on("pageerror", error => errors.push(error.message));
   await tab.goto(origin);
   await tab.waitForFunction(() => !!(window as any).komo);
-  await tab.keyboard.press("d");
+  await openDesign(tab);
   await tab.locator(target).click();
   await tab.mouse.move(2, 2);
   await tab.locator('[data-field-property="padding"] .design-field__unit').waitFor({ state: "attached" });

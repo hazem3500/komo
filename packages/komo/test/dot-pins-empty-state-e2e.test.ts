@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { waitForInspector } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -228,6 +229,7 @@ describe.skipIf(!chrome)("Design mode empty state", () => {
   async function design(query: string, options: Options = {}) {
     const page = await open(query, options);
     await page.keyboard.press("Shift+D");
+    await waitForInspector(page);
     await page.locator(".design-inspector__empty").waitFor();
     await settle(page, 300);
     return page;
@@ -319,6 +321,7 @@ it.skipIf(!chrome)("captures dot and compact pin close-ups and the empty state o
     for (const tokens of ["", "tokens=1"]) {
       const page = await open(`theme=${theme}&${tokens}`, { reducedMotion: "reduce", scale: 2 });
       await page.keyboard.press("Shift+D");
+      await waitForInspector(page);
       await page.locator(".design-inspector__empty").waitFor();
       await settle(page);
       const inspector = (await page.locator(".design-inspector").boundingBox())!;

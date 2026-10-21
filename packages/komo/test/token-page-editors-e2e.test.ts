@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // The Tokens view's Custom editors for typography, shadow and dimension tokens, and its row tooltip.
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
@@ -74,7 +75,7 @@ async function tokensView(zoom: string, viewport = { width: 1280, height: 860 })
   tab.on("pageerror", error => errors.push(error.message));
   await tab.goto(origin);
   await tab.waitForFunction(() => !!(window as any).komo);
-  await tab.keyboard.press("d");
+  await openDesign(tab);
   await settle(tab);
   const zoomButton = tab.getByRole("button", { name: zoom, exact: true });
   if (await zoomButton.count()) { await zoomButton.click(); await settle(tab); }

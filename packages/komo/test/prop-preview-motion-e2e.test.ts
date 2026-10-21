@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // A design-system button with its own color, background and border transitions. Previewing its
 // color prop option by option (pointer or arrow keys) renders each option at once: no host
@@ -95,7 +96,7 @@ async function open(target: string, video = false) {
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(origin);
   await page.locator(target).waitFor();
-  await page.keyboard.press("d");
+  await openDesign(page);
   // The button's corner, not its label, so the button itself is selected.
   await page.click(target, { position: { x: 4, y: 4 } });
   // Experimental geometry loads after Design mode opens.

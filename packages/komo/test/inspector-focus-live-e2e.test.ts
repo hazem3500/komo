@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // The inspector in real Chrome: a redraw (⌘Z, Before/After, a theme switch) puts focus back on
 // the control that had it, and Undo or Reset with nothing left to focus moves it to the
@@ -76,7 +77,7 @@ async function open() {
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(origin);
   await page.locator(".fixture-button").waitFor();
-  await page.keyboard.press("d");
+  await openDesign(page);
   await page.click(".fixture-button");
   await page.getByRole("combobox", { name: "Button variant", exact: true }).waitFor();
   await page.locator('[data-field-property="color"] .design-token-binding').waitFor({ state: "attached" });
