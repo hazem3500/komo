@@ -239,7 +239,9 @@ if (report.optionalTokenPage.gzip > 5_150)
 // a configurable canvas selection color with a magenta fallback on matching backgrounds, handles shown
 // only near the pointer or with focus and stepping back for the panel, fields and previews, overlay
 // peek/toggle with the visibility key and an eye button, and the first-use move hint (12,191 -> 13,483), plus ~3%.
-if (report.optionalGeometry.gzip > 13_900)
+// 14,050: geometry also runs inside Frame's viewport iframe: page rects map through the frame, its keys,
+// scrolling and pointer reach the overlay, and moves adopt a sheet from the frame's realm (13,919 measured).
+if (report.optionalGeometry.gzip > 14_050)
   throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
 // API tokens load only when "API tokens" is opened in the Account panel; nothing else imports
 // the chunk. 5,671 measured, plus ~3%.

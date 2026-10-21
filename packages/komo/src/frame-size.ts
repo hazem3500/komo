@@ -60,29 +60,30 @@ const clamp = (value: number, axis = 0) =>
  * nothing stored, unreadable values and entries from before versioning, which
  * kept implicit sizes from the old Fit default.
  */
-export function readFrameSize(raw: string | null): { size: Choice; actual: boolean; inPlace: boolean } {
+export function readFrameSize(raw: string | null): { size: Choice; actual: boolean; inPlace?: boolean } {
   try {
     const stored = JSON.parse(raw ?? "null");
-    if (stored?.v !== VERSION) return { size: "window", actual: false, inPlace: false };
+    if (stored?.v !== VERSION) return { size: "window", actual: false };
     const size: Choice =
       stored.size === "available"
         ? "available"
         : Array.isArray(stored.size) && stored.size.length === 2 && stored.size.every(Number.isFinite)
           ? [clamp(stored.size[0]), clamp(stored.size[1], 1)]
           : "window";
-    return { size, actual: stored.actual === true, inPlace: stored.inPlace === true };
+    // The reviewer's Viewport / In place choice, when they made one; otherwise the host's default applies.
+    return { size, actual: stored.actual === true, ...(typeof stored.inPlace === "boolean" ? { inPlace: stored.inPlace } : {}) };
   } catch {
-    return { size: "window", actual: false, inPlace: false };
+    return { size: "window", actual: false };
   }
 }
 /**
  * What to remember for an explicit choice; null for the default, so it is never
- * pinned. `inPlace` records choosing In place over Viewport mode.
+ * pinned. `inPlace` records the reviewer's Viewport / In place choice, when they made one.
  */
-export const frameSizeRecord = (size: Choice, actual: boolean, inPlace = false) =>
-  size === "window" && !actual && !inPlace
+export const frameSizeRecord = (size: Choice, actual: boolean, inPlace?: boolean) =>
+  size === "window" && !actual && inPlace === undefined
     ? null
-    : JSON.stringify({ v: VERSION, size: size === "window" ? null : size, actual, ...(inPlace ? { inPlace } : {}) });
+    : JSON.stringify({ v: VERSION, size: size === "window" ? null : size, actual, ...(inPlace === undefined ? {} : { inPlace }) });
 const dimensions = ([width, height]: number[]) =>
   `${Math.round(width)} × ${Math.round(height)}`;
 
@@ -99,8 +100,8 @@ export function mountFrameSize(
   apply: (toggled?: boolean) => void,
   // Passed in, so this chunk does not pull the eager layout module into a shared chunk.
   frameView: typeof placeView,
-  /** The host enabled viewport mode (frame.mode "iframe"). */
-  viewport = false,
+  /** Viewport mode is enabled (frame.mode "iframe"), starting in this mode (frame.defaultMode) until the reviewer picks one. */
+  viewport: false | "iframe" | "transform" = false,
 ): FrameSizeControls {
   let raw: string | null = null;
   try {
@@ -110,14 +111,15 @@ export function mountFrameSize(
   }
   const restored = readFrameSize(raw);
   let { size, actual } = restored;
-  let separate = viewport && !restored.inPlace;
+  let chosen = restored.inPlace !== undefined;
+  let separate = !!viewport && (chosen ? !restored.inPlace : viewport === "iframe");
   let state: { active: boolean; loading?: boolean; reason?: string } = { active: false };
   let current: FrameView | null | undefined;
   // Only the reviewer's own choices are remembered: a preset, a custom size, a drag,
   // an arrow-key resize or the zoom. Choosing the default forgets the entry.
   const remember = () => {
     try {
-      const record = frameSizeRecord(size, actual, viewport && !separate);
+      const record = frameSizeRecord(size, actual, viewport && chosen ? !separate : undefined);
       if (record) localStorage.setItem(key, record);
       else localStorage.removeItem(key);
     } catch {
@@ -125,7 +127,7 @@ export function mountFrameSize(
     }
   };
   // An old or unreadable entry is dropped, so it can't come back.
-  if (raw !== null && raw !== frameSizeRecord(size, actual, viewport && !separate)) remember();
+  if (raw !== null && raw !== frameSizeRecord(size, actual, viewport && chosen ? !separate : undefined)) remember();
   const change = (next: Choice, zoom: boolean, persist = true, own = separate) => {
     size = next;
     actual = zoom;
@@ -286,8 +288,8 @@ export function mountFrameSize(
     if (!menu.hidden && !event.composedPath().some((node) => node === menu || node === trigger)) close();
   }, { capture: true, signal: abort.signal });
   fit.addEventListener("click", () => change(size, false));
-  own.addEventListener("click", () => change(size, actual, true, true));
-  inPlace.addEventListener("click", () => change(size, actual, true, false));
+  own.addEventListener("click", () => ((chosen = true), change(size, actual, true, true)));
+  inPlace.addEventListener("click", () => ((chosen = true), change(size, actual, true, false)));
   full.addEventListener("click", () => change(size, true));
   for (const [handle, both] of [[edge, false], [corner, true]] as const) {
     let start: { x: number; y: number; size: Size; ratio: number } | null = null;

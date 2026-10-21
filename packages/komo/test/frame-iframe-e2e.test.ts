@@ -56,7 +56,7 @@ beforeAll(async () => {
       const params=new URLSearchParams(location.search);
       window.komo=initKomo({endpoint:location.origin,project:'frame-iframe',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
         design:{tokens:discoverCssTokens(),experimentalGeometry:params.has('geometry')},
-        frame:{mode:params.has('transform')?'transform':'iframe',...(params.get('url')?{iframeUrl:()=>params.get('url')}:{})}});
+        frame:{mode:params.has('transform')?'transform':'iframe',...(params.has('inplace')?{defaultMode:'transform'}:{}),...(params.get('url')?{iframeUrl:()=>params.get('url')}:{})}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -385,6 +385,23 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     }
     expect(errors).toEqual([]);
     await page.close();
+  });
+
+  it("starts In place with defaultMode transform until the reviewer picks Viewport, then remembers it", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    await open(page, "?inplace");
+    await page.waitForTimeout(400);
+    // No second copy of the app until it's asked for.
+    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(await page.getByRole("button", { name: "In place", exact: true }).getAttribute("aria-pressed")).toBe("true");
+    await page.getByRole("button", { name: "Viewport", exact: true }).click();
+    await viewportFrame(page);
+    // The reviewer's choice wins over the host's default after a reload.
+    await open(page, "?inplace");
+    await viewportFrame(page);
+    expect(await page.getByRole("button", { name: "Viewport", exact: true }).getAttribute("aria-pressed")).toBe("true");
+    await context.close();
   });
 
   it.each([
