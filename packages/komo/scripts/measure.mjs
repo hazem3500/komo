@@ -220,7 +220,8 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 236_200)
 // new edit), keyed tooltips, empty-canvas deselect (also on Frame's viewport backdrop) and the selection
 // restored on re-entry (7,677 -> 8,109 on main 418bc33).
 // 8,150 -> 8,215: the pending changes card's hooks (row hover outline, Discard all held in Before for Undo and Redo); the card itself is in the export chunk (8,103 -> 8,166 on main bc089fe).
-if (report.optionalDesignMode.gzip > 8_215)
+// 8,215 -> 8,300: the footer wraps under 420px (count and Before/After, then tools and Comment), so Comment is never clipped; CSS only (8,165 -> 8,255 on main ff2f416).
+if (report.optionalDesignMode.gzip > 8_300)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).

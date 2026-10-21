@@ -106,6 +106,8 @@ async function custom(tab: Page, property: string) {
   return tab.locator(".komo-tokens");
 }
 const close = async (tab: Page, property: string) => {
+  // The first change adds the footer's second row in a narrow panel, which can scroll a bottom field out of view.
+  await trigger(tab, property).scrollIntoViewIfNeeded();
   await trigger(tab, property).click();
   await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
 };
