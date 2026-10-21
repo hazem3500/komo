@@ -221,7 +221,8 @@ if (report.optionalTokenPage.gzip > 5_150)
 // a configurable canvas selection color with a magenta fallback on matching backgrounds, handles shown
 // only near the pointer or with focus and stepping back for the panel, fields and previews, overlay
 // peek/toggle with the visibility key and an eye button, and the first-use move hint (12,191 -> 13,483), plus ~3%.
-if (report.optionalGeometry.gzip > 13_900)
+// 14,150: move undo re-selection and peek release (#160) together with holding host motion during previews (14,037 measured).
+if (report.optionalGeometry.gzip > 14_150)
   throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
 // API tokens load only when "API tokens" is opened in the Account panel; nothing else imports
 // the chunk. 5,671 measured, plus ~3%.
