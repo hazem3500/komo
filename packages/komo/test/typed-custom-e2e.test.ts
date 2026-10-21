@@ -118,7 +118,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.keyboard.press("v"); expect(await target.getAttribute("style")).toBe(original);
     await page.keyboard.press("d");
     expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
-    await open("display"); await page.locator('.komo-custom select[aria-label="Layout"]').selectOption("grid"); await close();
+    // Layout is a keyword field: its own listbox applies; its token chip lists tokens only.
+    await page.locator('[data-field-property="display"] > select').click();
+    await page.locator('.komo-select [role="option"]').filter({ hasText: /^grid$/ }).click();
     expect(await target.evaluate(node => node.style.display)).toBe("grid");
     await undo.click(); expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
     await undo.click(); expect(await target.getAttribute("style")).toBe(original);

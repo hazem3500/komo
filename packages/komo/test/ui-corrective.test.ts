@@ -434,7 +434,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     } finally { await page.close(); }
   });
 
-  it("labels the numeric radius editor range without rejecting a full-radius token", async () => {
+  it("labels the numeric radius field with its unit inside, without rejecting a full-radius token", async () => {
     const page = await browser.newPage({ reducedMotion: "reduce" });
     page.setDefaultTimeout(4000);
     try {
@@ -442,7 +442,8 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await page.waitForFunction(() => !!(window as any).komo);
       await page.keyboard.press('d'); await page.locator('#other').click();
       const field = page.locator('[data-field-property="border-radius"]');
-      expect(await field.locator('.design-field__label').textContent()).toBe('Corner radius · px · scrub 0–96');
+      expect(await field.locator('.design-field__label').textContent()).toBe('Corner radius');
+      await expect.poll(() => field.locator('.design-field__unit').textContent()).toBe('px');
       await field.locator('select[data-picker]').click();
       await page.locator('.komo-tokens [role=option]').filter({ hasText: 'Full' }).click();
       expect(await page.locator('#other').evaluate(el => parseFloat(getComputedStyle(el).borderTopLeftRadius))).toBeGreaterThan(96);

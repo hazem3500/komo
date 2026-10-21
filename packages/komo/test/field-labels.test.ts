@@ -2,7 +2,7 @@
 import { expect, it } from "vitest";
 import { fieldControl, type Field } from "../src/design-panel.js";
 
-it("keeps metadata labels and units visible and associated with empty or populated controls", () => {
+it("keeps metadata labels visible and associated with empty or populated controls", () => {
   const element = document.createElement("div");
   element.style.opacity = "0.4";
   document.body.append(element);
@@ -24,11 +24,11 @@ it("keeps metadata labels and units visible and associated with empty or populat
     expect(label.textContent).toContain(field.label);
     expect(box.dataset.fieldLabel).toBe(field.label);
     if (field.property === "opacity") {
-      expect(label.textContent).toBe("Opacity · 0–1");
+      expect(label.textContent).toBe("Opacity");
       expect(control.value).toBe("0.4");
     }
-    if (field.kind === "length") expect(label.textContent).toBe("Corner radius · px · scrub 0–96");
-    if (field.kind === "size") expect(label.textContent).toBe("Width · px or unit");
+    // Units show inside the field (field-controls.ts), so labels name the field alone.
+    if (field.kind === "length" || field.kind === "size") expect(label.textContent).toBe(field.label);
     control.value = "";
     expect(label.textContent).toContain(field.label);
   }

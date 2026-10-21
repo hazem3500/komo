@@ -304,6 +304,7 @@ export function createDesignMode(options: DesignModeOptions) {
         updateActions();
       },
       rerender: renderControls,
+      reserved: options.reservedKey,
     } satisfies PanelContext);
     if (retainedProps) controls.prepend(retainedProps);
     // Any design-system adapter needs the token and props controls, not only registered elements.
