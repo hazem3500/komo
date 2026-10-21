@@ -180,7 +180,9 @@ await writeFile(
 // pan frame. Measured locally on main 53dedcc: 232,848.
 // 233,000 -> 233,200: geometry inside Frame's viewport iframe and frame.defaultMode (#167) on top of the
 // stage pan; 233,066 measured locally with both, plus ~100 for CI's measurement.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 233_200)
+// 233,200 -> 233,350: one-line Viewport / In place tooltips on the mode switch (233,231 measured on main
+// 418bc33 with this branch), plus ~100 for CI's measurement.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 233_350)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

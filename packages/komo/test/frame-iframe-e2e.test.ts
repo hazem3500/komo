@@ -395,6 +395,13 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     // No second copy of the app until it's asked for.
     expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
     expect(await page.getByRole("button", { name: "In place", exact: true }).getAttribute("aria-pressed")).toBe("true");
+    // Each mode says what it trades, on hover.
+    for (const [name, text] of [["In place", "No extra copy"], ["Viewport", "Runs a second copy of the app"]]) {
+      const button = page.getByRole("button", { name, exact: true });
+      await button.hover();
+      expect(await button.evaluate((node) => getComputedStyle(node, "::after").content)).toContain(text);
+    }
+    await page.screenshot({ path: join(shots, "mode-tooltip.png") });
     await page.getByRole("button", { name: "Viewport", exact: true }).click();
     await viewportFrame(page);
     // The reviewer's choice wins over the host's default after a reload.
