@@ -1,5 +1,5 @@
 import { popupStyles, previewStyle, watchPopup } from "./design-popup.js";
-import { holdHostMotion } from "./host-motion.js";
+import { stillPreview } from "./host-motion.js";
 // Komo-styled popups for the Design panel's native selects. The select stays the
 // focusable trigger and the value store, so `.value`, `change`, `disabled` and
 // labels keep working; only its system popup is replaced by a listbox that lives
@@ -141,10 +141,8 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement): vo
       // its value while an option is active and null once it is not. komo drives each step, so
       // the element's own transitions hold still until the host has rendered it.
       if (!selected) {
-        const release = element ? holdHostMotion(element) : () => {};
         const preview = (detail: string | null) => select.dispatchEvent(new CustomEvent("komo-preview", { detail }));
-        const undo = element && property ? previewStyle(element, property, value) : (preview(value), () => preview(null));
-        undoPreview = () => { undo(); release(); };
+        undoPreview = stillPreview(element, () => element && property ? previewStyle(element, property, value) : (preview(value), () => preview(null)));
       }
     }
     items[active]?.node.removeAttribute("data-active");

@@ -71,8 +71,8 @@ export function holdHostMotion(element: Element): () => void {
 }
 
 /** Run a preview with host motion held; its undo releases the hold once the host settles. */
-export function stillPreview(element: Element, preview: () => (() => void) | void): () => void {
-  const release = holdHostMotion(element);
+export function stillPreview(element: Element | undefined, preview: () => (() => void) | void): () => void {
+  const release = element ? holdHostMotion(element) : () => {};
   let undo: (() => void) | void;
   try { undo = preview(); } catch (error) { release(); throw error; }
   // The release waits for the host's next render, so the undo below is held too.
