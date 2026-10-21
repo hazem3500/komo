@@ -833,7 +833,16 @@ export function initComments(options: CommentsOptions): CommentsController {
         appliedViewport = "";
         scalePage();
         geometry();
-      }, frameView, viewportEnabled);
+      }, frameView, viewportEnabled, {
+        pan: schedulePan,
+        // Switching to 100% keeps the open comment's target in view.
+        anchor() {
+          const thread = threads.find((item) => item.id === selected);
+          const anchor = draft ?? (thread && onThreadPage(thread) ? thread.anchor : null);
+          const spot = anchor && locateAnchor(anchor);
+          return spot && spot.attached ? { x: spot.x / htmlZoom(), y: spot.y / htmlZoom() } : null;
+        },
+      });
       frameControls.status(viewportShown ? { active: true } : viewportFailed ? { active: false, reason: viewportFailed } : { active: false, loading: !!viewport || viewportOpening });
       // Re-layout only for a remembered size; the default keeps Frame's entrance motion.
       if (frameControls.sized) {
@@ -848,10 +857,46 @@ export function initComments(options: CommentsOptions): CommentsController {
   } catch {
     /* Storage is blocked: the default needs no controls until Frame opens. */
   }
+  // A 100% frame larger than its stage pans by moving the page root; everything that
+  // follows the frame moves in the same frame. Scroll events let Design mode, geometry
+  // handles and the app's own floating UI re-measure: once on input, so their animation
+  // frames run after this one, and once after the move, for those that measure at once.
+  let panFrameId = 0;
+  let panEvent = false;
+  const panScroll = () => {
+    panEvent = true;
+    document.dispatchEvent(new Event("scroll", { bubbles: true }));
+    panEvent = false;
+  };
+  function schedulePan() {
+    if (panFrameId) return;
+    panFrameId = requestAnimationFrame(panFrame);
+    panScroll();
+  }
+  function panFrame() {
+    panFrameId = 0;
+    if (!framed || !frameArea || !frameControls || destroyed || laidViewport) return;
+    const zoom = htmlZoom();
+    const view = frameControls.view(
+      { left: frameArea.left / zoom, top: frameArea.top / zoom, width: frameArea.width / zoom, height: frameArea.height / zoom },
+      [window.innerWidth / zoom, window.innerHeight / zoom],
+    );
+    frameBox.left = view.left;
+    frameBox.top = view.top;
+    surface.style.left = `${view.left}px`;
+    surface.style.top = `${view.top}px`;
+    framePortals();
+    frameControls.update(frameArea, zoom);
+    renderPins(true);
+    positionDialog();
+    positionNotice();
+    updateHover();
+    panScroll();
+  }
   function framePortals() {
     const zoom = htmlZoom();
-    const left = frameBox.left - (frameBox.pan ? window.scrollX / zoom : 0);
-    const top = frameBox.top - (frameBox.pan ? window.scrollY / zoom : 0);
+    const left = frameBox.left;
+    const top = frameBox.top;
     const { width, height } = frameBox;
     // The viewport iframe lays out its own portals and units; this page stays as it was.
     const active = framed && !destroyed && !laidViewport;
@@ -2009,7 +2054,6 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
     const useFrame = layout.framed;
     const scaled = options.frame?.scale === true;
-    const wasPanned = framed && frameBox.pan;
     const area = { left: layout.left, top: layout.top, width: layout.visibleWidth, height: layout.height };
     const box = { left: area.left / zoom, top: area.top / zoom, width: area.width / zoom, height: area.height / zoom };
     // Frame opens on the browser window's own size at Fit, so the page keeps its real layout.
@@ -2076,24 +2120,23 @@ export function initComments(options: CommentsOptions): CommentsController {
             logical: [view.width, view.height],
             pan,
           };
-      // A pannable 100% frame scrolls the document, with room beside the sidebar.
-      const gap = (value: number) => (pan ? `${value / zoom}px solid transparent` : "");
+      // A 100% frame larger than its stage stays fixed and pans inside it (see panFrame).
       Object.assign(surface.style, {
-        position: pan ? "absolute" : "fixed",
+        position: "fixed",
         transform: appliedScale !== 1 ? `scale(${appliedScale})` : savedStyle.transform,
         transformOrigin: "top left",
         left: `${frameBox.left}px`,
         top: `${frameBox.top}px`,
-        width: `${scaled ? window.innerWidth / zoom : view.width + (pan ? layout.right / zoom : 0)}px`,
+        width: `${scaled ? window.innerWidth / zoom : view.width}px`,
         boxSizing: "border-box",
-        height: `${scaled ? layout.height / effective : view.height + (pan ? 24 / zoom : 0)}px`,
+        height: `${scaled ? layout.height / effective : view.height}px`,
         paddingBottom: savedStyle.paddingBottom,
         zoom: savedStyle.zoom,
         overflow: scaled ? "hidden auto" : "auto",
         borderRadius: `${12 / effective}px`,
         background: pageBackground,
-        borderRight: gap(layout.right) || savedStyle.borderRight,
-        borderBottom: gap(24) || savedStyle.borderBottom,
+        borderRight: savedStyle.borderRight,
+        borderBottom: savedStyle.borderBottom,
         clipPath: savedStyle.clipPath,
       });
       for (const header of surface.querySelectorAll<HTMLElement>("header")) {
@@ -2106,14 +2149,13 @@ export function initComments(options: CommentsOptions): CommentsController {
           header.style.marginBottom = `-${header.offsetHeight}px`;
         }
       }
-      html.style.overflow = pan ? "auto" : "hidden";
-      document.body.style.overflow = pan ? "visible" : "hidden";
+      html.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
       html.style.background = document.body.style.background = "#080808";
       surface.scrollTop = scroll;
-      if (pan !== wasPanned) window.scrollTo({ left: 0, top: 0, behavior: "instant" });
     } else {
       restorePage();
-      if (framed && !laidViewport) window.scrollTo({ left: frameBox.pan ? 0 : window.scrollX, top: scroll * zoom, behavior: "instant" });
+      if (framed && !laidViewport) window.scrollTo({ left: window.scrollX, top: scroll * zoom, behavior: "instant" });
       appliedScale = 1;
       frameBox.pan = false;
     }
@@ -2169,9 +2211,16 @@ export function initComments(options: CommentsOptions): CommentsController {
       }).catch(() => {});
     }
     // Pins and picking follow the visible frame, which a fitted viewport may not fill.
-    const visible = scaled || pan
+    // A panned frame shows only where it overlaps its stage.
+    const clip = (start: number, size: number, from: number, length: number) => {
+      const low = Math.max(start, from);
+      return [low, Math.max(0, Math.min(start + size, from + length) - low)];
+    };
+    const [visibleLeft, visibleWidth] = clip(frameBox.left * zoom, frameBox.width * zoom, area.left, area.width);
+    const [visibleTop, visibleHeight] = clip(frameBox.top * zoom, frameBox.height * zoom, area.top, area.height);
+    const visible = scaled
       ? { left: layout.visibleLeft, top: layout.visibleTop, width: layout.visibleWidth, height: layout.visibleHeight }
-      : { left: frameBox.left * zoom, top: frameBox.top * zoom, width: frameBox.width * zoom, height: frameBox.height * zoom };
+      : { left: visibleLeft, top: visibleTop, width: visibleWidth, height: visibleHeight };
     pins.style.clipPath = useFrame
       ? `inset(${visible.top}px ${window.innerWidth - visible.left - visible.width}px ${viewportHeight - visible.top - visible.height}px ${visible.left}px)`
       : "";
@@ -6322,6 +6371,8 @@ export function initComments(options: CommentsOptions): CommentsController {
     });
   }
   const onScroll = (event: Event) => {
+      // komo's own pan notice is for others; pins already moved with the frame.
+      if (panEvent) return;
       previewSuppressed = true;
       hidePreview();
       const target = event.target;
@@ -6798,6 +6849,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(hoverFrame);
       cancelAnimationFrame(nearFrame);
+      cancelAnimationFrame(panFrameId);
       cancelAnimationFrame(noticeFrame);
       hidePreview();
       observer.disconnect();
