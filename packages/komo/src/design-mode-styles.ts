@@ -54,12 +54,14 @@ export const designModeStyles = `
 .design-inspector[data-empty] .design-inspector__controls { display:grid; place-items:center; }
 .design-inspector[data-empty] .design-inspector__bar:not([data-changes],[data-message]) { display:none; }
 /* One slim bar: a quiet Comment action, plus a change count and tools once something changed. */
-.design-inspector__bar { flex:none; display:flex; align-items:center; gap:8px; min-height:56px; padding:0 12px; border-top:1px solid #ffffff0d; color:#909090; font-size:12px; }
+.design-inspector__bar { flex:none; display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-height:36px; padding:10px 12px; border-top:1px solid #ffffff0d; color:#909090; font-size:12px; container-type:inline-size; }
+.design-inspector__count:empty { display:none; }
 .design-inspector__actions { display:flex; align-items:center; gap:2px; margin-left:auto; }
 .design-inspector__actions button:disabled { cursor:default; opacity:.35; }
 /* Comment is komo's primary action, as on the Comments panel. */
-.design-inspector__actions button:last-child { min-height:34px; margin-left:6px; padding:0 14px; border-radius:8px; background:var(--accent,#bda6ef); color:#211b2d; font-size:12px; font-weight:500; }
+.design-inspector__actions button:last-child { flex:none; white-space:nowrap; min-height:34px; margin-left:6px; padding:0 14px; border-radius:8px; background:var(--accent,#bda6ef); color:#211b2d; font-size:12px; font-weight:500; }
 .design-inspector__actions button:last-child:hover:not(:disabled) { background:var(--accent,#bda6ef); color:#211b2d; filter:brightness(1.08); }
+@container (max-width:419px) { .design-inspector__actions { flex-basis:calc(100% + 6px); margin-left:-6px; } .design-inspector__actions button:last-child { margin-left:auto; } }
 .design-inspector :focus-visible { outline:2px solid var(--accent,#bda6ef); outline-offset:2px; }
 @media (max-width:520px) {
   /* A content-sized bottom sheet; folding it leaves only the heading over the page. */
