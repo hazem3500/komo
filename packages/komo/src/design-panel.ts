@@ -47,7 +47,7 @@ export const fields: Field[] = [
   { property: "border-radius", label: "Corner radius", kind: "length", glyph: "M1.5 10.5V6A4.5 4.5 0 0 1 6 1.5h4.5", max: 96 },
   { property: "display", label: "Layout", kind: "select", values: ["block", "flex", "grid", "inline-flex", "inline-grid"] },
   { property: "font-family", label: "Font family", kind: "text", wide: true, placeholder: "system-ui, sans-serif" },
-  { property: "font-size", label: "Font size", kind: "length", glyph: "M2 3V1.5h8V3M6 1.5v9m-1.5 0h3", min: 1, max: 160 },
+  { property: "font-size", label: "Font size", kind: "length", wide: true, glyph: "M2 3V1.5h8V3M6 1.5v9m-1.5 0h3", min: 1, max: 160 },
   { property: "line-height", label: "Line height", kind: "text", glyph: "M1 1.5h10M1 10.5h10M3.5 8.5 6 3l2.5 5.5", placeholder: "1.4 or 24px" },
   { property: "letter-spacing", label: "Letter spacing", kind: "text", glyph: "M1 2.5v7M11 2.5v7M3.5 9.5 6 2.5l2.5 7M4.4 7h3.2", placeholder: "0 or 0.02em" },
   { property: "font-weight", label: "Weight", kind: "select", values: ["300", "400", "500", "600", "700", "800"] },
@@ -114,7 +114,8 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
       control.setAttribute("inputmode", "decimal");
     }
   }
-  box.append(fieldLabel(control, field, box));
+  const label = fieldLabel(control, field, box);
+  box.append(label);
   control.dataset.property = field.property;
   control.setAttribute("aria-label", field.label);
   /** The element's value, as on first render, Escape and syncFields. */
@@ -169,10 +170,13 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
     glyph.title = `${field.label} · drag to adjust`;
     if (field.glyph.length > 1) glyph.innerHTML = `<svg viewBox="0 0 12 12"><path d="${field.glyph}"/></svg>`;
     else glyph.textContent = field.glyph;
-    glyph.addEventListener("pointerdown", (event) => {
+    // The icon and the field's name both scrub; a click on the name still focuses the field.
+    label.style.cursor = "ew-resize";
+    for (const handle of [glyph, label]) handle.addEventListener("pointerdown", (event) => {
+      if (event.button) return;
       event.preventDefault();
       begin();
-      glyph.setPointerCapture?.(event.pointerId);
+      handle.setPointerCapture?.(event.pointerId);
       let x = event.clientX;
       const move = (next: PointerEvent) => {
         const steps = Math.trunc((next.clientX - x) / 2);
@@ -181,12 +185,12 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
         nudge(steps * (next.shiftKey ? 10 : 1));
       };
       const end = () => {
-        glyph.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointermove", move);
         commit();
       };
-      glyph.addEventListener("pointermove", move);
-      glyph.addEventListener("pointerup", end, { once: true });
-      glyph.addEventListener("pointercancel", end, { once: true });
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", end, { once: true });
+      handle.addEventListener("pointercancel", end, { once: true });
     });
     (control as HTMLElement).addEventListener("keydown", (event) => {
       if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;

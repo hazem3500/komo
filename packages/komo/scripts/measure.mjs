@@ -207,7 +207,8 @@ if (report.optionalDesignPanel.gzip > 4_800)
 // The Design panel's styled select popups (listbox, keyboard, flip and check marks)
 // load as their own chunk beside the panel, so neither the panel nor the entry grows.
 // 3,125: token selects (data-picker) are left to the token picker below (+11 bytes).
-if (report.optionalSelectMenu.gzip > 3_125)
+// 3,250: a letter on a closed select opens the list on its first match (3,085 -> 3,154), plus ~3%.
+if (report.optionalSelectMenu.gzip > 3_250)
   throw new Error("komo's select menu chunk exceeds its gzip budget.");
 // The token picker (search, type previews, sticky groups, lazy rows, keyboard) loads the first
 // time a token field opens. 4,631 measured, plus ~3%. It now also hands its rows' previews and
@@ -260,7 +261,8 @@ if (report.optionalFrameViewport.gzip > 2_300)
 // panel as its own chunk. 704 measured, plus ~3%.
 // In-row field controls (icon segments for text alignment and border style, weight samples,
 // unit suffixes) are fetched with the panel, like the select menu. 1,834 measured, plus ~3%.
-if (report.optionalFieldControls.gzip > 1_900)
+// 2,100: the font size row keeps its value beside a bound token's chip and trims its popup to the token list (1,834 -> 2,024), plus ~3%.
+if (report.optionalFieldControls.gzip > 2_100)
   throw new Error("komo's field controls chunk exceeds its gzip budget.");
 if (report.optionalLiveColors.gzip > 725)
   throw new Error("komo's live color field chunk exceeds its gzip budget.");

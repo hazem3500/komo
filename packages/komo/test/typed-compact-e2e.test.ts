@@ -224,7 +224,8 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("compact typed C
 
   it.each([{ width: 1280, height: 800 }, { width: 390, height: 844 }])("sizes every editor to its content, keeps each control reachable and Tab inside, at $width px", async viewport => {
     const { tab, errors } = await open(mode, viewport);
-    for (const property of ["box-shadow", "padding", "border-radius", "font-size", "font-family"]) {
+    // Font size edits its value in the row; its popup is the token list (font-size-row-e2e).
+    for (const property of ["box-shadow", "padding", "border-radius", "font-family"]) {
       const popup = await custom(tab, property);
       const box = (await popup.boundingBox())!, field = (await tab.locator(`[data-field-property="${property}"]`).boundingBox())!;
       // One width for every Custom editor, colors included.
