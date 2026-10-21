@@ -194,7 +194,8 @@ describe.skipIf(!chrome)('geometry ownership and guards', () => {
       await reason.waitFor();
       expect(await reason.textContent()).toBe("Rotated, skewed, 3D or mirrored boxes can't be previewed.");
       expect(await page.locator('.design-geometry__handle:visible').count()).toBe(0);
-      expect(await page.locator('.design-geometry__frame').isVisible()).toBe(false);
+      // The box can still move between elements, so its outline stays, without resize handles.
+      expect(await page.locator('.design-geometry__frame').isVisible()).toBe(true);
       expect(await page.locator('#target').getAttribute('style')).toBe(baseline);
     } finally { await page.close(); }
   });

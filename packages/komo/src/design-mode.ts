@@ -163,6 +163,11 @@ export function createDesignMode(options: DesignModeOptions) {
       enabled: () => active && decorating && !showingBefore && !textTools?.element,
       remember, track, history, update: updateActions, select,
       tokens: () => reactPanelModule, panel: () => controls,
+      before: () => showingBefore,
+      pick(x, y) {
+        const element = pickDesignTarget(options.targetAt(x, y));
+        if (element && !options.host.contains(element)) { decorating = true; choose(element); }
+      },
     });
   });
 
@@ -489,9 +494,12 @@ export function createDesignMode(options: DesignModeOptions) {
     if (!element || options.host.contains(element)) return;
     decorating = true;
     if (textTools?.element && (element === textTools.element || textTools.element.contains(element))) return;
-    if (textTools?.element) finishTextEdit();
     event.preventDefault();
     event.stopImmediatePropagation();
+    choose(element);
+  }
+  function choose(element: DesignTarget) {
+    if (textTools?.element) finishTextEdit();
     select(element);
     const focused = options.root.activeElement ?? document.activeElement;
     if (focused instanceof HTMLElement) focused.blur();
@@ -605,8 +613,13 @@ export function createDesignMode(options: DesignModeOptions) {
     geometry?.cancel();
     options.root.dispatchEvent(new Event("komo-preview-cancel"));
   }
+  /** Style rows to propose or copy; a structural move's hidden original is not a `display` change. */
+  function styles(element: DesignTarget) {
+    const values = changed.get(element);
+    return values && geometry?.moved(element) ? new Map([...values].filter(([property]) => property !== "display")) : values;
+  }
   function proposalFor(element: DesignTarget, create: typeof import("./design-export.js")["designProposal"]) {
-    return create(element, changed.get(element), property => originals.get(element)?.get(property)?.computed,
+    return create(element, styles(element), property => originals.get(element)?.get(property)?.computed,
       reactPanelModule?.tokenBoundProperties(element),
       [(element instanceof HTMLElement ? textTools?.proposal(element) : undefined), reactPanelModule?.proposedDesignChanges(element), geometry?.proposal(element)],
       reactPanelModule?.designContext(element, options.design));
@@ -667,7 +680,7 @@ export function createDesignMode(options: DesignModeOptions) {
   });
   copy.addEventListener("click", () => {
     const element = selected;
-    const values = element ? changed.get(element) : undefined;
+    const values = element ? styles(element) : undefined;
     if (!element || !values?.size) return;
     void exporter().then(async ({ cssText }) => {
       const css = cssText(element, values);

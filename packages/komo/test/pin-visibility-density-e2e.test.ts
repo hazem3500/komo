@@ -177,7 +177,7 @@ it.skipIf(!chrome)("lists Hide comments in shortcut help with the configured key
   await openMore(page);
   await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
   const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
-  const line = help.locator("div", { hasText: "Hide comments" });
+  const line = help.locator(".komo-shortcuts__row", { hasText: "Hide comments" });
   expect(await line.locator(".komo-kbd").getAttribute("aria-label")).toBe("Shift + H");
   expect((await line.locator("kbd").allTextContents()).at(-1)).toBe("H");
   await page.close();
