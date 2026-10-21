@@ -212,6 +212,13 @@ export interface ComponentAdapter {
 export interface DesignSystem {
   /** Opt in to experimental, reversible page-element previews: Figma-style resize handles and moves between elements. Default false. */
   experimentalGeometry?: boolean;
+  /**
+   * Canvas selection color for Design mode's hover and selection outlines, resize handles and move
+   * feedback, e.g. "#0c93f5" (the default) or "rebeccapurple". The panel keeps komo's accent. It
+   * applies with `experimentalGeometry`; the `--komo-selection` custom property on komo's host
+   * element sets it from CSS either way.
+   */
+  selectionColor?: string;
   tokens?: TokenAdapter;
   themes?: ThemeAxis[];
   components?: ComponentAdapter;

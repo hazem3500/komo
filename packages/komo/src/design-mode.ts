@@ -22,6 +22,8 @@ export interface DesignModeOptions {
   flip?(): void;
   /** The app's design-system adapters; `tokens` replaces CSS-variable token chips. */
   design?: DesignSystem;
+  /** The comments visibility shortcut; in Design mode experimental geometry uses it to hide its overlays. */
+  visibility?: import("./shortcuts.js").Shortcut | null;
   page?(): string;
   bounds?(element: Element): { left: number; top: number; right: number; bottom: number } | undefined;
   /** Link for a component's repository-relative source, e.g. through `sourceUrl`. */

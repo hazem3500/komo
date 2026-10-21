@@ -1,6 +1,6 @@
 import type { Shortcut } from "./shortcuts.js";
 
-export function designCommands(mac = /Mac|iPhone|iPad/.test(navigator.platform)) {
+export function designCommands(mac = /Mac|iPhone|iPad/.test(navigator.platform), visibility?: Shortcut | null) {
   const command = (label: string, key: string, group: string, modifiers: Partial<Shortcut> = {}) => ({
     label, group, shortcut: { key, label: key, alt: false, shift: false, ctrl: false, meta: false, ...modifiers },
   });
@@ -26,6 +26,8 @@ export function designCommands(mac = /Mac|iPhone|iPad/.test(navigator.platform))
     command("Resize width (Shift: 10px)", "ArrowRight", focus, mac ? { meta: true } : { ctrl: true }),
     command("Resize height (Shift: 10px)", "ArrowDown", focus, mac ? { meta: true } : { ctrl: true }),
     command("Back to the canvas", "Escape", focus),
+    // The comments visibility key, reused in Design mode for the selection overlays.
+    ...(visibility ? [{ label: "Hide or show selection · hold to peek", group: canvas, shortcut: visibility }] : []),
     command("Commit text preview", "Enter", "Inline text editor"),
     command("New line", "Enter", "Inline text editor", { shift: true }),
     command("Cancel text preview", "Escape", "Inline text editor"),

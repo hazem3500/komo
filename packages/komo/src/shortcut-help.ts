@@ -5,7 +5,7 @@ import type { Shortcut } from "./shortcuts.js";
 type HelpCommand = { label: string; shortcut?: Shortcut | null; group?: string; keys?: string[]; aria?: string };
 
 export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], design = false) {
-  if (design) commands.push(...designGestures(), ...designCommands());
+  if (design) commands.push(...designGestures(), ...designCommands(undefined, commands.find(item => (item as { id?: string }).id === "visibility")?.shortcut));
   const previous = root.activeElement?.closest(".morphing-menu__panel")
     ? root.querySelector<HTMLElement>('[data-menu-item="more"]') : root.activeElement as HTMLElement | null;
   const dialog = document.createElement("dialog");

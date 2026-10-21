@@ -191,6 +191,7 @@ export function bindMove(hooks: MoveHooks) {
     hooks.track(element, 'display');
     sync();
     hooks.update();
+    try { localStorage.setItem('komo:geometry-moved', '1'); } catch { /* The first-use hint shows again. */ }
     return `Moved ${target.position === 'inside' ? `into ${where(target.parent)}` : `${target.position} ${label(target.ref!)}`}`;
   }
 
