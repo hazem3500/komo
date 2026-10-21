@@ -570,6 +570,16 @@ export function initComments(options: CommentsOptions): CommentsController {
     }
     return found.length !== 1 || (anchored && found.includes(anchored)) ? (anchored ?? found[0] ?? null) : found[0];
   };
+  /**
+   * Opt-in snapshots of a new comment's target (signed-in reviewers only) load in their
+   * own chunk. `snapshot(anchor)` captures once per draft anchor and resolves to
+   * `{ image?: data URL, html?, note? }`, so the composer can show it; posting
+   * uploads it once the thread exists.
+   */
+  const snapshot = (anchor: Anchor, post?: (body: object) => Promise<unknown>) =>
+    options.snapshots && api.user?.verified
+      ? import("./snapshot.js").then((module) => module.snapshotFor(anchor, resolveAnchor, options.snapshots!, post), () => null)
+      : undefined;
   /** Short text for pins and previews; design proposals read as a summary, not raw text. */
   const commentText = (body: string) =>
     designProposal.test(body)
@@ -4775,6 +4785,8 @@ export function initComments(options: CommentsOptions): CommentsController {
       send.disabled = pending || !input.value.trim();
       if (!input.closest<HTMLElement>(".sidebar-replies")?.hidden) resizeInput();
     });
+    // Start the target's snapshot while the reviewer writes.
+    if (!thread && draft) void snapshot(draft);
     if (proposal) {
       const card = el("div", "draft-proposal");
       card.textContent = proposal;
@@ -4866,6 +4878,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       const tags = draftTags;
       const note = draftText;
       const proposal = draftProposal;
+      const client = api;
       const item: Thread = {
         id: `pending-${crypto.randomUUID()}`,
         page: page(),
@@ -4889,6 +4902,8 @@ export function initComments(options: CommentsOptions): CommentsController {
             "POST",
             { page: item.page, anchor, body: comment.body, ...(tags.length ? { tags } : {}) },
           );
+          // Snapshots follow the saved thread and never hold up or fail the post.
+          void snapshot(anchor, (body) => client.request(`threads/${result.id}/snapshot`, "POST", body));
           // The initial message ID is returned so queued edits target the persisted comment.
           const saved =
             result.commentId ??
