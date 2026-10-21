@@ -155,7 +155,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("native retained
     await page.goto(`${origin}/fallback?mode=${mode}&scenario=redirect&comment=design-away&comment-view=design`);
     await page.locator(".thread-navigation").waitFor();
     expect(await page.locator('.design-inspector[aria-hidden="false"]').count()).toBe(0);
-    await page.getByRole("button", { name: "After", exact: true }).click();
+    // After stays off, saying why, while the thread's page is elsewhere.
+    const after = page.getByRole("button", { name: "After", exact: true });
+    expect(await after.isDisabled()).toBe(true);
+    expect(await after.getAttribute("title")).toBe("Proposed on another page");
     expect(await page.getByRole("button", { name: "Before", exact: true }).getAttribute("aria-pressed")).toBe("true");
     expect(await page.locator("#target").getAttribute("style")).toBe("color:rgb(68,85,102)");
     expect(await page.evaluate(() => ({ calls: (window as any).navigationQA.calls.length, actions: (window as any).navigationQA.actions, writes: (window as any).navigationQA.writes }))).toEqual({ calls: 0, actions: 0, writes: [] });

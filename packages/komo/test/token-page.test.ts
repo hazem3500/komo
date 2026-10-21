@@ -173,9 +173,12 @@ describe("token proposals", () => {
       expect(live).toBe(0);
     });
 
-    it("has no switch without an adapter that previews values", () => {
-      expect(render().button("After")).toBeUndefined();
-      expect(render({ tokens: { id: "plain", list: () => tokens, resolve: () => ({}) } }).button("After")).toBeUndefined();
+    it("keeps After off, with a reason, without an adapter that previews values", () => {
+      for (const design of [undefined, { tokens: { id: "plain", list: () => tokens, resolve: () => ({}) } }]) {
+        const after = render(design).button("After")!;
+        expect(after.disabled).toBe(true);
+        expect(after.title).toBe("This change can't be previewed here");
+      }
     });
 
     it("names each token by its label, else the path's last part, with the full path and theme in komo's tooltip", () => {
