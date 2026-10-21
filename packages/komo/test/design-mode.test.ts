@@ -569,7 +569,7 @@ describe("design mode preview inspector", () => {
     undo.click();
     expect(button.style.getPropertyValue("font-size")).toBe("18px");
     expect(button.style.getPropertyPriority("font-size")).toBe("important");
-    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__close"));
+    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__target"));
     input.dispatchEvent(new Event("focus"));
     input.value = "30";
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -577,7 +577,7 @@ describe("design mode preview inspector", () => {
     const reset = shadow.querySelector<HTMLButtonElement>('.design-inspector__actions [aria-label="Reset"]')!;
     reset.click();
     expect(button.style.getPropertyValue("font-size")).toBe("18px");
-    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__close"));
+    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__target"));
     input.dispatchEvent(new Event("focus"));
     input.value = "30";
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -650,6 +650,7 @@ describe("design mode preview inspector", () => {
     expect(button.style.fontSize).toBe("18px");
   });
 
+  // Effects always holds Layer opacity; its shadow is added from the section.
   it("shows only the sections that apply and adds a fill from its empty section", () => {
     const sections = () => [...shadow.querySelectorAll(".design-section")].map((item) =>
       `${item.querySelector("summary, .design-section__title")?.textContent}${item.querySelector(".design-group") ? "" : " (empty)"}`);
@@ -657,7 +658,7 @@ describe("design mode preview inspector", () => {
     box.append(document.createElement("span"));
     page.append(box);
     pointer("pointerdown", box);
-    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border (empty)", "Effects (empty)"]);
+    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border (empty)", "Effects"]);
     expect(shadow.querySelector('[data-property="gap"]')).toBeNull();
     expect(shadow.querySelector("[aria-label='Edit selected text inline']")).toBeNull();
 
@@ -665,14 +666,14 @@ describe("design mode preview inspector", () => {
     box.style.border = "2px solid red";
     pointer("pointerdown", box);
     expect(shadow.querySelector('[data-property="gap"]')).not.toBeNull();
-    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border", "Effects (empty)"]);
+    expect(sections()).toEqual(["Layout", "Fill (empty)", "Border", "Effects"]);
 
     pointer("pointerdown", button);
-    expect(sections()).toEqual(["Layout", "Typography", "Fill (empty)", "Border (empty)", "Effects (empty)"]);
+    expect(sections()).toEqual(["Layout", "Typography", "Fill (empty)", "Border (empty)", "Effects"]);
     expect(shadow.querySelector(".design-section:nth-child(2) [aria-label='Edit selected text inline']")).not.toBeNull();
     shadow.querySelector<HTMLButtonElement>('[aria-label="Add fill"]')!.click();
     expect(button.style.backgroundColor).toBe("rgb(255, 255, 255)");
-    expect(sections()).toEqual(["Layout", "Typography", "Fill", "Border (empty)", "Effects (empty)"]);
+    expect(sections()).toEqual(["Layout", "Typography", "Fill", "Border (empty)", "Effects"]);
     expect(shadow.querySelector<HTMLInputElement>('[data-property="background-color"]')?.value).toBe("#ffffff");
     shadow.querySelector<HTMLButtonElement>(".design-inspector__actions button")!.click();
     expect(button.style.backgroundColor).toBe("");

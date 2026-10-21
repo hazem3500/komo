@@ -128,7 +128,7 @@ async function open(query = "") {
 const inspector = (page: Page, name: string) => page.locator(".design-inspector").getByRole("button", { name, exact: true });
 const chip = (page: Page) => page.locator(".design-geometry__chip");
 const line = (page: Page) => page.locator(".design-geometry__line");
-const live = (page: Page) => page.locator(".design-geometry__live");
+const live = (page: Page) => page.locator('.sr-only[aria-live="polite"]');
 async function pick(page: Page, id: string) {
   // A row is reached from its first cell through the inspector's parent button.
   if (id === "row1") { await pick(page, "c1"); await page.locator(".design-inspector__parent").click(); }

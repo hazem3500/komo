@@ -33,6 +33,9 @@ const geometry = (await readdir("dist"))
 const liveColors = (await readdir("dist"))
   .filter((file) => /^live-colors.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const fieldControls = (await readdir("dist"))
+  .filter((file) => /^field-controls.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const typedEditor = (await readdir("dist"))
   .filter((file) => /^token-custom.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
@@ -94,6 +97,7 @@ const report = {
   optionalAccountTokens: await sizes(new Set(accountTokens)),
   optionalFrameViewport: await sizes(new Set(frameIframe)),
   optionalLiveColors: await sizes(new Set(liveColors)),
+  optionalFieldControls: await sizes(new Set(fieldControls)),
   optionalColorEditor: await sizes(new Set(colorEditor)),
   optionalTypedEditor: await sizes(new Set(typedEditor)),
   adapterTailwind: await sizes(new Set(["dist/adapters/tailwind.js"])),
@@ -190,7 +194,10 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 233_200)
 // 7,475: Design mode also listens inside Frame's viewport iframe (pointer, click, keys, scroll) and
 // maps its outlines and picks through it (+~124: 7,320 -> 7,445). The entry imports chunks by hashed
 // name, so a lazy chunk's new content can also move it a byte.
-if (report.optionalDesignMode.gzip > 7_475)
+// 7,700: redraws of the same selection keep focus on the same control (or the selection, never
+// Exit), and moves, Undo and applied tokens reach komo's one live region from here, not core
+// (+~228: 7,445 -> 7,673). The re-resolving itself lives in the keyboard chunk.
+if (report.optionalDesignMode.gzip > 7_700)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).
@@ -202,12 +209,16 @@ if (report.optionalInlineTextEditing.gzip > 3_100)
 // The select trigger's chevron moved to the select menu chunk below (4,271 -> ~4,140).
 // 4,375: color fields fetch their settled-value sync (live-colors, below) and read a bound token's value (4,246 -> 4,321).
 // 4,625: field-label.ts moved into this chunk with the picker (it left a shared chunk the panel already loaded, because the typed Custom editor stopped importing it with the old color form).
-if (report.optionalDesignPanel.gzip > 4_625)
+// 4,800: letter spacing and opacity fields, per-field scrub steps, no Custom popup for keyword
+// fields and the fetch of the field controls chunk below (4,591 -> 4,677), plus ~3%.
+if (report.optionalDesignPanel.gzip > 4_800)
   throw new Error("komo's design panel chunk exceeds its gzip budget.");
 // The Design panel's styled select popups (listbox, keyboard, flip and check marks)
 // load as their own chunk beside the panel, so neither the panel nor the entry grows.
 // 3,125: token selects (data-picker) are left to the token picker below (+11 bytes).
-if (report.optionalSelectMenu.gzip > 3_125)
+// 3,250: a letter on a closed select opens the list on its first match (3,085 -> 3,154), plus ~3%.
+// 3,300: with the shared host-motion hold for previews (#151) alongside (3,260 measured).
+if (report.optionalSelectMenu.gzip > 3_300)
   throw new Error("komo's select menu chunk exceeds its gzip budget.");
 // The token picker (search, type previews, sticky groups, lazy rows, keyboard) loads the first
 // time a token field opens. 4,631 measured, plus ~3%. It now also hands its rows' previews and
@@ -261,6 +272,12 @@ if (report.optionalFrameViewport.gzip > 2_300)
   throw new Error("komo's Viewport mode chunk exceeds its gzip budget.");
 // Color fields re-read the element once hover, focus, theme and transitions settle; fetched with the
 // panel as its own chunk. 704 measured, plus ~3%.
+// In-row field controls (icon segments for text alignment and border style, weight samples,
+// unit suffixes) are fetched with the panel, like the select menu. 1,834 measured, plus ~3%.
+// 2,100: the font size row keeps its value beside a bound token's chip and trims its popup to the token list (1,834 -> 2,024), plus ~3%.
+// 2,400: every single-value numeric field (line height, letter spacing, gap, border width, and padding, margin and radius with one value) gets that row, with a chip sized to its token's name (2,024 -> 2,351), plus ~2%.
+if (report.optionalFieldControls.gzip > 2_400)
+  throw new Error("komo's field controls chunk exceeds its gzip budget.");
 if (report.optionalLiveColors.gzip > 725)
   throw new Error("komo's live color field chunk exceeds its gzip budget.");
 // The Custom color picker (area, sliders, eyedropper, value row with five formats, document and

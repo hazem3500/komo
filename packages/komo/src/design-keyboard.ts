@@ -102,3 +102,39 @@ export function designKeyboard(options: {
     return true;
   };
 }
+
+/** The control focus belongs on after a redraw, by its property, label or id. */
+function focusKey(node: Element): string {
+  const field = node.closest<HTMLElement>("[data-field-property]")?.dataset.fieldProperty;
+  const scope = field ? `[data-field-property=${JSON.stringify(field)}] ` : "";
+  const property = node.getAttribute("data-property"), label = node.getAttribute("aria-label");
+  return property ? `${node.localName}[data-property=${JSON.stringify(property)}]`
+    : label ? `${scope}${node.localName}[aria-label=${JSON.stringify(label)}]`
+    : node.id ? `[id=${JSON.stringify(node.id)}]` : scope && `${scope}${node.localName}`;
+}
+
+/**
+ * Once `container` is redrawn, focus the control matching the one that had focus; props and
+ * tokens attach a little later, so it waits up to 400ms, then calls `fallback`. Nothing moves
+ * if focus went somewhere else meanwhile. The returned function stops waiting.
+ */
+export function keepFocus(container: HTMLElement, focused: Element, done: () => void, fallback: () => void): (fallback: boolean) => void {
+  const root = container.getRootNode() as Document | ShadowRoot;
+  const key = focusKey(focused);
+  const lost = () => !root.activeElement && (!document.activeElement || document.activeElement === document.body);
+  const finish = (fall: boolean) => {
+    observer.disconnect();
+    clearTimeout(timer);
+    done();
+    if (fall && lost()) fallback();
+  };
+  const attempt = () => {
+    if (!lost()) return finish(false);
+    const next = key ? container.querySelector<HTMLElement>(key) : null;
+    if (next) { next.focus({ preventScroll: true }); finish(false); }
+  };
+  const observer = new MutationObserver(attempt);
+  observer.observe(container, { childList: true, subtree: true });
+  const timer = setTimeout(finish, 400, true);
+  return finish;
+}

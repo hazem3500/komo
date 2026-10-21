@@ -21,6 +21,8 @@ export type Field = {
   values?: string[];
   min?: number;
   max?: number;
+  /** One arrow press or scrub step; 1, or 0.1 for unitless text values. */
+  step?: number;
   placeholder?: string;
 };
 
@@ -33,6 +35,8 @@ export interface PanelContext {
   apply(control: Control, property: string, value: string | null): void;
   commit(control: Control, property: string, final?: boolean): void;
   cancel?(control: Control, property: string): void;
+  /** The review shortcuts: a focused select leaves them, B and ? to their shortcut instead of typing ahead. */
+  reserved?(event: KeyboardEvent): boolean;
   rerender(): void;
 }
 
@@ -45,8 +49,9 @@ export const fields: Field[] = [
   { property: "border-radius", label: "Corner radius", kind: "length", glyph: "M1.5 10.5V6A4.5 4.5 0 0 1 6 1.5h4.5", max: 96 },
   { property: "display", label: "Layout", kind: "select", values: ["block", "flex", "grid", "inline-flex", "inline-grid"] },
   { property: "font-family", label: "Font family", kind: "text", wide: true, placeholder: "system-ui, sans-serif" },
-  { property: "font-size", label: "Font size", kind: "length", glyph: "M2 3V1.5h8V3M6 1.5v9m-1.5 0h3", min: 1, max: 160 },
+  { property: "font-size", label: "Font size", kind: "length", wide: true, glyph: "M2 3V1.5h8V3M6 1.5v9m-1.5 0h3", min: 1, max: 160 },
   { property: "line-height", label: "Line height", kind: "text", glyph: "M1 1.5h10M1 10.5h10M3.5 8.5 6 3l2.5 5.5", placeholder: "1.4 or 24px" },
+  { property: "letter-spacing", label: "Letter spacing", kind: "text", glyph: "M1 2.5v7M11 2.5v7M3.5 9.5 6 2.5l2.5 7M4.4 7h3.2", placeholder: "0 or 0.02em" },
   { property: "font-weight", label: "Weight", kind: "select", values: ["300", "400", "500", "600", "700", "800"] },
   { property: "text-align", label: "Alignment", kind: "select", values: ["left", "center", "right", "justify"] },
   { property: "color", label: "Text color", kind: "color", wide: true },
@@ -56,6 +61,7 @@ export const fields: Field[] = [
   { property: "border-color", label: "Border color", kind: "color" },
   { property: "fill", label: "Fill", kind: "color", wide: true },
   { property: "stroke", label: "Stroke", kind: "color", wide: true },
+  { property: "opacity", label: "Layer opacity", kind: "text", glyph: "M6 1.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9v9", min: 0, max: 1, step: 0.01, placeholder: "0–1" },
   { property: "box-shadow", label: "Shadow", kind: "text", wide: true },
   { property: "stroke-width", label: "Stroke width", kind: "length", min: 0, max: 24 },
 ];
@@ -63,8 +69,9 @@ export const fields: Field[] = [
 /** Fetched with the panel, so its first render already has styled selects. */
 const selectMenu = import("./select-menu.js").catch(() => null);
 const live = import("./live-colors.js").catch(() => null);
+const controls = import("./field-controls.js").catch(() => null);
 
-const typography = ["font-family", "font-size", "line-height", "font-weight", "text-align", "color"];
+const typography = ["font-family", "font-size", "line-height", "letter-spacing", "font-weight", "text-align", "color"];
 
 /** Opaque colors read as short hex; fully transparent ones as `transparent`; partial alpha stays exact. */
 function shortColor(value: string): string {
@@ -109,7 +116,8 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
       control.setAttribute("inputmode", "decimal");
     }
   }
-  box.append(fieldLabel(control, field, box));
+  const label = fieldLabel(control, field, box);
+  box.append(label);
   control.dataset.property = field.property;
   control.setAttribute("aria-label", field.label);
   /** The element's value, as on first render, Escape and syncFields. */
@@ -153,8 +161,8 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
       const match = control.value.trim().match(/^(-?\d*\.?\d+)([a-z%]*)$/i);
       const unit = match ? match[2] : field.kind === "text" ? "px" : "";
       const start = match ? Number(match[1]) : parseFloat(getComputedStyle(element).getPropertyValue(field.property)) || 0;
-      let next = Math.round((start + steps * (field.kind === "text" && !unit ? 0.1 : 1)) * 10) / 10;
-      if (field.kind !== "text") next = Math.min(field.max ?? 1e4, Math.max(field.min ?? 0, next));
+      let next = Math.round((start + steps * (field.step ?? (field.kind === "text" && !unit ? 0.1 : 1))) * 100) / 100;
+      if (field.kind !== "text" || field.max) next = Math.min(field.max ?? 1e4, Math.max(field.min ?? 0, next));
       control.value = `${next}${unit}`;
       apply();
     };
@@ -164,10 +172,14 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
     glyph.title = `${field.label} · drag to adjust`;
     if (field.glyph.length > 1) glyph.innerHTML = `<svg viewBox="0 0 12 12"><path d="${field.glyph}"/></svg>`;
     else glyph.textContent = field.glyph;
-    glyph.addEventListener("pointerdown", (event) => {
+    // The icon and the field's name both scrub; a click on the name still focuses the field.
+    // Like the icon: a touch drag on the name scrubs instead of scrolling the panel.
+    label.style.cssText += ";cursor:ew-resize;user-select:none;touch-action:none";
+    for (const handle of [glyph, label]) handle.addEventListener("pointerdown", (event) => {
+      if (event.button) return;
       event.preventDefault();
       begin();
-      glyph.setPointerCapture?.(event.pointerId);
+      handle.setPointerCapture?.(event.pointerId);
       let x = event.clientX;
       const move = (next: PointerEvent) => {
         const steps = Math.trunc((next.clientX - x) / 2);
@@ -176,12 +188,12 @@ export function fieldControl(field: Field, context: Pick<PanelContext, "element"
         nudge(steps * (next.shiftKey ? 10 : 1));
       };
       const end = () => {
-        glyph.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointermove", move);
         commit();
       };
-      glyph.addEventListener("pointermove", move);
-      glyph.addEventListener("pointerup", end, { once: true });
-      glyph.addEventListener("pointercancel", end, { once: true });
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", end, { once: true });
+      handle.addEventListener("pointercancel", end, { once: true });
     });
     (control as HTMLElement).addEventListener("keydown", (event) => {
       if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
@@ -261,7 +273,9 @@ function liveColors(container: HTMLElement, element: DesignTarget) {
 export function renderPanel(container: HTMLElement, context: PanelContext) {
   const { element, changed } = context;
   // Selects open komo's own listbox once that module (fetched with the panel) is in.
-  void selectMenu.then((menu) => menu?.attach(container, context.element));
+  void selectMenu.then((menu) => menu?.attach(container, context.element, context.reserved));
+  // Icon segments, weight samples and unit suffixes join the fields once their chunk is in.
+  void controls.then((module) => module?.enhance(container, context.element));
   const style = getComputedStyle(element);
   if (element.namespaceURI === "http://www.w3.org/2000/svg") {
     container.append(
@@ -297,9 +311,7 @@ export function renderPanel(container: HTMLElement, context: PanelContext) {
     border
       ? section(context, "Border", ["border-width", "border-radius", "border-style", "border-color"])
       : section(context, "Border", null, [add("border", "border", "1px solid", "border-width")]),
-    shadow
-      ? section(context, "Effects", ["box-shadow"])
-      : section(context, "Effects", null, [add("shadow", "box-shadow", "0 1px 3px rgba(0, 0, 0, 0.12)", "box-shadow")]),
+    section(context, "Effects", shadow ? ["opacity", "box-shadow"] : ["opacity"], shadow ? [] : [add("shadow", "box-shadow", "0 1px 3px rgba(0, 0, 0, 0.12)", "box-shadow")]),
   );
   liveColors(container, element);
 }

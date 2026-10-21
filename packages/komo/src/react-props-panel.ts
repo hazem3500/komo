@@ -142,7 +142,7 @@ export function attachDesignSystemControls(
 const styledRoots = new WeakSet<ShadowRoot>();
 const commentHandlers = new WeakMap<HTMLButtonElement, AbortController>();
 // React props, inline token chips and shared theme values, in the inspector's compact field style.
-const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-inside{padding:10px 12px}.design-react-inside button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-react-inside button:hover{text-decoration:underline}.design-react-field.design-field{display:grid;grid-template-columns:clamp(56px,24%,80px) minmax(0,1fr);align-items:center;gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-field.design-field>:is(input,select){box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 8px;border:0;border-radius:6px;background-color:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field.design-field>select{padding-right:20px}.design-react-field.design-field>.design-react-switch{position:relative;justify-self:start;appearance:none;width:28px;min-width:0;height:16px;margin:0;padding:0;border-radius:8px;background:#ffffff29;cursor:pointer;transition:background-color .12s}.design-react-switch::before{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0006;transition:translate .12s var(--ease-smooth-out,ease)}.design-react-field.design-field>.design-react-switch:checked{background:#8b6ff0}.design-react-switch:checked::before{translate:12px}.design-react-field.design-field>.design-react-switch[data-unset]{border:1px dashed #ffffff4d;background:none}.design-react-switch[data-unset]::before{display:none}.design-react-switch[data-unset]::after{content:"unset";position:absolute;top:-1px;left:34px;color:#77736f;font-size:10px;line-height:16px;white-space:nowrap}.design-react-field.design-field>.design-react-switch:focus-visible{outline:2px solid #bda6ef;outline-offset:2px}@media (prefers-reduced-motion:reduce){.design-react-field.design-field>.design-react-switch,.design-react-switch::before{transition:none}}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field.design-field>.design-token-binding{display:grid}.design-react-field.design-field>.design-token-binding select{position:static;width:auto;height:24px;padding:0 18px 0 6px;box-shadow:none;opacity:1}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 6px center/8px no-repeat;color:#e9e6e1;padding:0 18px 0 6px;font:inherit;font-size:10px;cursor:pointer}.design-react-field .design-token-binding[data-mode=token] select{background-color:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 6px;border-radius:4px;background:#bda6ef1f;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-token-off{position:absolute;top:8px;right:24px;display:grid;place-items:center;width:12px;height:12px}.design-token-off::before{content:'';width:4px;height:4px;border-radius:50%;background:#e7c27d;opacity:.7}.design-token-off[hidden]{display:none}.design-field:has(>.design-token-binding>.design-token-off:not([hidden]))>input[data-property]{padding-right:38px}.design-theme-switch{padding:6px 12px 8px}.design-theme-switch .design-react-field>span{text-transform:capitalize}.design-theme-options{display:flex;min-width:0;padding:2px;border-radius:6px;background:#ffffff0a}.design-theme-options button{flex:1;min-width:0;height:24px;padding:0 6px;border:0;border-radius:4px;background:none;color:#898680;font:inherit;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.design-theme-options button:hover{color:#f1efeb}.design-theme-options button[aria-pressed=true]{background:#ffffff1a;color:#f1efeb}.design-theme-options button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}@media (max-width:520px){.design-theme-options button{height:30px}.design-react-field.design-field>:is(input,select){height:34px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{top:7px}.design-token-off{top:11px}}.design-react-row{display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:4px}.design-react-row>.design-react-field{min-width:0;margin-top:4px}.design-react-row>.design-theme-reset{flex:none;width:28px;height:28px;margin-top:4px}.design-react-row>.design-theme-reset[hidden]{display:none}.design-react-group{position:relative}.design-react-group>summary{padding-right:32px}.design-react-group[data-empty]{padding-bottom:0}.design-react-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-status{flex:none;margin-left:4px;padding:1px 5px;border-radius:4px;background:#ffffff0f;color:#898680;font-size:10px;font-weight:500}.design-react-group>.komo-source{position:absolute;z-index:3;top:6px;right:8px}.design-react-advanced{margin-top:10px}.design-react-advanced>summary{color:#898680;font-size:11px;cursor:pointer}.design-react-field.design-field>input[readonly]{width:100%;min-width:0;padding:0;background:none;color:#c9c5bf;cursor:text}@media(max-width:520px){.design-react-row .design-react-field>:is(input,select){height:36px}.design-react-row>.design-theme-reset{width:32px;height:32px}.design-react-group>.komo-source{top:2px}}.design-theme-switch{position:relative;flex:none;padding:0}.design-theme-switch>summary{display:flex;align-items:center;gap:5px;max-width:90px;min-height:28px;padding:0 8px;border-radius:7px;background:#ffffff08;color:#b7b1c2;font-size:11px;list-style:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.design-theme-switch>summary::-webkit-details-marker{display:none}.design-theme-switch>summary::after{content:"⌄";color:#77736f}.design-theme-switch[open]>summary,.design-theme-switch>summary:hover{background:#ffffff14;color:#f1efeb}.design-theme-popup{position:absolute;z-index:12;top:calc(100% + 6px);right:0;box-sizing:border-box;width:min(280px,calc(100vw - 48px));max-height:50dvh;overflow:auto;padding:10px 12px;border:1px solid #ffffff1a;border-radius:10px;background:#191819;box-shadow:0 12px 40px #0008}.design-theme-popup .design-react-field{grid-template-columns:68px minmax(0,1fr)}.design-theme-popup .design-react-field+ .design-react-field{margin-top:8px}.design-theme-toggle{flex:none;display:flex;align-items:center;min-width:28px;height:28px;padding:0;border:0;border-radius:7px;background:none;color:#909090;font:inherit;font-size:11px}.design-theme-toggle:hover{background:#161616;color:#eee}.design-theme-toggle>svg{width:16px;height:16px;margin:auto;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-theme-toggle:has(span){padding:2px;background:#ffffff0a}.design-theme-toggle span{max-width:72px;padding:0 6px;border-radius:5px;line-height:24px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-theme-toggle[data-on="0"] span:first-child,.design-theme-toggle[data-on="1"] span:last-child{background:#ffffff1a;color:#f1efeb}`;
+const panelStyles = `.design-react-source{display:block;padding:0 0 8px;color:#77736f;font-size:10px;overflow-wrap:anywhere}.design-react-inside{padding:10px 12px}.design-react-inside button{padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-react-inside button:hover{text-decoration:underline}.design-react-field.design-field{display:grid;grid-template-columns:clamp(56px,24%,80px) minmax(0,1fr);align-items:center;gap:0 8px;height:auto;min-height:28px;margin-top:4px;background:none;box-shadow:none;color:#898680;font-size:11px}.design-react-field>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-scrub{cursor:ew-resize;user-select:none;touch-action:none}.design-react-scrub:hover{color:#e9e6e1}.design-react-field.design-field>:is(input,select){box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 8px;border:0;border-radius:6px;background-color:#ffffff0a;color:#f1efeb;font:inherit;font-size:11px}.design-react-field.design-field>:is(input,select):focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.design-react-field.design-field>select{padding-right:20px}.design-react-field.design-field>.design-react-switch{position:relative;justify-self:start;appearance:none;width:28px;min-width:0;height:16px;margin:0;padding:0;border-radius:8px;background:#ffffff29;cursor:pointer;transition:background-color .12s}.design-react-switch::before{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0006;transition:translate .12s var(--ease-smooth-out,ease)}.design-react-field.design-field>.design-react-switch:checked{background:#8b6ff0}.design-react-switch:checked::before{translate:12px}.design-react-field.design-field>.design-react-switch[data-unset]{border:1px dashed #ffffff4d;background:none}.design-react-switch[data-unset]::before{display:none}.design-react-switch[data-unset]::after{content:"unset";position:absolute;top:-1px;left:34px;color:#77736f;font-size:10px;line-height:16px;white-space:nowrap}.design-react-field.design-field>.design-react-switch:focus-visible{outline:2px solid #bda6ef;outline-offset:2px}@media (prefers-reduced-motion:reduce){.design-react-field.design-field>.design-react-switch,.design-react-switch::before{transition:none}}.design-react-field input:disabled{opacity:.55;cursor:not-allowed}.design-react-type{display:none}.design-react-field.design-field>.design-token-binding{display:grid}.design-react-field.design-field>.design-token-binding select{position:static;width:auto;height:24px;padding:0 18px 0 6px;box-shadow:none;opacity:1}.design-react-field .design-token-binding{grid-column:2;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;margin-top:4px;color:#77736f;font-size:10px}.design-react-field .design-token-binding select{min-width:0;height:24px;border:0;border-radius:6px;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 6px center/8px no-repeat;color:#e9e6e1;padding:0 18px 0 6px;font:inherit;font-size:10px;cursor:pointer}.design-react-field .design-token-binding[data-mode=token] select{background-color:#bda6ef24;color:#e6dcfb}.design-token-binding__state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.design-field>.design-token-binding{display:contents}.design-field:has(>.design-token-binding)>input[data-property]{padding-right:28px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{position:absolute;top:4px;right:4px;width:20px;height:20px;box-sizing:border-box;border-radius:5px}.design-token-icon{display:grid;place-items:center;color:#77736f;opacity:0;pointer-events:none;transition:opacity .12s}.design-token-icon::before{content:'';width:6px;height:6px;border:1.2px solid currentColor;border-radius:1.5px;rotate:45deg}.design-field:is(:hover,:focus-within) .design-token-icon{opacity:1}.design-field>.design-token-binding select{margin:0;padding:0;border:0;opacity:0;cursor:pointer;appearance:none}.design-field>.design-token-binding select:hover+.design-token-icon,.design-field:has(.design-token-binding select:hover) .design-token-icon{background:#ffffff14;color:#e9e6e1}.design-field:has(.design-token-binding select:focus-visible) :is(.design-token-icon,.design-token-chip){outline:2px solid #bda6ef;outline-offset:1px;opacity:1}.design-field[data-token-mode=override] .design-token-icon{opacity:1;color:#e7c27d}.design-token-chip,.design-token-detach{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected])>[data-property]{visibility:hidden}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-chip{position:absolute;inset:4px 28px 4px var(--lead,4px);display:flex;align-items:center;gap:5px;padding:0 18px 0 6px;border-radius:4px;background:#bda6ef1f url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23c8b5f4' stroke-width='1.2'/%3E%3C/svg%3E") right 6px center/8px no-repeat;color:#e6dcfb;font-size:11px;white-space:nowrap;overflow:hidden;pointer-events:none}.design-token-chip::before{content:'';flex:none;width:5px;height:5px;border:1.2px solid #c8b5f4;border-radius:1px;rotate:45deg}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-binding select{left:var(--lead,4px);right:28px;width:auto}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-icon{display:none}.design-field:is([data-token-mode=token],[data-token-mode=connected]) .design-token-detach{display:grid;place-items:center;color:#898680}.design-token-detach:hover{background:#ffffff14;color:#f1efeb}.design-token-detach svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round}.design-theme-group .design-react-source{padding:0 0 6px}.design-theme-heading{display:block;padding:8px 0 2px;color:#77736f;font-size:10px;text-transform:capitalize}.design-theme-token{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) 20px;align-items:center;gap:6px;margin-top:4px}.design-theme-token>span{overflow:hidden;color:#898680;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.design-theme-token[data-changed]>span{color:#e6dcfb}.design-theme-token[data-changed]::before{content:'';position:absolute;top:calc(50% - 2px);left:-8px;width:4px;height:4px;border-radius:50%;background:#bda6ef}.design-theme-reset{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:none;color:#77736f;cursor:pointer}.design-theme-reset:disabled{visibility:hidden}.design-theme-reset:hover{background:#ffffff14;color:#f1efeb}.design-theme-reset svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-token-off{position:absolute;top:8px;right:24px;display:grid;place-items:center;width:12px;height:12px}.design-token-off::before{content:'';width:4px;height:4px;border-radius:50%;background:#e7c27d;opacity:.7}.design-token-off[hidden]{display:none}.design-field:has(>.design-token-binding>.design-token-off:not([hidden]))>input[data-property]{padding-right:38px}.design-theme-switch{padding:6px 12px 8px}.design-theme-switch .design-react-field>span{text-transform:capitalize}.design-theme-options{display:flex;min-width:0;padding:2px;border-radius:6px;background:#ffffff0a}.design-theme-options button{flex:1;min-width:0;height:24px;padding:0 6px;border:0;border-radius:4px;background:none;color:#898680;font:inherit;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.design-theme-options button:hover{color:#f1efeb}.design-theme-options button[aria-pressed=true]{background:#ffffff1a;color:#f1efeb}.design-theme-options button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}@media (max-width:520px){.design-theme-options button{height:30px}.design-react-field.design-field>:is(input,select){height:34px}.design-token-icon,.design-token-detach,.design-field>.design-token-binding select{top:7px}.design-token-off{top:11px}}.design-react-row{display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:4px}.design-react-row>.design-react-field{min-width:0;margin-top:4px}.design-react-row>.design-theme-reset{flex:none;width:28px;height:28px;margin-top:4px}.design-react-row>.design-theme-reset[hidden]{display:none}.design-react-group{position:relative}.design-react-group>summary{padding-right:32px}.design-react-group[data-empty]{padding-bottom:0}.design-react-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-react-status{flex:none;margin-left:4px;padding:1px 5px;border-radius:4px;background:#ffffff0f;color:#898680;font-size:10px;font-weight:500}.design-react-group>.komo-source{position:absolute;z-index:3;top:6px;right:8px}.design-react-advanced{margin-top:10px}.design-react-advanced>summary{color:#898680;font-size:11px;cursor:pointer}.design-react-field.design-field>input[readonly]{width:100%;min-width:0;padding:0;background:none;color:#c9c5bf;cursor:text}@media(max-width:520px){.design-react-row .design-react-field>:is(input,select){height:36px}.design-react-row>.design-theme-reset{width:32px;height:32px}.design-react-group>.komo-source{top:2px}}.design-theme-switch{position:relative;flex:none;padding:0}.design-theme-switch>summary{display:flex;align-items:center;gap:5px;max-width:90px;min-height:28px;padding:0 8px;border-radius:7px;background:#ffffff08;color:#b7b1c2;font-size:11px;list-style:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.design-theme-switch>summary::-webkit-details-marker{display:none}.design-theme-switch>summary::after{content:"⌄";color:#77736f}.design-theme-switch[open]>summary,.design-theme-switch>summary:hover{background:#ffffff14;color:#f1efeb}.design-theme-popup{position:absolute;z-index:12;top:calc(100% + 6px);right:0;box-sizing:border-box;width:min(280px,calc(100vw - 48px));max-height:50dvh;overflow:auto;padding:10px 12px;border:1px solid #ffffff1a;border-radius:10px;background:#191819;box-shadow:0 12px 40px #0008}.design-theme-popup .design-react-field{grid-template-columns:68px minmax(0,1fr)}.design-theme-popup .design-react-field+ .design-react-field{margin-top:8px}.design-theme-toggle{flex:none;display:flex;align-items:center;min-width:28px;height:28px;padding:0;border:0;border-radius:7px;background:none;color:#909090;font:inherit;font-size:11px}.design-theme-toggle:hover{background:#161616;color:#eee}.design-theme-toggle>svg{width:16px;height:16px;margin:auto;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.design-theme-toggle:has(span){padding:2px;background:#ffffff0a}.design-theme-toggle span{max-width:72px;padding:0 6px;border-radius:5px;line-height:24px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-theme-toggle[data-on="0"] span:first-child,.design-theme-toggle[data-on="1"] span:last-child{background:#ffffff1a;color:#f1efeb}`;
 // The token picker's "Matches … · Use token" suggestion under an off-token field.
 const matchStyles = `.design-token-match{grid-column:1/-1;display:flex;align-items:center;gap:6px;min-width:0;margin-top:-2px;padding:0 4px;color:#77736f;font-size:10px}.design-token-match[hidden]{display:none}.design-token-match>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.design-token-match button{flex:none;padding:0;border:0;background:none;color:#bda6ef;font:inherit;cursor:pointer}.design-token-match button:hover{text-decoration:underline}.design-token-match button:focus-visible{outline:1px solid #bda6ef;outline-offset:2px;border-radius:2px}@media (pointer:coarse){.design-token-match button{min-height:32px}}`;
 
@@ -483,6 +483,29 @@ function themeValues(adapter: TokenAdapter, design?: DesignSystem): (() => Promi
     })))).catch(() => []);
 }
 
+/** Add an id to a control's aria-describedby. */
+function describe(control: Element | null | undefined, id: string): void {
+  const ids = control?.getAttribute("aria-describedby")?.split(" ") ?? [];
+  if (control && !ids.includes(id)) control.setAttribute("aria-describedby", [...ids, id].join(" "));
+}
+
+/**
+ * A field's "Uses …" or "Not from a token · …" caption: plain text its controls are
+ * described by, not a live region, so selecting an element never floods a screen reader.
+ */
+function caption(select: HTMLSelectElement, property: string): HTMLElement {
+  const state = document.createElement("small");
+  state.className = "design-token-binding__state";
+  state.id = `komo-token-${property}-${Math.random().toString(36).slice(2, 8)}`;
+  describe(select, state.id);
+  return state;
+}
+
+/** Deliberate announcements, such as an applied token, go to komo's one polite live region. */
+function announce(from: Element, text: string): void {
+  from.dispatchEvent(new CustomEvent("komo-announce", { detail: text, bubbles: true, composed: true }));
+}
+
 /** Add token references directly to the existing style-property row. */
 export function createElementTokenControl(
   element: DesignTarget,
@@ -513,12 +536,7 @@ export function createElementTokenControl(
   detach.innerHTML = '<svg viewBox="0 0 12 12"><path d="M5 3.5 6.5 2a2.1 2.1 0 0 1 3 3L8 6.5M7 8.5 5.5 10a2.1 2.1 0 0 1-3-3L4 5.5M2 2l8 8"/></svg>';
   const select = document.createElement("select");
   select.setAttribute("aria-label", `Style token for ${property}`);
-  const state = document.createElement("small");
-  state.className = "design-token-binding__state";
-  state.setAttribute("aria-live", "polite");
-  const id = `komo-token-${property}-${Math.random().toString(36).slice(2, 8)}`;
-  state.id = id;
-  select.setAttribute("aria-describedby", id);
+  const state = caption(select, property);
   const custom = document.createElement("option");
   custom.value = "custom";
   custom.textContent = "Custom value";
@@ -568,6 +586,7 @@ export function createElementTokenControl(
         ? `Connected ${declared?.origin === "inline" ? "inline" : "from stylesheet"}`
         : mode === "override" ? `Custom override · was ${was}` : "";
     select.title = state.textContent || "Choose a token";
+    describe(row.parentElement?.querySelector("[data-property]"), state.id);
     // Like the default adapter's resolve(): no token reference means off-token.
     off.hidden = mode !== "custom";
     const value = mode === "custom" ? getComputedStyle(element).getPropertyValue(property).trim() : "";
@@ -592,6 +611,7 @@ export function createElementTokenControl(
         if (applyTokenToElement(source, element, token, property, { recordHistory: false }))
           onEdit(before, element.style.getPropertyValue(property), token.path);
       }
+      announce(row, `${property} uses ${token.path}`);
     } else {
       const control = row.parentElement?.querySelector<HTMLInputElement | HTMLSelectElement>("[data-property]");
       const value = control?.value ?? getComputedStyle(element).getPropertyValue(property).trim();
@@ -754,9 +774,8 @@ export function createAdapterTokenControl(
   populate();
   const dot = offTokenMarker();
   if (off !== undefined) markOffToken(dot, off, match);
-  const state = document.createElement("small");
-  state.className = "design-token-binding__state";
-  state.setAttribute("aria-live", "polite");
+  const state = caption(select, property);
+  describe(input, state.id);
   let detached = false;
   const suggestion = matchSuggestion(label, row);
   const current = () => {
@@ -775,7 +794,9 @@ export function createAdapterTokenControl(
     const path = current();
     const token = path ? tokens.find((item) => item.path === path) : undefined;
     select.value = path && available.some((item) => item.path === path) ? path : "";
-    chip.textContent = token ? `Uses ${tokenName(token)}` : path ? `Uses ${path}` : "";
+    // "Uses" is its own node, so a row with its value beside the chip can show the name alone.
+    const name = token ? tokenName(token) : path;
+    chip.replaceChildren(...name ? [el("span", "design-token-chip__verb", "Uses"), ` ${name}`] : []);
     const mode = !path ? "custom" : swapped ? "token" : "connected";
     row.dataset.mode = mode;
     // A bound color field shows its token's value for the current theme, not a mid-transition paint.
@@ -802,6 +823,7 @@ export function createAdapterTokenControl(
     const fromToken = "path" in from ? tokens.find((item) => item.path === from.path) : undefined;
     onSwap(swapToken(adapter, element, property, token, from, fromToken));
     update();
+    announce(row, `${property} uses ${tokenName(token)}`);
   }
   select.addEventListener("change", () => {
     const token = available.find((item) => item.path === select.value);
@@ -1103,7 +1125,9 @@ export function attachThemeSwitcher(
     const before = currentTheme(axis);
     if (id === before) return;
     if (!themeOriginals.has(axis)) themeOriginals.set(axis, before ?? fallback);
-    themeFocus = axis;
+    // The redrawn control takes focus only from itself; a focused field keeps it.
+    const focused = (control.getRootNode() as ShadowRoot).activeElement;
+    if (!focused || control.contains(focused)) themeFocus = axis;
     try { axis.apply(id, previewTarget()); } catch { /* The page keeps whatever the adapter managed to apply. */ }
     onSwitch();
     sync();
@@ -1153,6 +1177,8 @@ export function attachThemeSwitcher(
         options.forEach((option, index) => select.append(new Option(names[index], option.id)));
         select.value = current;
         select.addEventListener("change", () => choose(axis, current, select.value));
+        // The popup sits in the header, outside the panel's fields: it gets komo's listbox too.
+        void import("./select-menu.js").then(menu => menu.attach(popup), () => {});
       } else {
         field = el("div", "design-theme-options");
         field.setAttribute("role", "group");
@@ -1194,7 +1220,8 @@ export function attachThemeSwitcher(
       if (event.relatedTarget instanceof Node && !group.contains(event.relatedTarget)) close();
     });
     group.ownerDocument.defaultView?.addEventListener("keydown", event => {
-      if (!group.open || event.key !== "Escape" || !event.composedPath().includes(group)) return;
+      // An open theme listbox closes first.
+      if (!group.open || event.key !== "Escape" || !event.composedPath().includes(group) || group.querySelector("select[aria-expanded=true]")) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       close();
@@ -1234,6 +1261,43 @@ function show(control: HTMLInputElement | HTMLSelectElement, value: InspectableS
   }
   control.value = value === undefined ? "" : String(value);
   if (control instanceof HTMLInputElement) control.placeholder = value === undefined ? "unset" : '""';
+}
+
+/**
+ * A number prop scrubs like the color picker's channels: drag its name, or press the arrows
+ * (Shift for ten). A drag previews through komo-preview and keeps one change when it ends.
+ */
+function scrub(caption: HTMLElement, input: HTMLInputElement): void {
+  caption.className = "design-react-scrub";
+  const at = () => Number(input.value) || 0;
+  const set = (value: number) => { input.value = String(Math.round(value * 100) / 100); };
+  caption.addEventListener("pointerdown", event => {
+    if (event.button || input.disabled) return;
+    event.preventDefault();
+    caption.setPointerCapture?.(event.pointerId);
+    let x = event.clientX, moved = false;
+    const start = at();
+    caption.onpointermove = move => {
+      const steps = Math.trunc((move.clientX - x) / 2);
+      if (!steps) return;
+      x += steps * 2;
+      moved = true;
+      set(at() + steps * (move.shiftKey ? 10 : 1));
+      input.dispatchEvent(new CustomEvent("komo-preview", { detail: input.value }));
+    };
+    caption.onpointerup = caption.onpointercancel = () => {
+      caption.onpointermove = caption.onpointerup = caption.onpointercancel = null;
+      if (!moved) return input.focus();
+      input.dispatchEvent(new CustomEvent("komo-preview", { detail: null }));
+      if (at() !== start) input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+  });
+  input.addEventListener("keydown", event => {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    set(at() + (event.key === "ArrowUp" ? 1 : -1) * (event.shiftKey ? 10 : 1));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 }
 
 /** The component name as the section heading, with its source behind the shared ⓘ. */
@@ -1429,6 +1493,7 @@ export function createReactPropsPanel(
       } else if (prop.kind === "number") {
         input.type = "number";
         input.step = "any";
+        scrub(caption, input);
       } else {
         input.type = "text";
         input.maxLength = 500;
@@ -1465,7 +1530,7 @@ export function createReactPropsPanel(
       // A prop the inspector never committed is handed back to its renderer, so an
       // absent or null host value returns exactly.
       let preview: { opening: InspectableScalar; shown?: InspectableScalar } | undefined;
-      if (prop.kind === "enum") control.addEventListener("komo-preview", (event) => {
+      if (prop.kind === "enum" || prop.kind === "number") control.addEventListener("komo-preview", (event) => {
         element = retainReactPropTarget(element) ?? element;
         const raw = (event as CustomEvent<string | null>).detail;
         const props = editable.props;
@@ -1473,7 +1538,7 @@ export function createReactPropsPanel(
         try {
           if (raw !== null) {
             preview ??= { opening: now };
-            preview.shown = choice(raw);
+            preview.shown = prop.kind === "number" ? Number(raw) : choice(raw);
             editable.setProps({ ...props, [prop.name]: preview.shown });
           } else if (preview && (Object.is(now, preview.shown) || Object.is(now, preview.opening))) {
             editable.setProps({ ...props, [prop.name]: preview.opening });

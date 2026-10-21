@@ -26,6 +26,8 @@ beforeAll(async () => {
     const tokens=tailwindTokens({tokens:[
       {path:'radius.small',type:'dimension',class:'radius-small',properties:['border-radius'],value:'8px',label:'Small'},
       {path:'radius.large',type:'dimension',class:'radius-large',properties:['border-radius'],value:'24px',label:'Large'},
+      // Width keeps the typed single-length Custom editor: radius, padding and the other one-value fields edit in the row.
+      {path:'size.small',type:'dimension',class:'size-small',properties:['width'],value:'8px',label:'Small'},{path:'size.wide',type:'dimension',class:'size-wide',properties:['width'],value:'300px',label:'Wide'},
       {path:'space.small',type:'dimension',class:'space-small',properties:['padding'],value:'8px',label:'Small'},
       {path:'layout.flex',type:'other',class:'layout-flex',properties:['display'],value:'flex',label:'Flex'},
       {path:'font.body',type:'fontFamily',class:'font-body',properties:['font-family'],value:'"Body, Face", serif',label:'Body'},
@@ -37,7 +39,7 @@ beforeAll(async () => {
   `, resolveDir: process.cwd(), loader: "ts" }, outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022" });
   server = createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://localhost"), path = url.pathname;
-    if (path === "/") { response.setHeader("content-type", "text/html"); response.end(`<style>body{margin:0}main{padding:36px;min-height:100vh;box-sizing:border-box}#target{width:230px;height:100px;background:#eee;border:1px solid #888;font-family:"Acme, Display", "Fallback Sans", sans-serif}.radius-small{border-radius:8px}.radius-large{border-radius:24px}.space-small{padding:8px}.layout-flex{display:flex}.font-body{font-family:"Body, Face",serif!important}.shadow-soft{box-shadow:0px 2px 4px #00000040}</style><main><button id="target" class="radius-small" ${url.searchParams.has("inline") ? 'style="padding:1rem 2rem !important;border:2px solid red !important;margin:3px !important"' : ""}>Synthetic sample</button></main><script type="module" src="/entry.js"></script>`); return; }
+    if (path === "/") { response.setHeader("content-type", "text/html"); response.end(`<style>body{margin:0}main{padding:36px;min-height:100vh;box-sizing:border-box}#target{width:230px;height:100px;background:#eee;border:1px solid #888;font-family:"Acme, Display", "Fallback Sans", sans-serif}.radius-small{border-radius:8px}.size-small{width:8px}.size-wide{width:300px}.radius-large{border-radius:24px}.space-small{padding:8px}.layout-flex{display:flex}.font-body{font-family:"Body, Face",serif!important}.shadow-soft{box-shadow:0px 2px 4px #00000040}</style><main><button id="target" class="radius-small" ${url.searchParams.has("inline") ? 'style="padding:1rem 2rem !important;border:2px solid red !important;margin:3px !important"' : ""}>Synthetic sample</button></main><script type="module" src="/entry.js"></script>`); return; }
     try { const file = resolve(directory, `.${path}`); if (!file.startsWith(directory + "/")) throw Error(); response.setHeader("content-type", "text/javascript"); response.end(await readFile(file)); } catch { response.statusCode = 404; response.end(); }
   }).listen(0);
   origin = `http://localhost:${(server.address() as { port: number }).port}`;
@@ -91,19 +93,19 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     expect(await target.evaluate(node => getComputedStyle(node).borderRadius)).toBe("24px");
     await search.press("Enter"); await undo.click();
     expect(await target.getAttribute("class")).toBe("radius-small");
-    await open("border-radius");
-    const number = page.getByRole("textbox", { name: "Corner radius", exact: true });
+    await open("width");
+    const number = page.locator(".komo-tokens").getByRole("textbox", { name: "Width", exact: true });
     await number.fill(""); await page.evaluate(() => (window as any).qa.theme());
     expect(await number.inputValue()).toBe(""); expect(await number.getAttribute("aria-invalid")).toBe("true");
     await number.fill("120");
-    expect(await target.evaluate(node => node.style.borderRadius)).toBe("120px"); expect(await undo.isDisabled()).toBe(true);
+    expect(await target.evaluate(node => node.style.width)).toBe("120px"); expect(await undo.isDisabled()).toBe(true);
     await page.keyboard.press("Escape"); expect(await target.getAttribute("style")).toBe(original);
-    await open("border-radius"); await number.fill("8"); await keep(number);
-    expect(await page.locator('[data-field-property="border-radius"]').getAttribute("data-token-mode")).toBe("custom");
-    await page.getByRole("button", { name: "Use token Small", exact: true }).click();
-    expect(await page.locator('[data-field-property="border-radius"]').getAttribute("data-token-mode")).not.toBe("custom");
+    await open("width"); await number.fill("8"); await keep(number);
+    expect(await page.locator('[data-field-property="width"]').getAttribute("data-token-mode")).toBe("custom");
+    await open("width"); await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Small" }).click();
+    expect(await page.locator('[data-field-property="width"]').getAttribute("data-token-mode")).not.toBe("custom");
     await undo.click();
-    expect(await page.locator('[data-field-property="border-radius"]').getAttribute("data-token-mode")).toBe("custom");
+    expect(await page.locator('[data-field-property="width"]').getAttribute("data-token-mode")).toBe("custom");
     await undo.click(); expect(await target.getAttribute("style")).toBe(original);
     await open("border-radius"); await advanced(); await exact.fill("25% 30% / 10px 50%"); await exact.press("Enter");
     expect(await target.evaluate(node => node.style.borderRadius)).toBe("25% 30% / 10px 50%");
@@ -118,7 +120,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.keyboard.press("v"); expect(await target.getAttribute("style")).toBe(original);
     await page.keyboard.press("d");
     expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
-    await open("display"); await page.locator('.komo-custom select[aria-label="Layout"]').selectOption("grid"); await close();
+    // Layout is a keyword field: its own listbox applies; its token chip lists tokens only.
+    await page.locator('[data-field-property="display"] > select').click();
+    await page.locator('.komo-select [role="option"]').filter({ hasText: /^grid$/ }).click();
     expect(await target.evaluate(node => node.style.display)).toBe("grid");
     await undo.click(); expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
     await undo.click(); expect(await target.getAttribute("style")).toBe(original);
@@ -161,10 +165,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.keyboard.press("Escape");
     await expect.poll(() => target.getAttribute("style")).toBe(original);
     await page.keyboard.press("d");
-    await open("border-radius");
+    await open("width");
     await number.fill("1");
-    await page.locator('.komo-custom select[aria-label="Corner radius unit"]').selectOption("rem");
-    await close(); expect(await target.evaluate(node => node.style.borderRadius)).toBe("1rem");
+    await page.locator('.komo-custom select[aria-label="Width unit"]').selectOption("rem");
+    await close(); expect(await target.evaluate(node => node.style.width)).toBe("1rem");
     await page.getByRole("button", { name: "Reset", exact: true }).click();
     expect(await target.getAttribute("style")).toBe(original);
     expect(await target.getAttribute("class")).toBe("radius-small");
@@ -177,9 +181,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     const target = page.locator("#target"), original = await target.getAttribute("style");
     await page.keyboard.press("d"); await target.click();
     const open = async () => {
-      await page.locator('[data-field-property="border-radius"] select[data-picker]').click();
+      await page.locator('[data-field-property="width"] select[data-picker]').click();
     };
-    const number = page.getByRole("textbox", { name: "Corner radius", exact: true });
+    const number = page.locator(".komo-tokens").getByRole("textbox", { name: "Width", exact: true });
     await open(); await number.fill("140");
     await page.keyboard.press("Escape"); expect(await target.getAttribute("style")).toBe(original);
     await open(); await number.fill("150"); await number.press("Enter");
@@ -194,8 +198,8 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     page.setDefaultTimeout(5000);
     await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).komo);
     await page.keyboard.press("d"); await page.locator("#target").click();
-    await page.locator('[data-field-property="border-radius"] select[data-picker]').click();
-    const unit = page.locator('.komo-custom select[aria-label="Corner radius unit"]');
+    await page.locator('[data-field-property="width"] select[data-picker]').click();
+    const unit = page.locator('.komo-custom select[aria-label="Width unit"]');
     await unit.click();
     const menu = page.locator(".komo-select");
     await menu.waitFor();
