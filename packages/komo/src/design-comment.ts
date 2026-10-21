@@ -17,8 +17,17 @@ export interface DesignChange {
   /** Token path such as color.brand, when the change binds a design token. */
   token?: string;
   /** How to preview it on the page; absent when only the app can apply it. */
-  apply?: { kind: "style" | "variable" | "text" | "token"; property: string; theme?: string };
+  apply?: {
+    kind: "style" | "variable" | "text" | "token" | "prop" | "move"; property: string; theme?: string;
+    /** Styles a resize also sets, such as flex-basis. */
+    also?: string[][];
+    /** A structural move's places, and a prop's recorded value as written. */
+    from?: Place; to?: Place; value?: string;
+  };
 }
+
+/** Where a moved box sits: its parent's selector and its index among the laid-out children. */
+export type Place = { parent: string; index: number };
 
 export interface DesignSection {
   title: string;
@@ -53,8 +62,16 @@ function unquote(value: string): string {
 }
 
 function change(line: string, kind: string): DesignChange | null {
-  // "- Move (translate): Δx 12px, Δy 0px" or "- Resize (size) width: 180px → 224px · …"; the style rows preview them.
   if (kind === "geometry") {
+    // "- Resize (size) width: 180px → 224px · sets flex-basis: 224px": the size and what it also sets.
+    let match = /^- Resize \([\w-]+\) ([\w-]+): (.*?) → (.*?)((?: · .*)?)$/.exec(line);
+    if (match) return { label: match[1], before: match[2], after: match[3],
+      apply: { kind: "style", property: match[1], also: [...match[4].matchAll(/ · sets ([\w-]+): ([^·]*[^\s·])/g)].map(([, property, value]) => [property, value]) } };
+    // "- Move Link “Approvals”: from NavList (3rd) → NavList (2nd)"; its From/To lines locate both places.
+    match = /^- Move (.+): from (.+) \((\d+\w+)\) → (.+) \((\d+\w+)\)$/.exec(line);
+    if (match) return { label: match[1], before: `${match[2]} · ${match[3]}`, after: match[4] === match[2] ? match[5] : `${match[4]} · ${match[5]}`, apply: { kind: "move", property: "" } };
+    match = /^- Move \(translate\): Δx (\S+), Δy ([^\s·]+)/.exec(line);
+    if (match) return { label: "translate", before: "none", after: `${match[1]} ${match[2]}`, apply: { kind: "style", property: "translate" } };
     const [, label, before = "", after] = /^- (.+?): (?:(.*) → )?(.*)$/.exec(line) ?? [];
     return label ? { label, before, after } : null;
   }
@@ -77,7 +94,7 @@ function change(line: string, kind: string): DesignChange | null {
   const [, label, before, after, note] = match;
   if (kind === "inline text" && label === "white-space") return { label, before, after, apply: { kind: "style", property: label } };
   if (kind === "inline text") return { label: "Text", before: unquote(before), after: unquote(after), apply: { kind: "text", property: "text" } };
-  if (kind === "React prop") return { label, before: unquote(before), after: unquote(after), ...(note && note !== "custom value" ? { token: note } : {}) };
+  if (kind === "React prop") return { label, before: unquote(before), after: unquote(after), ...(note && note !== "custom value" ? { token: note } : {}), apply: { kind: "prop", property: label, value: after } };
   return { label, before, after, apply: { kind: "style", property: label } };
 }
 
@@ -101,7 +118,12 @@ export function parseDesignComment(body: string): DesignBlock[] {
         section.component = name;
         if (source) section.source = source;
       } else if (line.startsWith("Source: ")) section.source = line.slice(8);
-      else {
+      else if (/^(From|To): /.test(line)) {
+        // "From: main > nav · index 2 · before": the selector and index of the move above.
+        const move = [...section.changes].reverse().find(item => item.apply?.kind === "move")?.apply;
+        const [parent, index] = line.slice(line.indexOf(" ") + 1).split(" · ");
+        if (move) move[line[0] === "F" ? "from" : "to"] = { parent, index: parseInt(index?.slice(6)) || 0 };
+      } else {
         const item = line.includes("→") || kind === "geometry" ? change(line, kind) : null;
         // Previews can record a property that ended where it started.
         if (item && item.before !== item.after) section.changes.push(item);
@@ -153,6 +175,8 @@ interface Applied {
   pinBefore: Array<() => void>;
 }
 const applied = new Map<string, Applied>();
+// What an applied After left out, shown under its card until it reverts.
+const notes = new Map<string, string>();
 const lostPreviews = new Set<string>();
 // Before/After switches that may still be on screen, newest last.
 const visibleToggles = new Set<HTMLElement>();
@@ -185,17 +209,114 @@ function settle(key: string) {
 /** The adapter, its current list (empty for saved comments) and the theme key page token previews use. */
 type DraftTokens = { adapter: TokenAdapter; tokens: readonly DesignToken[]; theme?: string };
 
-function apply(key: string, sections: DesignSection[], resolve: (selector?: string) => Element | null, smooth = false, context?: DraftTokens) {
-  if (lostPreviews.has(key)) return false;
+/** Laid-out element children, without preview stand-ins or `skip`, as moves count them. */
+const kids = (parent: Element, skip?: Element) => [...parent.children].filter(child => child !== skip && !child.hasAttribute(CLONE) &&
+  !child.matches("script,style,template") && !/^(none|contents)$/.test(getComputedStyle(child).display));
+const indexOf = (element: Element, parent: Element) => kids(parent, element).filter(child => child.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING).length;
+const CLONE = "data-komo-move-clone";
+
+/**
+ * A recorded move, shown with a stand-in at its destination while the element itself
+ * is hidden. A reason instead when either place no longer matches the proposal.
+ */
+function movable(element: Element, { from, to }: NonNullable<DesignChange["apply"]>) {
+  const source = element.parentElement, target = to && document.querySelector(to.parent);
+  if (!isDesignTarget(element) || !from || !to || !source || !target) return "Destination not found on this page";
+  if (document.querySelector(from.parent) !== source || indexOf(element, source) !== from.index)
+    return target === source && indexOf(element, source) === to.index ? "Already moved on this page" : "This element has moved since";
+  return "";
+}
+function previewMove(element: Element, move: NonNullable<DesignChange["apply"]>) {
+  const why = movable(element, move);
+  if (why || !isDesignTarget(element)) return why;
+  const source = element.parentElement!, target = document.querySelector(move.to!.parent)!, to = move.to!;
+  const box = element.getBoundingClientRect(), anchor = source.getBoundingClientRect();
+  const clone = element.cloneNode(true) as Element;
+  for (const node of [clone, ...clone.querySelectorAll("[id]")]) node.removeAttribute("id");
+  clone.setAttribute(CLONE, "");
+  clone.setAttribute("aria-hidden", "true");
+  (clone as HTMLElement).inert = true;
+  target.insertBefore(clone, kids(target, element)[to.index] ?? null);
+  const display = inlineStyleSnapshot(element, "display");
+  element.style.setProperty("display", "none", "important");
+  return {
+    clone,
+    undo() { clone.remove(); display.restore(); },
+    // The origin rides with its parent, so scrolling and reflow keep it in place.
+    origin() { const now = source.getBoundingClientRect(); return new DOMRect(box.left + now.left - anchor.left, box.top + now.top - anchor.top, box.width, box.height); },
+  };
+}
+
+/** A recorded prop value through the app's component editor; undefined when it has none. */
+function previewProp(element: Element, name: string, raw = "", design?: DesignSystem) {
+  try {
+    const components = design?.components, identity = components?.identify(element);
+    const editor = identity && components!.editor?.(identity);
+    if (!editor || editor.available?.() === false || !editor.schema.some(prop => prop.name === name && prop.kind !== "unsupported")) return;
+    let value: string | number | boolean | undefined;
+    try { value = raw === "unset" ? undefined : JSON.parse(raw); } catch { value = raw; }
+    const before = editor.read();
+    editor.apply({ ...before, [name]: value });
+    return () => { try { editor.apply(before); editor.release?.([name]); } catch { /* The instance is gone with its preview. */ } };
+  } catch { return; }
+}
+
+/** Outline what After changed in the selection colour, and a moved box's origin faintly. */
+function mark(root: Node, boxes: Array<{ box(): DOMRect | null; origin?: boolean }>, color = "var(--komo-selection,#0c93f5)") {
+  const layer = document.createElement("div");
+  layer.setAttribute("aria-hidden", "true");
+  const nodes = boxes.map(({ origin }) => layer.appendChild(Object.assign(document.createElement("div"), {
+    className: "design-mark",
+    style: `position:fixed;z-index:1;pointer-events:none;box-sizing:border-box;border-radius:4px;outline:${origin ? `1px dashed ${color};opacity:.6` : `2px solid ${color}`};outline-offset:2px`,
+  })));
+  (root instanceof ShadowRoot ? root : document.body).append(layer);
+  let frame = 0;
+  const draw = () => {
+    boxes.forEach(({ box }, index) => {
+      const rect = box(), node = nodes[index];
+      node.hidden = !rect?.width && !rect?.height;
+      if (rect) Object.assign(node.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+    });
+    frame = requestAnimationFrame(draw);
+  };
+  draw();
+  return () => { cancelAnimationFrame(frame); layer.remove(); };
+}
+
+/** Why After can't be shown for these sections, checked before it is offered; empty when it can. */
+function blocker(sections: DesignSection[], resolve: (selector?: string) => Element | null, can: (item: DesignChange) => boolean) {
+  for (const section of sections) {
+    const rows = section.changes.filter(item => can(item) && item.apply!.kind !== "token" && item.apply!.kind !== "variable");
+    if (!rows.length) continue;
+    const element = resolve(section.target);
+    if (!element) return "Element not found on this page";
+    for (const item of rows) if (item.apply!.kind === "move") { const why = movable(element, item.apply!); if (why) return why; }
+  }
+  return sections.some(section => section.changes.some(can)) ? "" : "This change can't be previewed here";
+}
+
+/** Where After is shown: Design mode's colour and the shadow root that draws its outlines. */
+type Show = { design?: DesignSystem; root?: Node };
+
+/**
+ * Apply a comment's After. Rows that can't preview are skipped and named, so the rest still
+ * switch; nothing on the page means After is off, with the reason.
+ */
+function apply(key: string, sections: DesignSection[], resolve: (selector?: string) => Element | null, smooth = false, context?: DraftTokens, show: Show = {}): [on: boolean, message: string] {
+  if (lostPreviews.has(key)) return [false, UNAVAILABLE];
   settle(key);
   const restore: Array<() => void> = [];
   const restoreStyles: Array<() => void> = [];
   const pinBefore: Array<() => void> = [];
   const styleless = new Set<Element>();
   const values: TokenValueChange[] = [];
-  let unavailable = false;
+  const boxes: Array<{ box(): DOMRect | null; origin?: boolean }> = [];
+  let reason = "";
+  const skipped = new Set<string>();
+  const skip = (item: DesignChange, why: string) => { reason ||= why; skipped.add(item.label); };
   for (const section of sections) {
     const element = resolve(section.target);
+    let shown: Element | null = element;
     for (const item of section.changes) {
       if (!item.apply || item.after === "(unset)") continue;
       if (item.apply.kind === "token") {
@@ -208,55 +329,62 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
         const previous = root.style.getPropertyValue(item.apply.property);
         root.style.setProperty(item.apply.property, item.after);
         restore.push(() => previous ? root.style.setProperty(item.apply!.property, previous) : root.style.removeProperty(item.apply!.property));
+      } else if (!element) skip(item, "Element not found on this page");
+      else if (item.apply.kind === "move") {
+        const moved = previewMove(element, item.apply);
+        if (typeof moved === "string") skip(item, moved);
+        else {
+          restore.push(moved.undo);
+          boxes.push({ box: moved.origin, origin: true });
+          shown = moved.clone;
+        }
+      } else if (item.apply.kind === "prop") {
+        const undo = previewProp(element, item.apply.property, item.apply.value, show.design);
+        if (undo) restore.push(undo);
+        else skip(item, "This component can't preview props here");
       } else if (isDesignTarget(element) && item.apply.kind === "style") {
         if (!element.hasAttribute("style")) styleless.add(element);
         const token = item.token && context?.tokens.find(token => token.path === item.token);
         if (token && context) {
           try { restore.push(previewToken(context.adapter, element, item.apply.property, token)); }
-          catch { unavailable = true; }
+          catch { skip(item, UNAVAILABLE); }
           continue;
         }
-        const previous = element.style.getPropertyValue(item.apply.property);
-        const priority = element.style.getPropertyPriority(item.apply.property);
-        const absent = !element.hasAttribute("style");
-        const property = item.apply.property;
-        const whitespace = property === "white-space" ? inlineStyleSnapshot(element, property) : undefined;
-        const pin = () => {
-          if (item.before === "(unset)") return false;
-          element.style.setProperty(property, item.before, "important");
-          return true;
-        };
-        // Browsers can't animate from keywords like auto, so start from the measured value.
-        if (smooth && pin()) void getComputedStyle(element).getPropertyValue(property);
-        element.style.setProperty(property, item.after, "important");
-        pinBefore.push(pin);
-        restoreStyles.push(() => {
-          if (whitespace) { whitespace.restore(); return; }
-          if (previous) element.style.setProperty(item.apply!.property, previous, priority);
-          else element.style.removeProperty(item.apply!.property);
-          if (absent) removeEmptyStyle(element);
-        });
+        for (const [property, after, before] of [[item.apply.property, item.after, item.before], ...item.apply.also ?? []]) {
+          // Hands back the declaration, and the page's own style attribute text once nothing else changed.
+          const original = inlineStyleSnapshot(element, property);
+          const pin = () => {
+            if (!before || before === "(unset)") return false;
+            element.style.setProperty(property, before, "important");
+            return true;
+          };
+          // Browsers can't animate from keywords like auto, so start from the measured value.
+          if (smooth && pin()) void getComputedStyle(element).getPropertyValue(property);
+          element.style.setProperty(property, after, "important");
+          pinBefore.push(pin);
+          restoreStyles.push(original.restore);
+        }
       } else if (item.apply.kind === "text") {
         const undo = isHTMLElement(element) ? previewText(element, item.before, item.after, () => loseTextPreview(key)) : undefined;
         if (undo) restore.push(undo);
-        else unavailable = true;
-      } else if (item.apply.kind === "style") unavailable = true;
+        else skip(item, UNAVAILABLE);
+      } else skip(item, UNAVAILABLE);
     }
+    if (shown && section.changes.some(item => item.apply)) boxes.push({ box: () => shown!.isConnected ? shown!.getBoundingClientRect() : null });
   }
   // One preview for every token row; its cleanup removes the adapter's stylesheet for Before.
   if (values.length) {
     try { restore.push(context!.adapter.previewValues!(values, context!.theme)); }
-    catch { unavailable = true; }
+    catch { reason ||= UNAVAILABLE; values.forEach(value => skipped.add(value.path)); }
   }
   if (styleless.size) restoreStyles.unshift(() => {
     for (const element of styleless) if (isDesignTarget(element)) removeEmptyStyle(element);
   });
-  if (unavailable) {
-    for (const undo of [...restore, ...restoreStyles].reverse()) undo();
-    return false;
-  }
-  if (restore.length + restoreStyles.length) applied.set(key, { restore, restoreStyles, pinBefore });
-  return restore.length + restoreStyles.length > 0;
+  if (!restore.length && !restoreStyles.length) return [false, reason || UNAVAILABLE];
+  if (show.root && boxes.length) restore.push(mark(show.root, boxes, show.design?.selectionColor));
+  applied.set(key, { restore, restoreStyles, pinBefore });
+  notes.set(key, skipped.size ? `Not previewed: ${[...skipped].join(", ")}` : "");
+  return [true, skipped.size ? `Not previewed: ${[...skipped].join(", ")}` : ""];
 }
 
 // Properties that animate when a theme token changes, since its users are unknown.
@@ -299,6 +427,7 @@ function revert(key: string, smooth = false) {
   const state = applied.get(key);
   if (!state) return;
   applied.delete(key);
+  notes.delete(key);
   for (const undo of state.restore.reverse()) undo();
   const finish = () => { for (const undo of state.restoreStyles.reverse()) undo(); };
   if (!smooth || !state.pinBefore.length) return finish();
@@ -333,7 +462,8 @@ const css = `
 .design-card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #eee; }
 .design-card-target { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8a8a8a; font-size: 11px; }
 .design-toggle { display: inline-flex; padding: 2px; border-radius: 7px; background: #ffffff0a; flex: none; }
-.design-toggle button { border: 0; padding: 0 8px; height: 22px; border-radius: 5px; font: inherit; font-size: 11px; color: #9a9a9a; background: none; cursor: pointer; }
+.design-toggle button { display: inline-flex; align-items: center; gap: 4px; border: 0; padding: 0 7px; height: 22px; border-radius: 5px; font: inherit; font-size: 11px; color: #9a9a9a; background: none; cursor: pointer; }
+.design-toggle svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
 .design-toggle button[aria-pressed="true"] { color: #fff; background: #ffffff1a; }
 .design-toggle button:disabled { opacity: .45; cursor: not-allowed; }
 .design-rows { display: grid; grid-template-columns: minmax(0, 1fr); border-top: 1px solid #ffffff0a; }
@@ -343,14 +473,18 @@ const css = `
 .design-row-prose { grid-template-columns: 1fr; gap: 3px; }
 .design-diff { margin: 0; line-height: 1.5; color: #ddd; overflow-wrap: anywhere; }
 .design-diff del, .design-diff ins { border-radius: 3px; padding: 0 2px; }
-.design-diff del { color: #f6a19a; background: #f28b8224; text-decoration-color: #f6a19a99; }
-.design-diff ins { color: #b9e6ad; background: #8fd69424; text-decoration: none; }
+.design-diff del { color: #e3a29c; background: #f28b8214; text-decoration-color: #e3a29c80; }
+.design-diff ins { color: #add8a3; background: #8fd69414; text-decoration: none; }
 .design-prop { color: #9a9a9a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .design-values { display: flex; align-items: center; gap: 4px 6px; min-width: 0; color: #eee; }
 .design-before { color: #858585; text-decoration: line-through; text-decoration-color: #85858599; }
 .design-arrow { color: #666; }
+.design-also { grid-column: 2; color: #858585; font-size: 11px; overflow-wrap: anywhere; }
 .design-value { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 5px; min-width: 0; }
-.design-value-text, .design-token { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.design-values { flex-wrap: wrap; }
+.design-value-text { min-width: 0; overflow-wrap: anywhere; }
+.design-token { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-compact] .design-value-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .design-swatch { width: 12px; height: 12px; flex: none; border-radius: 3px; box-shadow: inset 0 0 0 1px #ffffff26; }
 .design-token { max-width: 100%; padding: 1px 6px; border-radius: 5px; color: var(--accent, #bda6ef); background: color-mix(in srgb, var(--accent, #bda6ef) 14%, transparent); }
 .design-more { border: 0; width: 100%; padding: 7px 12px; text-align: left; font: inherit; font-size: 11px; color: #9a9a9a; background: none; border-top: 1px solid #ffffff06; cursor: pointer; }
@@ -432,7 +566,12 @@ export interface DesignCommentOptions {
   design?: DesignSystem;
   /** Give a node komo's tooltip, which reads its aria-label. */
   tip?(node: HTMLElement): void;
+  /** Why After can't be shown right now, such as pending Design mode edits; checked on each switch. */
+  blocked?(): string | undefined;
 }
+
+const icon = (path: string) => `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="${path}"/></svg>`;
+const ICONS = [icon("M2.5 6.5a3.5 3.5 0 1 0 1.2-2.6M3 1.8v2.4h2.4"), icon("M1 6s1.8-3.5 5-3.5S11 6 11 6s-1.8 3.5-5 3.5S1 6 1 6Zm5 1.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z")];
 
 /** The theme key token edits use: the current option of each switchable axis, joined with "+". */
 const themeKeyOf = (design?: DesignSystem) => (design?.themes ?? []).filter(axis => axis.options?.length > 1).map(axis => themeState(design)[axis.id]).join("+") || undefined;
@@ -447,8 +586,6 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   const unavailable = document.createElement("p");
   unavailable.className = "design-source";
   unavailable.setAttribute("role", "status");
-  unavailable.hidden = !lostPreviews.has(options.key);
-  unavailable.textContent = UNAVAILABLE;
   const compact = !!options.compact;
   if (compact) root.dataset.compact = "";
   // Compact cards show the first three rows across all sections and count the rest.
@@ -458,7 +595,12 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   const context = adapter && { adapter, tokens: options.tokens?.tokens ?? [], theme: themeKeyOf(options.design) };
   // Page token rows preview only through an adapter with previewValues().
   const can = (item: DesignChange) => !!item.apply && (item.apply.kind !== "token" || !!adapter?.previewValues);
-  const previewable = sections.some((section) => section.changes.some(can));
+  // After is offered only when it can be shown; the reason stays beside the text diff.
+  const why = () => lostPreviews.has(options.key) ? UNAVAILABLE : options.blocked?.() || blocker(sections, options.resolve, can);
+  const reason = applied.has(options.key) ? notes.get(options.key) ?? "" : why();
+  unavailable.textContent = reason;
+  unavailable.hidden = !reason;
+  const show = { design: options.design, root: container.getRootNode() };
   const toggles: HTMLElement[] = [];
   const sync = () => {
     const on = applied.has(options.key);
@@ -484,33 +626,47 @@ export function renderDesignComment(container: HTMLElement, body: string, option
     head.className = "design-card-head";
     const label = document.createElement("div");
     label.className = "design-card-label";
-    label.append(Object.assign(document.createElement("span"), { className: "design-card-title", textContent: block.title }));
+    // A move reads as one sentence: "Moved Link “Approvals”", then "NavList · 3rd → 2nd".
+    const move = block.changes.find(item => item.apply?.kind === "move");
+    label.append(Object.assign(document.createElement("span"), { className: "design-card-title", textContent: move ? `Moved ${move.label}` : block.title }));
     const component = block.component ?? sections.find(section => section.target === block.target && section.component)?.component;
-    const where = block.target || component ? targetLabel({ ...block, component }, options.resolve(block.target)) : "";
+    const where = move ? `${move.before} → ${move.after}` : block.target || component ? targetLabel({ ...block, component }, options.resolve(block.target)) : "";
     if (where) label.append(Object.assign(document.createElement("span"), { className: "design-card-target", textContent: where, title: where }));
     head.append(label);
     if (block.source && !compact) head.append(sourceInfo(block.component || where || "Change", block.source, options.sourceHref));
-    // One Before/After switch for the whole comment, shown on its first previewable card.
-    if (previewable && !toggles.length && block.changes.some(can)) {
+    // One Before/After switch for the whole comment, top right of its first card.
+    if (!toggles.length) {
       const toggle = document.createElement("div");
       toggle.dataset.previewKey = options.key;
       toggle.className = "design-toggle";
       toggle.setAttribute("role", "group");
       toggle.setAttribute("aria-label", "Preview on page");
       for (const [index, label] of ["Before", "After"].entries()) {
-        const button = Object.assign(document.createElement("button"), { type: "button", textContent: label, title: `${label} · ${index ? "→" : "←"} or B` });
-        if (index === 1) button.disabled = lostPreviews.has(options.key);
+        const button = Object.assign(document.createElement("button"), { type: "button", title: `${label} · ${index ? "→" : "←"} or B` });
+        button.innerHTML = ICONS[index];
+        button.append(label);
+        if (index === 1 && reason && !applied.has(options.key)) {
+          button.disabled = true;
+          button.title = reason;
+        }
         button.addEventListener("click", () => {
           const showAfter = index === 1;
           if (showAfter === applied.has(options.key)) return;
+          const blocked = showAfter && why();
+          if (blocked) {
+            unavailable.textContent = blocked;
+            unavailable.hidden = false;
+            return;
+          }
           // A page-wide token card has no element to bring into view.
           const target = sections.find((section) => section.target)?.target;
           if (showAfter && target) options.resolve(target)?.scrollIntoView({ block: "center", behavior: "smooth" });
           const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
           if (!reduced) morph(sections, options.resolve);
           if (showAfter) {
-            unavailable.hidden = apply(options.key, sections, options.resolve, !reduced, context);
-            unavailable.textContent = UNAVAILABLE;
+            const [, message] = apply(options.key, sections, options.resolve, !reduced, context, show);
+            unavailable.hidden = !message;
+            unavailable.textContent = message;
           }
           else revert(options.key, !reduced);
           if (options.onSwitch) setTimeout(options.onSwitch, reduced ? 0 : 480);
@@ -528,6 +684,7 @@ export function renderDesignComment(container: HTMLElement, body: string, option
     rows.className = "design-rows";
     const visible = 4;
     block.changes.forEach((item, index) => {
+      if (item === move) return;
       if (room <= 0) return void extra++;
       if (compact) room--;
       const row = document.createElement("div");
@@ -554,9 +711,11 @@ export function renderDesignComment(container: HTMLElement, body: string, option
       before.classList.add("design-before");
       values.append(before, Object.assign(document.createElement("span"), { className: "design-arrow", textContent: "→" }), value(item.after, item.token));
       row.append(label, values);
+      // A resize also sets flex-basis or flex-grow; say so under its values.
+      if (item.apply?.also?.length) row.append(Object.assign(document.createElement("span"), { className: "design-also", textContent: item.apply.also.map(([property, to]) => `sets ${property}: ${to}`).join(" · ") }));
       rows.append(row);
     });
-    card.append(rows);
+    if (rows.childElementCount) card.append(rows);
     const hidden = rows.querySelectorAll("[hidden]").length;
     if (hidden) {
       const more = Object.assign(document.createElement("button"), { type: "button", className: "design-more", textContent: `Show ${hidden} more` });
@@ -686,7 +845,7 @@ export function renderDraftProposal(container: HTMLElement, body: string, resolv
           const element = runtime.resolve(section.target);
           if (element) refreshTokenBaseline(element, adapter!, tokens, section.changes.flatMap(item => item.apply?.kind === "style" ? [item.apply.property] : []));
         }
-        if (after) apply("draft", sections, runtime.resolve, false, runtime.context);
+        if (after) apply("draft", sections, runtime.resolve, false, runtime.context, { design, root: runtime.container.getRootNode() });
         const focused = runtime.container.querySelector<HTMLButtonElement>(".design-toggle button:focus")?.textContent;
         renderDesignComment(runtime.container, runtime.body, { ...runtime.options, key: "draft", resolve: runtime.resolve, tokens: runtime.context, note: (element, text) => element.append(text) });
         if (focused) [...runtime.container.querySelectorAll<HTMLButtonElement>(".design-toggle button")].find(button => button.textContent === focused)?.focus({ preventScroll: true });
@@ -701,7 +860,7 @@ export function renderDraftProposal(container: HTMLElement, body: string, resolv
     revert("draft");
     lostPreviews.delete("draft");
     draftBody = body;
-    apply("draft", parseDesignComment(body).filter((block): block is DesignSection => "changes" in block), resolve);
+    apply("draft", parseDesignComment(body).filter((block): block is DesignSection => "changes" in block), resolve, false, undefined, { design: options.design, root: container.getRootNode() });
   }
   renderDesignComment(container, body, { ...options, key: "draft", resolve, note: (element, text) => element.append(text) });
 }

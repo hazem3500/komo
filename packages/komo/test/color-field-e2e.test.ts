@@ -128,6 +128,9 @@ async function openCustom(tab: Page, property: string) {
   await trigger.focus();
   await tab.keyboard.press("Enter");
   await tab.locator(".komo-tokens").waitFor();
+  // Custom… from the keyboard, so the pointer stays where the test put it.
+  await tab.locator(".komo-tokens__more").focus();
+  await tab.keyboard.press("Enter");
   await tab.locator(".komo-tokens .komo-color").waitFor();
 }
 

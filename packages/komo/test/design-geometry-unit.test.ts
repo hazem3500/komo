@@ -144,12 +144,14 @@ Layout: flex item, row
     expect(parseDesignEdit(edit({ mode: "size", property: "width", from: "1px", to: "2px", effects: [3] }))).toBeNull();
   });
 
-  it("renders geometry rows in the change card without previewing them as CSS", () => {
+  it("renders geometry rows in the change card, previewing sizes, spans and translations as styles", () => {
     const section = parseDesignComment(body).find(block => "title" in block && block.title === "Geometry changes");
     expect(section).toMatchObject({ target: "#cta" });
-    const rows = (section as { changes: Array<{ label: string; after: string; apply?: unknown }> }).changes;
-    expect(rows.map(row => row.label)).toEqual(["Move (translate)", "Resize (flex-basis) width", "Resize (span) grid-column-end", "Move (offset)"]);
-    expect(rows.every(row => !row.apply)).toBe(true);
+    const rows = (section as { changes: Array<{ label: string; after: string; apply?: { kind: string; property: string; also?: string[][] } }> }).changes;
+    expect(rows.map(row => row.label)).toEqual(["translate", "width", "grid-column-end", "Move (offset)"]);
+    expect(rows.map(row => row.apply && [row.apply.property, row.apply.also])).toEqual([
+      ["translate", undefined], ["width", [["flex-basis", "240px"], ["flex-grow", "0"]]], ["grid-column-end", []], undefined,
+    ]);
   });
 });
 
@@ -197,9 +199,9 @@ To: #side > nav · index 10 · inside · component SideNav`;
     expect(parseDesignEdit(edit({ from, to: { index: 1, position: "after" } }))).toBeNull();
   });
 
-  it("shows the move as a card row without previewing it", () => {
+  it("reads the move as places to preview with a stand-in", () => {
     const section = parseDesignComment(body).find(block => "title" in block && block.title === "Geometry changes");
     const rows = (section as { changes: Array<{ label: string; before: string; after: string; apply?: unknown }> }).changes;
-    expect(rows).toEqual([{ label: "Move Button “Invite”", before: "from Toolbar “Views” (3rd)", after: "Sidebar (11th)" }]);
+    expect(rows).toMatchObject([{ label: "Button “Invite”", before: "Toolbar “Views” · 3rd", after: "Sidebar · 11th", apply: { kind: "move" } }]);
   });
 });

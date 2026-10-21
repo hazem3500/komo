@@ -100,12 +100,14 @@ describe.skipIf(!chrome).each([1280, 390])("single-value numeric rows at %ipx", 
     expect(value.x).toBeLessThan(chip.x);
     expect(await row.locator(".design-token-chip").textContent()).toContain(token.split(" ")[0]);
 
-    // The chip opens the token list alone; Edit as CSS stays collapsed.
+    // The chip opens the token list alone; Custom… holds only Edit as CSS, collapsed.
     await row.locator("select[data-picker]").click();
     const popup = tab.locator(".komo-tokens");
-    await popup.locator(".komo-custom").waitFor({ state: "attached" });
+    await popup.getByRole("option").first().waitFor();
     expect(await popup.locator(".komo-tokens__head").isVisible()).toBe(false);
-    expect(await popup.getByText("Custom value", { exact: true }).isVisible()).toBe(false);
+    expect(await popup.locator(".komo-custom").count()).toBe(0);
+    await popup.locator(".komo-tokens__more").click();
+    await popup.locator("details.komo-typed__advanced").waitFor();
     expect(await popup.locator(".komo-custom input:visible").count()).toBe(0);
     expect(await popup.locator("details.komo-typed__advanced").evaluate(node => (node as HTMLDetailsElement).open)).toBe(false);
     expect(await popup.locator("details.komo-typed__advanced summary").isVisible()).toBe(true);
@@ -135,6 +137,7 @@ describe.skipIf(!chrome).each([1280, 390])("single-value numeric rows at %ipx", 
     const row = tab.locator('[data-field-property="padding"]');
     await row.scrollIntoViewIfNeeded();
     await row.locator("select[data-picker]").click();
+    await tab.locator(".komo-tokens__more").click();
     await tab.locator(".komo-tokens .komo-custom input:visible").first().waitFor();
     expect(await tab.locator(".komo-tokens .komo-custom input:visible").count()).toBeGreaterThanOrEqual(4);
     expect(errors).toEqual([]);

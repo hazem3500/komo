@@ -184,6 +184,12 @@ await writeFile(
 // resize, move), Before/After on ← → anywhere, Tab/Enter selection and configurable compare/select
 // keys, one-press Escape (+599 measured on main 418bc33: 232,968 -> 233,567). Initial +472 for the key resolver and named keycaps;
 // resolving the keys on demand instead cost ~500 more in total for the extra chunk boundary.
+// 233,150 -> 235,450: posted design proposals and the composer's card preview every kind on the page
+// (resizes with what they also set, structural moves through a stand-in, React props through the
+// component editor), say why After is off, preview what they can and name the rest, and outline the
+// change and a move's origin in the selection colour (+2,194 measured on main 9652312: 232,968 -> 235,162). All in the
+// on-demand design comment chunk; initial +94 for the host's blocked reasons and the scrolling card.
+// 233,800 -> 236,050: both of the above together (235,806 measured).
 // 233,000 -> 233,200: geometry inside Frame's viewport iframe and frame.defaultMode (#167) on top of the
 // stage pan; 233,066 measured locally with both, plus ~100 for CI's measurement.
 // 233,200 -> 233,350: one-line Viewport / In place tooltips on the mode switch (233,231 measured on main
@@ -191,7 +197,9 @@ await writeFile(
 // -> 233,400: #167 with #171 combined, 233,291 measured on main b9686c1, plus ~100 for CI's measurement.
 // 233,800 -> 234,000: Design mode keys (#170) and #167 with #171 together, 233,888 measured on main
 // 1a9efe3, plus ~100 for CI's measurement.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 234_000)
+// 236,050 -> 236,200: design proposals (#172), Design mode keys (#170) and #167 with #171 together,
+// 236,061 measured on main bc089fe, plus ~100 for CI's measurement.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 236_200)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -244,7 +252,10 @@ if (report.optionalSelectMenu.gzip > 3_300)
 // 5,600: one popup replaces the Tokens and Custom tabs: a header, token values in each row, an
 // inline Custom value section, a restore when the pointer leaves the list, Home/End and
 // type-to-filter (5,222 -> 5,440), plus ~3%.
-if (report.optionalTokenPicker.gzip > 5_600)
+// 6,375: popups open on their tokens and swap to Custom on demand: a back header, a Custom… row with
+// the current value, Show all under the list, an active row's path and value instead of a tooltip,
+// and a viewport-capped height with one scroll area (5,458 -> 6,183 measured), plus ~3%.
+if (report.optionalTokenPicker.gzip > 6_375)
   throw new Error("komo's token picker chunk exceeds its gzip budget.");
 // The Tokens view (every token with nothing selected, per-theme edits, its footer and page
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and

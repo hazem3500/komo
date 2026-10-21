@@ -126,6 +126,7 @@ describe.skipIf(!chrome).each([{ width: 1280, height: 860 }, { width: 390, heigh
     await radius.scrollIntoViewIfNeeded();
     await settle(tab);
     await radius.locator("select[data-picker]").click();
+    await tab.locator(".komo-tokens").waitFor(); if (await tab.locator(".komo-tokens__more").isVisible()) await tab.locator(".komo-tokens__more").click();
     await tab.locator(".komo-tokens .komo-custom").waitFor();
     const unit = tab.locator(".komo-tokens select").filter({ has: tab.locator("option[value=rem]") }).first();
     await unit.waitFor();

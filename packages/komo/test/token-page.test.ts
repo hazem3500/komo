@@ -191,9 +191,12 @@ describe("token proposals", () => {
       expect(live).toBe(0);
     });
 
-    it("has no switch without an adapter that previews values", () => {
-      expect(render().button("After")).toBeUndefined();
-      expect(render({ tokens: { id: "plain", list: () => tokens, resolve: () => ({}) } }).button("After")).toBeUndefined();
+    it("keeps After off, with a reason, without an adapter that previews values", () => {
+      for (const design of [undefined, { tokens: { id: "plain", list: () => tokens, resolve: () => ({}) } }]) {
+        const after = render(design).button("After")!;
+        expect(after.disabled).toBe(true);
+        expect(after.title).toBe("This change can't be previewed here");
+      }
     });
 
     it("names each token by its label, else the path's last part, with the full path and theme in komo's tooltip", () => {
@@ -333,11 +336,11 @@ describe("Tokens view in Design mode", () => {
     await openView();
     rowFor("Primary").querySelector<HTMLButtonElement>("button")!.click();
     await vi.waitFor(() => expect(shadow.querySelector('.komo-tokens [role="option"]')).not.toBeNull());
-    // One popup: the alias targets first, then Custom value; no tabs.
+    // One popup: the alias targets first, with Custom… under them; no tabs.
     expect(shadow.querySelector(".komo-tokens__tabs")).toBeNull();
     expect($(".komo-tokens__head").textContent).toBe("Primary");
-    expect($<HTMLElement>(".komo-tokens__label").hidden).toBe(false);
-    expect($(".komo-tokens").hasAttribute("data-merged")).toBe(true);
+    expect($<HTMLElement>(".komo-tokens__more").hidden).toBe(false);
+    expect($<HTMLElement>(".komo-tokens__custom").hidden).toBe(true);
     const options = [...shadow.querySelectorAll<HTMLElement>('.komo-tokens [role="option"]')];
     expect(options.map((option) => option.getAttribute("aria-selected"))).toEqual(["true", "false"]);
     options[1].click();
