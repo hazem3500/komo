@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // Declared enum props preview live in real Chrome, like the Design token selects: the option
 // under the pointer or the keyboard's active row renders through the component's own state
@@ -100,7 +101,7 @@ async function open(version: number, target: string) {
   await page.goto(`${origin}/?react=${version}`);
   await page.locator(target).waitFor();
   expect(await page.evaluate(() => (window as any).qa.version)).toMatch(new RegExp(`^${version}\\.`));
-  await page.keyboard.press("d");
+  await openDesign(page);
   await page.click(target);
   return { page, errors };
 }

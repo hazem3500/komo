@@ -1,6 +1,6 @@
 {
   "name": "@hazem3500/komo",
-  "version": "0.9.86",
+  "version": "0.9.90",
   "description": "Point, area, and threaded comments for website branches.",
   "type": "module",
   "license": "MIT",
@@ -31,7 +31,8 @@
     "server/iap.ts",
     "server/tokens.ts",
     "server/account-page.ts",
-    "server/public-env.ts"
+    "server/public-env.ts",
+    "server/snapshots.ts"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

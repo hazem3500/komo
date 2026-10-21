@@ -202,7 +202,8 @@ export class CommentsApi {
     this.reads.abort();
     this.reads = new AbortController();
   }
-  async request<T>(path: string, method = "GET", data?: unknown): Promise<T> {
+  /** With `type`, `data` (a Blob or string) is the raw body of that type instead of JSON. */
+  async request<T>(path: string, method = "GET", data?: unknown, type?: string): Promise<T> {
     const url = new URL(path, this.options.endpoint.replace(/\/?$/, "/"));
     url.searchParams.set("project", this.options.project);
     url.searchParams.set("repo", this.options.repo);
@@ -210,13 +211,13 @@ export class CommentsApi {
     const headers: Record<string, string> = {};
     const token = this.token;
     if (token) headers.Authorization = `Bearer ${token}`;
-    if (data !== undefined) headers["Content-Type"] = "application/json";
+    if (data !== undefined) headers["Content-Type"] = type ?? "application/json";
     const readSignal = method === "GET" ? this.reads.signal : undefined;
     const timeout = AbortSignal.timeout(15000);
     const response = await fetch(url, {
       method,
       headers,
-      body: data === undefined ? undefined : JSON.stringify(data),
+      body: data === undefined ? undefined : type ? (data as BodyInit) : JSON.stringify(data),
       credentials: "omit",
       cache: "no-store",
       signal: readSignal ? AbortSignal.any([readSignal, timeout]) : timeout,

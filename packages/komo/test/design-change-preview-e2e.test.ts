@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -103,7 +104,7 @@ describe.skipIf(!chrome)("Before/After on posted design proposals", () => {
     const card = page.locator("#card");
     const look = () => card.evaluate(node => { const css = getComputedStyle(node); return [css.color, css.height, css.paddingTop, css.borderTopLeftRadius, css.fontSize, css.width]; });
     const original = await look();
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.locator(".design-inspector__empty").waitFor();
     const box = (await card.boundingBox())!;
     await page.mouse.click(box.x + 6, box.y + 6);

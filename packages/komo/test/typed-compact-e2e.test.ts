@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -85,7 +86,7 @@ async function open(mode: string, viewport = { width: 1280, height: 800 }, theme
   tab.on("pageerror", error => errors.push(error.message));
   await tab.goto(`${origin}/?mode=${mode}&theme=${theme}`);
   await tab.waitForFunction(() => !!(window as any).komo);
-  await tab.keyboard.press("d");
+  await openDesign(tab);
   await settle(tab);
   await tab.locator("#card").click();
   await tab.locator('[data-field-property="border-radius"] .design-token-binding').waitFor();

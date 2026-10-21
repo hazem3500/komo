@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // The font size row: a T icon and the name scrub, the value reads "14" with "px" inside the
 // field, a bound token shows as a chip with a caret beside the value, and the chip's popup is
@@ -63,7 +64,7 @@ async function open(width: number, query = "") {
   tab.on("pageerror", error => errors.push(error.message));
   await tab.goto(origin + query);
   await tab.waitForFunction(() => !!(window as any).komo);
-  await tab.keyboard.press("d");
+  await openDesign(tab);
   await tab.locator("#card").click();
   await tab.mouse.move(2, 2);
   const row = tab.locator('[data-field-property="font-size"]');

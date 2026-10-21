@@ -872,8 +872,8 @@ export function createDesignMode(options: DesignModeOptions) {
     },
     get active() { return active; },
     get selected() { return selected; },
-    /** Resolves once the property controls have loaded. */
-    ready: Promise.all([ready, selectionReady]),
+    /** Resolves once the property controls and selection keys have loaded; the panel then carries data-ready. */
+    ready: Promise.all([ready, selectionReady]).then(() => { panel.dataset.ready = ""; }),
     destroy() {
       textTools?.finish(true);
       setActive(false);

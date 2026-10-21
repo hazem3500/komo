@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Locator, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // Boolean props render as switches in real Chrome: the white thumb sits 2px in from the
 // track's start when off and from its end when on, never mid-track, and an unset prop is an
@@ -77,9 +78,7 @@ async function open(colorScheme: "light" | "dark", reducedMotion: "reduce" | "no
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(origin);
   await page.locator(".fixture-option").waitFor();
-  await page.keyboard.press("d");
-  // Pick only once Design mode is open; a click before then reaches the page.
-  await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+  await openDesign(page);
   await page.click(".fixture-option");
   const control = (name: string) => page.getByRole("switch", { name: `Option ${name}`, exact: true });
   await control("selected").waitFor();

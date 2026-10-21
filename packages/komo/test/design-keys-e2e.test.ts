@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -81,7 +82,7 @@ async function design(select = "#card") {
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(origin);
   await page.waitForFunction(() => !!(window as any).komo);
-  await page.keyboard.press("d");
+  await openDesign(page);
   await page.locator(".design-inspector__empty").waitFor();
   await page.locator(select).click({ position: { x: 4, y: 4 } });
   await page.locator(".design-inspector__target").waitFor();
@@ -213,7 +214,7 @@ describe.skipIf(!chrome)("Design mode keys", () => {
         expect(await active(page)).toBe(false);
       }
       // The selection comes back on the next entry.
-      await page.keyboard.press("d");
+      await openDesign(page);
       await expect.poll(() => target(page)).toContain("div#card");
       expect(page.errors).toEqual([]);
       await page.close();

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Locator, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // komo's select menus show every label in full: in the color popup's format menu, in a unit
 // select inside a Custom popup, and in the panel's own selects. Only the viewport may cut one short.
@@ -94,7 +95,7 @@ describe.skipIf(!chrome).each([{ width: 1280, height: 860 }, { width: 390, heigh
     tab.on("pageerror", error => errors.push(error.message));
     await tab.goto(origin);
     await tab.waitForFunction(() => !!(window as any).komo);
-    await tab.keyboard.press("d");
+    await openDesign(tab);
     await settle(tab);
     await tab.locator("#card").click();
     await tab.mouse.move(2, 2);

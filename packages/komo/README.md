@@ -375,7 +375,8 @@ Frame opens on your browser window's own size, labelled **Desktop · 1280 × 800
 - **Anchors.** Comments are anchored by page and selector, so a comment made in either mode resolves the same in the other. A draft, an open thread and the Design selection carry over when you switch.
 - **Exit.** Closing Frame removes the iframe. Your page underneath was never moved, so its layout and scroll are exactly as you left them; the frame opens at the same scroll position.
 - **Adapters** receive the reviewed page: `previewValues(changes, theme, target)` and theme axes' `current(target)` and `apply(id, target)` get `{ document, root }`, which is the frame's document in Viewport mode. Write page-wide previews there. The built-in adapters already do. Element-level `preview(element, …)` needs nothing new: the element is in the frame.
-- **Limits.** `pickRoots` names your page's elements, so in Viewport mode all of the frame's body is pickable. Registrations made with `useKomoInspectable` or `useKomoDesignTokens` live in the frame's copy of the app and aren't visible to komo there (the React fiber adapter works). Experimental move/resize geometry works in both modes: handles, snapping and structural moves map through the frame's scale.
+- **React registrations.** `useKomoInspectable` and `useKomoDesignTokens` registrations made by the framed copy of the app are read through a small bridge that komo, inert inside the frame, publishes; prop edits go through the framed app's own state, and token previews apply to its roots. The React fiber adapter works too.
+- **Limits.** `pickRoots` names your page's elements, so in Viewport mode all of the frame's body is pickable. Experimental move/resize geometry works in both modes: handles, snapping and structural moves map through the frame's scale.
 
 `frame: { scale: true }` explicitly opts into shrinking the original viewport instead. A CSS transform changes visual rectangles without changing local layout dimensions, so arbitrary coordinate-sensitive host handlers may select the wrong value under scaling. This option requires host controls that already account for transforms; komo does not rewrite native events or browser prototypes. Use the default unscaled Frame or Floating for interactive pages that do not support scaling.
 
@@ -453,8 +454,10 @@ Starter limits per owner/workspace:
 | Write requests per project | 500/day |
 | Request body | 16 KiB |
 | Comment / reviewer name | 4,000 / 60 characters |
+| Element snapshots per thread | One image (256 KiB) and one HTML capture (32 KiB) |
+| Snapshot storage | 5 MiB, counted within the storage budget |
 
-The storage budget accounts for text, anchors, reactions, and a fixed profile allowance per member. It is deliberately conservative, not a measurement of D1 disk usage. Soft-deleting or resolving a comment does not reset its quota. Inline file attachments are not supported; avatars have a bounded representation.
+The storage budget accounts for text, anchors, reactions, element snapshots, and a fixed profile allowance per member. It is deliberately conservative, not a measurement of D1 disk usage. Soft-deleting or resolving a comment does not reset its quota. Element snapshots are the only attachments; avatars have a bounded representation.
 
 The service also applies per-IP and per-user limits, database-enforced quotas, owner-approved site restrictions, payload validation, project suspension, hourly cleanup, and a global daily request ceiling. Edge rate limiting runs before database work. These controls bound ordinary abuse; Google accounts and CORS do not eliminate automated abuse. The service remains a starter offering, not an unlimited storage service. Project exports, imports, and quota recovery are available below. Billing upgrades are not implemented yet.
 
@@ -525,6 +528,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `sessionDomain` | `string` | Host-only | Explicit trusted parent domain; all sibling hosts can receive the session. Empty string disables sharing. |
 | `sessionEndpoint` | `string` | `endpoint` | Canonical API identity for trusted gateways to the same service; never share across independent APIs. |
 | `avatar` | `(user: { id, name }) => string \| undefined` | None | Photo URL for signed-in reviewers the server has none for, such as IAP sign-in. HTTPS only; guests keep their initial. |
+| `snapshots` | `{ image?, html?, maxBytes?, redact?(element) }` | Off | Save an image and/or trimmed HTML of the commented element with each new thread. See [Comment snapshots](#comment-snapshots). |
 
 Google sign-in uses the account photo (`picture`) automatically, loaded from `lh3.googleusercontent.com`. Under a restrictive CSP, allow that host (or your `avatar` host) in `img-src`; blocked or failed photos fall back to the initial.
 
@@ -580,6 +584,28 @@ komo renders in a shadow root, so page listeners see its events as coming from k
 
 Other capture-phase listeners still run. Set `isolateEvents: false` if your app needs to observe feedback events or handle Escape itself.
 
+### Comment snapshots
+
+Snapshots are off by default. Turn on each kind you want:
+
+```ts
+snapshots: {
+  image: true,
+  html: true,
+  maxBytes: 250_000,
+  redact: (element) => element.matches(".account-balance"),
+}
+```
+
+When a signed-in reviewer starts a comment, komo captures the commented element in the page, in Frame's viewport iframe when it shows the page. Capture needs a server that supports [element snapshots](#element-snapshots); guests capture only when the project allows guest snapshots. The capture code loads on demand. Each kind uploads as its own file once the thread is saved and never holds up the comment: if an upload fails, the comment still posts and komo logs a note to the console.
+
+- **`image`** is a WebP image of the element with 16px of padding, at most 1200px wide and `maxBytes` in size (250,000 by default). Quality steps down from 0.8, then the size. komo draws the element itself, with no extension or third-party library: it copies the element with its computed styles into an SVG `foreignObject` and draws that to a canvas, after `document.fonts.ready`. An image from another origin without CORS would taint the canvas, so komo saves the HTML instead, starting with a comment that says why.
+- **`html`** is the element's `outerHTML`, trimmed to about 20 KB. Scripts, styles and inline event handlers are removed, and long attribute values and text are cut short.
+- **Redaction.** Input, textarea and password values never appear in either snapshot. `redact(element)` returning true replaces that element's text with `[redacted]`.
+- **Privacy.** komo's own UI is never captured. Add `data-komo-no-snapshot` to any element to keep it out: a comment inside it captures nothing, and inside a captured element it shows as an empty box.
+
+Limits: the image shows the element at the top of its scroll position and up to 2,000px tall. It leaves out iframes, shadow DOM contents, `<use>` references to sprites outside the element, and web fonts served from another origin without CORS, which fall back to a local font. A target with more than 3,000 elements gets no image.
+
 ### CLI
 
 | Command / flag | Purpose |
@@ -611,8 +637,20 @@ Branch detection also supports `CF_PAGES_BRANCH`, `WORKERS_CI_BRANCH`, `VERCEL_G
 | `bootstrapHash` | Generated | SHA-256 owner-claim key hash. |
 | `suspended` | `false` | Disable a project. |
 | `writesPerDay` | `10000` self-hosted | Daily write-request allowance; hosted uses 500. |
+| `allowGuestSnapshots` | `false` | Let guest sessions attach element snapshots to their own threads. |
+| `maxSnapshotBytes` | `52428800` (50 MiB) | Total snapshot bytes stored per project; hosted uses 5 MiB. |
 
 Worker bindings: `DB` (D1), optional `EDGE_LIMIT` (rate limiter). Variables: `PROJECTS`, `GOOGLE_CLIENT_ID`, optional `GITHUB_CLIENT_ID`, `KOMO_HOSTED="true"` to enable hosted provisioning, and `KOMO_PAUSED="true"` to pause service requests. Store `GOOGLE_CLIENT_SECRET` and optional `GITHUB_CLIENT_SECRET` as Worker secrets. Hosted configuration uses an hourly cleanup trigger. `/health` remains available while paused.
+
+### Element snapshots
+
+A comment can carry a snapshot of its target element: one image (`image/webp` or `image/png`, up to 256 KiB) and one trimmed HTML capture (`text/html`, UTF-8, up to 32 KiB) per thread. Capture is opt-in on the client. **Snapshots may contain page content and user data**, so treat them like the comments they belong to.
+
+- `POST /threads/:id/snapshot?kind=image|html` takes the raw file with its `Content-Type`, or `multipart/form-data` with `kind` and `file` fields. A new upload replaces the thread's previous snapshot of that kind. Uploads need a session with write access to the project; guests are refused unless the project sets `allowGuestSnapshots`, and then only on their own threads. The thread's author or a signed-in reviewer can replace or `DELETE /threads/:id/snapshot/:kind`.
+- `GET /threads/:id/snapshot/:kind` needs a session, even on link-access projects, and returns `Cache-Control: private`, `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`. HTML is always served as `text/plain`; show it to agents or in a sandboxed viewer, never as live markup.
+- Thread listings add `snapshot: { image?, html? }` URLs when a thread has snapshots. `/config` reports `snapshots: { guests, maxImageBytes, maxHtmlBytes }`.
+
+Snapshots are deleted with their thread, by clearing resolved threads, retention, or project deletion. Exports include them, base64-encoded. Their bytes count toward database quotas, and each project stores at most `maxSnapshotBytes` of snapshots. Uploads share the write rate limits, plus 60 per reviewer every ten minutes.
 
 ## Source context
 
@@ -697,7 +735,7 @@ To migrate, export from your source, set up a destination using `npx @hazem3500/
 npx @hazem3500/komo project import --file /path/to/comments.json
 ```
 
-Exports include threads, replies, reactions, anchors, and historical profiles across all pages and branches, including resolved feedback. They exclude sessions, credentials, verified emails, and membership. Imports use the destination repository and keep imported authors unverified. Retrying the same export is safe; existing imported records are not overwritten. Destination quotas still apply. Export retries are required if feedback changes while downloading. Keep export files private.
+Exports include threads, replies, reactions, element snapshots, anchors, and historical profiles across all pages and branches, including resolved feedback. They exclude sessions, credentials, verified emails, and membership. Imports use the destination repository and keep imported authors unverified. Retrying the same export is safe; existing imported records are not overwritten. Destination quotas still apply. Export retries are required if feedback changes while downloading. Keep export files private.
 
 Upgrade self-hosted deployments with `npm install @hazem3500/komo@latest` then `npx @hazem3500/komo deploy`; the CLI applies bundled database migrations before redeploying. Self-hosted project removal is controlled by your Worker configuration. Account-wide data requests remain available at ty@offbr.co.
 

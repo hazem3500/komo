@@ -36,6 +36,22 @@ export const previewTarget = (): PreviewTarget => {
   const document = pageDocument();
   return { document, root: document.documentElement };
 };
+/**
+ * komo bundled into the framed app stays inert but publishes its React
+ * registries (useKomoInspectable, useKomoDesignTokens) here, so komo in this
+ * window can read registrations made in the frame's own realm.
+ */
+const FRAME_BRIDGE = Symbol.for("komo.frame-bridge");
+type Bridge = Record<string, ((...args: never[]) => unknown) | undefined>;
+/** The viewport iframe's published registries, for a node or window from that frame. */
+export function frameBridge(from: Node | Window | null | undefined): Bridge | undefined {
+  const view = from && ("nodeType" in from ? from.ownerDocument?.defaultView : from);
+  return view && view !== window ? (view as unknown as Record<symbol, Bridge | undefined>)[FRAME_BRIDGE] : undefined;
+}
+/** Inside Frame's viewport iframe, publish this realm's registries for komo in the parent window. */
+export function publishFrameBridge(entries: Bridge) {
+  if (framedByKomo()) Object.assign(((window as unknown as Record<symbol, Bridge>)[FRAME_BRIDGE] ??= {}), entries);
+}
 /** The viewport iframe while it shows the page. */
 export const pageFrame = () => (frameDocument() ? frame : null);
 

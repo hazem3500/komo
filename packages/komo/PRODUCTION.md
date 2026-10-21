@@ -24,6 +24,8 @@ Status: working preview / controlled beta. Not ready for an unrestricted public 
 
 ## Product boundaries
 
+- Element snapshots (an image and trimmed HTML per thread) are opt-in on the client and may contain page content or user data. They are readable only with a session, served inert (`text/plain` HTML, `Content-Security-Policy: sandbox`, `nosniff`, private caching), counted against quotas and a per-project snapshot cap, refused for guests unless a project allows them, and deleted with their thread.
+
 - The setup URL manages accounts, limits, and approved sites. Reviewers leave comments on an installed, approved website.
 - A public project key identifies a link-accessible review workspace. Site restrictions do not implement private repository membership or prove domain ownership.
 - Self-hosted project counts cover the user's connected projects configured on that service, not unrelated deployments.

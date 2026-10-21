@@ -54,6 +54,9 @@ const frameIframe = (await readdir("dist"))
 const accountTokens = (await readdir("dist"))
   .filter((file) => /^account-tokens.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const snapshots = (await readdir("dist"))
+  .filter((file) => /^snapshot-.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const entry = Object.keys(outputs).find(
   (path) => outputs[path].entryPoint === "dist/index.js"
 );
@@ -95,6 +98,7 @@ const report = {
   optionalTokenPage: await sizes(new Set(tokenPage)),
   optionalGeometry: await sizes(new Set(geometry)),
   optionalAccountTokens: await sizes(new Set(accountTokens)),
+  optionalSnapshots: await sizes(new Set(snapshots)),
   optionalFrameViewport: await sizes(new Set(frameIframe)),
   optionalLiveColors: await sizes(new Set(liveColors)),
   optionalFieldControls: await sizes(new Set(fieldControls)),
@@ -199,7 +203,8 @@ await writeFile(
 // 1a9efe3, plus ~100 for CI's measurement.
 // 236,050 -> 236,200: design proposals (#172), Design mode keys (#170) and #167 with #171 together,
 // 236,061 measured on main bc089fe, plus ~100 for CI's measurement.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 236_200)
+// 236,200 -> 241,100: opt-in comment snapshots, a 4,561-byte on-demand chunk (below) plus ~150 in initial for the /config gate, raw-body uploads and the hook (240,969 measured on main 4d26ac1 with #177).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 241_100)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -293,6 +298,9 @@ if (report.optionalGeometry.gzip > 14_400)
 // the chunk. 5,671 measured, plus ~3%.
 if (report.optionalAccountTokens.gzip > 5_850)
   throw new Error("komo's API tokens chunk exceeds its gzip budget.");
+// Comment snapshots (SVG foreignObject image, trimmed HTML, raw-file uploads) load only when snapshots are on, the server supports them and a reviewer starts a comment. 4,561 measured, plus ~3%.
+if (report.optionalSnapshots.gzip > 4_700)
+  throw new Error("komo's comment snapshot chunk exceeds its gzip budget.");
 // Viewport mode loads only when Frame opens with frame.mode "iframe": the iframe, its stage, the
 // same-origin and fallback checks (X-Frame-Options, frame-ancestors, cross-origin redirects, timeout) and
 // the frame geometry komo's page reads switch to. 2,216 measured, plus ~3%.

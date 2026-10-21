@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openDesign } from "./design-e2e.js";
 
 // Pending edits in real Chrome. Escape keeps element previews pending (Before while
 // closed, After on return), and page token edits do the same: after re-entering they
@@ -123,13 +124,13 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
       await page.keyboard.up("Control");
     };
 
-    await page.keyboard.press("d");
+    await openDesign(page);
     await editSurface();
 
     // Escape shows Before while closed; re-entering puts the tokens back, and says so.
     await page.keyboard.press("Escape");
     await expect.poll(background).toBe(light);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await expect.poll(background).toBe(orange);
     expect(await page.locator(".design-inspector__pending h3").textContent()).toBe("1 unsaved change");
     await card.click();
@@ -181,7 +182,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     await field("width").fill("180");
     await field("width").press("Enter");
     await page.keyboard.press("Escape");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await editSurface();
     await card.click();
     expect(await count.textContent()).toBe("2 changes");
@@ -209,13 +210,13 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     // Posting selects the new thread, and D would open it in Design mode; start again from a fresh page.
     await page.reload();
     await page.waitForFunction(() => !!(window as any).komo);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await editSurface();
     await card.click();
     await narrow();
     // Escape on a resize handle cancels the gesture, so leave with the close button.
     await page.getByRole("button", { name: "Exit design mode", exact: true }).click();
-    await page.keyboard.press("d");
+    await openDesign(page);
     const pending = page.locator(".design-inspector__pending");
     expect(await pending.locator("h3").textContent()).toBe("2 unsaved changes");
     await page.screenshot({ path: join(tmpdir(), `komo-pending-edits-${mode}-pending.png`) });
