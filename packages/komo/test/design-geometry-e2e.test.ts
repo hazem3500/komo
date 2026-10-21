@@ -164,7 +164,14 @@ describe.skipIf(!chrome)('geometry ownership and guards', () => {
       expect(sized.width - rect.width).toBeCloseTo(33, 0);
       expect(sized.height - rect.height).toBeCloseTo(23, 0);
       // Scrolling under a held handle keeps the dragged edge under the pointer.
-      await page.mouse.wheel(0, 40); await page.waitForTimeout(100);
+      // The wheel resolves before Chrome scrolls; wait for the page's scroll event, which
+      // runs after komo's own scroll listener has moved the held edge.
+      await page.evaluate(() => { (window as any).wheeled = new Promise<void>(resolve => {
+        const done = () => { if (scrollY < 40) return; removeEventListener('scroll', done, true); resolve(); };
+        addEventListener('scroll', done, true);
+      }); });
+      await page.mouse.wheel(0, 40);
+      await page.evaluate(() => (window as any).wheeled);
       const scrolled = (await target.boundingBox())!;
       // The host's centred scale drifts the box a little as it grows; it no longer scrolls away.
       expect(Math.abs(scrolled.y + scrolled.height - (sized.y + sized.height))).toBeLessThan(3);
