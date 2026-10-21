@@ -136,6 +136,26 @@ function expectFitted(state: Awaited<ReturnType<typeof frame>>, [width, height]:
   expect(state.scroll).toEqual([0, 0]);
   expect(state.scale).toBe(`${Math.round(scale * 100)}%`);
 }
+/** Bring an element into the stage: its scrollers first, then the stage's own pan under the wheel. */
+async function reveal(page: Page, selector: string) {
+  await page.locator(selector).evaluate((node) => node.scrollIntoView({ block: "center", inline: "center" }));
+  for (let step = 0; step < 6; step++) {
+    const [target, stage] = await page.evaluate((selector) => {
+      const rect = document.querySelector(selector)!.getBoundingClientRect();
+      const root = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
+      const bars = [...root.querySelectorAll<HTMLElement>(".frame-scroll")].map((bar) => bar.getBoundingClientRect());
+      const main = document.querySelector("main")!.getBoundingClientRect();
+      const right = Math.min(main.right, ...bars.filter((bar) => bar.height > bar.width).map((bar) => bar.right));
+      const bottom = Math.min(main.bottom, ...bars.filter((bar) => bar.width > bar.height).map((bar) => bar.bottom));
+      return [{ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, { x: (Math.max(main.left, 24) + right) / 2, y: (Math.max(main.top, 48) + bottom) / 2 }];
+    }, selector);
+    const dx = target.x - stage.x, dy = target.y - stage.y;
+    if (Math.abs(dx) < 40 && Math.abs(dy) < 40) return;
+    await page.mouse.move(12, 400);
+    await page.mouse.wheel(dx, dy);
+    await page.waitForTimeout(120);
+  }
+}
 async function choose(page: Page, name: string) {
   await page.locator(".frame-size-trigger").click();
   await page.getByRole("menuitemradio", { name: new RegExp(`^${name}`) }).click();
@@ -217,14 +237,18 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     expect(actual.transform).toBe("none");
     expect(actual.scale).toBe("100%");
     expect(actual.pressed).toEqual(["false", "true"]);
-    near(actual.rect.left, 24, "100% left");
-    // The page pans; host selection and portals follow the moved frame.
-    await page.mouse.wheel(0, 0);
-    await page.evaluate(() => window.scrollTo(400, 120));
-    await page.waitForTimeout(100);
+    // Switching to 100% keeps the last point under the pointer in view, within the stage's pan range.
+    expect(actual.rect.left).toBeLessThanOrEqual(24.5);
+    expect(actual.rect.left).toBeGreaterThanOrEqual(24 - (1440 - 852) - 0.5);
+    // The stage pans under the wheel over its margin; host selection and portals follow the moved frame.
+    await page.mouse.move(12, 400);
+    await page.mouse.wheel(100, 60);
+    await page.waitForTimeout(150);
     const panned = await frame(page);
-    near(panned.rect.left, 24 - 400, "panned left");
-    near(panned.rect.top, 48 - 120, "panned top");
+    near(panned.rect.left, Math.max(24 - (1440 - 852), actual.rect.left - 100), "panned left");
+    near(panned.rect.top, Math.max(48 - (900 - 728), actual.rect.top - 60), "panned top");
+    // The document itself never scrolls: the frame pans inside its stage.
+    expect(await page.evaluate(() => [window.scrollX, window.scrollY])).toEqual([0, 0]);
     expect(await select(page, 3, 10)).toEqual({ target: [3, 10], coordinates: [3, 10] });
     await page.screenshot({ path: join(shots, "preset-wide-100.png") });
     await page.getByRole("button", { name: "Fit", exact: true }).click();
@@ -269,6 +293,33 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     // Choosing the window again forgets the entry instead of pinning the default.
     await choose(page, "Your window");
     expect(await stored()).toBeNull();
+    await context.close();
+  });
+
+  it("tips once that a scaled frame may offset floating UI, with 100% one click away", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    await open(page);
+    const hint = page.locator(".frame-hint");
+    expect(await hint.isVisible()).toBe(true);
+    expect(await hint.textContent()).toContain("Some floating UI may be offset while scaled. Use 100% to check exact positions.");
+    // It sits inside the stage's bottom-left, clear of the bar and the page's header.
+    const tip = (await hint.boundingBox())!;
+    expect(tip.x).toBeGreaterThanOrEqual(24);
+    expect(tip.y + tip.height).toBeLessThanOrEqual(48 + 728);
+    expect(tip.y).toBeGreaterThan(400);
+    await page.screenshot({ path: join(shots, "scaled-tip.png") });
+    await hint.getByRole("button", { name: "Use 100%", exact: true }).click();
+    await page.waitForTimeout(150);
+    expect((await frame(page)).scale).toBe("100%");
+    expect(await hint.isVisible()).toBe(false);
+    // Seen through once, it stays away, also back at Fit and after a reload.
+    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    await page.waitForTimeout(150);
+    expect(await hint.isVisible()).toBe(false);
+    await page.reload();
+    await open(page);
+    expect(await hint.isVisible()).toBe(false);
     await context.close();
   });
 
@@ -418,7 +469,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
         for (const [thread, cellId] of [["fixture-thread", "cell-4-11"], ["centre-thread", "cell-3-13"]]) {
           const pin = page.locator(`.pin[data-thread="${thread}"]`);
           if (zoom === "100%") {
-            await page.locator(`#${cellId}`).evaluate((node) => node.scrollIntoView({ block: "center", inline: "center" }));
+            await reveal(page, `#${cellId}`);
             await page.waitForTimeout(400);
           }
           const label = `${viewport.width}px window, ${state.label} at ${state.scale}, ${thread}`;
@@ -445,7 +496,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
           await page.keyboard.press("d");
           await page.waitForTimeout(400);
           if (zoom === "100%") {
-            await page.locator(`#${cellId}`).evaluate((node) => node.scrollIntoView({ block: "center", inline: "center" }));
+            await reveal(page, `#${cellId}`);
             await page.waitForTimeout(400);
           }
           await pin.click({ force: true });

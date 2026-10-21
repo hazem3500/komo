@@ -1,6 +1,7 @@
 import { cssSelector } from './design-export.js';
 import { elementLabel } from './element-label.js';
 import { changePreviewStyles, inlineStyleSnapshot } from './design-preview.js';
+import { STILL } from './host-motion.js';
 import type { DesignTarget } from './design-target.js';
 
 /** Where a box sits: its parent (selector, label, component) and its index among the parent's element children. */
@@ -119,6 +120,8 @@ export function bindMove(hooks: MoveHooks) {
     copies.forEach((node, index) => { node.removeAttribute('id'); if (!index || sources.length < 400) paint(node, sources[index]); });
     root.style.display = entry.display!;
     root.setAttribute(CLONE, '');
+    // A copy taken while komo previews the original must not keep its hold.
+    root.removeAttribute(STILL);
     root.setAttribute('aria-hidden', 'true');
     root.inert = true;
     return root;
