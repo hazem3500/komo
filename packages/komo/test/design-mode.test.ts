@@ -569,7 +569,7 @@ describe("design mode preview inspector", () => {
     undo.click();
     expect(button.style.getPropertyValue("font-size")).toBe("18px");
     expect(button.style.getPropertyPriority("font-size")).toBe("important");
-    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__close"));
+    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__target"));
     input.dispatchEvent(new Event("focus"));
     input.value = "30";
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -577,7 +577,7 @@ describe("design mode preview inspector", () => {
     const reset = shadow.querySelector<HTMLButtonElement>('.design-inspector__actions [aria-label="Reset"]')!;
     reset.click();
     expect(button.style.getPropertyValue("font-size")).toBe("18px");
-    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__close"));
+    expect(shadow.activeElement).toBe(shadow.querySelector(".design-inspector__target"));
     input.dispatchEvent(new Event("focus"));
     input.value = "30";
     input.dispatchEvent(new Event("input", { bubbles: true }));

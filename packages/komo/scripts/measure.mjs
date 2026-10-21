@@ -184,7 +184,10 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 230_200)
 // 7,475: Design mode also listens inside Frame's viewport iframe (pointer, click, keys, scroll) and
 // maps its outlines and picks through it (+~124: 7,320 -> 7,445). The entry imports chunks by hashed
 // name, so a lazy chunk's new content can also move it a byte.
-if (report.optionalDesignMode.gzip > 7_475)
+// 7,700: redraws of the same selection keep focus on the same control (or the selection, never
+// Exit), and moves, Undo and applied tokens reach komo's one live region from here, not core
+// (+~228: 7,445 -> 7,673). The re-resolving itself lives in the keyboard chunk.
+if (report.optionalDesignMode.gzip > 7_700)
   throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).

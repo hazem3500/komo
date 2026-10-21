@@ -73,6 +73,8 @@ export function createDesignMode(options: DesignModeOptions) {
   const parent = action("design-inspector__parent");
   parent.hidden = true;
   const title = el("span", "design-inspector__target");
+  // Focus falls back here, never to Exit, when the control that had it is gone after a redraw.
+  title.tabIndex = -1;
   const subtitle = el("small");
   const close = action("design-inspector__close");
   close.setAttribute("aria-label", "Exit design mode");
@@ -263,9 +265,21 @@ export function createDesignMode(options: DesignModeOptions) {
     styleEdits.commit(control, selected, property, final);
     updateActions();
   }
+  /** The inspector's title names the selection; focus lands there when its control is gone. */
+  const focusSelection = () => title.focus({ preventScroll: true });
+  let refocus: ((fallback: boolean) => void) | undefined;
+  let keepFocus: typeof import("./design-keyboard.js")["keepFocus"] | undefined;
+  let drawn: DesignTarget | null = null;
   function renderControls(retainedProps?: HTMLElement) {
+    const focused = (panel.getRootNode() as Document | ShadowRoot).activeElement;
+    // Only a redraw of the same selection keeps focus; a pick on the page leaves the panel (choose).
+    const keep = focused && selected === drawn && controls.contains(focused) && keepFocus;
+    drawn = selected;
+    if (keep) refocus?.(false);
     cancelPreview();
     controls.replaceChildren();
+    // Undo, Reset, Before/After and theme switches redraw; focus returns to the same control, else the selection.
+    if (keep) refocus = keep(controls, focused, () => { refocus = undefined; }, () => { if (active && selected) focusSelection(); });
     syncEmpty();
     if (!selected) {
       if (views) controls.append(views.empty);
@@ -508,6 +522,7 @@ export function createDesignMode(options: DesignModeOptions) {
     select(element);
     const focused = options.root.activeElement ?? document.activeElement;
     if (isHTMLElement(focused)) focused.blur();
+    refocus?.(false);
   }
   function onClick(event: MouseEvent) {
     if (!active || event.composedPath().includes(options.host)) return;
@@ -653,7 +668,11 @@ export function createDesignMode(options: DesignModeOptions) {
       renderOutlines();
     }
     updateActions();
-    (undo.disabled ? close : undo).focus({ preventScroll: true });
+    options.root.dispatchEvent(new CustomEvent("komo-announce", { detail: "Undone" }));
+    // A redrawn field gets its focus back (refocus); a control still shown keeps it. Otherwise focus
+    // goes to Undo, or to the selection once nothing is left to undo, never to Exit.
+    const now = options.root.activeElement;
+    if (!refocus && (!now || now === undo || !now.getClientRects().length)) undo.disabled ? focusSelection() : undo.focus({ preventScroll: true });
   });
   function resetElement(element: DesignTarget) {
     if (textTools?.isEditing(isHTMLElement(element) ? element : null)) finishTextEdit(true);
@@ -681,7 +700,7 @@ export function createDesignMode(options: DesignModeOptions) {
     renderControls();
     renderOutlines();
     updateActions();
-    close.focus({ preventScroll: true });
+    if (!refocus) focusSelection();
   });
   copy.addEventListener("click", () => {
     const element = selected;
@@ -715,6 +734,11 @@ export function createDesignMode(options: DesignModeOptions) {
   const toAfter = () => showBefore(false);
   for (const node of [controls, actions, editText])
     for (const type of ["pointerdown", "focusin", "click", "input"]) node.addEventListener(type, toAfter, true);
+  // Moves, Undo and applied tokens announce in komo's one polite live region (index.ts).
+  options.root.addEventListener("komo-announce", event => {
+    const live = options.root.querySelector(".sr-only[aria-live]");
+    if (live) live.textContent = (event as CustomEvent<string>).detail;
+  }, { signal: listeners.signal });
   document.addEventListener("pointermove", onMove, { capture: true, signal: listeners.signal });
   document.addEventListener("pointerdown", onDown, { capture: true, signal: listeners.signal });
   document.addEventListener("click", onClick, { capture: true, signal: listeners.signal });
@@ -728,6 +752,7 @@ export function createDesignMode(options: DesignModeOptions) {
   watchHighlight(options.host, () => active ? [selected ?? hovered, hovered] : [], scheduleOutline, listeners.signal, () => { if (!retainSelection()) clearSelection(); });
   const selectionReady = exporter().then(module => {
     if (listeners.signal.aborted) return;
+    keepFocus = module.keepFocus;
     keyboard = module.designKeyboard({
       host: options.host, compare, reserved: options.reservedKey, root: options.root, undo, signal: listeners.signal,
       selected: () => selectionPage === page() ? selected : null,

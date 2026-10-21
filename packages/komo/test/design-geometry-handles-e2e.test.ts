@@ -188,9 +188,9 @@ describe.skipIf(!chrome)("Figma-style geometry handles", () => {
           const overlapY = Math.min(handle.square.bottom, state.content.bottom) - Math.max(handle.square.top, state.content.top);
           expect(overlapX <= 4.6 || overlapY <= 4.6, `${id} ${handle.name} covers content`).toBe(true);
         }
-        // Nothing in the page overlay carries text but the readout and the live region.
+        // Nothing in the page overlay carries text but the readout; announcements use komo's live region.
         expect(await page.locator(".design-geometry").evaluate(node => [...node.querySelectorAll("*")]
-          .filter(child => !child.matches(".design-geometry__live,.design-geometry__readout") && child.textContent).length)).toBe(0);
+          .filter(child => !child.matches(".design-geometry__readout") && child.textContent).length)).toBe(0);
       }
       // The old Move and resize buttons are gone.
       expect(await page.locator(".design-geometry button").count()).toBe(0);
@@ -274,8 +274,8 @@ describe.skipIf(!chrome)("Figma-style geometry handles", () => {
     try {
       await pick(page, "card");
       const card = page.locator("#card");
-      const live = page.locator(".design-geometry__live");
-      expect(await live.getAttribute("role")).toBe("status");
+      const live = page.locator('.sr-only[aria-live="polite"]');
+      expect(await live.count()).toBe(1);
       await frameOf(page).focus();
       // The label names the shipped keys in the platform's glyphs only.
       const mac = await page.evaluate(() => /mac|iphone|ipad/i.test(navigator.platform));
@@ -356,7 +356,7 @@ describe.skipIf(!chrome)("Figma-style geometry handles", () => {
       expect(await note.textContent()).toContain("sets flex-grow: 0");
       expect(await note.evaluate(node => node.closest(".design-section")?.querySelector("summary")?.textContent)).toBe("Layout");
       expect(await page.locator(".design-geometry .design-geometry-note").count()).toBe(0);
-      expect(await page.locator(".design-geometry__live").textContent()).toMatch(/^Resized: width [\d.]+px$/);
+      expect(await page.locator('.sr-only[aria-live="polite"]').textContent()).toMatch(/^Resized: width [\d.]+px$/);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   });
