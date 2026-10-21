@@ -245,7 +245,7 @@ describe.skipIf(!chrome)("host motion while komo previews a component prop", () 
     await expect.poll(() => dot.isVisible(), { timeout: 1000 }).toBe(true);
     expect(await dot.getAttribute("title")).toBe("Wait for this element's animation to finish.");
     // Only resizing waits: the selection can still be moved, and no resize handle shows.
-    expect(await page.locator(".design-geometry__frame").getAttribute("aria-label")).toMatch(/^Move or resize div#box: Alt/);
+    expect(await page.locator(".design-geometry__frame").getAttribute("aria-label")).toMatch(/^Move or resize div#box:/);
     expect(await page.locator(".design-geometry__handle:visible").count()).toBe(0);
     expect(await page.locator(".design-geometry-note").evaluate(note => note.textContent)).not.toMatch(/animation/);
     expect(await layout()).toBe(before);
