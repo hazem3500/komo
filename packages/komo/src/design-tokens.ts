@@ -1,5 +1,5 @@
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
-import { counterpart } from "./frame-target.js";
+import { counterpart, frameBridge, pageWindow, publishFrameBridge } from "./frame-target.js";
 import type { DesignToken, TokenAdapter, TokenUsage } from "./design-system.js";
 
 /** Explicit bridge from a site's named CSS custom properties into Design mode. */
@@ -118,8 +118,17 @@ export function registerDesignTokenSource(
   };
 }
 
+/** Token sources for the page komo shows: those registered in Frame's viewport iframe when it bridges them. */
+function pageSources(): Iterable<RegisteredDesignTokenSource> {
+  const bridged = frameBridge(pageWindow())?.tokenSources;
+  return bridged ? (bridged() as Iterable<RegisteredDesignTokenSource>) : sources;
+}
+
 export function tokenSourceFor(target: Element | null): RegisteredDesignTokenSource | null {
   if (!target) return null;
+  // An element in Frame's viewport iframe belongs to the sources registered there.
+  const bridged = frameBridge(target)?.tokenSourceFor;
+  if (bridged) return bridged(target as never) as RegisteredDesignTokenSource | null;
   let match: RegisteredDesignTokenSource | null = null;
   for (const source of sources) {
     const root = counterpart(source.root, target.ownerDocument);
@@ -177,7 +186,7 @@ export function previewThemeToken(
 
 /** Show shared theme values as the page had them, or put the edits back. */
 export function showThemeBefore(on: boolean): void {
-  for (const source of sources)
+  for (const source of pageSources())
     for (const [path, edit] of source.themeEdits) {
       const variable = source.tokens.find((token) => token.path === path)?.cssVariable;
       if (!variable) continue;
@@ -481,7 +490,7 @@ export function resetDesignTokens(element: DesignTarget): void {
 
 /** Restore every element and shared theme value, e.g. when Design mode closes. */
 export function resetAllDesignTokens(): void {
-  for (const source of sources) {
+  for (const source of new Set([...sources, ...pageSources()])) {
     for (const element of [source.root, ...source.elementOriginals.keys(), ...source.elementBindings.keys()]) resetDesignTokens(element);
     history.set(source, []);
   }
@@ -538,7 +547,7 @@ function designTokenFor(source: RegisteredDesignTokenSource, token: KomoDesignTo
 export function cssVariableTokens(): TokenAdapter {
   return {
     id: "css-variables",
-    list: () => [...sources].flatMap((source) => source.tokens.map((token) => designTokenFor(source, token))),
+    list: () => [...pageSources()].flatMap((source) => source.tokens.map((token) => designTokenFor(source, token))),
     resolve(element) {
       const source = tokenSourceFor(element);
       const usage: Record<string, TokenUsage> = {};
@@ -569,7 +578,7 @@ export function cssVariableTokens(): TokenAdapter {
       const restores: Array<() => void> = [];
       for (const change of changes) {
         if (change.theme && change.theme !== theme) continue;
-        for (const source of sources) {
+        for (const source of pageSources()) {
           const token = source.tokens.find((item) => item.path === change.path);
           const alias = change.alias && source.tokens.find((item) => item.path === change.alias);
           const value = alias ? `var(${alias.cssVariable})` : change.value;
@@ -591,3 +600,6 @@ export function cssVariableTokens(): TokenAdapter {
     },
   };
 }
+
+// Inside Frame's viewport iframe, komo in the parent window reads this realm's token sources.
+publishFrameBridge({ tokenSourceFor, tokenSources: () => sources });
