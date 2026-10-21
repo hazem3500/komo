@@ -170,7 +170,13 @@ await writeFile(
 // chunk replaces; ~620 in the shared core chunk) and Frame's layout keeps the viewport hooks (~1,000). The
 // size bar's Viewport / In place switch and reason note add ~420 to the frame-size chunk (227,768 measured on main with #156 and #158).
 // 225,810 -> 230,200: both of the above together (230,073 measured with pin stacks and Viewport mode).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 230_200)
+// 230,200 -> 233,000: a 100% Frame pans inside its stage (scrollbars, wheel chaining from the app's
+// scrollers, Space+drag, stage keys, focus reveal, Fit-to-100% anchoring) and a one-time tip about scaled
+// floating UI, all in the frame-size chunk (~+2,400); initial ~+190 moves the frame and its overlays per
+// pan frame. Measured locally on main 53dedcc: 232,848.
+// 233,000 -> 233,200: geometry inside Frame's viewport iframe and frame.defaultMode (#167) on top of the
+// stage pan; 233,066 measured locally with both, plus ~100 for CI's measurement.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 233_200)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -239,9 +245,10 @@ if (report.optionalTokenPage.gzip > 5_150)
 // a configurable canvas selection color with a magenta fallback on matching backgrounds, handles shown
 // only near the pointer or with focus and stepping back for the panel, fields and previews, overlay
 // peek/toggle with the visibility key and an eye button, and the first-use move hint (12,191 -> 13,483), plus ~3%.
-// 14,050: geometry also runs inside Frame's viewport iframe: page rects map through the frame, its keys,
-// scrolling and pointer reach the overlay, and moves adopt a sheet from the frame's realm (13,919 measured).
-if (report.optionalGeometry.gzip > 14_050)
+// 14,200: komo previews hold host motion and a lasting animation shows as a dot by the Layout title (+302: 13,736 -> 14,038 measured).
+// 14,400: geometry also runs inside Frame's viewport iframe: page rects map through the frame, its keys,
+// scrolling and pointer reach the overlay, and moves adopt a sheet from the frame's realm (~+130 on top).
+if (report.optionalGeometry.gzip > 14_400)
   throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
 // API tokens load only when "API tokens" is opened in the Account panel; nothing else imports
 // the chunk. 5,671 measured, plus ~3%.

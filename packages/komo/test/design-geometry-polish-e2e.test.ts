@@ -375,7 +375,13 @@ describe.skipIf(!chrome)("geometry polish screenshots", () => {
     const framed = await open("frame");
     try {
       for (const scale of [0.53, 0.67, 0.86, 1]) {
-        if (scale === 1) { await framed.page.getByRole("button", { name: "100%", exact: true }).click(); await framed.page.waitForTimeout(150); }
+        if (scale === 1) {
+          await framed.page.getByRole("button", { name: "100%", exact: true }).click();
+          // 100% keeps the last point in view; pan the stage back to the page's top-left.
+          await framed.page.mouse.move(8, 400);
+          await framed.page.mouse.wheel(-5000, -5000);
+          await framed.page.waitForTimeout(150);
+        }
         else await fit(framed.page, scale);
         for (const id of ["icon", "card"]) {
           await pick(framed.page, id);
