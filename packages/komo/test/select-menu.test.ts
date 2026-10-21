@@ -216,12 +216,16 @@ describe("select menu", () => {
     expect(list()).toBeNull();
   });
 
-  it("closes on an outside press, a scroll, and when its select is replaced", () => {
+  it("closes on an outside press, a scroll that moves its select, and when its select is replaced", () => {
     const { root, container, select, list, down } = mount();
     down(select);
     document.body.dispatchEvent(new Event("pointerdown", { bubbles: true, composed: true }));
     expect(list()).toBeNull();
     down(select);
+    // A scroll that left the select in place (focus brought it into view first) keeps the list.
+    container.dispatchEvent(new Event("scroll"));
+    expect(list()).not.toBeNull();
+    select.getBoundingClientRect = () => new DOMRect(0, -40, 100, 28);
     container.dispatchEvent(new Event("scroll"));
     expect(list()).toBeNull();
     down(select);

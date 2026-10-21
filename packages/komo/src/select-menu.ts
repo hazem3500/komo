@@ -10,6 +10,8 @@ const css = `.design-field>select{appearance:none;padding-right:20px;cursor:poin
 
 const containers = new WeakSet<HTMLElement>();
 const targets = new WeakMap<HTMLElement, HTMLElement | SVGElement>();
+/** komo's review shortcuts per container; with B and ?, a focused select leaves them to their shortcut (design-keyboard.ts). */
+const shortcuts = new WeakMap<HTMLElement, (event: KeyboardEvent) => boolean>();
 const styled = new WeakSet<Node>();
 let count = 0;
 let current: { select: HTMLSelectElement; close(): void } | undefined;
@@ -18,8 +20,9 @@ let current: { select: HTMLSelectElement; close(): void } | undefined;
  * Replace the system popup of every select inside `container`, now and later.
  * Called on each render, it also closes a popup whose select was just replaced.
  */
-export function attach(container: HTMLElement, element?: HTMLElement | SVGElement): void {
+export function attach(container: HTMLElement, element?: HTMLElement | SVGElement, reserved?: (event: KeyboardEvent) => boolean): void {
   if (element) targets.set(container, element);
+  if (reserved) shortcuts.set(container, reserved);
   if (current && !current.select.isConnected) current.close();
   // Style the root the panel is in now; a container rendered detached gets it on a later call.
   const root = container.getRootNode();
@@ -65,6 +68,7 @@ export function attach(container: HTMLElement, element?: HTMLElement | SVGElemen
     if (!select || current?.select === select || event.ctrlKey || event.metaKey) return;
     // A letter opens the list on its first match, instead of the select changing unseen.
     const letter = event.key.length === 1 && event.key !== " " && !event.altKey;
+    if (letter && (/^[b?]$/i.test(event.key) || shortcuts.get(container)?.(event))) return;
     if (!letter && !["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) return;
     event.preventDefault();
     open(select, targets.get(container), letter ? event.key : "");
@@ -212,7 +216,13 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement, let
     if (!path.includes(list) && !path.includes(select)) close();
   }, { capture: true, signal });
   // Scroll events stay inside komo's shadow root, so the panel's own scrolling is heard there.
-  const scrolled = (event: Event) => { if (event.target !== list) close(); };
+  // Scrolling that moves the select closes its list. A scroll that brought the select into view
+  // before the list opened (focusing it, or the panel keeping its place) arrives later; it is kept.
+  let at: DOMRect | undefined;
+  const scrolled = (event: Event) => {
+    const now = select.getBoundingClientRect();
+    if (event.target !== list && (!at || Math.abs(now.top - at.top) + Math.abs(now.left - at.left) > 1)) close();
+  };
   addEventListener("scroll", scrolled, { capture: true, signal });
   select.getRootNode().addEventListener("scroll", scrolled, { capture: true, signal });
   addEventListener("resize", close, { signal });
@@ -250,6 +260,7 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement, let
   select.setAttribute("aria-expanded", "true");
   select.setAttribute("aria-controls", id);
   // A select laid over a small icon anchors to its whole field instead.
+  at = select.getBoundingClientRect();
   const anchor = (select.offsetWidth < 60 ? host : select).getBoundingClientRect();
   // As wide as the trigger, or its longest option and the check column, within the viewport.
   const width = Math.min(Math.max(anchor.width, list.offsetWidth + 2, 120), innerWidth - 16);

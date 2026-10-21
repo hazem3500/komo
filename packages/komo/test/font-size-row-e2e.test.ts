@@ -28,7 +28,7 @@ beforeAll(async () => {
         {path:'text.large',type:'dimension',class:'text-large',properties:['font-size'],value:'18px',label:'Large'},
       ]});
       window.fetch=async()=>Response.json({threads:[],guests:true});
-      window.komo=initKomo({endpoint:location.origin,project:'font-size-row',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens}});
+      window.komo=initKomo({endpoint:location.origin,project:'font-size-row',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens},shortcuts:location.search.includes('reserve-g')?{comments:'G'}:undefined});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -56,12 +56,12 @@ afterAll(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-async function open(width: number) {
+async function open(width: number, query = "") {
   const tab = await browser.newPage({ viewport: { width, height: 860 }, reducedMotion: "reduce" });
   tab.setDefaultTimeout(5000);
   const errors: string[] = [];
   tab.on("pageerror", error => errors.push(error.message));
-  await tab.goto(origin);
+  await tab.goto(origin + query);
   await tab.waitForFunction(() => !!(window as any).komo);
   await tab.keyboard.press("d");
   await tab.locator("#card").click();
@@ -156,8 +156,10 @@ describe.skipIf(!chrome).each([1280, 390])("the font size row at %ipx", width =>
       await tab.keyboard.press("Escape");
       await expect.poll(() => tab.locator(".komo-select").count()).toBe(0);
     }
-    // A letter on a closed select opens the list on its first match; Enter keeps it.
+    // A letter on a closed select opens the list on its first match; Enter keeps it. The select
+    // starts out of view, so focusing it scrolls the panel just before the list opens.
     const layout = tab.locator('select[data-property="display"]');
+    await layout.evaluate(node => { const scroller = node.closest(".design-inspector__controls")!; scroller.scrollTop = scroller.scrollHeight; });
     await layout.focus();
     await tab.keyboard.press("g");
     await expect.poll(() => tab.locator(".komo-select [data-active]").textContent()).toBe("grid");
@@ -165,6 +167,28 @@ describe.skipIf(!chrome).each([1280, 390])("the font size row at %ipx", width =>
     await tab.keyboard.press("Enter");
     expect(await tab.locator(".komo-select").count()).toBe(0);
     expect(await tab.locator("#card").evaluate(node => (node as HTMLElement).style.display)).toBe("grid");
+    expect(errors).toEqual([]);
+    await tab.close();
+  });
+
+  it("leaves komo's own shortcut keys to their shortcut on a focused select", async () => {
+    // The comments list is bound to G here: on a focused select, G opens the list of comments,
+    // not the select's options; any other letter still types ahead.
+    const { tab, errors } = await open(width, "?reserve-g");
+    const layout = tab.locator('select[data-property="display"]');
+    await layout.scrollIntoViewIfNeeded();
+    await layout.focus();
+    await tab.keyboard.press("f");
+    await expect.poll(() => tab.locator(".komo-select [data-active]").textContent()).toBe("flex");
+    await tab.keyboard.press("Escape");
+    await expect.poll(() => tab.locator(".komo-select").count()).toBe(0);
+    expect(await tab.locator("#card").evaluate(node => (node as HTMLElement).style.display)).toBe("");
+    await layout.focus();
+    await tab.keyboard.press("g");
+    await tab.waitForTimeout(200);
+    expect(await tab.locator(".komo-select").count()).toBe(0);
+    expect(await layout.inputValue()).toBe("block");
+    expect(await tab.locator("#card").evaluate(node => (node as HTMLElement).style.display)).toBe("");
     expect(errors).toEqual([]);
     await tab.close();
   });
