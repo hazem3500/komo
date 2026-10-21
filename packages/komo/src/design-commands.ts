@@ -1,5 +1,5 @@
 import { isMac } from "./kbd.js";
-import type { Shortcut } from "./shortcuts.js";
+import { resolveDesignKeys, type DesignKeys, type Shortcut } from "./shortcuts.js";
 
 const command = (label: string, key: string, group: string, modifiers: Partial<Shortcut> = {}) => ({
   label, group, shortcut: { key, label: key, alt: false, shift: false, ctrl: false, meta: false, ...modifiers },
@@ -13,16 +13,22 @@ export function reviewCommands() {
   ];
 }
 
-export function designCommands(mac = isMac(), visibility?: Shortcut | null) {
+export function designCommands(mac = isMac(), visibility?: Shortcut | null, keys: DesignKeys = resolveDesignKeys()) {
   const canvas = "Design canvas", geometry = "Experimental geometry", text = "Text editing", compare = "Compare";
+  const bound = (label: string, group: string, shortcut: Shortcut | null) => ({ label, group, shortcut });
   return [
-    command("Previous sibling", "ArrowLeft", canvas),
-    command("Next sibling", "ArrowRight", canvas),
-    command("Parent element", "ArrowUp", canvas, { alt: true }),
-    command("Child element", "ArrowDown", canvas, { alt: true }),
-    command("Inspect focused element", "Enter", canvas),
+    // Figma-style: Tab and Shift+Tab walk siblings, Enter and Shift+Enter go in and out.
+    bound("Next sibling", canvas, keys.next),
+    bound("Previous sibling", canvas, keys.prev),
+    bound("First child", canvas, keys.child),
+    bound("Parent element", canvas, keys.parent),
+    command("First child (alternative)", "ArrowDown", canvas, { alt: true }),
+    command("Parent element (alternative)", "ArrowUp", canvas, { alt: true }),
+    command("Inspect focused element, with nothing selected", "Enter", canvas),
     command("Exit Design mode", "Escape", canvas),
     command("Undo last preview", "z", canvas, mac ? { meta: true } : { ctrl: true }),
+    command("Redo last undo", "z", canvas, mac ? { meta: true, shift: true } : { ctrl: true, shift: true }),
+    ...(mac ? [] : [command("Redo last undo", "y", canvas, { ctrl: true })]),
     // M focuses the selection, so Alt+arrows there move it while Alt+arrows on the canvas keep
     // selecting parent and child. Ctrl+arrows switch spaces on macOS, so ⌘ resizes there.
     command("Focus selection to move or resize", "M", canvas),
@@ -40,8 +46,8 @@ export function designCommands(mac = isMac(), visibility?: Shortcut | null) {
     command("New line", "Enter", text, { shift: true }),
     command("Cancel text edit", "Escape", text),
     command("Toggle before and after", "B", compare),
-    command("Show before", "ArrowLeft", compare),
-    command("Show after", "ArrowRight", compare),
+    bound("Show before", compare, keys.before),
+    bound("Show after", compare, keys.after),
   ];
 }
 

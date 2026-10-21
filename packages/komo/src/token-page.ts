@@ -24,6 +24,7 @@ export interface PageTokens {
   readonly size: number;
   readonly steps: readonly object[];
   undo(): void;
+  redo(): void;
   reset(): void;
   proposal(): string | undefined;
   open(): void;
@@ -57,6 +58,8 @@ export function tokenEdits(adapter: TokenAdapter, options: { before?(): boolean;
   const before = () => !!options.before?.();
   const edits = new Map<string, TokenEdit>();
   const steps: Array<{ key: string; edit?: TokenEdit }> = [];
+  // Undone steps with the edit they had made, for redo; a new edit clears them.
+  const undone: Array<{ key: string; edit?: TokenEdit }> = [];
   let cleanup: (() => void) | undefined;
   let applied = "";
   const run = (list: TokenEdit[]) => {
@@ -86,6 +89,7 @@ export function tokenEdits(adapter: TokenAdapter, options: { before?(): boolean;
       const previous = edits.get(key);
       if ((previous?.to ?? edit.from) === edit.to) return false;
       steps.push({ key, edit: previous });
+      undone.length = 0;
       if (edit.to === edit.from) edits.delete(key);
       else edits.set(key, edit);
       sync();
@@ -99,6 +103,15 @@ export function tokenEdits(adapter: TokenAdapter, options: { before?(): boolean;
     undo() {
       const step = steps.pop();
       if (!step) return;
+      undone.push({ key: step.key, edit: edits.get(step.key) });
+      if (step.edit) edits.set(step.key, step.edit);
+      else edits.delete(step.key);
+      sync();
+    },
+    redo() {
+      const step = undone.pop();
+      if (!step) return;
+      steps.push({ key: step.key, edit: edits.get(step.key) });
       if (step.edit) edits.set(step.key, step.edit);
       else edits.delete(step.key);
       sync();
@@ -490,6 +503,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
     get size() { return edits.size; },
     get steps() { return edits.steps; },
     undo() { edits.undo(); refresh(); },
+    redo() { edits.redo(); refresh(); },
     reset: resetAll, proposal, open: page.open,
   });
   return page;

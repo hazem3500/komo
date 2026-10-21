@@ -41,7 +41,7 @@ beforeAll(async () => {
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
     if (path === "/") {
       response.setHeader("content-type", "text/html");
-      response.end(`<html><style>:root{--color-text:#131213;--color-surface:240 240 240}body{margin:0}main{min-height:100vh;box-sizing:border-box;padding:70px}#card{width:240px;height:96px;padding:16px;background:rgb(var(--color-surface));color:var(--color-text);font:16px sans-serif}</style><main><article id="card">Example card</article></main><script type="module" src="/entry.js"></script></html>`);
+      response.end(`<html><style>:root{--color-text:#131213;--color-surface:240 240 240}body{margin:0}main{min-height:calc(100vh - 80px);box-sizing:border-box;padding:70px}#card{width:240px;height:96px;padding:16px;background:rgb(var(--color-surface));color:var(--color-text);font:16px sans-serif}</style><main><article id="card">Example card</article></main><script type="module" src="/entry.js"></script></html>`);
       return;
     }
     try {
@@ -63,6 +63,20 @@ afterAll(async () => {
 
 const light = "rgb(240, 240, 240)", orange = "rgb(255, 128, 0)";
 
+/** A press on empty canvas (the page root's blank area, or outside the page) deselects; re-entry brings the selection back. */
+async function deselect(page: import("playwright-core").Page) {
+  const point = await page.evaluate(() => {
+    for (let y = innerHeight - 4; y > 0; y -= 24) for (let x = 4; x < innerWidth; x += 24) {
+      const node = document.elementFromPoint(x, y);
+      if (node === document.body || node === document.documentElement || node === document.querySelector("main")) return [x, y];
+    }
+    return null;
+  });
+  if (!point) throw new Error("No empty canvas to click");
+  await page.mouse.click(point[0], point[1]);
+  await page.locator(".design-inspector__empty").waitFor();
+}
+
 describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token and geometry edits in %s", mode => {
   it("shows pending token edits after Escape, shares Undo, Before/After, Comment and Reset all, and keeps Layout fields current", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
@@ -82,6 +96,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     const field = (property: string) => page.locator(`.design-inspector [data-property="${property}"]`);
     const tool = (name: string) => bar.getByRole("button", { name, exact: true });
     const editSurface = async () => {
+      if (!await page.locator(".design-inspector__empty").count()) await deselect(page);
       await page.getByRole("button", { name: /^Edit tokens/ }).click();
       // The colour editor keeps each value as it is typed; clicking the row again closes it.
       await row("surface").locator("button").first().click();

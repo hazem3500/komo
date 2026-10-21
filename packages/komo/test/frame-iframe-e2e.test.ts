@@ -270,6 +270,11 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     }
     // The Tokens view previews page-wide inside the frame, not on this page.
     await page.keyboard.press("d");
+    // Re-entry brings the last selection back; a press on the backdrop around the frame deselects.
+    await expect.poll(() => page.locator(".design-inspector__target").textContent()).toContain("div#card-2");
+    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    const outer = (await page.locator("iframe").first().boundingBox())!;
+    await page.mouse.click(outer.x + outer.width / 2, outer.y + outer.height + 8);
     await page.getByRole("button", { name: "Edit tokens", exact: true }).click();
     const row = page.locator(".design-token-row").filter({ has: page.locator("b").getByText("brand", { exact: true }) });
     await row.waitFor();

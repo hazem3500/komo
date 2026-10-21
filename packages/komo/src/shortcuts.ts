@@ -1,6 +1,6 @@
 import type { KomoShortcuts } from "./types.js";
 
-export type ShortcutAction = keyof KomoShortcuts;
+export type ShortcutAction = Exclude<keyof KomoShortcuts, "compare" | "select">;
 
 export interface Shortcut {
   key: string;
@@ -25,7 +25,7 @@ const yielding = new Set<ShortcutAction>(["visibility"]);
 const modifiers = ["Ctrl", "Alt", "Shift", "Meta"] as const;
 const reserved = new Set(["escape", "tab"]);
 
-function parse(action: ShortcutAction, value: string): Shortcut {
+function parse(action: string, value: string, tab = false): Shortcut {
   const parts = value.split("+").map((part) => part.trim());
   // "Shift++" binds the plus key.
   if (parts.length > 1 && parts.at(-1) === "" && parts.at(-2) === "")
@@ -38,7 +38,7 @@ function parse(action: ShortcutAction, value: string): Shortcut {
       throw new Error(`Invalid komo shortcut for ${action}: "${value}".`);
     held.add(name);
   }
-  if (!key || reserved.has(key.toLowerCase()))
+  if (!key || reserved.has(key.toLowerCase()) && !(tab && key.toLowerCase() === "tab"))
     throw new Error(`Invalid komo shortcut for ${action}: "${value}".`);
   const display = key.length === 1 ? key.toUpperCase() : key;
   return {
@@ -49,6 +49,27 @@ function parse(action: ShortcutAction, value: string): Shortcut {
     meta: held.has("Meta"),
     label: [...modifiers.filter((m) => held.has(m)), display].join("+"),
   };
+}
+
+/** Design mode's Before/After and selection keys, Figma-style. */
+export type DesignKeys = Record<"before" | "after" | "next" | "prev" | "parent" | "child", Shortcut | null>;
+const designDefaults = { before: "ArrowLeft", after: "ArrowRight", next: "Tab", prev: "Shift+Tab", parent: "Shift+Enter", child: "Enter" };
+
+/** Resolve `shortcuts.compare` and `shortcuts.select`; false disables one. Tab is allowed here. */
+export function resolveDesignKeys(config: KomoShortcuts = {}): DesignKeys {
+  const given: Record<string, string | false | undefined> = { ...config.compare, ...config.select };
+  const resolved = {} as DesignKeys;
+  const seen = new Map<string, string>();
+  for (const [action, fallback] of Object.entries(designDefaults) as Array<[keyof DesignKeys, string]>) {
+    const value = given[action] ?? fallback;
+    if (value === false) { resolved[action] = null; continue; }
+    const shortcut = parse(action, value, true);
+    const other = seen.get(shortcut.label.toLowerCase());
+    if (other) throw new Error(`komo shortcuts for ${other} and ${action} both use ${shortcut.label}.`);
+    seen.set(shortcut.label.toLowerCase(), action);
+    resolved[action] = shortcut;
+  }
+  return resolved;
 }
 
 /** Resolve configured shortcuts; false disables one. Throws on invalid or duplicate keys. */

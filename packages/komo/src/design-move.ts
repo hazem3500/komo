@@ -13,6 +13,7 @@ type Entry = {
   element: DesignTarget;
   geometry?: Array<{ mode: string; layout: string; move?: MoveRecord; effects: string[] }>;
   undo?(): void;
+  redo?(): void;
   /** The live destination: before `before` in `parent`, appended when null. */
   place?: { parent: Element; before: Element | null; selectors: [string, string | null] };
   clone?: HTMLElement; display?: string; priority?: string; sig?: string | null;
@@ -191,6 +192,12 @@ export function bindMove(hooks: MoveHooks) {
       geometry: [{ mode: 'structure', layout: hooks.layout(element), move, effects: [] }],
       undo() {
         changePreviewStyles(element, ['display'], () => snapshot.restore());
+        hooks.track(element, 'display');
+      },
+      // Back in history, the entry is the latest again, so its stand-in returns on the next sync.
+      redo() {
+        known.add(entry);
+        changePreviewStyles(element, ['display'], () => element.style.setProperty('display', 'none', snapshot.priority));
         hooks.track(element, 'display');
       },
     };

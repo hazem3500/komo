@@ -352,8 +352,10 @@ describe.skipIf(!chrome)("structural move", () => {
       await restored();
       expect(await page.locator(".design-inspector__target").textContent()).toMatch(/#one$/);
       await expect.poll(async () => Math.abs(((await page.locator(".design-geometry__frame").boundingBox())?.y ?? 0) - (await page.locator("#one").boundingBox())!.y)).toBeLessThan(1);
-      // Design mode has no redo: ⌘⇧Z changes nothing.
+      // ⌘⇧Z (Ctrl+Shift+Z) redoes the move; ⌘Z takes it back again.
       await page.keyboard.press("ControlOrMeta+Shift+z");
+      await expect.poll(() => order(page, "list")).toEqual(["Two", "Three", "One*"]);
+      await page.keyboard.press("ControlOrMeta+z");
       await restored();
 
       // Keyboard: M, ⌥↓, then ⌘Z with the selection still focused, and again after Escape.

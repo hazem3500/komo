@@ -1,7 +1,7 @@
 import { designCommands, designGestures, reviewCommands } from "./design-commands.js";
 import { button, el } from "./dom.js";
 import { renderKbd, renderKeycaps, shortcutKeys } from "./kbd.js";
-import type { Shortcut } from "./shortcuts.js";
+import type { DesignKeys, Shortcut } from "./shortcuts.js";
 
 type HelpCommand = { label: string; shortcut?: Shortcut | null; group?: string; keys?: string[]; gesture?: string; aria?: string };
 
@@ -37,7 +37,7 @@ const css = `.komo-shortcuts{box-sizing:border-box;width:min(720px,calc(100vw - 
  * Escape, ?, the close button and a click outside close it at once and return focus to
  * the control that opened it. Opening it again while it is open keeps it open.
  */
-export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], design = false, mode?: "design" | "comment") {
+export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], design = false, mode?: "design" | "comment", keys?: DesignKeys) {
   const open = root.querySelector<HTMLDialogElement>("dialog.komo-shortcuts");
   if (open) return open.querySelector<HTMLElement>("[autofocus]")?.focus();
   const active = root.activeElement ?? document.activeElement;
@@ -66,7 +66,7 @@ export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], desi
   body.setAttribute("role", "region");
   body.setAttribute("aria-label", "Shortcuts");
   // Design mode reuses the comments visibility key for its overlays.
-  const own: HelpCommand[] = design ? [...designGestures(), ...designCommands(undefined, commands.find(item => /^(Hide|Show) comments$/.test(item.label))?.shortcut)] : [];
+  const own: HelpCommand[] = design ? [...designGestures(), ...designCommands(undefined, commands.find(item => /^(Hide|Show) comments$/.test(item.label))?.shortcut, keys)] : [];
   const review: HelpCommand[] = [...commands, ...reviewCommands()];
   const listed = (mode === "design" ? [...own, ...review] : [...review, ...own])
     .filter(item => item.shortcut || item.keys?.length || item.gesture);

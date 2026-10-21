@@ -116,7 +116,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.keyboard.press('ArrowRight');
     expect(await page.locator('.design-inspector__target').textContent()).toContain('#native-summary');
     await page.locator('#native-button').click();
-    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Tab');
     expect(await page.locator('.design-inspector__target').textContent()).toContain('#native-link');
     await page.evaluate(() => (window as any).komo.destroy());
     await page.close();
@@ -235,15 +235,15 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.keyboard.press('d');
     await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
     await page.locator('#target').click({ position: { x: 5, y: 5 } });
-    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Tab');
     expect(await page.locator('.design-inspector__target').textContent()).toBe('p#sibling');
     const rect = await page.locator('#sibling').boundingBox();
     expect(rect!.y).toBeGreaterThanOrEqual(0);
     expect(rect!.y).toBeLessThan(800);
     expect(await page.locator('.design-outline:not(.design-outline--prospective)').isVisible()).toBe(true);
-    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Tab');
     expect(await page.locator('.design-inspector__target').textContent()).toBe('p#sibling');
-    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('Shift+Tab');
     expect(await page.locator('.design-inspector__target').textContent()).toBe('a#target');
     expect(await page.evaluate(() => (window as any).textQA.actions)).toBe(0);
     expect(new URL(page.url()).hash).toBe('');

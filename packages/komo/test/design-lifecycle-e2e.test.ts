@@ -35,7 +35,7 @@ beforeAll(async () => {
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
     if (path === "/") {
       response.setHeader("content-type", "text/html");
-      response.end(`<style>body{margin:0}main{min-height:100vh;padding:60px;box-sizing:border-box}a{display:inline-flex;margin:20px;padding:20px;color:#575456}svg{width:32px;height:32px;fill:currentColor}</style><main><a href="#first"><svg id="first"><path id="shape" d="M2 2h28v28H2z"/></svg></a><a href="#second"><svg id="second"><path d="M2 2h28v28H2z"/></svg></a></main><script type="module" src="/entry.js"></script>`);
+      response.end(`<style>body{margin:0}main{min-height:calc(100vh - 80px);padding:60px;box-sizing:border-box}a{display:inline-flex;margin:20px;padding:20px;color:#575456}svg{width:32px;height:32px;fill:currentColor}</style><main><a href="#first"><svg id="first"><path id="shape" d="M2 2h28v28H2z"/></svg></a><a href="#second"><svg id="second"><path d="M2 2h28v28H2z"/></svg></a></main><script type="module" src="/entry.js"></script>`);
       return;
     }
     try {
@@ -54,6 +54,20 @@ afterAll(async () => {
   server?.close();
   if (directory) await rm(directory, { recursive: true, force: true });
 });
+
+/** A press on empty canvas (the page root's blank area, or outside the page) deselects; re-entry brings the selection back. */
+async function deselect(page: import("playwright-core").Page) {
+  const point = await page.evaluate(() => {
+    for (let y = innerHeight - 4; y > 0; y -= 24) for (let x = 4; x < innerWidth; x += 24) {
+      const node = document.elementFromPoint(x, y);
+      if (node === document.body || node === document.documentElement || node === document.querySelector("main")) return [x, y];
+    }
+    return null;
+  });
+  if (!point) throw new Error("No empty canvas to click");
+  await page.mouse.click(point[0], point[1]);
+  await page.locator(".design-inspector__empty").waitFor();
+}
 
 describe.skipIf(!chrome).each([false, true])("SVG lifecycle in Frame=%s", frame => {
   it("resumes synchronized controls, hands SVG previews to drafts and restores exact styles", async () => {
@@ -106,6 +120,7 @@ describe.skipIf(!chrome).each([false, true])("SVG lifecycle in Frame=%s", frame 
     expect(await computed("#shape")).toBe("rgb(239, 51, 64)");
     await page.keyboard.press("Escape");
     await page.keyboard.press("d");
+    await deselect(page);
     await page.getByRole("button", { name: "Reset all previews", exact: true }).click();
     await page.getByRole("button", { name: "Exit design mode", exact: true }).click();
     await page.waitForTimeout(450);

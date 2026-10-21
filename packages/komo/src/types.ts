@@ -90,6 +90,13 @@ export interface KomoShortcuts {
    * another configured shortcut already uses H.
    */
   visibility?: string | false;
+  /** Design mode Before and After. Default "ArrowLeft" and "ArrowRight"; they pause in text fields, sliders and open lists. */
+  compare?: { before?: string | false; after?: string | false };
+  /**
+   * Design mode selection, used while focus is on the page or the selection, never in the panel.
+   * Defaults: next "Tab", prev "Shift+Tab", child "Enter", parent "Shift+Enter"; Alt+↓ and Alt+↑ stay as aliases.
+   */
+  select?: { next?: string | false; prev?: string | false; parent?: string | false; child?: string | false };
 }
 
 /** How large comment pins are drawn on the page. */

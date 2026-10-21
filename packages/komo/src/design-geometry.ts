@@ -387,6 +387,10 @@ export function bindGeometry(hooks: Hooks) {
           for (const property of before.keys()) { hooks.tokens()?.syncDesignTokenBinding(element, property); hooks.track(element, property); }
         });
         restore();
+      }, redo() {
+        changePreviewStyles(element, values.keys(), () => {
+          for (const [property, [value, priority]] of values) { element.style.setProperty(property, value, priority); hooks.tokens()?.syncDesignTokenBinding(element, property); hooks.track(element, property); }
+        });
       } } as Entry);
       say(`Resized: ${said(current.changes)}`);
     }

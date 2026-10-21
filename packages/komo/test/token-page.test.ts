@@ -66,6 +66,24 @@ describe("tokenEdits", () => {
     expect(calls).toHaveLength(6);
   });
 
+  it("redoes undone token steps in order, and a new edit clears them", () => {
+    const edits = tokenEdits(fake());
+    edits.set(change("color.a", "#111111"));
+    edits.set(change("color.a", "#333333"));
+    edits.undo();
+    edits.undo();
+    expect(edits.size).toBe(0);
+    edits.redo();
+    expect(edits.get("color.a")?.to).toBe("#111111");
+    edits.redo();
+    expect(edits.get("color.a")?.to).toBe("#333333");
+    expect(edits.steps).toHaveLength(2);
+    edits.undo();
+    edits.set(change("color.b", "#222222"));
+    edits.redo();
+    expect(edits.get("color.a")?.to).toBe("#111111");
+  });
+
   it("drops an edit back to the page value and ignores repeats", () => {
     const log: string[] = [];
     const edits = tokenEdits(fake(log));
