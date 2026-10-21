@@ -2472,7 +2472,7 @@ ${collapsed} .avatar img { display: none; }
 .new-comment-composer .draft-body { grid-template-columns: var(--komo-avatar) minmax(0, 1fr) var(--komo-action); column-gap: var(--komo-gutter); }
 .new-comment-composer .draft-body:not(:has(.avatar)) { grid-template-columns: minmax(0, 1fr) var(--komo-action); }
 .dialog .new-comment-composer .draft-body .send { justify-self: center; }
-.new-comment-composer .draft-proposal { margin-right: calc(var(--komo-action) + var(--komo-gutter)); }
+.new-comment-composer .draft-proposal { margin-right: calc(var(--komo-action) + var(--komo-gutter)); max-height: min(45dvh, 360px); min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .thread-navigation { margin: 0 var(--komo-inset) 12px; padding: 10px 12px; border: 1px solid #8883; border-radius: 8px; color: #aaa; }
 .account-layer .account-dialog { --komo-inset: 24px; }
 `;

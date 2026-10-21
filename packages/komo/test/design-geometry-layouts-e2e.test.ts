@@ -250,10 +250,11 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
 
       await pick(page, "cta");
       await inspector(page, "Comment").click();
-      await page.waitForSelector(".draft-proposal");
+      await page.waitForSelector(".draft-proposal .design-card");
       const proposal = (await page.locator(".draft-proposal").textContent())!;
       expect(proposal).not.toContain("Move (translate)");
-      expect(proposal).toContain("Resize (flex-basis) width");
+      // The card names the property once and says what the resize also sets.
+      expect(proposal).toMatch(/width\d+px→\d+px/);
       expect(proposal).toContain("sets flex-grow: 0");
       await page.keyboard.press("Escape");
       expect(await page.locator("#cta").getAttribute("style")).toBeNull();

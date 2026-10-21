@@ -276,7 +276,8 @@ describe("design comments", () => {
     });
     const [propBlock] = parseDesignComment(props);
     expect(propBlock).toMatchObject({ component: "PromoCard", source: "examples/react-props/src/card.tsx:19", changes: [{ label: "tone", before: "quiet", after: "loud" }] });
-    expect((propBlock as { changes: Array<{ apply?: unknown }> }).changes[0].apply).toBeUndefined();
+    // Props preview through the app's component editor, with the value as recorded.
+    expect((propBlock as { changes: Array<{ apply?: unknown }> }).changes[0].apply).toEqual({ kind: "prop", property: "tone", value: "loud" });
   });
 
   it("summarises for the sidebar", () => {

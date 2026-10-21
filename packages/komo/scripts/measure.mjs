@@ -184,7 +184,13 @@ await writeFile(
 // resize, move), Before/After on ← → anywhere, Tab/Enter selection and configurable compare/select
 // keys, one-press Escape (+599 measured on main 418bc33: 232,968 -> 233,567). Initial +472 for the key resolver and named keycaps;
 // resolving the keys on demand instead cost ~500 more in total for the extra chunk boundary.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 233_800)
+// 233,150 -> 235,450: posted design proposals and the composer's card preview every kind on the page
+// (resizes with what they also set, structural moves through a stand-in, React props through the
+// component editor), say why After is off, preview what they can and name the rest, and outline the
+// change and a move's origin in the selection colour (+2,194 measured on main 9652312: 232,968 -> 235,162). All in the
+// on-demand design comment chunk; initial +94 for the host's blocked reasons and the scrolling card.
+// 233,800 -> 236,050: both of the above together (235,806 measured).
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 236_050)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
