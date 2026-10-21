@@ -207,7 +207,11 @@ if (report.optionalTokenPage.gzip > 4_950)
 // with a click threshold, nearest-valid drop targets per flow with an insertion line, container
 // outline and label chip, inert computed-style stand-ins that follow renderer commits, Alt+arrow
 // moves on the focused selection, limits, and the move proposal lines (8,141 -> 12,137), plus ~3%.
-if (report.optionalGeometry.gzip > 12_500)
+// 13,900: design-tool handle polish (7px pixel-snapped squares, outward hit areas, none under 24px),
+// a configurable canvas selection color with a magenta fallback on matching backgrounds, handles shown
+// only near the pointer or with focus and stepping back for the panel, fields and previews, overlay
+// peek/toggle with the visibility key and an eye button, and the first-use move hint (12,191 -> 13,483), plus ~3%.
+if (report.optionalGeometry.gzip > 13_900)
   throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
 // API tokens load only when "API tokens" is opened in the Account panel; nothing else imports
 // the chunk. 5,671 measured, plus ~3%.

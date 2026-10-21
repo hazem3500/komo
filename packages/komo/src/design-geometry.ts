@@ -16,7 +16,7 @@ export type GeometryChange = {
 type Entry = { element?: DesignTarget; kind?: string; property?: string; geometry?: GeometryChange[] };
 type Hooks = {
   signal: AbortSignal;
-  options: Pick<import("./design-mode.js").DesignModeOptions, "root" | "bounds" | "host" | "targetAt" | "design" | "reservedKey">;
+  options: Pick<import("./design-mode.js").DesignModeOptions, "root" | "bounds" | "host" | "targetAt" | "design" | "reservedKey" | "visibility">;
   selected(): DesignTarget | null;
   select(element: Element): void;
   /** Select what a click at this point would, as Design mode's canvas does. */
@@ -239,7 +239,9 @@ type Gesture = {
 };
 
 const HANDLES = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
-const SQUARE = 8, HIT = 16, SMALL = 40, SNAP = 4;
+// Handles: 7px squares in 12px hit areas reaching 8px outside the box and 4px in; boxes under 24px
+// draw none (their edges still drag) and under 40px drop the midpoints. Snap within 4px; show within 12px.
+const SQUARE = 7, OUT = 8, IN = 4, TINY = 24, SMALL = 40, SNAP = 4, NEAR = 12;
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
 export function bindGeometry(hooks: Hooks) {
@@ -247,7 +249,7 @@ export function bindGeometry(hooks: Hooks) {
   const surface = document.createElement('div');
   surface.className = 'design-geometry';
   const style = document.createElement('style');
-  style.textContent = `.design-geometry{position:fixed;inset:0;pointer-events:none;z-index:4}.design-geometry[hidden],.design-geometry [hidden],.design-geometry-note[hidden],.design-geometry-note [hidden]{display:none}.design-geometry:not([data-on])>:not(.design-geometry__live){display:none}.design-outline[data-kind=selected]:has(~.design-geometry[data-on]:not([hidden])){outline:0}.design-geometry>*{position:fixed;box-sizing:border-box}.design-geometry__frame{border:1px solid var(--accent,#bda6ef);outline:0}.design-geometry__frame:focus-visible{box-shadow:0 0 0 3px color-mix(in oklab,var(--accent,#bda6ef) 40%,transparent)}.design-geometry__handle{translate:-50% -50%;width:${HIT}px;height:${HIT}px;pointer-events:auto;touch-action:none}.design-geometry__handle::before{content:'';position:absolute;left:50%;top:50%;width:${SQUARE}px;height:${SQUARE}px;margin:-${SQUARE / 2}px;box-sizing:border-box;background:#fff;border:1px solid var(--accent,#bda6ef)}.design-geometry__handle[data-small]::before{display:none}[data-handle=n],[data-handle=s]{cursor:ns-resize}[data-handle=e],[data-handle=w]{cursor:ew-resize}[data-handle=nw],[data-handle=se]{cursor:nwse-resize}[data-handle=ne],[data-handle=sw]{cursor:nesw-resize}.design-geometry__guide{background:var(--accent,#bda6ef)}.design-geometry__readout{translate:-50% 0;padding:3px 6px;border-radius:6px;background:var(--mm-tooltip-surface,#1f1f1f);color:var(--mm-ink,#f8f7f4);font:500 11px/1.3 system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}.design-geometry[data-dragging] :is(.design-geometry__handle,.design-geometry__guide){display:none}.design-geometry__line{background:var(--accent,#bda6ef);border-radius:1px}.design-geometry__drop{border:2px dashed var(--accent,#bda6ef);border-radius:4px}.design-geometry__chip{translate:none}.design-geometry__live{width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.design-geometry-note{display:grid;gap:8px;padding:0 12px 12px;color:#a19d97;font-size:11px;line-height:1.45}.design-geometry-note p{margin:0}.design-geometry-note div{display:flex;flex-wrap:wrap;gap:6px}.design-geometry-note button{height:24px;padding:0 8px;border-radius:6px;background:#ffffff0f;color:#e9e6e1;font-size:11px}.design-geometry-note button:hover{background:#ffffff1a}.design-geometry-note button[aria-pressed=true]{background:color-mix(in oklab,var(--accent,#bda6ef) 32%,transparent)}`;
+  style.textContent = `.design-geometry{--komo-sel:var(--komo-selection,#0c93f5);position:fixed;inset:0;pointer-events:none;z-index:2}.design-geometry[hidden],.design-geometry [hidden],.design-geometry-note[hidden],.design-geometry-note [hidden]{display:none}.design-geometry:not([data-on])>:not(.design-geometry__live){display:none}.design-outline[data-kind=selected]:has(~.design-geometry[data-on]:not([hidden])){outline:0}:host(.design-active[data-komo-overlays-hidden]) :is(.design-geometry,.design-outline,.pins){visibility:hidden}.design-geometry>*{position:fixed;box-sizing:border-box}.design-geometry__frame{border:1px solid var(--komo-sel);outline:0}.design-geometry__frame:focus-visible{box-shadow:0 0 0 2px color-mix(in oklab,var(--komo-sel) 35%,transparent)}.design-geometry__frame,.design-geometry__handle{transition:opacity .12s ease}.design-geometry__handle{opacity:0;pointer-events:auto;touch-action:none}.design-geometry:is([data-near],[data-active],[data-focus]) .design-geometry__handle{opacity:1}.design-geometry[data-quiet] .design-geometry__handle{opacity:0;pointer-events:none}.design-geometry[data-quiet] .design-geometry__frame{opacity:.4}.design-geometry[data-preview] .design-geometry__frame{opacity:0}.design-geometry__handle::before{content:'';position:absolute;left:var(--x);top:var(--y);width:${SQUARE}px;height:${SQUARE}px;box-sizing:border-box;border-radius:1px;background:#fff;border:1px solid var(--komo-sel);box-shadow:0 1px 2px #0000001f}.design-geometry__handle:hover::before,.design-geometry__handle[data-active]::before{background:var(--komo-sel)}.design-geometry__handle[data-small]::before{display:none}[data-handle=n],[data-handle=s]{cursor:ns-resize}[data-handle=e],[data-handle=w]{cursor:ew-resize}[data-handle=nw],[data-handle=se]{cursor:nwse-resize}[data-handle=ne],[data-handle=sw]{cursor:nesw-resize}.design-geometry__guide{background:var(--komo-selection,#0c93f5)}.design-geometry__readout{translate:-50% 0;padding:2px 6px;border-radius:4px;background:var(--komo-sel);color:#fff;font:500 11px/16px system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 1px 3px #0003}.design-geometry[data-dragging] :is(.design-geometry__handle,.design-geometry__guide){display:none}.design-geometry__line{background:var(--komo-sel);border-radius:1px}.design-geometry__drop{border:2px dashed var(--komo-sel);border-radius:4px}.design-geometry__chip{translate:none}.design-geometry__live{width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}@media (prefers-reduced-motion:reduce){.design-geometry__frame,.design-geometry__handle{transition:none}}.design-geometry-note{display:grid;gap:8px;padding:0 12px 12px;color:#a19d97;font-size:11px;line-height:1.45}.design-geometry-note p{margin:0}.design-geometry-note div{display:flex;flex-wrap:wrap;gap:6px}.design-geometry-note button{height:24px;padding:0 8px;border-radius:6px;background:#ffffff0f;color:#e9e6e1;font-size:11px}.design-geometry-note button:hover{background:#ffffff1a}.design-geometry-note button[aria-pressed=true]{background:color-mix(in oklab,var(--accent,#bda6ef) 32%,transparent)}.design-inspector__eye{display:grid;place-items:center;flex:none;min-width:28px;height:28px;border-radius:7px;color:#909090}.design-inspector__eye:hover{background:#161616;color:#eee}.design-inspector__eye svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.3}`;
   const frame = node('div', 'design-geometry__frame', surface);
   frame.tabIndex = 0;
   frame.setAttribute('role', 'group');
@@ -279,6 +281,39 @@ export function bindGeometry(hooks: Hooks) {
   let rejected: Element | null = null;
   let snapping = false;
   let axes = [false, false];
+  // Where the outline is drawn, the pointer and what it's over, for showing handles only near the selection.
+  let outline: { left: number; top: number; right: number; bottom: number } | null = null;
+  let point = { x: -1e4, y: -1e4 }, over: EventTarget[] = [], pending = 0;
+  let hidden = false, held: { at: number; was: boolean } | undefined;
+  const eye = Object.assign(document.createElement('button'), { type: 'button', className: 'design-inspector__eye' });
+  /** Hide every Design overlay (selection, hover outline, pins and move feedback), or show them again. */
+  function peek(on: boolean) {
+    hidden = on;
+    hooks.options.host.toggleAttribute('data-komo-overlays-hidden', on);
+    eye.setAttribute('aria-pressed', String(on));
+    eye.setAttribute('aria-label', eye.title = on ? 'Show selection' : 'Hide selection');
+    eye.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>${on ? '<path d="M2.5 13.5l11-11"/>' : ''}</svg>`;
+  }
+  peek(false);
+  // Canvas selection color for outlines, handles, Design mode's hover outline and move feedback; the panel keeps its accent.
+  const color = hooks.options.design?.selectionColor;
+  if (color) hooks.options.host.style.setProperty('--komo-selection', color);
+  eye.addEventListener('click', () => peek(!hidden));
+  /**
+   * Handles show near the pointer, while resizing or dragging, or with keyboard focus; over the panel,
+   * while typing in a field or with the color picker open they step back, and a hover preview drops the outline.
+   */
+  function state() {
+    const root = hooks.options.root, inspector = hooks.panel().closest('.design-inspector'), focused = root.activeElement;
+    const popup = root.querySelector('.komo-select:popover-open,.komo-tokens:popover-open');
+    const typing = !!focused && !!inspector?.contains(focused) && focused.matches('input,textarea,select,[contenteditable]');
+    surface.toggleAttribute('data-quiet', !gesture && (!!popup || typing || !!root.querySelector('.komo-color') || (!!inspector && over.includes(inspector))));
+    surface.toggleAttribute('data-preview', !!popup && over.includes(popup));
+    surface.toggleAttribute('data-near', !!outline && point.x > outline.left - NEAR && point.x < outline.right + NEAR && point.y > outline.top - NEAR && point.y < outline.bottom + NEAR);
+    surface.toggleAttribute('data-active', !!gesture || surface.hasAttribute('data-dragging'));
+    surface.toggleAttribute('data-focus', focused === frame);
+  }
+  const later = () => { if (!pending) pending = requestAnimationFrame(() => { pending = 0; state(); }); };
   const controller = new AbortController();
   // A later field edit of the same property supersedes a resize: the style rows carry the net value.
   const recorded = (element: DesignTarget) => hooks.history.reduce<GeometryChange[]>((list, entry) => entry.element !== element ? list
@@ -330,6 +365,7 @@ export function bindGeometry(hooks: Hooks) {
       live.textContent = `Resized: ${said(current.changes)}`;
     }
     if (current.pointer !== undefined && current.source.hasPointerCapture(current.pointer)) current.source.releasePointerCapture(current.pointer);
+    current.source.removeAttribute('data-active');
     readout.hidden = guides[0].hidden = guides[1].hidden = true;
     hooks.update();
     render();
@@ -506,6 +542,7 @@ export function bindGeometry(hooks: Hooks) {
     const visible = hooks.enabled() && !!element?.isConnected;
     surface.hidden = !visible;
     surface.removeAttribute('data-on');
+    outline = null;
     // The panel note stays while the canvas is undecorated, so its own buttons stay clickable.
     note.hidden = !element?.isConnected;
     if (!visible) finish(true);
@@ -525,7 +562,12 @@ export function bindGeometry(hooks: Hooks) {
     snap.setAttribute('aria-pressed', String(snapping));
     const { moves, sizes } = net(recorded(element));
     const done = moves.flatMap(change => change.move ? [moveLines(change.move)[0].slice(2)] : []);
-    text.textContent = [reason, still].filter(Boolean).join(' · ') || [...new Set([...done, ...[...gesture?.changes ?? [], ...moves, ...sizes].flatMap(change => change.effects)])].join(' · ');
+    let seen = true;
+    try { seen = !!localStorage.getItem('komo:geometry-moved'); } catch { /* No hint without storage. */ }
+    text.textContent = [reason, still].filter(Boolean).join(' · ') || [...new Set([...done, ...[...gesture?.changes ?? [], ...moves, ...sizes].flatMap(change => change.effects)])].join(' · ')
+      || (seen || moved ? '' : 'Drag to reorder · M, then ⌥↑/⌥↓');
+    const heading = panel.closest('.design-inspector')?.querySelector('.design-inspector__heading');
+    if (heading && eye.parentElement !== heading) heading.querySelector('.design-inspector__fold')?.before(eye);
     text.hidden = !text.textContent;
     note.hidden = text.hidden && parent.hidden && snap.hidden;
     const rect = box.getBoundingClientRect();
@@ -536,26 +578,38 @@ export function bindGeometry(hooks: Hooks) {
     axes = reason || moved ? [false, false] : info.axes;
     const label = `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}`;
     frame.setAttribute('aria-label', `${still ? 'Resize' : 'Move or resize'} ${label}: ${still ? '' : 'Alt or ⌥ + arrows move, '}Ctrl or ⌘ + arrows resize, Shift for 10px`);
+    // The outline sits on the border box in whole device pixels; each square centres on its 1px line.
+    const dpr = devicePixelRatio || 1, whole = (value: number) => Math.round(value * dpr) / dpr;
+    const left = whole(rect.left), top = whole(rect.top), right = whole(rect.right), bottom = whole(rect.bottom);
+    outline = { left, top, right, bottom };
+    // On a background close to the selection color, the selection turns magenta so it stays visible.
+    const rgb = (node: Element, property: 'backgroundColor') => getComputedStyle(node)[property].match(/[\d.]+/g)?.map(Number) ?? [];
+    const [own, mark] = [rgb(box, 'backgroundColor'), rgb(guides[0], 'backgroundColor')];
+    surface.style.setProperty('--komo-sel', own.length > 2 && (own[3] ?? 1) > 0.5 && Math.hypot(own[0] - mark[0], own[1] - mark[1], own[2] - mark[2]) < 90 ? '#e5359b' : '');
     Object.assign(frame.style, {
-      left: px(rect.left), top: px(rect.top), width: px(rect.width), height: px(rect.height),
-      clipPath: `inset(${[bounds.top - rect.top, rect.right - bounds.right, rect.bottom - bounds.bottom, bounds.left - rect.left].map(value => px(Math.max(0, value))).join(' ')})`,
+      left: px(left), top: px(top), width: px(right - left), height: px(bottom - top),
+      clipPath: `inset(${[bounds.top - top, right - bounds.right, bottom - bounds.bottom, bounds.left - left].map(value => px(Math.max(0, value))).join(' ')})`,
     });
-    // Handles sit centred on the outline, pushed outward where the padding is thinner than half a handle,
-    // so no square covers content. Tiny boxes lose the midpoint squares; their edges still drag.
-    const sx = rect.width / info.borderWidth, sy = rect.height / info.borderHeight;
-    const out = (side: string, scale: number) => Math.max(0, SQUARE / 2 - scale * sum(info.css, [`padding-${side}`, `border-${side}-width`]));
-    const left = rect.left - out('left', sx), right = rect.right + out('right', sx), top = rect.top - out('top', sy), bottom = rect.bottom + out('bottom', sy);
+    // Hit areas reach outward so the body stays draggable; boxes under 24px draw no squares at all.
+    const tiny = right - left < TINY || bottom - top < TINY, inward = tiny ? 0 : IN, reach = OUT + IN - inward;
     const corners = axes[0] && axes[1];
+    const line = (low: number, high: number, side: number) => side < 0 ? low + 0.5 : side > 0 ? high - 0.5 : whole((low + high) / 2) + 0.5;
+    const span = (low: number, high: number, side: number): [number, number] => side < 0 ? [low - reach, low + inward] : side > 0 ? [high - inward, high + reach]
+      : high - low - 2 * inward >= OUT + IN ? [low + inward, high - inward] : [(low + high - OUT - IN) / 2, (low + high + OUT + IN) / 2];
     for (const { handle, ex, ey } of handles) {
-      const x = ex < 0 ? left : ex > 0 ? right : (left + right) / 2, y = ey < 0 ? top : ey > 0 ? bottom : (top + bottom) / 2;
+      const x = line(left, right, ex), y = line(top, bottom, ey);
       const edge = !ex || !ey;
+      const [x0, x1] = span(left, right, ex), [y0, y1] = span(top, bottom, ey);
       handle.hidden = (edge ? !axes[ex ? 0 : 1] || !!info.ratio : !corners) || x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom;
-      handle.toggleAttribute('data-small', edge && corners && (ex ? rect.height : rect.width) < SMALL);
-      Object.assign(handle.style, { left: px(x), top: px(y),
-        width: px(ey && !ex ? Math.max(HIT, rect.width - 2 * HIT) : HIT), height: px(ex && !ey ? Math.max(HIT, rect.height - 2 * HIT) : HIT) });
+      handle.toggleAttribute('data-small', tiny || (edge && corners && (ex ? bottom - top : right - left) < SMALL));
+      Object.assign(handle.style, { left: px(x0), top: px(y0), width: px(x1 - x0), height: px(y1 - y0) });
+      handle.style.setProperty('--x', px(x - SQUARE / 2 - x0));
+      handle.style.setProperty('--y', px(y - SQUARE / 2 - y0));
     }
-    const below = bottom + 10 + 24 < bounds.bottom;
-    Object.assign(readout.style, { left: px(Math.max(bounds.left + 40, Math.min(bounds.right - 40, (left + right) / 2))), top: px(below ? bottom + 10 : top - 10 - 22) });
+    // The size chip sits below the box, clear of the squares, or above it at the bottom edge.
+    const below = bottom + SQUARE + 30 < bounds.bottom;
+    Object.assign(readout.style, { left: px(Math.max(bounds.left + 40, Math.min(bounds.right - 40, (left + right) / 2))), top: px(below ? bottom + SQUARE + 4 : top - SQUARE - 24) });
+    state();
   }
 
   parent.addEventListener('click', () => {
@@ -570,6 +624,8 @@ export function bindGeometry(hooks: Hooks) {
       if (event.button !== 0) return;
       event.preventDefault(); event.stopPropagation();
       start(kind, ex, ey, handle, event);
+      handle.toggleAttribute('data-active', !!gesture);
+      state();
       if (gesture) handle.setPointerCapture(event.pointerId);
     });
     handle.addEventListener('pointermove', event => {
@@ -590,6 +646,14 @@ export function bindGeometry(hooks: Hooks) {
     const arrow = ARROWS[event.key], path = event.composedPath(), focused = path[0] === frame;
     const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
     const typing = path.some(node => node instanceof Element && node.matches('input,textarea,select,[contenteditable]:not([contenteditable=false])'));
+    // In Design mode the comments visibility key hides the overlays: a tap toggles, a hold peeks.
+    const key = hooks.options.visibility;
+    if (key && !typing && hooks.options.host.classList.contains('design-active') && event.key.toLowerCase() === key.key
+        && event.shiftKey === key.shift && event.altKey === key.alt && event.ctrlKey === key.ctrl && event.metaKey === key.meta) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) { held = { at: event.timeStamp, was: hidden }; peek(!hidden); }
+      return;
+    }
     const element = hooks.selected();
     let run: (() => void) | undefined;
     if (!gesture && focused && event.key === 'Escape') run = () => frame.blur();
@@ -613,6 +677,7 @@ export function bindGeometry(hooks: Hooks) {
   }, { capture: true, signal: controller.signal });
   // macOS sends no arrow keyup while ⌘ is held, so releasing the modifier also commits.
   window.addEventListener('keyup', event => {
+    if (held && event.key.toLowerCase() === hooks.options.visibility?.key) { if (event.timeStamp - held.at > 350) peek(held.was); held = undefined; }
     if (gesture?.keyboard && /^(Arrow|Control|Meta)/.test(event.key)) finish();
   }, { capture: true, signal: controller.signal });
   window.addEventListener('scroll', () => {
@@ -628,9 +693,11 @@ export function bindGeometry(hooks: Hooks) {
     }
     render();
   }, { capture: true, passive: true, signal: controller.signal });
+  window.addEventListener('pointermove', event => { point = { x: event.clientX, y: event.clientY }; over = event.composedPath(); later(); }, { capture: true, passive: true, signal: controller.signal });
+  for (const type of ['focusin', 'focusout']) window.addEventListener(type, later, { capture: true, signal: controller.signal });
   readout.hidden = guides[0].hidden = guides[1].hidden = true;
   render();
-  hooks.signal.addEventListener('abort', () => { finish(true); controller.abort(); surface.remove(); style.remove(); note.remove(); }, { once: true });
+  hooks.signal.addEventListener('abort', () => { finish(true); controller.abort(); cancelAnimationFrame(pending); peek(false); surface.remove(); style.remove(); note.remove(); eye.remove(); }, { once: true });
   return {
     render, cancel: () => finish(true),
     /** The geometry section for this element's proposal, from the gestures still in history. */

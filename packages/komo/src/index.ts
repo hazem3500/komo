@@ -5708,7 +5708,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             root: shadow,
             panelRoot: sidebar,
             host,
-            shortcutHelp: openShortcutHelp,
+            shortcutHelp: openShortcutHelp, visibility: shortcuts.visibility,
             reservedKey: event => Object.values(shortcuts).some(shortcut => matchesShortcut(event, shortcut)),
             design: options.design,
             sourceHref: sourceLink,

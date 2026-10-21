@@ -3,7 +3,7 @@ export const designModeStyles = `
    widget shadow root and never become site styles. */
 .design-outline {
   position:fixed; z-index:1; pointer-events:none; box-sizing:border-box;
-  outline:2px solid var(--accent,#bda6ef); outline-offset:2px;
+  outline:2px solid var(--komo-selection,#0c93f5); outline-offset:2px;
   transition:opacity 80ms ease;
 }
 .design-outline[data-kind="hover"] { outline-style:dashed; opacity:.8; }

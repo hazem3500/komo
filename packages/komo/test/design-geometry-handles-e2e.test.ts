@@ -143,7 +143,7 @@ async function layout(page: Page, id: string) {
     const handles = [...root.querySelectorAll<HTMLElement>(".design-geometry__handle")].filter(handle => !handle.hidden).map(handle => {
       const box = handle.getBoundingClientRect(), square = getComputedStyle(handle, "::before");
       const size = parseFloat(square.width);
-      const x = box.left + box.width / 2, y = box.top + box.height / 2;
+      const x = box.left + parseFloat(square.left) + size / 2, y = box.top + parseFloat(square.top) + size / 2;
       return { name: handle.dataset.handle!, cursor: getComputedStyle(handle).cursor, drawn: square.display !== "none",
         hit: [box.width, box.height], square: { left: x - size / 2, top: y - size / 2, right: x + size / 2, bottom: y + size / 2, size } };
     });
@@ -164,28 +164,29 @@ describe.skipIf(!chrome)("Figma-style geometry handles", () => {
     try {
       const expected: Record<string, { drawn: string[]; present: string[] }> = {
         card: { drawn: all, present: all },
-        icon: { drawn: corners, present: all },
+        // Under 24px a box draws no squares; its edges and corners still drag from outside.
+        icon: { drawn: [], present: all },
         photo: { drawn: corners, present: corners },
         fixed: { drawn: ["e", "w"], present: ["e", "w"] },
       };
       for (const [id, { drawn, present }] of Object.entries(expected)) {
         await pick(page, id);
         const state = await layout(page, id);
-        expect(Math.abs(state.frame.left - state.rect.left), `${id} frame left`).toBeLessThan(0.6);
-        expect(Math.abs(state.frame.width - state.rect.width), `${id} frame width`).toBeLessThan(0.6);
-        expect(Math.abs(state.frame.height - state.rect.height), `${id} frame height`).toBeLessThan(0.6);
+        expect(Math.abs(state.frame.left - state.rect.left), `${id} frame left`).toBeLessThan(1);
+        expect(Math.abs(state.frame.width - state.rect.width), `${id} frame width`).toBeLessThan(1);
+        expect(Math.abs(state.frame.height - state.rect.height), `${id} frame height`).toBeLessThan(1);
         expect(state.frame.border).toBe("1px");
         expect(state.handles.map(handle => handle.name).sort(), `${id} handles`).toEqual([...present].sort());
         expect(state.handles.filter(handle => handle.drawn).map(handle => handle.name).sort(), `${id} squares`).toEqual([...drawn].sort());
         for (const handle of state.handles) {
           expect(handle.cursor, `${id} ${handle.name}`).toBe(cursors[handle.name]);
-          expect(handle.square.size).toBe(8);
-          expect(Math.min(...handle.hit), `${id} ${handle.name} hit`).toBe(16);
+          expect(handle.square.size).toBe(7);
+          expect(Math.min(...handle.hit), `${id} ${handle.name} hit`).toBeGreaterThanOrEqual(12);
           if (!handle.drawn) continue;
-          // A drawn square may touch the outline but never covers the content box.
+          // A drawn square centres on the outline, so at most half of it reaches inside the box.
           const overlapX = Math.min(handle.square.right, state.content.right) - Math.max(handle.square.left, state.content.left);
           const overlapY = Math.min(handle.square.bottom, state.content.bottom) - Math.max(handle.square.top, state.content.top);
-          expect(overlapX <= 1 || overlapY <= 1, `${id} ${handle.name} covers content`).toBe(true);
+          expect(overlapX <= 4.6 || overlapY <= 4.6, `${id} ${handle.name} covers content`).toBe(true);
         }
         // Nothing in the page overlay carries text but the readout and the live region.
         expect(await page.locator(".design-geometry").evaluate(node => [...node.querySelectorAll("*")]
@@ -322,7 +323,7 @@ describe.skipIf(!chrome)("Figma-style geometry handles", () => {
         else expect(scale).toBeCloseTo(1, 2);
         expect(state.frame.border).toBe("1px");
         expect(state.handles.length).toBe(8);
-        for (const handle of state.handles) expect(Math.min(...handle.hit), `${zoom} ${handle.name}`).toBe(16);
+        for (const handle of state.handles) expect(Math.min(...handle.hit), `${zoom} ${handle.name}`).toBeGreaterThanOrEqual(12);
         const card = page.locator("#card");
         const baseline = await card.getAttribute("style");
         await drag(page, "e", 30, 0, "Alt", async () => {

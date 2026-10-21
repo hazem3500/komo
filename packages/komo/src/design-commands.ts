@@ -13,7 +13,7 @@ export function reviewCommands() {
   ];
 }
 
-export function designCommands(mac = isMac()) {
+export function designCommands(mac = isMac(), visibility?: Shortcut | null) {
   const canvas = "Design canvas", geometry = "Experimental geometry", text = "Text editing", compare = "Compare";
   return [
     command("Previous sibling", "ArrowLeft", canvas),
@@ -32,6 +32,8 @@ export function designCommands(mac = isMac()) {
     command("Resize width (Shift: 10px)", "ArrowRight", geometry, mac ? { meta: true } : { ctrl: true }),
     command("Resize height (Shift: 10px)", "ArrowDown", geometry, mac ? { meta: true } : { ctrl: true }),
     command("Back to the canvas", "Escape", geometry),
+    // The comments visibility key, reused in Design mode for the selection overlays.
+    ...(visibility ? [{ label: "Hide or show selection · hold to peek", group: canvas, shortcut: visibility }] : []),
     command("Commit text", "Enter", text),
     command("New line", "Enter", text, { shift: true }),
     command("Cancel text edit", "Escape", text),

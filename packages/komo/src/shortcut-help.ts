@@ -65,7 +65,8 @@ export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], desi
   body.setAttribute("autofocus", "");
   body.setAttribute("role", "region");
   body.setAttribute("aria-label", "Shortcuts");
-  const own: HelpCommand[] = design ? [...designGestures(), ...designCommands()] : [];
+  // Design mode reuses the comments visibility key for its overlays.
+  const own: HelpCommand[] = design ? [...designGestures(), ...designCommands(undefined, commands.find(item => /^(Hide|Show) comments$/.test(item.label))?.shortcut)] : [];
   const review: HelpCommand[] = [...commands, ...reviewCommands()];
   const listed = (mode === "design" ? [...own, ...review] : [...review, ...own])
     .filter(item => item.shortcut || item.keys?.length || item.gesture);
