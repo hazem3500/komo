@@ -63,15 +63,21 @@ export function enhance(container: HTMLElement, element: Element): void {
     unit.className = "design-field__unit";
     unit.setAttribute("aria-hidden", "true");
     control.after(unit);
+    // One value sits beside a bound token's chip, and its popup is the token list alone: the row
+    // already names the field and holds the value; Edit as CSS stays. Several values keep Custom.
+    // An open popup keeps its layout while its rows preview other values; it settles on close.
+    const settle = () => {
+      if (inline && !box.querySelector(":scope > .komo-tokens"))
+        box.toggleAttribute("data-inline-token", !/\s/.test(getComputedStyle(element).getPropertyValue(property).trim()));
+    };
     // The token chip joins the row when the design system's controls load, before or after this.
-    const chip = () => { const node = box.querySelector(".design-token-chip"); if (node) chips?.observe(node); return node; };
-    if (inline && !chip()) { const added = new MutationObserver(() => { if (chip()) added.disconnect(); }); added.observe(box, { childList: true, subtree: true }); }
+    const chip = () => { const node = box.querySelector(".design-token-chip"); if (node) chips?.observe(node); };
+    if (inline) new MutationObserver(() => { chip(); settle(); }).observe(box, { childList: true });
+    chip();
     follow(control, () => {
       // Plain numbers are pixels, except a unitless line height; a value with its own unit or a keyword shows none.
       unit.textContent = property !== "line-height" && /^-?\d*\.?\d+$/.test(control.value.trim()) ? "px" : "";
-      // One value sits beside a bound token's chip, and its popup is the token list alone: the row
-      // already names the field and holds the value; Edit as CSS stays. Several values keep Custom.
-      if (inline) box.toggleAttribute("data-inline-token", !/\s/.test(getComputedStyle(element).getPropertyValue(property).trim()));
+      settle();
     });
   }
 }
