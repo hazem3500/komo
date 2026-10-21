@@ -101,7 +101,7 @@ describe.skipIf(!chrome).each([false, true])("SVG lifecycle in Frame=%s", frame 
       await page.getByRole("button", { name: "Before", exact: true }).click();
       await page.getByRole("button", { name: "After", exact: true }).click();
       await page.keyboard.press("v");
-      await page.keyboard.press("d");
+      await openDesign(page);
     }
     await edit("#second", "#2468ff");
     await page.locator(".design-inspector__actions button:last-child").click();
@@ -116,10 +116,10 @@ describe.skipIf(!chrome).each([false, true])("SVG lifecycle in Frame=%s", frame 
     expect(await computed("#second")).toBe("rgb(36, 104, 255)");
     await page.keyboard.press("Escape");
     expect(await page.locator("#second").getAttribute("style")).toBeNull();
-    await page.keyboard.press("d");
+    await openDesign(page);
     expect(await computed("#shape")).toBe("rgb(239, 51, 64)");
     await page.keyboard.press("Escape");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await deselect(page);
     await page.getByRole("button", { name: "Reset all previews", exact: true }).click();
     await page.getByRole("button", { name: "Exit design mode", exact: true }).click();

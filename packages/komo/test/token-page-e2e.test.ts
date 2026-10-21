@@ -207,7 +207,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
 
     // Destroy leaves the page exactly as it was.
     await page.keyboard.press("Escape");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.getByRole("button", { name: "Edit tokens", exact: true }).click();
     await custom("surface", "#00ff00");
     expect((await look()).background).toBe("rgb(0, 255, 0)");

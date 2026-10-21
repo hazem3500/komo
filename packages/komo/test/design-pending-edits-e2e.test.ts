@@ -130,7 +130,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     // Escape shows Before while closed; re-entering puts the tokens back, and says so.
     await page.keyboard.press("Escape");
     await expect.poll(background).toBe(light);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await expect.poll(background).toBe(orange);
     expect(await page.locator(".design-inspector__pending p").textContent()).toBe("1 token change has pending runtime previews. Undo, Reset or reload to restore.");
     await card.click();
@@ -182,7 +182,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     await field("width").fill("180");
     await field("width").press("Enter");
     await page.keyboard.press("Escape");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await editSurface();
     await card.click();
     expect(await count.textContent()).toBe("2 changes");
@@ -216,7 +216,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     await narrow();
     // Escape on a resize handle cancels the gesture, so leave with the close button.
     await page.getByRole("button", { name: "Exit design mode", exact: true }).click();
-    await page.keyboard.press("d");
+    await openDesign(page);
     const pending = page.locator(".design-inspector__pending");
     expect(await pending.locator("p").textContent()).toBe("1 element and 1 token change have pending runtime previews. Undo, Reset or reload to restore.");
     await page.screenshot({ path: join(tmpdir(), `komo-pending-edits-${mode}-pending.png`) });

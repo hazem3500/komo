@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { waitForInspector } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -128,6 +129,7 @@ it.skipIf(!chrome)("native actions, drafts, exact links and visual conversation 
     if (process.env.KOMO_CONVERSATION_EVIDENCE) await page.screenshot({path:join(process.env.KOMO_CONVERSATION_EVIDENCE,'selected.png')});
     await page.locator('summary[aria-label="Comment actions"]').click();
     await page.getByRole('menuitem',{name:'Open in Design',exact:true}).click();
+    await waitForInspector(page);
     await page.getByRole('button',{name:'Back to comment',exact:true}).click();
     await expect.poll(() => page.locator('.dialog textarea').inputValue()).toBe(draft + 'Full thread edit');
     await page.locator('.thread-back').click();

@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { openDesign } from "./design-e2e.js";
+import { openDesign, waitForInspector } from "./design-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -136,7 +136,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     // Design mode has loaded and requested its selection keys; until they arrive, the inspector stays closed.
     expect(await page.locator('.design-inspector[aria-hidden="false"]').count()).toBe(0);
     release();
-    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
+    await waitForInspector(page);
     await page.locator('#early-button').focus();
     await page.keyboard.press('Enter');
     expect(await page.locator('.design-inspector__target').textContent()).toContain('#early-button');
@@ -157,9 +157,10 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       await expect.poll(() => requested).not.toBe(0);
       await page.locator('.design-inspector[aria-hidden="false"]').waitFor({ timeout: 4000 });
       expect(Date.now() - requested).toBeGreaterThanOrEqual(1500);
-      // The held chunk then arrives and Enter inspects the focused link as usual.
+      expect(await page.locator('.design-inspector[data-ready]').count()).toBe(0);
+      // The held chunk then arrives, the inspector is marked ready, and Enter inspects the focused link as usual.
       release();
-      await expect.poll(() => page.locator('.design-inspector__actions [aria-label="Undo"] svg').count()).toBe(1);
+      await waitForInspector(page);
       await page.locator('#target').focus();
       await page.keyboard.press('Enter');
       expect(await page.locator('.design-inspector__target').textContent()).toContain('#target');
@@ -458,7 +459,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.evaluate(() => (window as any).textQA.rewrite());
     await page.waitForTimeout(150);
     expect(await text()).toBe("Host update");
-    await page.keyboard.press("d");
+    await openDesign(page);
     expect(await text()).toBe("Original title\nproposal");
     await page.locator(".design-inspector__actions button:last-child").click();
     const proposal = page.locator(".draft-proposal");

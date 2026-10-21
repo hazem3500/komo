@@ -240,7 +240,7 @@ describe.skipIf(!chrome)("structural move", () => {
       await page.keyboard.press("d");
       await expect.poll(() => clones(page)).toBe(0);
       expect(await page.locator("#three").getAttribute("style")).toBeNull();
-      await page.keyboard.press("d");
+      await openDesign(page);
       await expect.poll(() => order(page, "list")).toEqual(["Three*", "One", "Two"]);
       await page.evaluate(() => (window as any).komo.destroy());
       expect(await clones(page)).toBe(0);
@@ -405,7 +405,7 @@ describe.skipIf(!chrome)("structural move", () => {
       await pick(page, "today");
       await drag(page, "today", "month", 0.8, 0.5);
       await page.locator(".design-inspector__close").click();
-      await page.keyboard.press("d");
+      await openDesign(page);
       await page.locator(".design-inspector__pending").getByRole("button", { name: "Reset all previews" }).click();
       await restored();
       expect(await order(page, "toolbar")).toEqual(["Today", "Week", "Month"]);
@@ -427,7 +427,7 @@ describe.skipIf(!chrome)("structural move", () => {
       expect(await order(page, "toolbar")).toEqual(["Month", "Today*", "Week*"]);
       await page.keyboard.press("ControlOrMeta+z");
       await page.locator(".design-inspector__close").click();
-      await page.keyboard.press("d");
+      await openDesign(page);
       await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy pending proposals" }).click();
       const text = await page.evaluate(() => navigator.clipboard.readText());
       expect(text).toContain("- Move Button “Today”");
@@ -443,7 +443,7 @@ describe.skipIf(!chrome)("structural move", () => {
       await pick(page, "today");
       await drag(page, "today", "month", 0.8, 0.5);
       await page.locator(".design-inspector__close").click();
-      await page.keyboard.press("d");
+      await openDesign(page);
       await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy pending proposals" }).click();
       const text = await page.evaluate(() => navigator.clipboard.readText());
       expect(text).toContain("Proposed geometry changes (preview only)\nTarget: #today\nLayout: flex item, row\n- Move Button “Today”: from Toolbar “Views” (1st) → Toolbar “Views” (3rd)\nFrom: #toolbar · index 0\nTo: #toolbar · index 2 · after");

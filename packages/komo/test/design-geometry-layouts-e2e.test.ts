@@ -187,7 +187,7 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
       }
       await page.keyboard.press("d");
       for (const [id, attribute] of Object.entries(attributes)) expect(await page.locator(`#${id}`).getAttribute("style"), `${id} suspended`).toBe(attribute);
-      await page.keyboard.press("d");
+      await openDesign(page);
       expect(await page.locator("#cell").getAttribute("style")).not.toBe(attributes.cell);
       await page.evaluate(() => (window as any).komo.destroy());
       for (const [id, attribute] of Object.entries(attributes)) expect(await page.locator(`#${id}`).getAttribute("style"), `${id} destroy`).toBe(attribute);
@@ -272,7 +272,7 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
         await drag(page, name, dx, dy);
       }
       await page.locator(".design-inspector__close").click();
-      await page.keyboard.press("d");
+      await openDesign(page);
       await page.locator(".design-inspector__pending").getByRole("button", { name: "Copy pending proposals" }).click();
       const text = await page.evaluate(() => navigator.clipboard.readText());
       expect(text).toMatch(/Proposed geometry changes \(preview only\)\nTarget: #badge\nLayout: position: relative\n- Resize \(size\) width: [\d.]+px → [\d.]+px/);

@@ -177,7 +177,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await page.waitForFunction(() => document.querySelector("main button")?.getAttribute("aria-label") === "Second edit");
     await page.keyboard.press("v");
     await page.waitForFunction(() => document.querySelector("main button")?.className === "button-tertiary");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.waitForFunction(() => document.querySelector("main button")?.className === "button-primary");
     expect(await variant.inputValue()).toBe("primary");
     await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -304,7 +304,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await page.waitForFunction(() => document.querySelector("main button")?.getAttribute("aria-label") === "Preview action");
     await page.keyboard.press("v");
     await page.waitForFunction(() => document.querySelector("main button")?.className === "button-tertiary");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await page.waitForFunction(() => document.querySelector("main button")?.className === "button-primary");
     expect(await variant.inputValue()).toBe("primary");
     await page.getByRole("button", { name: "Undo", exact: true }).click();

@@ -112,7 +112,7 @@ describe.skipIf(!chrome)('experimental geometry', () => {
       expect(await target.getAttribute('style')).toBe(sizedStyle);
       await page.keyboard.press('d');
       expect(await target.getAttribute('style')).toBe(baseline);
-      await page.keyboard.press('d');
+      await openDesign(page);
       expect(await target.getAttribute('style')).toBe(sizedStyle);
       await target.hover();
       await handle(page, 'se').waitFor({ state: 'visible' });

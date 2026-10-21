@@ -144,7 +144,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await theme("dark");
     await expect.poll(() => trigger.getAttribute("title")).toContain("#eeeeee");
     expect(await value()).toBe(dark);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await expect.poll(value).toBe("rgb(238, 238, 238)");
     await page.getByRole("button", { name: "Reset", exact: true }).click();
     expect(await value()).toBe(dark);
@@ -223,7 +223,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await page.keyboard.press("v");
     await theme("dark");
     await expect.poll(value).toBe("rgb(187, 187, 187)");
-    await page.keyboard.press("d");
+    await openDesign(page);
     await expect.poll(value).toBe("rgb(193, 168, 255)");
     const fill = page.locator('[data-field-property="background-color"]');
     await fill.getByRole("button", { name: "Edit background-color value", exact: true }).click();
@@ -265,7 +265,6 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await page.waitForFunction(() => !!(window as any).komo);
     await openDesign(page);
     const target = page.locator("#target");
-    await page.locator('.design-inspector[aria-hidden="false"]').waitFor();
     const pick = await target.boundingBox();
     await page.mouse.click(pick!.x + pick!.width * 0.75, pick!.y + pick!.height / 2);
     const field = page.locator('[data-field-property="border-radius"]');
@@ -443,7 +442,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     expect(await value()).toBe("rgb(36, 104, 255)");
     await page.keyboard.press("v");
     expect(await value()).toBe("rgb(87, 84, 86)");
-    await page.keyboard.press("d");
+    await openDesign(page);
     expect(await value()).toBe("rgb(36, 104, 255)");
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     expect(await value()).toBe("rgb(105, 65, 198)");

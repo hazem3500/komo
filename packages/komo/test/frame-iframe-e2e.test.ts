@@ -268,7 +268,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
       await page.waitForTimeout(200);
     }
     // The Tokens view previews page-wide inside the frame, not on this page.
-    await page.keyboard.press("d");
+    await openDesign(page);
     // Re-entry brings the last selection back; a press on the backdrop around the frame deselects.
     await expect.poll(() => page.locator(".design-inspector__target").textContent()).toContain("div#card-2");
     await page.getByRole("button", { name: "Fit", exact: true }).click();

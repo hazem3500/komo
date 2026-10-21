@@ -121,7 +121,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.getByRole("button", { name: "After", exact: true }).click();
     expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
     await page.keyboard.press("v"); expect(await target.getAttribute("style")).toBe(original);
-    await page.keyboard.press("d");
+    await openDesign(page);
     expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
     // Layout is a keyword field: its own listbox applies; its token chip lists tokens only.
     await page.locator('[data-field-property="display"] > select').click();
@@ -167,7 +167,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await expect.poll(() => target.evaluate(node => node.style.boxShadow)).not.toBe("");
     await page.keyboard.press("Escape");
     await expect.poll(() => target.getAttribute("style")).toBe(original);
-    await page.keyboard.press("d");
+    await openDesign(page);
     await open("width");
     await number.fill("1");
     await page.locator('.komo-custom select[aria-label="Width unit"]').selectOption("rem");
