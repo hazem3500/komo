@@ -100,6 +100,7 @@ async function custom(tab: Page, property: string) {
   await field.scrollIntoViewIfNeeded();
   await settle(tab);
   await trigger(tab, property).click();
+  await tab.locator(".komo-tokens").waitFor(); if (await tab.locator(".komo-tokens__more").isVisible()) await tab.locator(".komo-tokens__more").click();
   await tab.locator(".komo-custom .komo-typed").first().waitFor();
   await settle(tab);
   return tab.locator(".komo-tokens");
@@ -117,10 +118,10 @@ async function entries(tab: Page) {
   return count;
 }
 
-/** Each visible control of the popup, scrolled to inside the popup's own body, is on screen and hit-testable. */
+/** Each visible control of the popup, scrolled to inside the popup's one scroll area, is on screen and hit-testable. */
 const unreachable = (popup: ReturnType<Page["locator"]>) => popup.evaluate(node => {
   const root = node.getRootNode() as ShadowRoot, frame = node.getBoundingClientRect();
-  const body = node.querySelector<HTMLElement>(".komo-custom__body")!;
+  const body = node.querySelector<HTMLElement>(".komo-tokens__custom")!;
   return [...node.querySelectorAll<HTMLElement>("input,select,button,summary")]
     .filter(control => control.getClientRects().length && !control.matches("details:not([open]) :not(summary)"))
     .filter(control => {
@@ -236,7 +237,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("compact typed C
       expect(box.y).toBeGreaterThanOrEqual(0);
       expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
       expect(box.y >= field.y + field.height || box.y + box.height <= field.y).toBe(true);
-      const body = await popup.locator(".komo-custom__body").evaluate(node => ({ client: node.clientHeight, scroll: node.scrollHeight, overflow: getComputedStyle(node).overflowY }));
+      const body = await popup.locator(".komo-tokens__custom").evaluate(node => ({ client: node.clientHeight, scroll: node.scrollHeight, overflow: getComputedStyle(node).overflowY }));
       expect(body.overflow).toBe("auto");
       expect(body.client).toBeLessThanOrEqual(460);
       expect(await unreachable(popup)).toEqual([]);

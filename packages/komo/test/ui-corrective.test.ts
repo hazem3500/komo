@@ -122,6 +122,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await page.waitForFunction(() => !!(window as any).komo);
       await page.keyboard.press('d'); await page.locator('#target').click();
       await page.locator('[data-field-property="color"] select[data-picker]').click();
+      await page.locator('.komo-tokens__more').click();
       const value=page.getByRole('textbox',{name:'Hex',exact:true});
       await expect.poll(()=>value.inputValue()).toBe('CCCCCC');
       await page.evaluate(()=>(window as any).radiusQA.theme('light'));
@@ -139,6 +140,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       const original = await target.evaluate(el => [el.className, el.getAttribute('style')]);
       await page.keyboard.press('d'); await target.click();
       await page.locator('[data-field-property="color"] select[data-picker]').click();
+      await page.locator('.komo-tokens__more').click();
       const value = page.getByRole('textbox', { name: 'Hex', exact: true });
       await expect.poll(() => value.inputValue(), { timeout: 4000 }).toBe('CCCCCC');
       // Each switch lands while the previous refresh may still be settling.
@@ -165,6 +167,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       const before=await target.evaluate(el=>[el.className,el.getAttribute('style')]);
       await page.keyboard.press('d'); await target.click();
       await page.locator('[data-field-property="color"] select[data-picker]').click();
+      await page.locator('.komo-tokens__more').click();
       await page.getByRole('textbox',{name:'Hex',exact:true}).fill('336699');
       const opacity=page.getByRole('textbox',{name:'Opacity',exact:true});
       await opacity.fill('50'); await opacity.press('Enter');
@@ -184,6 +187,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await page.keyboard.press('d');await page.locator('#target').click();
       const trigger=page.locator('[data-field-property="color"] select[data-picker]');
       await trigger.click();
+      await page.locator('.komo-tokens__more').click();
       await page.getByRole('textbox',{name:'Hex',exact:true}).fill('336699');
       const input=page.getByRole('textbox',{name:'Opacity',exact:true});
       await input.fill('50');
@@ -205,6 +209,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await page.keyboard.press('d');await target.click();
       const trigger=page.locator('[data-field-property="color"] select[data-picker]');
       await trigger.click();
+      await page.locator('.komo-tokens__more').click();
       await page.getByRole('textbox',{name:'Hex',exact:true}).fill('336699');
       const opacity=page.getByRole('textbox',{name:'Opacity',exact:true});
       await opacity.fill('50');await opacity.press('Enter');
@@ -281,6 +286,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
           await page.keyboard.press('d'); await target.click();
           const trigger = page.locator('[data-field-property="color"] select[data-picker]');
           await trigger.click();
+          await page.locator('.komo-tokens__more').click();
           if (kind === 'format') await page.getByRole('combobox', { name: 'Color format', exact: true }).selectOption('CSS');
           const input = page.getByRole('textbox', { name: kind === 'format' ? 'CSS color' : 'Hex', exact: true });
           await input.waitFor();
@@ -314,6 +320,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
           }
           expect(await target.evaluate(el => [el.className, el.getAttribute('style')])).toEqual(original);
           await trigger.click();
+          await page.locator('.komo-tokens__more').click();
           await input.waitFor(); await input.press('Escape');
           expect(await target.evaluate(el => [el.className, el.getAttribute('style')])).toEqual(original);
           expect(await trigger.evaluate(el => (el.getRootNode() as ShadowRoot).activeElement === el)).toBe(true);
@@ -334,6 +341,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
         const original = await target.evaluate(el => [el.className, el.getAttribute('style')]);
         const trigger = page.locator('[data-field-property="color"] select[data-picker]');
         await trigger.click();
+        await page.locator('.komo-tokens__more').click();
         const popup = page.locator('.komo-tokens');
         const area = page.getByRole('slider', { name: 'Saturation and brightness', exact: true });
         const hue = page.getByRole('slider', { name: 'Hue', exact: true });
@@ -348,6 +356,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
         const committed = await target.evaluate(el => [el.className, el.getAttribute('style')]);
         expect(committed).not.toEqual(original);
         await trigger.click();
+        await page.locator('.komo-tokens__more').click();
         await hue.waitFor(); await hue.focus();
         const beforeKey = await input.inputValue();
         await hue.press('ArrowRight');
@@ -382,6 +391,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await target.click();
       const trigger = page.locator('[data-field-property="color"] select[data-picker]');
       await trigger.click();
+      await page.locator('.komo-tokens__more').click();
       const popup = page.locator(".komo-tokens");
       const format = page.getByRole("combobox", { name: "Color format", exact: true });
       await format.waitFor();
@@ -417,6 +427,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       expect(await target.evaluate(node => [node.className, node.getAttribute("style")])).toEqual(original);
       expect(await trigger.evaluate(node => (node.getRootNode() as ShadowRoot).activeElement === node)).toBe(true);
       await trigger.click();
+      await page.locator('.komo-tokens__more').click();
       await red.fill("51");
       await page.getByRole("textbox", { name: "Green", exact: true }).fill("102");
       await page.getByRole("textbox", { name: "Blue", exact: true }).fill("153");

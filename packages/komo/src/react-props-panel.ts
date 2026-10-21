@@ -681,6 +681,8 @@ export function attachStyleTokenControls<T extends { property: string; kind?: st
         const open = (event: Event) => {
           event.preventDefault();
           trigger?.focus();
+          // The swatch opens the popup on its color picker; the token chip opens it on the tokens.
+          if (trigger) trigger.dataset.start = "custom";
           trigger?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
         };
         swatch?.addEventListener("click", open);
