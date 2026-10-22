@@ -51,9 +51,11 @@ function parse(action: string, value: string, tab = false): Shortcut {
   };
 }
 
-/** Design mode's Before/After and selection keys, Figma-style. */
+/** Design mode's Before/After and selection keys. Enter posts a comment, so child has no default key. */
 export type DesignKeys = Record<"before" | "after" | "next" | "prev" | "parent" | "child", Shortcut | null>;
-const designDefaults = { before: "ArrowLeft", after: "ArrowRight", next: "Tab", prev: "Shift+Tab", parent: "Shift+Enter", child: "Enter" };
+const designDefaults: Record<keyof DesignKeys, string | false> = {
+  before: "ArrowLeft", after: "ArrowRight", next: "Tab", prev: "Shift+Tab", parent: "Shift+Enter", child: false,
+};
 
 /** Resolve `shortcuts.compare` and `shortcuts.select`; false disables one. Tab is allowed here. */
 export function resolveDesignKeys(config: KomoShortcuts = {}): DesignKeys {

@@ -45,13 +45,13 @@ it("opens shortcut help with ? on the canvas, but not from fields or reserved bi
 let cleanup = new AbortController();
 afterEach(() => { cleanup.abort(); cleanup = new AbortController(); document.body.replaceChildren(); });
 
-it("walks siblings with Tab and Shift+Tab, goes in with Enter or Alt+↓ and out with Shift+Enter or Alt+↑, without wrapping", () => {
+it("walks siblings with Tab and Shift+Tab, goes in with Alt+↓ and out with Shift+Enter or Alt+↑, without wrapping", () => {
   const f = fixture();
   expect(f.press("Tab", document.body, { shiftKey: true }).defaultPrevented).toBe(true);
   expect(f.select).not.toHaveBeenCalled();
   f.press("Tab");
   expect(f.selected().id).toBe("icon");
-  f.press("Enter");
+  f.press("ArrowDown", document.body, { altKey: true });
   expect(f.selected().id).toBe("p");
   f.press("Tab");
   expect(f.selected().id).toBe("q");
@@ -154,6 +154,9 @@ it("lists configured keys in shortcut help, with platform keycaps", () => {
   expect(commands.filter(command => command.group === "Compare").map(command => command.shortcut!.label)).toEqual(["B", "ArrowLeft", "ArrowRight"]);
   expect(renderKbd(commands.find(command => command.label === "Next sibling")!.shortcut!, true).textContent).toBe("Tab");
   expect(renderKbd(commands.find(command => command.label === "Parent element")!.shortcut!, true).textContent).toBe("⇧↵");
+  expect(renderKbd(commands.find(command => command.label === "Post comment")!.shortcut!, true).textContent).toBe("↵");
+  expect(commands.find(command => command.label === "Inspect focused element, with nothing selected")).toBeUndefined();
+  expect(renderKbd(commands.find(command => command.label === "First child")!.shortcut!, true).getAttribute("aria-label")).toBe("Option + ArrowDown");
   expect(renderKbd(commands.find(command => command.label === "Redo last undo")!.shortcut!, true).textContent).toBe("⇧⌘Z");
   expect(designCommands(false).filter(command => command.label === "Redo last undo").map(command => renderKbd(command.shortcut!, false).textContent)).toEqual(["CtrlShiftZ", "CtrlY"]);
   const configured = designCommands(true, null, resolveDesignKeys({ compare: { before: "Shift+B" }, select: { next: false } }));

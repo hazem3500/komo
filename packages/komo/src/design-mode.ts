@@ -822,6 +822,11 @@ export function createDesignMode(options: DesignModeOptions) {
     keyboard = module.designKeyboard({
       host: options.host, compare, reserved: options.reservedKey, root: options.root, undo, redo, keys: options.keys, signal: listeners.signal,
       selected: () => selectionPage === page() ? selected : null,
+      comment() {
+        if (!selected || comment.disabled) return false;
+        comment.click();
+        return true;
+      },
       select: show,
       compareBefore(before) { showBefore(before ?? !showingBefore); },
       help: options.shortcutHelp,

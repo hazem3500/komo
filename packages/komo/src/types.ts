@@ -99,7 +99,8 @@ export interface KomoShortcuts {
   compare?: { before?: string | false; after?: string | false };
   /**
    * Design mode selection, used while focus is on the page or the selection, never in the panel.
-   * Defaults: next "Tab", prev "Shift+Tab", child "Enter", parent "Shift+Enter"; Alt+↓ and Alt+↑ stay as aliases.
+   * Defaults: next "Tab", prev "Shift+Tab", parent "Shift+Enter". Child has no default; Alt+↓ and Alt+↑ stay as aliases.
+   * Plain Enter posts the Design comment when a target is selected.
    */
   select?: { next?: string | false; prev?: string | false; parent?: string | false; child?: string | false };
 }
