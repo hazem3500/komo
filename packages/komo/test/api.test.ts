@@ -107,6 +107,8 @@ beforeAll(async () => {
     cli: { repo: "owner/site", origins: [origin] },
     other: { repo: "owner/site", origins: [origin] },
     photos: { repo: "owner/site", origins: [origin] },
+    scopes: { repo: "owner/site", origins: [origin] },
+    strict: { repo: "owner/site", origins: [origin], allowGuestResolve: false },
     demo: { repo: "owner/site", origins: [origin], retainedCommentsPerUser: 3 },
     snapshots: {
       repo: "owner/site",
@@ -206,6 +208,7 @@ beforeAll(async () => {
       ('${h("owner-token")}','google:fixture','_komo',9999999999999),
       ('${h("guest-management-token")}','guest:fixture','_komo',9999999999999),
       ('${h("owned-token")}','google:fixture','owned',9999999999999),
+      ('${h("strict-verified")}','google:fixture','strict',9999999999999),
       ('${h("claim-token")}','google:fixture','unclaimed',9999999999999),
       ('${h("guest-claim-token")}','guest:fixture','unclaimed',9999999999999);
   `
@@ -434,6 +437,79 @@ describe("shared comments against real workerd and SQLite", () => {
       expect(
         (await call("/threads", "POST", { page: "/", anchor, body: "Bad tags", tags }, guest.token)).status
       ).toBe(400);
+  });
+  it("stores an all-pages scope additively and keeps page-only payloads unchanged", async () => {
+    const call = (path: string, method = "GET", data?: unknown, token?: string) =>
+      request(path, method, data, token, "scope-create", "owner/site", "scopes");
+    const guest = await (await call("/auth/guest", "POST", { name: "Scope author" })).json();
+    const create = async (extra: Record<string, unknown>) => {
+      const response = await call("/threads", "POST", { page: "/reports", anchor, body: "Sidebar link", ...extra }, guest.token);
+      expect(response.status, await response.clone().text()).toBe(201);
+      return (await response.json()).id as string;
+    };
+    const everywhere = await create({ scope: "all" });
+    const legacy = await create({});
+    const explicit = await create({ scope: "page" });
+    for (const scope of ["everywhere", true, null, ["all"], "ALL"])
+      expect((await call("/threads", "POST", { page: "/", anchor, body: "Bad scope", scope }, guest.token)).status).toBe(400);
+    const listed = await (await call("/threads")).json();
+    const byId = (id: string) => listed.threads.find((thread: Thread) => thread.id === id);
+    expect(byId(everywhere).scope).toBe("all");
+    expect(byId(everywhere).page).toBe("/reports");
+    // Page-only threads keep the exact pre-scope shape older clients validate.
+    const legacyKeys = ["anchor", "comments", "createdAt", "id", "page", "resolved", "resolvedBy", "tags", "updatedAt"];
+    for (const id of [legacy, explicit]) expect(Object.keys(byId(id)).sort()).toEqual(legacyKeys);
+    expect(Object.keys(byId(everywhere)).sort()).toEqual([...legacyKeys, "scope"].sort());
+    const compact = await (await call("/threads?authors=1")).json();
+    expect(compact.threads.find((thread: Thread) => thread.id === everywhere).scope).toBe("all");
+    // Updates from clients that predate scopes leave it untouched.
+    expect((await call(`/threads/${everywhere}`, "PATCH", { resolved: true }, guest.token)).status).toBe(200);
+    expect((await call(`/threads/${everywhere}`, "PATCH", { anchor: { ...anchor, x: 0.4 } }, guest.token)).status).toBe(200);
+    expect((await call(`/threads/${everywhere}`, "PATCH", { tag: "nav" }, guest.token)).status).toBe(200);
+    const after = (await (await call("/threads")).json()).threads.find((thread: Thread) => thread.id === everywhere);
+    expect(after).toMatchObject({ scope: "all", resolved: true, tags: ["nav"], anchor: { x: 0.4 } });
+    // Seeded rows written without the column read as page-only.
+    const seeded = await (await request("/threads", "GET", undefined, undefined, "pagination", "owner/site", "test")).json();
+    expect(seeded.threads.length).toBeGreaterThan(0);
+    expect(seeded.threads.every((thread: Thread) => !("scope" in thread))).toBe(true);
+  });
+  it("switches a thread between all pages and its own page with resolve permissions", async () => {
+    const call = (path: string, method = "GET", data?: unknown, token?: string, project = "scopes", branch = "scope-toggle") =>
+      request(path, method, data, token, branch, "owner/site", project);
+    const author = await (await call("/auth/guest", "POST", { name: "Scope author" })).json();
+    const other = await (await call("/auth/guest", "POST", { name: "Other reviewer" })).json();
+    const { id } = await (await call("/threads", "POST", { page: "/a", anchor, body: "Header search" }, author.token)).json();
+    const scopeOf = async () =>
+      (await (await call("/threads")).json()).threads.find((thread: Thread) => thread.id === id)?.scope;
+    const { revision } = await (await call("/threads")).json();
+    // Guests may resolve in this project, so they may also change where a comment shows.
+    const shown = await call(`/threads/${id}`, "PATCH", { scope: "all" }, other.token);
+    expect(shown.status, await shown.clone().text()).toBe(200);
+    expect(await shown.json()).toEqual({ ok: true, scope: "all" });
+    expect(await scopeOf()).toBe("all");
+    expect((await (await call(`/threads?revision=${revision}`)).json()).notModified).toBeUndefined();
+    expect(await (await call(`/threads/${id}`, "PATCH", { scope: "all" }, author.token)).json()).toEqual({ ok: true, scope: "all" });
+    expect(await (await call(`/threads/${id}`, "PATCH", { scope: "page" }, author.token)).json()).toEqual({ ok: true, scope: "page" });
+    expect(await scopeOf()).toBeUndefined();
+    for (const data of [{ scope: "everywhere" }, { scope: null }, { scope: "all", resolved: true }, { scope: "all", anchor }])
+      expect((await call(`/threads/${id}`, "PATCH", data, author.token)).status).toBe(400);
+    expect((await call(`/threads/${id}`, "PATCH", { scope: "all" })).status).toBe(401);
+    expect((await call(`/threads/${id}`, "PATCH", { scope: "all" }, author.token, "scopes", "other-branch")).status).toBe(404);
+    expect((await call(`/threads/${id}`, "PATCH", { scope: "all" }, author.token, "other")).status).toBe(401);
+    expect(await scopeOf()).toBeUndefined();
+
+    // Without guest resolve, only the author or a signed-in reviewer may switch it.
+    const strictAuthor = await (await call("/auth/guest", "POST", { name: "Strict author" }, undefined, "strict")).json();
+    const strictGuest = await (await call("/auth/guest", "POST", { name: "Strict guest" }, undefined, "strict")).json();
+    const strict = await (await call("/threads", "POST", { page: "/a", anchor, body: "Top nav", scope: "all" }, strictAuthor.token, "strict")).json();
+    const strictScope = async () =>
+      (await (await call("/threads", "GET", undefined, undefined, "strict")).json()).threads.find((thread: Thread) => thread.id === strict.id)?.scope;
+    expect((await call(`/threads/${strict.id}`, "PATCH", { scope: "page" }, strictGuest.token, "strict")).status).toBe(403);
+    expect(await strictScope()).toBe("all");
+    expect((await call(`/threads/${strict.id}`, "PATCH", { scope: "page" }, strictAuthor.token, "strict")).status).toBe(200);
+    expect(await strictScope()).toBeUndefined();
+    expect((await call(`/threads/${strict.id}`, "PATCH", { scope: "all" }, "strict-verified", "strict")).status).toBe(200);
+    expect(await strictScope()).toBe("all");
   });
   it("resolves project-only configuration to the existing repository", async () => {
     const canonical = await request(
@@ -1835,6 +1911,7 @@ describe("owner management and private projects", () => {
         body: "Move this feedback",
       })
     ).json();
+    expect((await call(`/threads/${created.id}`, "PATCH", { scope: "all" })).status).toBe(200);
     expect(
       (
         await call(`/threads/${created.id}/comments`, "POST", {
@@ -1921,6 +1998,7 @@ describe("owner management and private projects", () => {
     expect(result.threads[0].comments[0].author.verified).toBe(false);
     const imported = result.threads[0];
     expect(imported.id).toMatch(/^import:/);
+    expect(imported.scope).toBe("all");
     expect(tables.snapshots).toHaveLength(1);
     expect(Object.keys(imported.snapshot)).toEqual(["image"]);
     const copied = await fetch(imported.snapshot.image, {

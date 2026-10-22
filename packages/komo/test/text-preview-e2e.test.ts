@@ -93,7 +93,7 @@ afterAll(async () => {
 });
 
 describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version => {
-  it("inspects focused native buttons, links and summaries with Enter/Space without host activation", async () => {
+  it("inspects focused native buttons, links and summaries with Space without host activation", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     await page.goto(`${origin}/?react=${version}&mode=floating`);
     await page.locator('#target').waitFor();
@@ -104,7 +104,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       area.addEventListener('click', () => (window as any).textQA.actions++);
     });
     await openDesign(page);
-    for (const id of ['native-button', 'native-link', 'native-summary']) for (const key of ['Enter', 'Space']) {
+    for (const id of ['native-button', 'native-link', 'native-summary']) for (const key of ['Space']) {
       await page.locator(`#${id}`).focus();
       await page.keyboard.press(key);
       expect(await page.locator('.design-inspector__target').textContent()).toContain(`#${id}`);
@@ -138,7 +138,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     release();
     await waitForInspector(page);
     await page.locator('#early-button').focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('Space');
     expect(await page.locator('.design-inspector__target').textContent()).toContain('#early-button');
     await page.evaluate(() => (window as any).komo.destroy());
     await page.close();
@@ -158,11 +158,11 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       await page.locator('.design-inspector[aria-hidden="false"]').waitFor({ timeout: 4000 });
       expect(Date.now() - requested).toBeGreaterThanOrEqual(1500);
       expect(await page.locator('.design-inspector[data-ready]').count()).toBe(0);
-      // The held chunk then arrives, the inspector is marked ready, and Enter inspects the focused link as usual.
+      // The held chunk then arrives, the inspector is marked ready, and Space inspects the focused link as usual.
       release();
       await waitForInspector(page);
       await page.locator('#target').focus();
-      await page.keyboard.press('Enter');
+      await page.keyboard.press('Space');
       expect(await page.locator('.design-inspector__target').textContent()).toContain('#target');
       await page.evaluate(() => (window as any).komo.destroy());
     } finally {

@@ -44,6 +44,9 @@ export interface Comment {
   reactions: Record<string, string[]>;
 }
 
+/** Where a thread shows: its own page, or every page where its anchor exists. */
+export type ThreadScope = "page" | "all";
+
 export interface Thread {
   id: string;
   page: string;
@@ -54,6 +57,12 @@ export interface Thread {
   updatedAt: number;
   /** Reviewer-defined labels used to group related feedback. */
   tags?: string[];
+  /**
+   * "all" shows the thread on every page where its anchor resolves, for
+   * persistent layout such as an app sidebar. Omitted means this page only;
+   * `page` stays the page it was made on.
+   */
+  scope?: ThreadScope;
   /**
    * Authenticated URLs of the thread's element snapshots, when it has any.
    * Fetch them with the session's bearer token; HTML is served as plain text.
@@ -99,7 +108,8 @@ export interface KomoShortcuts {
   compare?: { before?: string | false; after?: string | false };
   /**
    * Design mode selection, used while focus is on the page or the selection, never in the panel.
-   * Defaults: next "Tab", prev "Shift+Tab", child "Enter", parent "Shift+Enter"; Alt+↓ and Alt+↑ stay as aliases.
+   * Defaults: next "Tab", prev "Shift+Tab", parent "Shift+Enter". Child has no default; Alt+↓ and Alt+↑ stay as aliases.
+   * Plain Enter posts the Design comment when a target is selected.
    */
   select?: { next?: string | false; prev?: string | false; parent?: string | false; child?: string | false };
 }
@@ -277,6 +287,14 @@ export interface CommentsOptions {
    * Click/area offsets remain relative to that owner; Design inspection stays precise.
    */
   anchorTarget?: (element: Element) => Element | undefined;
+  /**
+   * Selectors for layout shown on every page, e.g. ["nav", "[data-sidebar]",
+   * "header"]. Comments made inside them show on every page where their target
+   * exists; reviewers can switch a comment back to its own page.
+   */
+  persistentRegions?: string[];
+  /** Custom test for persistent layout, alongside persistentRegions. */
+  isPersistent?: (element: Element) => boolean;
   /** Resolve an anchor to a repository-relative source path. */
   source?: (element: Element) => string | undefined;
   /** Defaults to GitHub's source viewer. */

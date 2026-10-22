@@ -1,4 +1,4 @@
-import { check, string, pagePath, anchorValue } from "./validation";
+import { check, string, pagePath, anchorValue, threadScope } from "./validation";
 import { digest } from "./digest";
 import { isEmoji } from "../src/emoji";
 import {
@@ -103,9 +103,11 @@ export async function importProject(
         400,
         "Invalid resolved state."
       );
+      // Exports from before thread scopes have no scope; they stay page-only.
+      const scope = row.scope == null ? "page" : threadScope(row.scope);
       statements.push(
         env.DB.prepare(
-          "INSERT OR IGNORE INTO threads(id,project,repo,branch,page,anchor,resolved,resolved_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id"
+          "INSERT OR IGNORE INTO threads(id,project,repo,branch,page,anchor,resolved,resolved_by,created_at,updated_at,scope) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id"
         ).bind(
           await id(row.id),
           project,
@@ -116,7 +118,8 @@ export async function importProject(
           row.resolved,
           row.resolved_by ? await id(row.resolved_by, true) : null,
           time(row.created_at),
-          time(row.updated_at)
+          time(row.updated_at),
+          scope
         )
       );
     } else if (kind === "comments") {

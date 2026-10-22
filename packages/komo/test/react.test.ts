@@ -73,6 +73,15 @@ describe("useKomo", () => {
     await render({ project: "test", shortcuts: { comment: "N" } });
     expect(init).toHaveBeenCalledTimes(2);
   });
+  it("compares inline persistent region selectors by value", async () => {
+    await render({ project: "test", persistentRegions: ["nav", "[data-sidebar]"] });
+    await render({ project: "test", persistentRegions: ["nav", "[data-sidebar]"] });
+    expect(init).toHaveBeenCalledTimes(1);
+    await render({ project: "test", persistentRegions: ["nav"] });
+    expect(init).toHaveBeenCalledTimes(2);
+    await render({ project: "test" });
+    expect(init).toHaveBeenCalledTimes(3);
+  });
   it("compares inline feature options by value", async () => {
     await render({ project: "test", features: { tags: false } });
     await render({ project: "test", features: { tags: false } });

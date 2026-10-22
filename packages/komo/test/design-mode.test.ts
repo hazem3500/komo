@@ -548,14 +548,60 @@ describe("design mode preview inspector", () => {
     expect(panel.hasAttribute("data-state")).toBe(false);
   });
 
-  it("lets keyboard users select a focused page element without activating it", () => {
+  it("lets keyboard users select a focused page element with Space without activating it", () => {
     const label = document.querySelector<HTMLElement>("#label")!;
     label.tabIndex = 0;
     label.focus();
-    const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true });
+    const event = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true, composed: true });
     label.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
     expect(shadow.querySelector(".design-inspector__target")?.textContent).toBe("span#label");
+  });
+
+  it("posts the selected proposal with Enter on the canvas, and not from a token field or the composer", async () => {
+    pointer("pointerdown", button);
+    const press = (target: EventTarget, init: KeyboardEventInit = {}) => {
+      const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, composed: true, ...init });
+      target.dispatchEvent(event);
+      return event;
+    };
+    expect(press(document.body).defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(comments).toEqual([button]));
+    press(document.body, { repeat: true });
+    press(document.body, { shiftKey: true });
+    press(document.body, { metaKey: true });
+    press(document.body, { ctrlKey: true });
+    press(document.body, { altKey: true });
+    press(document.body, { isComposing: true });
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true, composed: true }));
+    expect(comments).toEqual([button]);
+
+    const field = shadow.querySelector<HTMLInputElement>('[data-property="color"]')!;
+    let blurred = 0;
+    field.addEventListener("blur", () => { blurred += 1; });
+    field.focus();
+    press(field);
+    expect(blurred).toBe(1);
+    expect(comments).toEqual([button]);
+
+    const composer = document.createElement("textarea");
+    composer.setAttribute("aria-label", "Comment");
+    shadow.append(composer);
+    let submitted = 0;
+    composer.addEventListener("keydown", event => {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        submitted += 1;
+      }
+    });
+    composer.focus();
+    press(composer);
+    expect(submitted).toBe(1);
+    expect(comments).toEqual([button]);
+
+    controller.clearSelection();
+    expect(press(document.body).defaultPrevented).toBe(false);
+    expect(comments).toEqual([button]);
   });
 
   it("supports undo and reset, then restores original inline declarations on destroy", () => {

@@ -208,8 +208,10 @@ await writeFile(
 // 236,050 -> 236,200: design proposals (#172), Design mode keys (#170) and #167 with #171 together,
 // 236,061 measured on main bc089fe, plus ~100 for CI's measurement.
 // 236,200 -> 241,100: opt-in comment snapshots, a 4,561-byte on-demand chunk (below) plus ~150 in initial for the /config gate, raw-body uploads and the hook (240,969 measured on main 4d26ac1 with #177).
-// 241,100 -> 245,800: showing those snapshots (thumbnails, the open card, the full-size viewer, HTML as text) is its own on-demand chunk, loaded the first time a thread with a snapshot is shown (4,046 measured). All-features 245,586 on 0.9.91, plus ~200 for CI's measurement. Initial stays inside 102,500.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 245_800)
+// 241,100 -> 245,800: showing those snapshots (thumbnails, the open card, the full-size viewer, HTML as text) is its own on-demand chunk, loaded the first time a thread with a snapshot is shown (4,046 measured).
+// 241,100 -> 241,500: all-pages comments on persistent layout (scope at create, page membership, list label, the … toggle) run at mount (~+400); 241,364 measured on main 4be3b4d, plus ~140 for CI's measurement.
+// 245,800 -> 246,200: both together on 0.9.91 with main's all-pages comments, 246,017 measured, plus ~180 for CI.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 246_200)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

@@ -28,7 +28,9 @@ export function agentPrompt(
     .filter(
       (thread) =>
         !thread.resolved &&
-        (context.page === undefined || thread.page === context.page),
+        (context.page === undefined ||
+          thread.page === context.page ||
+          thread.scope === "all"),
     )
     .map((thread) => ({
       ...thread,
@@ -65,6 +67,8 @@ export function agentPrompt(
     }
     const anchor = thread.anchor;
     lines.push(`### Thread ${value(thread.id)} — Open`);
+    if (thread.scope === "all")
+      lines.push("Shown on: all pages with this target");
     lines.push(`CSS selector: ${value(anchor.selector)}`);
     if (anchor.source) lines.push(`Source reference: ${value(anchor.source)}`);
     for (const [key, label] of Object.entries({
