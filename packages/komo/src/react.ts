@@ -48,6 +48,12 @@ function sameConfig(a: KomoConfig, b: KomoConfig): boolean {
         themes.every((axis, index) => axis === nextThemes[index])
       );
     }
+    if (key === "persistentRegions")
+      // Inline selector lists are new each render; compare their entries.
+      return (
+        a[key]?.length === b[key]?.length &&
+        (a[key] ?? []).every((selector, index) => selector === b[key]?.[index])
+      );
     if (key !== "onboarding") return Object.is(a[key], b[key]);
     const before = a.onboarding;
     const after = b.onboarding;
@@ -82,6 +88,9 @@ export function useKomo(config: KomoConfig): void {
     if (config.enabled === false) return;
     const snapshot = {
       ...config,
+      ...(config.persistentRegions
+        ? { persistentRegions: [...config.persistentRegions] }
+        : {}),
       ...(config.onboarding
         ? {
             onboarding: {

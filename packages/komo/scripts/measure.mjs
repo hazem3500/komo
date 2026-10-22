@@ -204,7 +204,8 @@ await writeFile(
 // 236,050 -> 236,200: design proposals (#172), Design mode keys (#170) and #167 with #171 together,
 // 236,061 measured on main bc089fe, plus ~100 for CI's measurement.
 // 236,200 -> 241,100: opt-in comment snapshots, a 4,561-byte on-demand chunk (below) plus ~150 in initial for the /config gate, raw-body uploads and the hook (240,969 measured on main 4d26ac1 with #177).
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 241_100)
+// 241,100 -> 241,500: all-pages comments on persistent layout (scope at create, page membership, list label, the … toggle) run at mount (~+400); 241,364 measured on main 4be3b4d, plus ~140 for CI's measurement.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 241_500)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
