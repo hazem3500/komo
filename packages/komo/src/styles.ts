@@ -387,7 +387,7 @@ small {
   line-height: 1.5;
 }
 .thread-navigation p { margin: 0 0 4px; }
-.thread-destination { color: inherit; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.thread-destination, .thread-route { color: inherit; text-underline-offset: 3px; overflow-wrap: anywhere; }
 .error {
   background: #fff0e5;
   color: #9c4619;
