@@ -376,7 +376,31 @@ Frame opens on your browser window's own size, labelled **Desktop · 1280 × 800
 - **Exit.** Closing Frame removes the iframe. Your page underneath was never moved, so its layout and scroll are exactly as you left them; the frame opens at the same scroll position.
 - **Adapters** receive the reviewed page: `previewValues(changes, theme, target)` and theme axes' `current(target)` and `apply(id, target)` get `{ document, root }`, which is the frame's document in Viewport mode. Write page-wide previews there. The built-in adapters already do. Element-level `preview(element, …)` needs nothing new: the element is in the frame.
 - **React registrations.** `useKomoInspectable` and `useKomoDesignTokens` registrations made by the framed copy of the app are read through a small bridge that komo, inert inside the frame, publishes; prop edits go through the framed app's own state, and token previews apply to its roots. The React fiber adapter works too.
+- **Single copy.** With `shell: true`, Viewport runs the app only once, in the frame (see below).
 - **Limits.** `pickRoots` names your page's elements, so in Viewport mode all of the frame's body is pickable. Experimental move/resize geometry works in both modes: handles, snapping and structural moves map through the frame's scale.
+
+##### Single-copy Viewport
+
+By default Viewport runs a second copy of your app in the frame, while your page keeps running beneath it. `frame: { mode: "iframe", shell: true }` avoids the second copy: choosing Viewport reloads the page as a **shell** for komo, and the app runs once, in the frame. Your app's entry skips mounting in the shell:
+
+```ts
+import { isShell } from "@hazem3500/komo/shell";
+
+const komo = { project: "YOUR_PROJECT_KEY", frame: { mode: "iframe", shell: true } } as const;
+if (import.meta.env.DEV && isShell(komo.project)) {
+  // komo's shell: start komo only. It loads the app in the frame.
+  const { initKomo } = await import("@hazem3500/komo");
+  initKomo(komo);
+} else {
+  mountApp(); // Your app, which starts komo as usual.
+}
+```
+
+- **Free in production.** `@hazem3500/komo/shell` is side-effect free and reads nothing until `isShell()` is called, so a build-time guard such as `import.meta.env.DEV && isShell(…)` drops it, and the shell branch, from production builds. komo's package checks verify this on a minified build.
+- **Only komo makes a shell.** `isShell(project)` is true only when komo set a random nonce in this tab's sessionStorage and the URL carries the same one, for the same project and origin. A link with `?komo-shell=…` alone, or a flag left by another project, returns false, so a crafted link can't blank your app. If komo doesn't start within 4 seconds (`isShell(project, { timeout })`), the shell clears itself and loads the normal page.
+- **Reloads.** Choosing Viewport asks first, because the reload drops unsaved state in the app and Design previews you haven't posted. Your app's own `beforeunload` guard can also refuse the reload. Cancel or a refused reload keeps the second copy instead. A remembered Frame reopens in the shell on load without asking. In place, Floating, closing Frame or a frame that can't load all reload the normal page on the frame's route.
+- **URL.** The shell's URL follows the frame's route, so reloading or sharing it stays on the same page. The frame's own URL never carries the nonce.
+- **Two copies again.** If a shell ends early (komo didn't start, or the frame couldn't load), the tab keeps the two-copy Viewport until the reviewer picks Viewport again. Server-rendered markup the guard can't skip still paints in the shell.
 
 `frame: { scale: true }` explicitly opts into shrinking the original viewport instead. A CSS transform changes visual rectangles without changing local layout dimensions, so arbitrary coordinate-sensitive host handlers may select the wrong value under scaling. This option requires host controls that already account for transforms; komo does not rewrite native events or browser prototypes. Use the default unscaled Frame or Floating for interactive pages that do not support scaling.
 
@@ -506,6 +530,7 @@ Pass these to `initKomo(config)` from `@hazem3500/komo` or `useKomo(config)` fro
 | `frame.scale` | `boolean` | `false` | Reflow at the available width without scaling. Set `true` only for hosts whose interactive controls account for transformed coordinates; keeps the original viewport layout and scales its contents. |
 | `frame.mode` | `"iframe" \| "transform"` | `"transform"` | `"iframe"` offers Viewport mode: the page in a same-origin iframe sized to the chosen viewport, with real media queries. Falls back in place with the reason when the page can't be framed. |
 | `frame.defaultMode` | `"iframe" \| "transform"` | `"iframe"` | With `mode: "iframe"`, where Frame starts until the reviewer picks Viewport or In place. `"transform"` opens In place, so the second copy of the app loads only when asked for. A remembered choice wins. |
+| `frame.shell` | `boolean` | `false` | With `mode: "iframe"`, Viewport reloads the page as komo's shell, so the app runs once, in the frame. Requires the entry guard `isShell(project)` from `@hazem3500/komo/shell`. See Single-copy Viewport. |
 | `frame.iframeUrl(location)` | `(location: Location) => string` | The current URL | Same-origin URL to load in Viewport mode, e.g. a preview route. Pair it with `page(location)`. Pass a stable function. |
 | `frame.include(element)` | `(element: HTMLElement) => boolean` | Fixed portals, including fixed descendants of static wrappers | Keep body-level dialogs, overlays and toasts inside Frame. Host transforms, animations and focus are preserved without moving portal DOM. Return `true` to map a whole body child through Frame or `false` to exclude its subtree; komo's own host is never framed. |
 | `isolateEvents` | `boolean` | `true` | Keep komo's events out of the host page. See [Host events](#host-events). |
