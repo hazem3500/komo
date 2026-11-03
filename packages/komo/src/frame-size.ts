@@ -9,11 +9,11 @@ export type FrameSizeControls = {
   view(box: Box, window: number[]): FrameView;
   /** True when a remembered size or zoom differs from the default, the window at Fit. */
   sized: boolean;
-  /** The reviewer wants a separate viewport (only offered when the host enables it). */
+  /** The reviewer wants a simulated viewport (only offered when the host enables it). */
   readonly separate: boolean;
   /**
-   * Viewport mode's state: showing the page in its own viewport, loading, or
-   * in place because it can't, with the reason shown in the bar.
+   * The simulated viewport's state: showing the page in its own viewport, loading,
+   * or showing the page itself because it can't, with the reason shown in the bar.
    */
   status(state: { active: boolean; loading?: boolean; reason?: string }): void;
   /** Follow the frame in its box, in window pixels; null hides the controls. */
@@ -31,7 +31,7 @@ export const FRAME_PRESETS: Array<[string, number, number]> = [
 const LIMITS = [[240, 3840], [240, 2160]];
 /** Remembered sizes carry this version; anything older predates the window-at-Fit default. */
 const VERSION = 2;
-const css = `.frame-size{position:fixed;inset:0;pointer-events:none;z-index:3;font-size:12px;font-weight:500;line-height:1;color:#d6d3ce}.frame-size>*{pointer-events:auto;position:fixed}.frame-size [hidden]{display:none}.frame-bar,.frame-zoom,.frame-custom{display:flex;align-items:center;gap:6px}.frame-size button,.frame-size input,.frame-zoom,.frame-menu{font:inherit;color:inherit;background:#1c1c1c;border:1px solid #ffffff14;border-radius:8px;height:28px;padding:0 10px;cursor:pointer}.frame-size button:hover{background:#262626}.frame-size :focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:1px}.frame-zoom{gap:2px;padding:2px}.frame-zoom button{height:22px;border:0;padding:0 8px}.frame-size [aria-pressed=true],.frame-size [aria-checked=true]{background:#ffffff1f;color:#f1efeb}.frame-menu{display:grid;height:auto;min-width:200px;padding:4px;border:0;border-radius:10px;background:#232323;box-shadow:0 0 0 1px #ffffff14,0 12px 32px #0008;font-size:11px;cursor:auto}.frame-menu>button{display:flex;gap:12px;padding:0 8px;border:0;background:none}.frame-menu>button>span{margin-left:auto}.frame-menu>button::after{content:"";width:7px;height:3.5px;align-self:center;margin:-3px 3px 0 0;border:solid #0000;border-width:0 0 1.5px 1.5px;rotate:-45deg}.frame-menu>[aria-checked=true]::after{border-color:#bda6ef}.frame-size .frame-menu>[aria-checked=true]{background:none}.frame-size span,.frame-readout,.frame-custom{color:#898680;font-variant-numeric:tabular-nums}.frame-custom{gap:4px;padding:4px 4px 2px;border-top:1px solid #ffffff0d}.frame-custom input{width:64px;padding:0 6px;cursor:text}.frame-handle{width:10px;margin-left:-5px;cursor:ew-resize;touch-action:none}.frame-corner{width:18px;height:18px;margin:-9px 0 0 -9px;cursor:nwse-resize;touch-action:none}.frame-handle::after,.frame-corner::after{content:'';position:absolute;left:3px;top:calc(50% - 20px);width:4px;height:40px;border-radius:2px;background:#ffffff40}.frame-corner::after{inset:4px;width:auto;height:auto;background:none;border:solid #ffffff59;border-width:0 2px 2px 0;border-radius:0 0 4px 0}.frame-handle:hover::after,.frame-handle[data-active]::after{background:var(--accent,#bda6ef)}.frame-corner:hover::after,.frame-corner[data-active]::after{border-color:var(--accent,#bda6ef)}.frame-readout{padding:5px 8px;border-radius:6px;background:#1c1c1cf2;color:#f1efeb}.frame-scroll{box-sizing:border-box;touch-action:none}.frame-scroll[data-axis=y]{width:12px}.frame-scroll[data-axis=x]{height:12px}.frame-thumb{position:absolute;border-radius:4px;background:#2a2a2ad9;box-shadow:0 0 0 1px #ffffff2e}.frame-scroll[data-axis=y] .frame-thumb{left:3px;right:3px}.frame-scroll[data-axis=x] .frame-thumb{top:3px;bottom:3px}.frame-scroll:hover .frame-thumb,.frame-scroll:focus-visible .frame-thumb,.frame-thumb[data-active]{background:#3a3a3af2;box-shadow:0 0 0 1px #ffffff59}.frame-hand{cursor:grab;touch-action:none}.frame-hand[data-grabbing]{cursor:grabbing}.frame-hint{display:flex;align-items:center;gap:8px;box-sizing:border-box;padding:4px 4px 4px 12px;border:1px solid #ffffff14;border-radius:10px;background:#1c1c1cf2;box-shadow:0 8px 24px #0006;line-height:1.35}.frame-hint span{color:#d6d3ce}.frame-size .frame-hint-close{width:28px;padding:0;border:0;background:none;color:#898680;font-size:16px}.frame-bar{white-space:nowrap}.frame-bar .frame-scale{min-width:44px;color:#f1efeb;font-size:14px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums}.frame-note{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding-left:4px}.frame-note>span:first-child{overflow:hidden;text-overflow:ellipsis}.frame-bar .frame-info{flex:none;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:none;color:#898680}.frame-bar .frame-info:hover{background:#ffffff12;color:#f1efeb}.frame-info::before{content:"i";display:inline-grid;place-items:center;width:12px;height:12px;border:1.2px solid;border-radius:50%;font:italic 600 9px/1 Georgia,serif}.frame-size .frame-tip{position:absolute;z-index:1;top:calc(100% + 8px);right:0;width:260px;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font-weight:400;line-height:1.45;white-space:normal;opacity:0;visibility:hidden;transition:opacity .15s}.frame-info:is(:hover,:focus-visible)+.frame-tip{opacity:1;visibility:visible}.frame-note[data-reason]>span:first-child{color:#f3c27a}.frame-mode{position:relative}.frame-mode button:is(:hover,:focus-visible)::after{content:attr(data-tip) / "";position:absolute;z-index:1;top:calc(100% + 8px);left:0;width:250px;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font-weight:400;line-height:1.45;white-space:normal;text-align:left;pointer-events:none}`;
+const css = `.frame-size{position:fixed;inset:0;pointer-events:none;z-index:3;font-size:12px;font-weight:500;line-height:1;color:#d6d3ce}.frame-size>*{pointer-events:auto;position:fixed}.frame-size [hidden]{display:none}.frame-bar,.frame-zoom,.frame-custom{display:flex;align-items:center;gap:6px}.frame-size button,.frame-size input,.frame-zoom,.frame-menu{font:inherit;color:inherit;background:#1c1c1c;border:1px solid #ffffff14;border-radius:8px;height:28px;padding:0 10px;cursor:pointer}.frame-size button:hover{background:#262626}.frame-size :focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:1px}.frame-zoom{gap:2px;padding:2px}.frame-zoom button{height:22px;border:0;padding:0 8px}.frame-size [aria-pressed=true],.frame-size [aria-checked=true]{background:#ffffff1f;color:#f1efeb}.frame-menu{display:grid;height:auto;min-width:200px;padding:4px;border:0;border-radius:10px;background:#232323;box-shadow:0 0 0 1px #ffffff14,0 12px 32px #0008;font-size:11px;cursor:auto}.frame-menu>button{display:flex;gap:12px;padding:0 8px;border:0;background:none}.frame-menu>button>span{margin-left:auto}.frame-menu>button::after{content:"";width:7px;height:3.5px;align-self:center;margin:-3px 3px 0 0;border:solid #0000;border-width:0 0 1.5px 1.5px;rotate:-45deg}.frame-menu>[aria-checked=true]::after{border-color:#bda6ef}.frame-size .frame-menu>[aria-checked=true]{background:none}.frame-size span,.frame-readout,.frame-custom{color:#898680;font-variant-numeric:tabular-nums}.frame-custom{gap:4px;padding:4px 4px 2px;border-top:1px solid #ffffff0d}.frame-custom input{width:64px;padding:0 6px;cursor:text}.frame-handle{width:10px;margin-left:-5px;cursor:ew-resize;touch-action:none}.frame-corner{width:18px;height:18px;margin:-9px 0 0 -9px;cursor:nwse-resize;touch-action:none}.frame-handle::after,.frame-corner::after{content:'';position:absolute;left:3px;top:calc(50% - 20px);width:4px;height:40px;border-radius:2px;background:#ffffff40}.frame-corner::after{inset:4px;width:auto;height:auto;background:none;border:solid #ffffff59;border-width:0 2px 2px 0;border-radius:0 0 4px 0}.frame-handle:hover::after,.frame-handle[data-active]::after{background:var(--accent,#bda6ef)}.frame-corner:hover::after,.frame-corner[data-active]::after{border-color:var(--accent,#bda6ef)}.frame-readout{padding:5px 8px;border-radius:6px;background:#1c1c1cf2;color:#f1efeb}.frame-scroll{box-sizing:border-box;touch-action:none}.frame-scroll[data-axis=y]{width:12px}.frame-scroll[data-axis=x]{height:12px}.frame-thumb{position:absolute;border-radius:4px;background:#2a2a2ad9;box-shadow:0 0 0 1px #ffffff2e}.frame-scroll[data-axis=y] .frame-thumb{left:3px;right:3px}.frame-scroll[data-axis=x] .frame-thumb{top:3px;bottom:3px}.frame-scroll:hover .frame-thumb,.frame-scroll:focus-visible .frame-thumb,.frame-thumb[data-active]{background:#3a3a3af2;box-shadow:0 0 0 1px #ffffff59}.frame-hand{cursor:grab;touch-action:none}.frame-hand[data-grabbing]{cursor:grabbing}.frame-hint{display:flex;align-items:center;gap:8px;box-sizing:border-box;padding:4px 4px 4px 12px;border:1px solid #ffffff14;border-radius:10px;background:#1c1c1cf2;box-shadow:0 8px 24px #0006;line-height:1.35}.frame-hint span{color:#d6d3ce}.frame-size .frame-hint-close{width:28px;padding:0;border:0;background:none;color:#898680;font-size:16px}.frame-bar{white-space:nowrap}.frame-bar .frame-scale{min-width:44px;color:#f1efeb;font-size:14px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums}.frame-note{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding-left:4px}.frame-note>span:first-child{overflow:hidden;text-overflow:ellipsis}.frame-bar .frame-info{flex:none;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:none;color:#898680}.frame-bar .frame-info:hover{background:#ffffff12;color:#f1efeb}.frame-info::before{content:"i";display:inline-grid;place-items:center;width:12px;height:12px;border:1.2px solid;border-radius:50%;font:italic 600 9px/1 Georgia,serif}.frame-size .frame-tip{position:absolute;z-index:1;top:calc(100% + 8px);right:0;width:260px;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font-weight:400;line-height:1.45;white-space:normal;opacity:0;visibility:hidden;transition:opacity .15s}.frame-info:is(:hover,:focus-visible)+.frame-tip{opacity:1;visibility:visible}.frame-note[data-reason]>span:first-child{color:#f3c27a}.frame-menu>.frame-sim{position:relative;display:grid;gap:3px;width:0;min-width:100%;height:auto;margin-top:4px;padding:8px 32px 8px 8px;text-align:left;line-height:1.3;white-space:normal}.frame-sim::before{content:"";position:absolute;top:8px;right:8px;width:14px;height:14px;box-sizing:border-box;border:1.5px solid #ffffff59;border-radius:4px;transition:background-color .15s,border-color .15s}.frame-sim[aria-checked=true]::before{border-color:var(--accent,#bda6ef);background:var(--accent,#bda6ef)}.frame-menu>.frame-sim::after{position:absolute;top:12px;right:11.5px;margin:0}.frame-menu>.frame-sim[aria-checked=true]::after{border-color:#1c1c1c}.frame-sim>b{font-weight:inherit}.frame-menu>.frame-sim>span{margin:0;font-weight:400;color:#a19d96}`;
 
 const element = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -70,7 +70,7 @@ export function readFrameSize(raw: string | null): { size: Choice; actual: boole
         : Array.isArray(stored.size) && stored.size.length === 2 && stored.size.every(Number.isFinite)
           ? [clamp(stored.size[0]), clamp(stored.size[1], 1)]
           : "window";
-    // The reviewer's Viewport / In place choice, when they made one; otherwise the host's default applies.
+    // Whether the reviewer turned Simulate real viewport off (true) or on, when they chose; otherwise the host's default applies.
     return { size, actual: stored.actual === true, ...(typeof stored.inPlace === "boolean" ? { inPlace: stored.inPlace } : {}) };
   } catch {
     return { size: "window", actual: false };
@@ -78,7 +78,7 @@ export function readFrameSize(raw: string | null): { size: Choice; actual: boole
 }
 /**
  * What to remember for an explicit choice; null for the default, so it is never
- * pinned. `inPlace` records the reviewer's Viewport / In place choice, when they made one.
+ * pinned. `inPlace` records the reviewer's Simulate real viewport choice (true for off), when they made one.
  */
 export const frameSizeRecord = (size: Choice, actual: boolean, inPlace?: boolean) =>
   size === "window" && !actual && inPlace === undefined
@@ -135,14 +135,18 @@ const dimensions = ([width, height]: number[]) =>
  */
 export function mountFrameSize(
   root: ShadowRoot,
-  /** The visible frame: the page root in place, the viewport iframe's port otherwise. */
+  /** The visible frame: the page root itself, or the simulated viewport iframe's port. */
   surface: () => HTMLElement,
   key: string,
-  /** Re-layout; `toggled` when the reviewer switched between Viewport and In place. */
+  /** Re-layout; `toggled` when the reviewer turned Simulate real viewport on or off. */
   apply: (toggled?: boolean) => void,
   // Passed in, so this chunk does not pull the eager layout module into a shared chunk.
   frameView: typeof placeView,
-  /** Viewport mode is enabled (frame.mode "iframe"), starting in this mode (frame.defaultMode) until the reviewer picks one. */
+  /**
+   * The simulated viewport is offered (frame.mode "iframe"), starting in this mode (frame.defaultMode)
+   * until the reviewer chooses. Without it the page itself is always shown: a remembered choice is
+   * ignored, but kept, so it applies again if the host turns the simulated viewport back on.
+   */
   viewport: false | "iframe" | "transform" = false,
   hooks: {
     /** The frame panned: move it and what follows it, without a full layout. */
@@ -165,9 +169,10 @@ export function mountFrameSize(
   let current: FrameView | null | undefined;
   // Only the reviewer's own choices are remembered: a preset, a custom size, a drag,
   // an arrow-key resize or the zoom. Choosing the default forgets the entry.
+  const choice = () => (viewport ? (chosen ? !separate : undefined) : restored.inPlace);
   const remember = () => {
     try {
-      const record = frameSizeRecord(size, actual, viewport && chosen ? !separate : undefined);
+      const record = frameSizeRecord(size, actual, choice());
       if (record) localStorage.setItem(key, record);
       else localStorage.removeItem(key);
     } catch {
@@ -175,14 +180,14 @@ export function mountFrameSize(
     }
   };
   // An old or unreadable entry is dropped, so it can't come back.
-  if (raw !== null && raw !== frameSizeRecord(size, actual, viewport && chosen ? !separate : undefined)) remember();
+  if (raw !== null && raw !== frameSizeRecord(size, actual, choice())) remember();
   // 100% larger than the stage pans like a design tool; these are page pixels past the stage's edge.
   let pan: Size = [0, 0];
   let range: Size = [0, 0];
   let pointer: { x: number; y: number } | null = null;
   const change = (next: Choice, zoom: boolean, persist = true, own = separate) => {
     // Fit to 100% keeps the selection, or the point last under the pointer, where it was.
-    // (In place only: the viewport iframe's port scrolls itself and starts at the frame's top-left.)
+    // (The page itself only: the viewport iframe's port scrolls itself and starts at the frame's top-left.)
     if (zoom && !actual && current && lastBox && !state.active) {
       const point = hooks.anchor?.() ?? pointer ?? {
         x: current.left + (current.width * current.scale) / 2,
@@ -216,13 +221,7 @@ export function mountFrameSize(
   const fit = element("button", "", { type: "button", title: "Show the whole viewport" }, "Fit");
   const full = element("button", "", { type: "button", title: "Actual CSS pixels" }, "100%");
   zoom.append(fit, full);
-  // Viewport shows the page in its own iframe; In place reflows this page.
-  const mode = element("div", "frame-zoom frame-mode", { role: "group", "aria-label": "Viewport", hidden: "" });
-  // One line each on what the two modes trade, shown on hover and focus and read as the description.
-  const own = element("button", "", { type: "button", "data-tip": "Loads the page in a frame at this size. Breakpoints, popovers and menus behave like a real screen. Runs a second copy of the app.", "aria-description": "Loads the page in a frame at this size. Breakpoints, popovers and menus behave like a real screen. Runs a second copy of the app." }, "Viewport");
-  const inPlace = element("button", "", { type: "button", "data-tip": "Shows the page itself resized. No extra copy, but breakpoints follow your browser window.", "aria-description": "Shows the page itself resized. No extra copy, but breakpoints follow your browser window." }, "In place");
-  mode.append(own, inPlace);
-  // In place, the page keeps the browser window's media queries; say so when they disagree.
+  // The page itself keeps the browser window's media queries; say so when they disagree.
   const note = element("span", "frame-note", { hidden: "" });
   const noteText = element("span", "", {}, "Layout follows your browser window");
   const info = element("button", "frame-info", {
@@ -231,9 +230,9 @@ export function mountFrameSize(
     "aria-describedby": "frame-tip",
   });
   const tip = element("span", "frame-tip", { id: "frame-tip", role: "tooltip" });
-  const windowTip = `Media queries, window.innerWidth and resize events still match your browser window, because the page has no viewport of its own here. ${viewport ? "Choose Viewport to see its real breakpoints." : "Resize the browser window to see another breakpoint."}`;
+  const windowTip = `Media queries, window.innerWidth and resize events still match your browser window, because the page has no viewport of its own here. ${viewport ? "Turn on Simulate real viewport in the size menu for real breakpoints." : "Resize the browser window to see another breakpoint."}`;
   note.append(noteText, info, tip);
-  bar.append(trigger, scale, zoom, mode, note);
+  bar.append(trigger, scale, zoom, note);
   const menu = element("div", "frame-menu", {
     role: "menu",
     "aria-label": "Frame size",
@@ -286,6 +285,19 @@ export function mountFrameSize(
     change([clamp(+fields[0].value), clamp(+fields[1].value, 1)], actual);
   });
   menu.append(...items, custom);
+  // The simulated viewport is a checkbox row at the end of the size menu, offered only when the host enables it.
+  // Toggling it keeps the menu open, so the reviewer sees the switch happen.
+  const simulate = element("button", "frame-sim", {
+    type: "button",
+    role: "menuitemcheckbox",
+    "aria-labelledby": "frame-sim-label",
+    "aria-describedby": "frame-sim-hint",
+  });
+  simulate.append(
+    element("b", "", { id: "frame-sim-label" }, "Simulate real viewport"),
+    element("span", "", { id: "frame-sim-hint" }, "Reloads the page in a frame so breakpoints and popovers match this size. Runs a second copy of the app."),
+  );
+  if (viewport) menu.append(simulate);
   const edge = element("div", "frame-handle", {
     role: "slider",
     tabindex: "0",
@@ -327,7 +339,7 @@ export function mountFrameSize(
 
   let ratio = 1;
   const host = root.host as HTMLElement;
-  // Viewport mode's port scrolls natively; this pans the in-place frame.
+  // The simulated viewport's port scrolls natively; this pans the page itself.
   const panning = () => !!current?.pan && !layer.hidden && !state.active;
   const panTo = (x: number, y: number) => {
     const next = clampPan([x, y], range);
@@ -407,8 +419,11 @@ export function mountFrameSize(
     if (!menu.hidden && !event.composedPath().some((node) => node === menu || node === trigger)) close();
   }, { capture: true, signal: abort.signal });
   fit.addEventListener("click", () => change(size, false));
-  own.addEventListener("click", () => ((chosen = true), change(size, actual, true, true)));
-  inPlace.addEventListener("click", () => ((chosen = true), change(size, actual, true, false)));
+  simulate.addEventListener("click", () => {
+    chosen = true;
+    change(size, actual, true, !separate);
+    simulate.setAttribute("aria-checked", String(separate));
+  });
   full.addEventListener("click", () => {
     dismissHint();
     change(size, true);
@@ -597,7 +612,7 @@ export function mountFrameSize(
       );
       range = view.pan ? [Math.max(0, view.width * view.scale - box.width), Math.max(0, view.height * view.scale - box.height)] : [0, 0];
       pan = clampPan(pan, range);
-      // The stage pan moves the in-place frame; the viewport iframe's port scrolls natively instead.
+      // The stage pan moves the page itself; the viewport iframe's port scrolls natively instead.
       const offset = state.active ? [0, 0] : pan;
       return (current = { ...view, left: view.left - offset[0], top: view.top - offset[1] });
     },
@@ -645,15 +660,13 @@ export function mountFrameSize(
       fit.setAttribute("aria-pressed", String(!actual));
       full.setAttribute("aria-pressed", String(actual));
       scale.textContent = `${Math.round(view.scale * 100)}%`;
-      mode.hidden = !viewport;
-      own.setAttribute("aria-pressed", String(separate));
-      inPlace.setAttribute("aria-pressed", String(!separate));
-      // In place because the viewport can't load: say why, in place of the breakpoint note.
+      simulate.setAttribute("aria-checked", String(separate));
+      // The page itself because the simulated viewport can't load: say why, in place of the breakpoint note.
       const failed = separate && !state.active && !state.loading && !!state.reason;
-      noteText.textContent = failed ? "Viewport unavailable · showing in place" : state.loading ? "Loading viewport…" : "Layout follows your browser window";
-      tip.textContent = failed ? state.reason! : windowTip;
+      noteText.textContent = failed ? "Simulated viewport unavailable" : state.loading ? "Loading simulated viewport…" : "Layout follows your browser window";
+      tip.textContent = failed ? `${state.reason} Showing the page itself.` : windowTip;
       info.hidden = !!state.loading;
-      info.setAttribute("aria-label", failed ? "Why the viewport is unavailable" : "Why the layout follows your browser window");
+      info.setAttribute("aria-label", failed ? "Why the simulated viewport is unavailable" : "Why the layout follows your browser window");
       note.toggleAttribute("data-reason", failed);
       note.hidden = state.active || (!failed && !state.loading && Math.abs(view.width - innerWidth / zoom) < 1);
       edge.setAttribute("aria-valuenow", String(Math.round(view.width)));
@@ -664,7 +677,7 @@ export function mountFrameSize(
       bar.style.maxWidth = `${box.width}px`;
       place(menu, box.left, top + 34);
       // The tip waits while the size menu is open, and goes once seen through.
-      // Viewport mode has no scaled-transform offsets to warn about.
+      // The simulated viewport has no scaled-transform offsets to warn about.
       scaled = view.scale <= 0.999 && !state.active;
       showHint();
       // Bottom-left inside the stage, clear of the page's own header.

@@ -1,4 +1,4 @@
-// Single-copy Viewport's page moves (frame.shell), loaded on demand: into the shell,
+// The single-copy simulated viewport's page moves (frame.shell), loaded on demand: into the shell,
 // out of it, and the shell's URL following the frame's route. The keys repeat
 // shell-session.ts's, so this chunk shares no module with core.
 

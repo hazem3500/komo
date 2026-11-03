@@ -1,4 +1,4 @@
-// Single-copy Viewport: the top window becomes a shell for komo and the app runs
+// Single-copy simulated viewport: the top window becomes a shell for komo and the app runs
 // once, in Frame's viewport iframe. komo marks a shell page with a random nonce,
 // kept both in this tab's sessionStorage and in the URL, so a link alone can't
 // make one. This is the part core reads at mount; shell-mode.ts moves pages, and

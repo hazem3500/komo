@@ -244,15 +244,16 @@ export interface CommentsOptions {
    * `include` overrides the default per body child; true maps the whole child
    * through the frame, and false leaves its subtree alone.
    *
-   * `mode: "iframe"` adds Viewport mode: the current URL renders in a same-origin
-   * iframe sized to the chosen viewport, so media queries, viewport units,
-   * matchMedia, resize events and window.innerWidth are real. komo stays in this
-   * window and reaches into the frame; komo inside the frame stays inert. The
+   * `mode: "iframe"` adds a simulated viewport: the current URL renders in a
+   * same-origin iframe sized to the chosen viewport, so media queries, viewport
+   * units, matchMedia, resize events and window.innerWidth are real. komo stays in
+   * this window and reaches into the frame; komo inside the frame stays inert. The
    * framed copy is a second live instance of the app (its own requests, sockets
-   * and analytics), so it is opt-in; "transform" (the default) keeps the in-place
-   * frame. Reviewers can switch between Viewport and In place. When the frame
-   * can't show a same-origin page (X-Frame-Options, CSP frame-ancestors, a
-   * cross-origin redirect or a timeout), Frame falls back to in place and says why.
+   * and analytics), so it is opt-in; "transform" (the default) frames the page
+   * itself. Reviewers turn it on or off with "Simulate real viewport" in the Frame
+   * size menu, which only appears with mode "iframe". When the frame can't show a
+   * same-origin page (X-Frame-Options, CSP frame-ancestors, a cross-origin redirect
+   * or a timeout), Frame falls back to the page itself and says why.
    * `iframeUrl(location)` picks the URL to frame, e.g. a preview route for an app
    * that needs its own bootstrap; it must be same-origin. Pair it with `page` so
    * comments keep the page they belong to.
@@ -262,14 +263,16 @@ export interface CommentsOptions {
     include?(element: HTMLElement): boolean;
     mode?: "iframe" | "transform";
     /**
-     * With mode "iframe", where Frame starts until the reviewer picks Viewport or In
-     * place: "iframe" (the default) or "transform", which opens In place, so a second
-     * copy of the app loads only when the reviewer asks for Viewport.
+     * With mode "iframe", where Frame starts until the reviewer chooses: "iframe"
+     * (the default, the simulated viewport) or "transform", which opens on the page
+     * itself, so a second copy of the app loads only when the reviewer turns on
+     * "Simulate real viewport". Without mode "iframe" the page itself is always
+     * shown, whatever the reviewer chose before.
      */
     defaultMode?: "iframe" | "transform";
     iframeUrl?(location: Location): string;
     /**
-     * Single-copy Viewport (with mode "iframe"): Viewport reloads this page as a
+     * Single-copy simulated viewport (with mode "iframe"): turning it on reloads this page as a
      * shell for komo, so the app runs once, in the frame. Requires the app's entry
      * to skip mounting when `isShell(project)` from `@hazem3500/komo/shell` is true.
      */
@@ -307,7 +310,7 @@ export interface CommentsOptions {
   sourceUrl?: (source: string, branch: string) => string;
   /**
    * Defaults to location.pathname; query strings are not stored. In Frame's
-   * Viewport mode komo passes the frame's location: read it instead of
+   * simulated viewport komo passes the frame's location: read it instead of
    * window.location so comments keep their page in both modes.
    */
   page?: (location?: Location) => string;

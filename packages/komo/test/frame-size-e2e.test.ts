@@ -212,7 +212,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
       expect(await select(page, 2, 9)).toEqual({ target: [2, 9], coordinates: [2, 9] });
       await page.screenshot({ path: join(shots, `preset-${name.toLowerCase()}-fit.png`) });
     }
-    // In place, a narrower viewport cannot change media queries; the bar says why.
+    // On the page itself, a narrower viewport cannot change media queries; the bar says why.
     await page.getByRole("button", { name: "Why the layout follows your browser window" }).hover();
     await page.waitForTimeout(200);
     const tip = page.getByRole("tooltip");
