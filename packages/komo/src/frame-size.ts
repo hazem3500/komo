@@ -1,4 +1,5 @@
 import type { FrameView, frameView as placeView } from "./review-layout.js";
+import type { onFrame } from "./frame-target.js";
 
 type Box = { left: number; top: number; width: number; height: number };
 type Size = [number, number];
@@ -149,6 +150,8 @@ export function mountFrameSize(
     pan?(): void;
     /** A point (window pixels) to keep in view when switching to 100%, e.g. the selection. */
     anchor?(): { x: number; y: number } | null;
+    /** Listens in Frame's viewport iframe too; passed in, like frameView, so this chunk shares no module with core. */
+    onFrame?: typeof onFrame;
   } = {},
 ): FrameSizeControls {
   let raw: string | null = null;
@@ -329,6 +332,8 @@ export function mountFrameSize(
   const host = root.host as HTMLElement;
   // Viewport mode's port scrolls natively; this pans the in-place frame.
   const panning = () => !!current?.pan && !layer.hidden && !state.active;
+  // Space+drag pans either: the in-place frame, or the viewport iframe's port.
+  const grabbable = () => !!current?.pan && !layer.hidden;
   const panTo = (x: number, y: number) => {
     const next = clampPan([x, y], range);
     if (next[0] === pan[0] && next[1] === pan[1]) return;
@@ -353,7 +358,7 @@ export function mountFrameSize(
   });
   // Space+drag pans from anywhere, the hand tool; nothing underneath is clicked.
   const hand = element("div", "frame-hand", { hidden: "", "aria-hidden": "true" });
-  let grab: { x: number; y: number; pan: Size; id: number } | null = null;
+  let grab: { x: number; y: number; pan: Size; id: number; port: HTMLElement | null } | null = null;
   let spaceHeld = false;
   layer.append(hand, ...bars.map((bar) => bar.track));
   let lastBox: Box | null = null;
@@ -440,7 +445,12 @@ export function mountFrameSize(
     spaceHeld = false;
     if (!grab) hand.hidden = true;
   };
-  window.addEventListener("keydown", (event) => {
+  // Space and its release fire in the viewport iframe's document once a click there focused it.
+  const listen = (type: string, listener: (event: KeyboardEvent) => void) => {
+    window.addEventListener(type, listener as EventListener, { capture: true, signal: abort.signal });
+    hooks.onFrame?.(type, listener, { capture: true, signal: abort.signal }, "window");
+  };
+  listen("keydown", (event) => {
     if (event.key !== " " || event.ctrlKey || event.metaKey || event.altKey) return;
     if (!hand.hidden) {
       event.preventDefault();
@@ -448,30 +458,35 @@ export function mountFrameSize(
       return;
     }
     const path = event.composedPath();
-    if (!panning() || event.repeat || path.includes(host) || typing(path[0])) return;
+    if (!grabbable() || event.repeat || path.includes(host) || typing(path[0])) return;
     event.preventDefault();
     event.stopPropagation();
     spaceHeld = true;
     hand.hidden = false;
-  }, { capture: true, signal: abort.signal });
-  window.addEventListener("keyup", (event) => {
+  });
+  listen("keyup", (event) => {
     if (event.key !== " " || hand.hidden) return;
     // A focused button would click on Space's release.
     event.preventDefault();
     event.stopPropagation();
     release();
-  }, { capture: true, signal: abort.signal });
+  });
+  // Focus leaving the page drops the hand: this window's blur, or the iframe's unless focus came back here.
   window.addEventListener("blur", release, { signal: abort.signal });
+  hooks.onFrame?.("blur", () => setTimeout(() => document.hasFocus() || release()), { signal: abort.signal }, "window");
   hand.addEventListener("pointerdown", (event) => {
     if (event.button) return;
     event.preventDefault();
     hand.setPointerCapture(event.pointerId);
     hand.dataset.grabbing = "";
-    grab = { x: event.clientX, y: event.clientY, pan, id: event.pointerId };
+    const port = state.active ? surface() : null;
+    grab = { x: event.clientX, y: event.clientY, pan: port ? [port.scrollLeft, port.scrollTop] : pan, id: event.pointerId, port };
   });
   hand.addEventListener("pointermove", (event) => {
-    if (grab?.id === event.pointerId)
-      panTo(grab.pan[0] - (event.clientX - grab.x) / ratio, grab.pan[1] - (event.clientY - grab.y) / ratio);
+    if (grab?.id !== event.pointerId) return;
+    const [dx, dy] = [event.clientX - grab.x, event.clientY - grab.y];
+    if (grab.port) grab.port.scrollTo(grab.pan[0] - dx, grab.pan[1] - dy);
+    else panTo(grab.pan[0] - dx / ratio, grab.pan[1] - dy / ratio);
   });
   const drop = () => {
     grab = null;

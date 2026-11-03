@@ -747,8 +747,10 @@ export function bindGeometry(hooks: Hooks) {
     window.addEventListener(type, listener as EventListener, options);
     onFrame(type, listener, options, 'window');
   }
-  // Focus leaving mid-hold never delivers the keyup, so it ends the peek too.
+  // Focus leaving mid-hold never delivers the keyup, so it ends the peek too: this window's blur, or
+  // the viewport iframe's when focus didn't come back here (a keyup here still ends it).
   window.addEventListener('blur', () => release(Infinity), { signal: controller.signal });
+  onFrame('blur', () => setTimeout(() => document.hasFocus() || release(Infinity)), { signal: controller.signal }, 'window');
   document.addEventListener('visibilitychange', () => { if (document.hidden) release(Infinity); }, { signal: controller.signal });
   readout.hidden = guides[0].hidden = guides[1].hidden = true;
   render();
