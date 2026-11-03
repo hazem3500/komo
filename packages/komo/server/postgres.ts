@@ -91,6 +91,7 @@ export function postgresDatabase(connectionString: string, pg: Pg) {
           "004_personal_access_tokens.sql",
           "005_snapshots.sql",
           "006_thread_scope.sql",
+          "007_session_origin.sql",
         ];
         if (
           versions.rows.length > 1 ||

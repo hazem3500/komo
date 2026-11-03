@@ -235,21 +235,43 @@ async function limit(env: Env, key: string, max: number, seconds = 60) {
     .first<{ count: number }>();
   check(row && row.count <= max, 429, "Too many requests. Try again shortly.");
 }
-async function session(env: Env, project: string, userId: string) {
+/** How a session was signed in, stored from D1 migration 0021 / PostgreSQL 007. */
+type SessionVia = "proxy" | "google" | "github" | "guest";
+const missingSessionColumns = (error: unknown) =>
+  error instanceof Error &&
+  /no such column|has no column named|column .* does not exist/i.test(error.message) &&
+  /\b(via|created_at)\b/.test(error.message);
+async function session(
+  env: Env,
+  project: string,
+  userId: string,
+  via: SessionVia
+) {
   const accessToken = token();
-  await env.DB.batch([
+  const tokenHash = await hash(accessToken);
+  const now = Date.now();
+  const expires = now + (authOptions(env).sessionMaxAge ?? SESSION_LIFETIME);
+  const member = () =>
     env.DB.prepare(
       "INSERT OR IGNORE INTO project_members(project,user_id) SELECT ?,? WHERE NOT EXISTS(SELECT 1 FROM project_settings WHERE project=? AND access='private') OR EXISTS(SELECT 1 FROM project_owners WHERE project=? AND user_id=?) OR EXISTS(SELECT 1 FROM project_access WHERE project=? AND user_id=?)"
-    ).bind(project, userId, project, project, userId, project, userId),
-    env.DB.prepare(
-      "INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES(?,?,?,?)"
-    ).bind(
-      await hash(accessToken),
-      userId,
-      project,
-      Date.now() + (authOptions(env).sessionMaxAge ?? SESSION_LIFETIME)
-    ),
-  ]);
+    ).bind(project, userId, project, project, userId, project, userId);
+  try {
+    await env.DB.batch([
+      member(),
+      env.DB.prepare(
+        "INSERT INTO sessions(token_hash,user_id,project,expires_at,via,created_at) VALUES(?,?,?,?,?,?)"
+      ).bind(tokenHash, userId, project, expires, via, now),
+    ]);
+  } catch (error) {
+    // A Worker database without migration 0021 stores sessions as before.
+    if (!missingSessionColumns(error)) throw error;
+    await env.DB.batch([
+      member(),
+      env.DB.prepare(
+        "INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES(?,?,?,?)"
+      ).bind(tokenHash, userId, project, expires),
+    ]);
+  }
   return accessToken;
 }
 // Personal access tokens only pass where a route names the access it needs.
@@ -263,27 +285,51 @@ async function authenticate(
     .get("Authorization")
     ?.match(/^Bearer (.{1,200})$/)?.[1];
   check(bearer, 401, "Enter your name to comment.");
-  if (isPersonalToken(bearer))
+  const { proxy, sessionMaxAge, allowGuests } = authOptions(env);
+  if (isPersonalToken(bearer)) {
+    // A token would outlive the proxy's own sign-in checks; agents exchange
+    // their proxy identity for a session instead.
+    check(
+      !proxy,
+      403,
+      "Access tokens are off behind the sign-in proxy. Use /auth/proxy/session."
+    );
     return identity(
       await authenticateToken(env, bearer, project, access, request)
     );
-  const { sessionMaxAge, allowGuests } = authOptions(env);
+  }
   const now = Date.now();
-  // Sessions record only their expiry. One minted under the cap expires within
-  // it; a longer one was minted with the default lifetime, which dates it.
-  const row = await env.DB.prepare(
-    `SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.project=? AND s.expires_at>?${sessionMaxAge ? " AND (s.expires_at<=? OR s.expires_at>=?)" : ""}`
-  )
-    .bind(
-      await hash(bearer),
-      project,
-      now,
-      ...(sessionMaxAge
-        ? [now + sessionMaxAge, now - sessionMaxAge + SESSION_LIFETIME]
-        : [])
+  let row: UserRow | null;
+  try {
+    row = await env.DB.prepare(
+      "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.project=? AND s.expires_at>?" +
+        // Behind a proxy, only sessions the proxy signed in.
+        (proxy ? " AND s.via='proxy'" : "") +
+        // Sessions from before migration 0021 have no created_at: date them by
+        // the default lifetime, which makes any shorter-lived one look older.
+        (sessionMaxAge ? " AND COALESCE(s.created_at,s.expires_at-?)>?" : "")
     )
-    .first<UserRow>();
-  check(row, 401, "Your session expired. Enter your name again.");
+      .bind(
+        await hash(bearer),
+        project,
+        now,
+        ...(sessionMaxAge ? [SESSION_LIFETIME, now - sessionMaxAge] : [])
+      )
+      .first<UserRow>();
+  } catch (error) {
+    if (missingSessionColumns(error))
+      throw new ConfigError(
+        "KOMO_PROXY_AUTH and KOMO_SESSION_MAX_AGE_DAYS need D1 migration 0021_session_origin. Apply the migrations."
+      );
+    throw error;
+  }
+  check(
+    row,
+    401,
+    proxy
+      ? "Your session expired. Sign in again."
+      : "Your session expired. Enter your name again."
+  );
   // 401 so clients drop a guest session left from before guests were turned off.
   check(
     allowGuests || !row.id.startsWith("guest:"),
@@ -544,7 +590,8 @@ async function finishSignIn(
   env: Env,
   saved: SignInState,
   user: Identity,
-  provider: "github" | "google"
+  provider: "github" | "google",
+  via: SessionVia = provider
 ) {
   const setupCode =
     env.KOMO_HOSTED === "true" &&
@@ -571,7 +618,8 @@ async function finishSignIn(
   const accessToken = await session(
     env,
     created?.project ?? saved.project,
-    user.id
+    user.id,
+    via
   );
   return signedInPage(
     {
@@ -633,7 +681,13 @@ async function proxySignIn(
     .bind(await hash(state), Date.now(), proxy.signIn)
     .first<SignInState>();
   check(saved, 400, "Sign-in expired. Return to the site and try again.");
-  return finishSignIn(env, saved, await proxyUser(env, signedIn), proxy.signIn);
+  return finishSignIn(
+    env,
+    saved,
+    await proxyUser(env, signedIn),
+    proxy.signIn,
+    "proxy"
+  );
 }
 // For agents and CLIs: a caller the proxy authenticated exchanges that
 // identity for a project session, the non-interactive counterpart of the popup.
@@ -642,18 +696,26 @@ async function proxySession(
   env: Env,
   proxy: ProxyAuthProvider
 ) {
-  const signedIn = await proxy.identify(request);
-  const project = string(
-    new URL(request.url).searchParams.get("project"),
-    100,
-    "project"
+  const url = new URL(request.url);
+  // Only CLIs and agents, which send no Origin: a web page must not turn a
+  // visitor's proxy sign-in into a token it can read.
+  const origin = request.headers.get("Origin");
+  check(
+    !origin || origin === url.origin,
+    403,
+    "Exchange a proxy session from a CLI or agent, not a web page."
   );
+  const signedIn = await proxy.identify(request);
+  const project = string(url.searchParams.get("project"), 100, "project");
   const config = await projectConfig(env, project);
   check(config, 404, "Unknown comments project.");
   check(!config.suspended, 403, "This workspace is suspended.");
   await limit(env, `${project}:proxy-session:${signedIn.id}`, 60, 3600);
   const user = await proxyUser(env, signedIn);
-  return json({ token: await session(env, project, user.id), user }, 201);
+  return json(
+    { token: await session(env, project, user.id, "proxy"), user },
+    201
+  );
 }
 const PROXY_SESSION_PATHS = ["/auth/proxy/session", "/auth/iap/session"];
 async function route(
@@ -991,6 +1053,11 @@ async function route(
     });
   }
   if (accountRoute) {
+    check(
+      !auth.proxy,
+      403,
+      "Access tokens are off behind the sign-in proxy. Use /auth/proxy/session."
+    );
     // Sessions only: an access token can never mint or revoke access tokens.
     const user = await authenticate(request, env, project);
     check(
@@ -1058,7 +1125,15 @@ async function route(
   if (env.KOMO_HOSTED !== "true") ctx.waitUntil(maintain(env.DB));
   if (url.pathname === "/config" && request.method === "GET")
     return json({
-      repo: config.repo,
+      // The repository is feedback metadata: keep it from anonymous callers
+      // when reads need a session.
+      ...(!auth.requireSessionForReads ||
+      (await authenticate(request, env, project).then(
+        () => true,
+        () => false
+      ))
+        ? { repo: config.repo }
+        : {}),
       github:
         !auth.proxy && !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
       google: auth.proxy
@@ -1071,8 +1146,9 @@ async function route(
         !(await privateAccess(env, project)),
       private: await privateAccess(env, project),
       guestResolve: config.allowGuestResolve !== false,
-      // Signed-in Google accounts can manage personal access tokens here.
-      tokens: true,
+      // Signed-in Google accounts can manage personal access tokens here,
+      // except behind a sign-in proxy.
+      tokens: !auth.proxy,
       // Element snapshots are opt-in on the client; guests need project consent.
       snapshots: {
         guests: auth.allowGuests && config.allowGuestSnapshots === true,
@@ -1158,7 +1234,7 @@ async function route(
       .run();
     return json(
       {
-        token: await session(env, project, id),
+        token: await session(env, project, id, "guest"),
         user: { id, name, verified: false },
       },
       201
@@ -1268,21 +1344,15 @@ async function route(
     return json({ user });
   }
   const access: PatAccess = request.method === "GET" ? "read" : "write";
-  // No anonymous reads. Behind a sign-in proxy the session must also belong to
-  // an account the proxy signs in, not one left from before it was turned on.
+  // No anonymous reads. Behind a proxy, authenticate() accepts only sessions
+  // the proxy signed in.
   if (auth.requireSessionForReads) {
     check(
       request.method !== "GET" || request.headers.get("Authorization"),
       401,
       "Sign in to see comments."
     );
-    const reader = await authenticate(request, env, project, access);
-    check(
-      !auth.proxy ||
-        (reader.verified && reader.id.startsWith(`${auth.proxy.signIn}:`)),
-      403,
-      "Sign in with your Google account to see comments."
-    );
+    await authenticate(request, env, project, access);
   }
   if (await privateAccess(env, project)) {
     await requireMember(
@@ -1943,7 +2013,10 @@ export default {
     }
     const headers = new Headers(response.headers);
     const origin = request.headers.get("Origin") ?? "";
+    // The proxy session exchange is for CLIs and agents: never readable cross-origin.
+    const pathname = new URL(request.url).pathname;
     if (
+      !PROXY_SESSION_PATHS.some((path) => pathname.endsWith(path)) &&
       config &&
       (originAllowed(origin, config.origins) ||
         (project !== "_komo" && localOrigin(origin)) ||
