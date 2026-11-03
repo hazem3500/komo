@@ -20,7 +20,8 @@ export interface CapturedSnapshot {
 /** Hosts mark private regions with this attribute: a target inside one is never captured. */
 export const OPT_OUT = "data-komo-no-snapshot";
 /** komo's own UI on the page: its host, Design mode stand-ins, previews and Frame's viewport. */
-const OWN = "[data-branch-comments],[data-komo-move-clone],[data-komo-viewport],[data-komo-design-tokens],[data-komo-snapshot-sandbox]";
+// Not data-komo-design-tokens: hosts that register tokens carry it on the document root.
+const OWN = "[data-branch-comments],[data-komo-move-clone],[data-komo-viewport],[data-komo-snapshot-sandbox]";
 export const PLACEHOLDER = "[redacted]";
 const DROP = new Set(["script", "noscript", "template", "style", "link", "meta", "base", "title"]);
 const URL_ATTRIBUTE = /^(?:href|src|action|formaction|xlink:href|poster|data|background)$/i;
