@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { createServer } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Thread } from "../src/types";
+import { applyMigrations, executeSql } from "./wrangler-local";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 let directory = "",
@@ -150,23 +151,7 @@ beforeAll(async () => {
   ];
   const configPath = join(directory, "wrangler.json");
   await writeFile(configPath, JSON.stringify(config));
-  await promisify(execFile)(
-    "pnpm",
-    [
-      "exec",
-      "wrangler",
-      "d1",
-      "migrations",
-      "apply",
-      "DB",
-      "--local",
-      "--persist-to",
-      join(directory, "state"),
-      "--config",
-      configPath,
-    ],
-    { cwd: root, timeout: 45000 }
-  );
+  await applyMigrations(configPath, join(directory, "state"));
   const seed = join(directory, "seed.sql");
   const h = (value: string) => createHash("sha256").update(value).digest("hex");
   await writeFile(
@@ -213,24 +198,7 @@ beforeAll(async () => {
       ('${h("guest-claim-token")}','guest:fixture','unclaimed',9999999999999);
   `
   );
-  await promisify(execFile)(
-    "pnpm",
-    [
-      "exec",
-      "wrangler",
-      "d1",
-      "execute",
-      "DB",
-      "--local",
-      "--persist-to",
-      join(directory, "state"),
-      "--config",
-      configPath,
-      "--file",
-      seed,
-    ],
-    { cwd: root, timeout: 45000 }
-  );
+  await executeSql(configPath, join(directory, "state"), seed);
   worker = spawn(
     "pnpm",
     [
@@ -266,7 +234,7 @@ beforeAll(async () => {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   throw new Error(`Worker failed to start: ${output}`);
-});
+}, 240000);
 afterAll(async () => {
   if (worker?.pid) {
     try {

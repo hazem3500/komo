@@ -16,7 +16,7 @@ import {
   revokeToken,
   type PatAccess,
 } from "./tokens";
-import { authPrefix, iapIdentity, type IapIdentity } from "./iap";
+import { authOptions, type ProxyAuthProvider, type ProxyIdentity } from "./proxy-auth";
 import setupClient from "./setup-client.txt";
 import {
   dispatchWebhook,
@@ -51,6 +51,7 @@ import {
   threadScope,
   cliReturnOrigin,
   check,
+  ConfigError,
   HttpError,
   localOrigin,
   originAllowed,
@@ -133,8 +134,9 @@ function webhookEvent(
 }
 const json = (data: unknown, status = 200) => Response.json(data, { status });
 const token = () => crypto.randomUUID() + crypto.randomUUID();
-// Sessions should not force reviewers back through sign-in:
-// keep them valid for a century and only revoke on logout.
+// Sessions should not force reviewers back through sign-in: unless
+// KOMO_SESSION_MAX_AGE_DAYS caps them, keep them valid for a century and only
+// revoke on logout.
 const SESSION_LIFETIME = 100 * 365 * 86400000;
 async function hash(value: string) {
   return Array.from(
@@ -233,21 +235,43 @@ async function limit(env: Env, key: string, max: number, seconds = 60) {
     .first<{ count: number }>();
   check(row && row.count <= max, 429, "Too many requests. Try again shortly.");
 }
-async function session(env: Env, project: string, userId: string) {
+/** How a session was signed in, stored from D1 migration 0021 / PostgreSQL 007. */
+type SessionVia = "proxy" | "google" | "github" | "guest";
+const missingSessionColumns = (error: unknown) =>
+  error instanceof Error &&
+  /no such column|has no column named|column .* does not exist/i.test(error.message) &&
+  /\b(via|created_at)\b/.test(error.message);
+async function session(
+  env: Env,
+  project: string,
+  userId: string,
+  via: SessionVia
+) {
   const accessToken = token();
-  await env.DB.batch([
+  const tokenHash = await hash(accessToken);
+  const now = Date.now();
+  const expires = now + (authOptions(env).sessionMaxAge ?? SESSION_LIFETIME);
+  const member = () =>
     env.DB.prepare(
       "INSERT OR IGNORE INTO project_members(project,user_id) SELECT ?,? WHERE NOT EXISTS(SELECT 1 FROM project_settings WHERE project=? AND access='private') OR EXISTS(SELECT 1 FROM project_owners WHERE project=? AND user_id=?) OR EXISTS(SELECT 1 FROM project_access WHERE project=? AND user_id=?)"
-    ).bind(project, userId, project, project, userId, project, userId),
-    env.DB.prepare(
-      "INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES(?,?,?,?)"
-    ).bind(
-      await hash(accessToken),
-      userId,
-      project,
-      Date.now() + SESSION_LIFETIME
-    ),
-  ]);
+    ).bind(project, userId, project, project, userId, project, userId);
+  try {
+    await env.DB.batch([
+      member(),
+      env.DB.prepare(
+        "INSERT INTO sessions(token_hash,user_id,project,expires_at,via,created_at) VALUES(?,?,?,?,?,?)"
+      ).bind(tokenHash, userId, project, expires, via, now),
+    ]);
+  } catch (error) {
+    // A Worker database without migration 0021 stores sessions as before.
+    if (!missingSessionColumns(error)) throw error;
+    await env.DB.batch([
+      member(),
+      env.DB.prepare(
+        "INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES(?,?,?,?)"
+      ).bind(tokenHash, userId, project, expires),
+    ]);
+  }
   return accessToken;
 }
 // Personal access tokens only pass where a route names the access it needs.
@@ -261,16 +285,57 @@ async function authenticate(
     .get("Authorization")
     ?.match(/^Bearer (.{1,200})$/)?.[1];
   check(bearer, 401, "Enter your name to comment.");
-  if (isPersonalToken(bearer))
+  const { proxy, sessionMaxAge, allowGuests } = authOptions(env);
+  if (isPersonalToken(bearer)) {
+    // A token would outlive the proxy's own sign-in checks; agents exchange
+    // their proxy identity for a session instead.
+    check(
+      !proxy,
+      403,
+      "Access tokens are off behind the sign-in proxy. Use /auth/proxy/session."
+    );
     return identity(
       await authenticateToken(env, bearer, project, access, request)
     );
-  const row = await env.DB.prepare(
-    "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.project=? AND s.expires_at>?"
-  )
-    .bind(await hash(bearer), project, Date.now())
-    .first<UserRow>();
-  check(row, 401, "Your session expired. Enter your name again.");
+  }
+  const now = Date.now();
+  let row: UserRow | null;
+  try {
+    row = await env.DB.prepare(
+      "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.project=? AND s.expires_at>?" +
+        // Behind a proxy, only sessions the proxy signed in.
+        (proxy ? " AND s.via='proxy'" : "") +
+        // Sessions from before migration 0021 have no created_at: date them by
+        // the default lifetime, which makes any shorter-lived one look older.
+        (sessionMaxAge ? " AND COALESCE(s.created_at,s.expires_at-?)>?" : "")
+    )
+      .bind(
+        await hash(bearer),
+        project,
+        now,
+        ...(sessionMaxAge ? [SESSION_LIFETIME, now - sessionMaxAge] : [])
+      )
+      .first<UserRow>();
+  } catch (error) {
+    if (missingSessionColumns(error))
+      throw new ConfigError(
+        "KOMO_PROXY_AUTH and KOMO_SESSION_MAX_AGE_DAYS need D1 migration 0021_session_origin. Apply the migrations."
+      );
+    throw error;
+  }
+  check(
+    row,
+    401,
+    proxy
+      ? "Your session expired. Sign in again."
+      : "Your session expired. Enter your name again."
+  );
+  // 401 so clients drop a guest session left from before guests were turned off.
+  check(
+    allowGuests || !row.id.startsWith("guest:"),
+    401,
+    "Guest comments are disabled."
+  );
   return identity(row);
 }
 // Both hosted recovery and in-project OAuth use the same one-use setup claim.
@@ -513,6 +578,21 @@ async function oauthCallback(
       .bind(id)
       .first<UserRow>())!
   );
+  return finishSignIn(env, saved, user, provider);
+}
+type SignInState = {
+  project: string;
+  origin: string;
+  approved_origins: string | null;
+};
+// Mints the session (finishing a hosted setup first) and hands it to the popup.
+async function finishSignIn(
+  env: Env,
+  saved: SignInState,
+  user: Identity,
+  provider: "github" | "google",
+  via: SessionVia = provider
+) {
   const setupCode =
     env.KOMO_HOSTED === "true" &&
     saved.approved_origins &&
@@ -535,7 +615,12 @@ async function oauthCallback(
           : [saved.origin]
       )
     : undefined;
-  const accessToken = await session(env, created?.project ?? saved.project, id);
+  const accessToken = await session(
+    env,
+    created?.project ?? saved.project,
+    user.id,
+    via
+  );
   return signedInPage(
     {
       type: created ? "komo:setup" : "branch-comments:auth",
@@ -564,8 +649,8 @@ function signedInPage(message: Record<string, unknown>, origin: string) {
     }
   );
 }
-// Records the IAP-verified Google account as a verified reviewer.
-async function iapUser(env: Env, signedIn: IapIdentity) {
+// Records the account a sign-in proxy vouched for as a verified reviewer.
+async function proxyUser(env: Env, signedIn: ProxyIdentity) {
   await env.DB.prepare(
     "INSERT INTO users(id,name,verified) VALUES(?,?,1) ON CONFLICT(id) DO NOTHING"
   )
@@ -580,34 +665,67 @@ async function iapUser(env: Env, signedIn: IapIdentity) {
       .first<UserRow>())!
   );
 }
-// Behind IAP the authorize step is the whole sign-in: IAP has already
-// authenticated the browser, so there is no Google redirect or callback.
-async function iapSignIn(request: Request, env: Env) {
+// Behind a sign-in proxy the authorize step is the whole sign-in: the proxy
+// has already authenticated the browser, so there is no redirect or callback.
+async function proxySignIn(
+  request: Request,
+  env: Env,
+  proxy: ProxyAuthProvider
+) {
   const url = new URL(request.url);
   const state = string(url.searchParams.get("state"), 200, "state");
-  const signedIn = await iapIdentity(request, env.KOMO_IAP_AUDIENCE!);
+  const signedIn = await proxy.identify(request);
   const saved = await env.DB.prepare(
-    "DELETE FROM oauth_states WHERE state_hash=? AND expires_at>? AND provider=? RETURNING project,origin"
+    "DELETE FROM oauth_states WHERE state_hash=? AND expires_at>? AND provider=? RETURNING project,origin,approved_origins"
   )
-    .bind(await hash(state), Date.now(), "google")
-    .first<{ project: string; origin: string }>();
+    .bind(await hash(state), Date.now(), proxy.signIn)
+    .first<SignInState>();
   check(saved, 400, "Sign-in expired. Return to the site and try again.");
-  const user = await iapUser(env, signedIn);
-  return signedInPage(
-    {
-      type: "branch-comments:auth",
-      token: await session(env, saved.project, user.id),
-      user,
-    },
-    saved.origin
+  return finishSignIn(
+    env,
+    saved,
+    await proxyUser(env, signedIn),
+    proxy.signIn,
+    "proxy"
   );
 }
+// For agents and CLIs: a caller the proxy authenticated exchanges that
+// identity for a project session, the non-interactive counterpart of the popup.
+async function proxySession(
+  request: Request,
+  env: Env,
+  proxy: ProxyAuthProvider
+) {
+  const url = new URL(request.url);
+  // Only CLIs and agents, which send no Origin: a web page must not turn a
+  // visitor's proxy sign-in into a token it can read.
+  const origin = request.headers.get("Origin");
+  check(
+    !origin || origin === url.origin,
+    403,
+    "Exchange a proxy session from a CLI or agent, not a web page."
+  );
+  const signedIn = await proxy.identify(request);
+  const project = string(url.searchParams.get("project"), 100, "project");
+  const config = await projectConfig(env, project);
+  check(config, 404, "Unknown comments project.");
+  check(!config.suspended, 403, "This workspace is suspended.");
+  await limit(env, `${project}:proxy-session:${signedIn.id}`, 60, 3600);
+  const user = await proxyUser(env, signedIn);
+  return json(
+    { token: await session(env, project, user.id, "proxy"), user },
+    201
+  );
+}
+const PROXY_SESSION_PATHS = ["/auth/proxy/session", "/auth/iap/session"];
 async function route(
   request: Request,
   env: Env,
   ctx: ExecutionContext
 ): Promise<Response> {
   const url = new URL(request.url);
+  // Invalid sign-in options fail every request, health checks included.
+  const auth = authOptions(env);
   if (url.pathname === "/health") return json({ ok: true, version: env.KOMO_VERSION?.id });
   if (url.pathname === "/setup-client.js" && request.method === "GET")
     return new Response(setupClient, {
@@ -701,7 +819,7 @@ async function route(
     authorize.searchParams.set("state", state);
     return oauthAuthorize(new Request(authorize), env, "google");
   }
-  if (url.pathname === "/setup") return setupPage();
+  if (url.pathname === "/setup") return setupPage(env.KOMO_PUBLIC_PATH ?? "");
   if (url.pathname === "/account" && request.method === "GET")
     return accountPage(env, url);
   if (
@@ -764,28 +882,26 @@ async function route(
   const oauthPath = url.pathname.match(
     /^\/auth\/(github|google)\/(authorize|callback)$/
   );
-  if (env.KOMO_IAP_AUDIENCE) {
-    // IAP sign-in replaces OAuth. Its handlers live only under KOMO_AUTH_PREFIX,
-    // the path the load balancer puts behind IAP.
-    const prefix = authPrefix(env.KOMO_AUTH_PREFIX);
+  if (auth.proxy) {
+    // Proxy sign-in replaces OAuth. Its handlers live only under
+    // KOMO_AUTH_PATH_PREFIX when set, the path the proxy protects.
+    const prefix = auth.signInPrefix;
     const signInPath =
       !prefix || url.pathname.startsWith(`${prefix}/auth/`)
         ? url.pathname.slice(prefix.length)
         : "";
-    if (signInPath === "/auth/google/authorize") return iapSignIn(request, env);
-    // For agents: an IAP-authenticated caller exchanges its identity for a
-    // project session, the non-interactive counterpart of the popup.
-    if (signInPath === "/auth/iap/session" && request.method === "POST") {
-      const signedIn = await iapIdentity(request, env.KOMO_IAP_AUDIENCE);
-      const target = string(url.searchParams.get("project"), 100, "project");
-      check(await projectConfig(env, target), 404, "Unknown comments project.");
-      const user = await iapUser(env, signedIn);
-      return json({ token: await session(env, target, user.id), user }, 201);
-    }
-    check(!oauthPath || oauthPath[1] === "google", 403, "Sign in with your Google account.");
+    if (signInPath === `/auth/${auth.proxy.signIn}/authorize`)
+      return proxySignIn(request, env, auth.proxy);
+    if (PROXY_SESSION_PATHS.includes(signInPath) && request.method === "POST")
+      return proxySession(request, env, auth.proxy);
+    check(
+      !oauthPath || oauthPath[1] === auth.proxy.signIn,
+      403,
+      "Sign in with your Google account."
+    );
     check(
       !oauthPath &&
-        url.pathname !== "/auth/iap/session" &&
+        !PROXY_SESSION_PATHS.includes(url.pathname) &&
         !(prefix && url.pathname.startsWith(`${prefix}/`)),
       404,
       "Not found."
@@ -937,6 +1053,11 @@ async function route(
     });
   }
   if (accountRoute) {
+    check(
+      !auth.proxy,
+      403,
+      "Access tokens are off behind the sign-in proxy. Use /auth/proxy/session."
+    );
     // Sessions only: an access token can never mint or revoke access tokens.
     const user = await authenticate(request, env, project);
     check(
@@ -1004,24 +1125,33 @@ async function route(
   if (env.KOMO_HOSTED !== "true") ctx.waitUntil(maintain(env.DB));
   if (url.pathname === "/config" && request.method === "GET")
     return json({
-      repo: config.repo,
-      github: !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
-      google: !!(
-        env.KOMO_IAP_AUDIENCE ||
-        (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
-      ),
+      // The repository is feedback metadata: keep it from anonymous callers
+      // when reads need a session.
+      ...(!auth.requireSessionForReads ||
+      (await authenticate(request, env, project).then(
+        () => true,
+        () => false
+      ))
+        ? { repo: config.repo }
+        : {}),
+      github:
+        !auth.proxy && !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
+      google: auth.proxy
+        ? auth.proxy.signIn === "google"
+        : !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
       guests:
-        !env.KOMO_IAP_AUDIENCE &&
+        auth.allowGuests &&
         config.allowGuests !== false &&
         (!config.requireOwner || !!owner) &&
         !(await privateAccess(env, project)),
       private: await privateAccess(env, project),
       guestResolve: config.allowGuestResolve !== false,
-      // Signed-in Google accounts can manage personal access tokens here.
-      tokens: true,
+      // Signed-in Google accounts can manage personal access tokens here,
+      // except behind a sign-in proxy.
+      tokens: !auth.proxy,
       // Element snapshots are opt-in on the client; guests need project consent.
       snapshots: {
-        guests: config.allowGuestSnapshots === true,
+        guests: auth.allowGuests && config.allowGuestSnapshots === true,
         maxImageBytes: SNAPSHOT_LIMITS.image,
         maxHtmlBytes: SNAPSHOT_LIMITS.html,
       },
@@ -1088,7 +1218,7 @@ async function route(
     });
   }
   if (url.pathname === "/auth/guest" && request.method === "POST") {
-    check(!env.KOMO_IAP_AUDIENCE, 403, "Guest comments are disabled.");
+    check(auth.allowGuests, 403, "Guest comments are disabled.");
     check(
       !(await privateAccess(env, project)),
       403,
@@ -1104,7 +1234,7 @@ async function route(
       .run();
     return json(
       {
-        token: await session(env, project, id),
+        token: await session(env, project, id, "guest"),
         user: { id, name, verified: false },
       },
       201
@@ -1116,8 +1246,8 @@ async function route(
   ) {
     const provider = url.pathname.includes("/google/") ? "google" : "github";
     check(
-      env.KOMO_IAP_AUDIENCE
-        ? provider === "google"
+      auth.proxy
+        ? provider === auth.proxy.signIn
         : provider === "google"
           ? env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
           : env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET,
@@ -1145,7 +1275,7 @@ async function route(
       .run();
     return json({
       // KOMO_PUBLIC_PATH covers apps served under a path behind a proxy that strips it.
-      url: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}${env.KOMO_IAP_AUDIENCE ? authPrefix(env.KOMO_AUTH_PREFIX) : ""}/auth/${provider}/authorize?state=${encodeURIComponent(state)}`,
+      url: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}${auth.signInPrefix}/auth/${provider}/authorize?state=${encodeURIComponent(state)}`,
     });
   }
   if (url.pathname === "/me") {
@@ -1214,15 +1344,15 @@ async function route(
     return json({ user });
   }
   const access: PatAccess = request.method === "GET" ? "read" : "write";
-  // Behind IAP, comments are never readable or writable without a session
-  // minted from an IAP-verified Google account.
-  if (env.KOMO_IAP_AUDIENCE) {
-    const reader = await authenticate(request, env, project, access);
+  // No anonymous reads. Behind a proxy, authenticate() accepts only sessions
+  // the proxy signed in.
+  if (auth.requireSessionForReads) {
     check(
-      reader.verified && reader.id.startsWith("google:"),
-      403,
-      "Sign in with your Google account to see comments."
+      request.method !== "GET" || request.headers.get("Authorization"),
+      401,
+      "Sign in to see comments."
     );
+    await authenticate(request, env, project, access);
   }
   if (await privateAccess(env, project)) {
     await requireMember(
@@ -1486,7 +1616,7 @@ async function route(
     );
     // Snapshots may hold page content: guests need the project's explicit consent.
     check(
-      user.verified || config.allowGuestSnapshots === true,
+      user.verified || (auth.allowGuests && config.allowGuestSnapshots === true),
       403,
       "Guests cannot attach snapshots in this project."
     );
@@ -1860,6 +1990,8 @@ export default {
       else {
         console.error("comments_request_failed", {
           path: new URL(request.url).pathname,
+          // A misconfigured option names itself; other errors stay private.
+          ...(error instanceof ConfigError ? { config: error.message } : {}),
         });
         response = json(
           { error: "Comments are temporarily unavailable. Try again." },
@@ -1881,7 +2013,10 @@ export default {
     }
     const headers = new Headers(response.headers);
     const origin = request.headers.get("Origin") ?? "";
+    // The proxy session exchange is for CLIs and agents: never readable cross-origin.
+    const pathname = new URL(request.url).pathname;
     if (
+      !PROXY_SESSION_PATHS.some((path) => pathname.endsWith(path)) &&
       config &&
       (originAllowed(origin, config.origins) ||
         (project !== "_komo" && localOrigin(origin)) ||

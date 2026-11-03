@@ -1,11 +1,10 @@
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
-import { isIP } from "node:net";
 import { loadPostgres, postgresDatabase } from "./postgres";
 import worker from "./index";
-import { sitePattern } from "./validation";
 import { sendWebhookPinned } from "./node-webhooks";
-import { authPrefix, publicLocation } from "./iap";
+import { authOptions, publicLocation } from "./proxy-auth";
+import { checkProjects, clientAddress, trustedProxyHops } from "./node-config";
 
 const databaseUrl = process.env.DATABASE_URL;
 const projects = process.env.PROJECTS;
@@ -15,30 +14,10 @@ if (!databaseUrl || !projects || !publicUrl)
 // PUBLIC_URL may include a path (https://example.com/komo) when a proxy serves
 // the app under it; requests are accepted with or without that path.
 const { origin: publicOrigin, path: publicPath } = publicLocation(publicUrl);
-// Fail at startup, not on the first sign-in, when the prefix is malformed.
-authPrefix(process.env.KOMO_AUTH_PREFIX);
-const configured = JSON.parse(projects) as Record<
-  string,
-  { repo?: unknown; origins?: unknown }
->;
-if (
-  !configured ||
-  typeof configured !== "object" ||
-  Array.isArray(configured) ||
-  Object.values(configured).some(
-    (project) =>
-      !project ||
-      typeof project.repo !== "string" ||
-      !Array.isArray(project.origins) ||
-      project.origins.some(
-        (site) => typeof site !== "string" || sitePattern(site) !== site,
-      ),
-  )
-) {
-  throw Error("PROJECTS must map project keys to repo and origins");
-}
+checkProjects(projects);
+const proxyHops = trustedProxyHops(process.env);
 const db = postgresDatabase(databaseUrl, await loadPostgres());
-await db.migrate();
+const option = (name: string) => process.env[name] || undefined;
 const env = {
   DB: db,
   PROJECTS: projects,
@@ -47,12 +26,21 @@ const env = {
   GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID ?? "",
   GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET ?? "",
   KOMO_WEBHOOK_KEYS: process.env.KOMO_WEBHOOK_KEYS,
-  KOMO_TOKEN_PEPPER: process.env.KOMO_TOKEN_PEPPER || undefined,
+  KOMO_TOKEN_PEPPER: option("KOMO_TOKEN_PEPPER"),
   KOMO_WEBHOOK_SEND: sendWebhookPinned,
-  KOMO_IAP_AUDIENCE: process.env.KOMO_IAP_AUDIENCE || undefined,
-  KOMO_AUTH_PREFIX: process.env.KOMO_AUTH_PREFIX || undefined,
+  KOMO_PROXY_AUTH: option("KOMO_PROXY_AUTH"),
+  KOMO_PROXY_AUDIENCE: option("KOMO_PROXY_AUDIENCE"),
+  KOMO_IAP_AUDIENCE: option("KOMO_IAP_AUDIENCE"),
+  KOMO_AUTH_PATH_PREFIX: option("KOMO_AUTH_PATH_PREFIX"),
+  KOMO_AUTH_PREFIX: option("KOMO_AUTH_PREFIX"),
+  KOMO_REQUIRE_SESSION_FOR_READS: option("KOMO_REQUIRE_SESSION_FOR_READS"),
+  KOMO_ALLOW_GUESTS: option("KOMO_ALLOW_GUESTS"),
+  KOMO_SESSION_MAX_AGE_DAYS: option("KOMO_SESSION_MAX_AGE_DAYS"),
   KOMO_PUBLIC_PATH: publicPath || undefined,
 } as unknown as Env;
+// Fail at startup, before touching the database, on an invalid sign-in option.
+authOptions(env);
+await db.migrate();
 const port = Number(process.env.PORT ?? 8080);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw Error("Invalid PORT");
@@ -75,22 +63,13 @@ const server = createServer(async (incoming, outgoing) => {
         headers.set(name, Array.isArray(value) ? value.join(", ") : value);
     }
     // Ignore client-supplied Cloudflare IP headers. The API uses this trusted value for rate limits.
-    const proxyHops = Number(process.env.KOMO_PROXY_HOPS ?? 0);
-    if (!Number.isInteger(proxyHops) || proxyHops < 0 || proxyHops > 8)
-      throw Error("Invalid KOMO_PROXY_HOPS");
-    const forwardedHeader = incoming.headers["x-forwarded-for"];
-    const forwarded = (
-      Array.isArray(forwardedHeader)
-        ? forwardedHeader.join(",")
-        : (forwardedHeader ?? "")
-    )
-      .split(",")
-      .map((ip) => ip.trim());
-    const ip =
-      proxyHops > 0 ? forwarded.at(-proxyHops) : incoming.socket.remoteAddress;
     headers.set(
       "CF-Connecting-IP",
-      ip && isIP(ip) ? ip : (incoming.socket.remoteAddress ?? "local"),
+      clientAddress(
+        incoming.headers["x-forwarded-for"],
+        proxyHops,
+        incoming.socket.remoteAddress,
+      ),
     );
     const request = new Request(url, {
       method: incoming.method,
