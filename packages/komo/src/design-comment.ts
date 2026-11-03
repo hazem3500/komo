@@ -14,6 +14,8 @@ export interface DesignChange {
   label: string;
   before: string;
   after: string;
+  /** A move's places by name, without positions, when both have one. */
+  place?: string;
   /** Token path such as color.brand, when the change binds a design token. */
   token?: string;
   /** How to preview it on the page; absent when only the app can apply it. */
@@ -69,9 +71,15 @@ function change(line: string, kind: string): DesignChange | null {
       apply: { kind: "style", property: match[1], also: [...match[4].matchAll(/ · sets ([\w-]+): ([^·]*[^\s·])/g)].map(([, property, value]) => [property, value]) } };
     // "- Move Link “Approvals”: from NavList (3rd) → NavList (2nd)"; its From/To lines locate both places.
     match = /^- Move (.+): from (.+) \((\d+\w+)\) → (.+) \((\d+\w+)\)$/.exec(line);
-    // An older proposal may name a place by an anonymous wrapper; its position alone reads better.
-    const at = (place: string, nth: string) => /^[\w$.()]+$/.test(place) && !namedComponent(place) ? nth : `${place} · ${nth}`;
-    if (match) return { label: match[1], before: at(match[2], match[3]), after: match[4] === match[2] ? match[5] : at(match[4], match[5]), apply: { kind: "move", property: "" } };
+    if (match) {
+      // A place named by an anonymous wrapper (an older proposal) reads as its position alone;
+      // a named place reads without the position, which stays in the card's tooltip.
+      const named = (place: string) => /^[\w$.()]+$/.test(place) && !namedComponent(place) ? "" : place;
+      const [from, to] = [named(match[2]), named(match[4])], same = match[4] === match[2];
+      const at = (place: string, nth: string) => place ? `${place} · ${nth}` : nth;
+      return { label: match[1], before: at(from, match[3]), after: same ? match[5] : at(to, match[5]),
+        ...(from && (same || to) ? { place: same ? from : `${from} → ${to}` } : {}), apply: { kind: "move", property: "" } };
+    }
     match = /^- Move \(translate\): Δx (\S+), Δy ([^\s·]+)/.exec(line);
     if (match) return { label: "translate", before: "none", after: `${match[1]} ${match[2]}`, apply: { kind: "style", property: "translate" } };
     const [, label, before = "", after] = /^- (.+?): (?:(.*) → )?(.*)$/.exec(line) ?? [];
@@ -507,7 +515,7 @@ const css = `
 .design-card-head { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 40px; padding: 7px 8px 7px 12px; }
 .design-card-label { display: grid; flex: 1; min-width: 0; gap: 1px; }
 .design-card-title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; font-weight: 600; color: #eee; }
-.design-card-target { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8a8a8a; font-size: 11px; }
+.design-card-target { display: -webkit-box; min-width: 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; color: #8a8a8a; font-size: 11px; }
 .design-toggle { display: inline-flex; padding: 2px; border-radius: 7px; background: #ffffff0a; flex: none; }
 .design-toggle button { display: inline-flex; align-items: center; gap: 4px; border: 0; padding: 0 7px; height: 22px; border-radius: 5px; font: inherit; font-size: 11px; color: #9a9a9a; background: none; cursor: pointer; }
 .design-toggle svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
@@ -677,8 +685,8 @@ export function renderDesignComment(container: HTMLElement, body: string, option
     const move = block.changes.find(item => item.apply?.kind === "move");
     label.append(Object.assign(document.createElement("span"), { className: "design-card-title", textContent: move ? `Moved ${move.label}` : block.title }));
     const component = block.component ?? sections.find(section => section.target === block.target && section.component)?.component;
-    const where = move ? `${move.before} → ${move.after}` : block.target || component ? targetLabel({ ...block, component }, options.resolve(block.target)) : "";
-    if (where) label.append(Object.assign(document.createElement("span"), { className: "design-card-target", textContent: where, title: where }));
+    const where = move ? move.place ?? `${move.before} → ${move.after}` : block.target || component ? targetLabel({ ...block, component }, options.resolve(block.target)) : "";
+    if (where) label.append(Object.assign(document.createElement("span"), { className: "design-card-target", textContent: where, title: move ? `${move.before} → ${move.after}` : where }));
     head.append(label);
     if (block.source && !compact) head.append(sourceInfo(block.component || where || "Change", block.source, options.sourceHref));
     // One Before/After switch for the whole comment, top right of its first card.

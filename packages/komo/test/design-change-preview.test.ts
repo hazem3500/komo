@@ -41,6 +41,9 @@ describe("Before/After for every posted proposal", () => {
     // An older move names its places by a wrapper: the position alone reads better.
     const [section] = parseDesignComment(["Proposed geometry changes (preview only)", "Target: #new", "- Move Button “New goal”: from Primitive.div (1st) → Primitive.div (2nd)", "From: div#toolbar · index 0", "To: div#toolbar · index 1 · after"].join("\n"));
     expect(section).toMatchObject({ changes: [{ label: "Button “New goal”", before: "1st", after: "2nd" }] });
+    expect((section as { changes: Array<{ place?: string }> }).changes[0].place).toBeUndefined();
+    const [across] = parseDesignComment(["Proposed geometry changes (preview only)", "Target: #new", "- Move Button “New goal”: from Toolbar “Actions” (1st) → Sidebar (2nd)", "From: div#toolbar · index 0", "To: aside · index 1 · after"].join("\n"));
+    expect(across).toMatchObject({ changes: [{ before: "Toolbar “Actions” · 1st", after: "Sidebar · 2nd", place: "Toolbar “Actions” → Sidebar" }] });
   });
 
 
@@ -69,7 +72,9 @@ describe("Before/After for every posted proposal", () => {
     renderDesignComment(container, move, { key: "move", resolve: () => approvals, note: () => {}, design: { selectionColor: "#ff00aa" } });
     // The element is named once, in the heading, with both places below it and no repeated row.
     expect(container.querySelector(".design-card-title")!.textContent).toBe("Moved Link “Approvals”");
-    expect(container.querySelector(".design-card-target")!.textContent).toBe("NavList · 3rd → 2nd");
+    // Its place by name; the positions stay in the tooltip.
+    expect(container.querySelector(".design-card-target")!.textContent).toBe("NavList");
+    expect(container.querySelector(".design-card-target")!.getAttribute("title")).toBe("NavList · 3rd → 2nd");
     expect(container.querySelectorAll(".design-row")).toHaveLength(0);
     // A design thread opens on Before: the page as it is now.
     expect(button(container, "Before").getAttribute("aria-pressed")).toBe("true");
@@ -97,7 +102,7 @@ describe("Before/After for every posted proposal", () => {
     renderDesignComment(container, move, { key: "missing", resolve: () => null, note: () => {} });
     expect(button(container, "After").disabled).toBe(true);
     expect(status(container).textContent).toBe("Element not found on this page");
-    expect(container.querySelector(".design-card-target")!.textContent).toBe("NavList · 3rd → 2nd");
+    expect(container.querySelector(".design-card-target")!.textContent).toBe("NavList");
     // The page already shows the move.
     container = nav();
     const approvals = document.querySelector<HTMLElement>("#approvals")!;

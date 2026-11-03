@@ -157,7 +157,7 @@ describe.skipIf(!chrome)("Before/After on posted design proposals", () => {
     const page = await open("move");
     const before = await snapshot(page);
     expect(await page.locator(".design-card-title").textContent()).toBe("Moved Link “Approvals”");
-    expect(await page.locator(".design-card-target").textContent()).toBe("NavList · 3rd → 2nd");
+    expect(await page.locator(".design-card-target").textContent()).toBe("NavList");
     expect(await page.locator(".design-row").count()).toBe(0);
     expect(await toggle(page, "Before").getAttribute("aria-pressed")).toBe("true");
     await page.screenshot({ path: join(shots, "move-before.png") });

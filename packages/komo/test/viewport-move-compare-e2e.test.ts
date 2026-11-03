@@ -134,6 +134,9 @@ async function open(mode: Mode) {
 const order = (app: Frame) => app.evaluate(() => [...document.getElementById("toolbar")!.children]
   .filter((node) => getComputedStyle(node).display !== "none")
   .map((node) => `${node.textContent}${node.hasAttribute("data-komo-move-clone") ? "*" : ""}`));
+/** Card labels whose text is cut off: wider or taller than their box. */
+const clipped = (card: ReturnType<Page["locator"]>) => card.locator(".design-card-title, .design-card-target").evaluateAll((nodes) =>
+  nodes.filter((node) => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1).map((node) => node.textContent));
 const BEFORE = ["New goal", "Edit", "Share"], AFTER = ["Edit", "New goal*", "Share"];
 
 /** An element's box on screen, through the viewport iframe's offset and scale. */
@@ -183,7 +186,9 @@ describe.skipIf(!chrome)("Before/After for a move in Viewport and In place", () 
       expect(await draft.locator(".design-toggle button", { hasText: "After" }).getAttribute("aria-pressed")).toBe("true");
       // The card names the button and its toolbar, not the wrappers' primitive names.
       expect(await draft.locator(".design-card-title").textContent()).toBe("Moved Button “New goal”");
-      expect(await draft.locator(".design-card-target").textContent()).toBe("Toolbar “Actions” · 1st → 2nd");
+      expect(await draft.locator(".design-card-target").textContent()).toBe("Toolbar “Actions”");
+      // Nothing is cut off at the composer card's default width.
+      expect(await clipped(draft)).toEqual([]);
       await page.screenshot({ path: join(shots, `${mode}-composer-after.png`) });
       await flip(page, app, draft, `${mode} composer`);
 
@@ -229,6 +234,8 @@ describe.skipIf(!chrome)("Before/After for a move in Viewport and In place", () 
       expect([anchor.selector, Math.round(anchor.x * 10), Math.round(anchor.y * 10)]).toEqual(["#new", 5, 5]);
       const card = page.locator(".message-text").filter({ has: page.locator(".design-toggle") }).first();
       expect(await card.locator(".design-card-title").textContent()).toBe("Moved Button “New goal”");
+      expect(await card.locator(".design-card-target").textContent()).toBe("Toolbar “Actions”");
+      expect(await clipped(card)).toEqual([]);
       await card.locator(".design-toggle button", { hasText: "After" }).click();
       await expect.poll(() => order(app), `${mode} posted After`).toEqual(AFTER);
       await page.screenshot({ path: join(shots, `${mode}-posted-after.png`) });
