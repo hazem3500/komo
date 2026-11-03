@@ -4,7 +4,6 @@ import { textEntry } from "./dom.js";
 import { isDesignTarget } from "./design-target.js";
 import { elementLabel, namedComponent } from "./element-label.js";
 import { isHTMLElement, onFrame, previewTarget, screenRect } from "./frame-target.js";
-import { STAND_IN } from "./anchors.js";
 import { inlineStyleSnapshot, removeEmptyStyle } from "./design-preview.js";
 import { previewText } from "./text-preview.js";
 import { sourceInfo, sourceInfoStyles, type SourceHref } from "./source-info.js";
@@ -218,6 +217,8 @@ const kids = (parent: Element, skip?: Element) => [...parent.children].filter(ch
   !child.matches("script,style,template") && !/^(none|contents)$/.test(getComputedStyle(child).display));
 const indexOf = (element: Element, parent: Element) => kids(parent, element).filter(child => child.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING).length;
 const CLONE = "data-komo-move-clone";
+// Comment anchors measure this stand-in while it shows a moved element (anchors.ts).
+const STAND_IN = Symbol.for("komo.stand-in");
 type StandIn = Element & { [STAND_IN]?: Element };
 
 /**
