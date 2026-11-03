@@ -76,6 +76,15 @@ komo comments resolve THREAD_ID --endpoint https://comments.example.com --projec
 
 The `--origin` value must be one approved preview origin. Each PR needs the same branch value in widget and bot to isolate its feedback. On the same project, an owner can edit approved sites after Google sign-in. Wildcard origins match one hostname label only, so `pr-*.preview.example.com` does not allow arbitrary subdomains of `example.com`.
 
+## Upgrade a database from upstream komo
+
+A database created by upstream komo's Node server is upgraded in place. That server records schema version 1 in `komo_schema`. On first boot, this server takes the migration lock and finds version 1. It applies `002_thread_tags.sql` through `006_thread_scope.sql` in one transaction and records version 6. These migrations only add tables, and columns that have defaults. Existing threads get no tags and page scope, and webhooks stay off. No rows are rewritten or deleted. Existing sessions keep working, so reviewers stay signed in. If a step fails, the transaction rolls back and the server exits with the schema unchanged. Later boots find version 6 and change nothing. `test/postgres-upstream-upgrade.test.ts` checks this against upstream commit `738da17`.
+
+1. Back up first, with a `pg_dump` from the same or a newer PostgreSQL major version: `pg_dump --format=custom --no-owner --file komo-before-upgrade.dump "$DATABASE_URL"`.
+2. Stop the old server. Then start this one with the same `DATABASE_URL`. `/health` returns `{"ok":true}` after the migrations finish.
+
+To roll back, restore the backup. Redeploying the old image is not enough: the upstream server refuses version 6 with `Unsupported PostgreSQL schema version`. Stop the server and create an empty database. Run `pg_restore --no-owner --exit-on-error --dbname "$NEW_DATABASE_URL" komo-before-upgrade.dump`, then start the old image with that URL. The backup doesn't include feedback written after the upgrade. To keep a copy, run `komo project export --out comments.json` against this server before you restore.
+
 ## Database boundary
 
 The API's storage contract is `prepare().bind().first()/all()/run()` plus atomic `batch()`. `server/postgres.ts` implements it with a PostgreSQL pool, parameterized statements, and one transaction per batch. `server/postgres/001_initial.sql` mirrors the SQLite schema and its quota, revision, retention, and deletion triggers; later numbered files, such as `005_snapshots.sql` for element snapshots (`bytea`), mirror later D1 migrations. Add a numbered PostgreSQL migration whenever the D1 schema changes. Existing D1 migrations and the Worker entry point stay separate. The Node server runs the same request handler; transport and storage are the only new adapters.
