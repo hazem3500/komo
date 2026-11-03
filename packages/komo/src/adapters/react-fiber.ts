@@ -93,7 +93,14 @@ const isFiber = (value: unknown): value is Fiber => !!value && typeof value === 
 
 interface Hook {
   renderers?: Map<number, { findFiberByHostInstance?: (node: Element) => unknown }>;
+  [key: symbol]: ReactPreviewBridge | undefined;
 }
+/**
+ * The DevTools hook of the window that rendered `node`. In Frame's viewport iframe the app's
+ * React, its renderer and the preview bridge live in the iframe's realm, not in this one.
+ */
+const hookOf = (node: Node) =>
+  attempt(() => ((node.ownerDocument?.defaultView ?? globalThis) as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: Hook }).__REACT_DEVTOOLS_GLOBAL_HOOK__);
 
 /** The fiber React attached to a DOM node, from its own keys or a DevTools renderer. */
 function fiberOf(node: Element): Fiber | null {
@@ -103,8 +110,7 @@ function fiberOf(node: Element): Fiber | null {
       if (isFiber(fiber)) return fiber;
     }
   }
-  const hook = attempt(() => (globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: Hook }).__REACT_DEVTOOLS_GLOBAL_HOOK__);
-  for (const renderer of hook?.renderers?.values?.() ?? []) {
+  for (const renderer of hookOf(node)?.renderers?.values?.() ?? []) {
     const fiber = attempt(() => renderer.findFiberByHostInstance?.(node));
     if (isFiber(fiber)) return fiber;
   }
@@ -160,11 +166,11 @@ function nameOf(type: unknown, depth = 0): string | undefined {
   return undefined;
 }
 
-/** The first DOM element a component renders. */
+/** The first DOM element a component renders, from any realm: `instanceof Element` fails across frames. */
 function rootElement(fiber: Fiber): Element | null {
   let node = fiber.child;
   for (let steps = 0; node && steps < 2000; steps++) {
-    if (node.tag === HOST_COMPONENT) return node.stateNode instanceof Element ? node.stateNode : null;
+    if (node.tag === HOST_COMPONENT) return (node.stateNode as Node | null)?.nodeType === 1 ? node.stateNode as Element : null;
     node = node.child ?? node.sibling;
   }
   return null;
@@ -300,8 +306,7 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
         if (!element?.isConnected) return null;
         return { ...snapshot, element, props: (snapshot.fiber.memoizedProps ?? {}) as Record<string, unknown> };
       }) ?? null;
-      const hook = (globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: Record<symbol, ReactPreviewBridge> }).__REACT_DEVTOOLS_GLOBAL_HOOK__;
-      const editor = attempt(() => hook?.[Symbol.for("inline-feedback.react-preview")]?.editor({ schema, current: read }));
+      const editor = attempt(() => hookOf(identity.element)?.[Symbol.for("inline-feedback.react-preview")]?.editor({ schema, current: read }));
       if (editor) editors.set(found.fiber, editor);
       return editor ?? null;
     },
