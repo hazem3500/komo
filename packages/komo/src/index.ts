@@ -576,7 +576,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     const anchored = resolveAnchor(anchor);
     let found: Element[] = [];
     try {
-      if (selector) found = [...document.querySelectorAll(selector)];
+      if (selector) found = [...pageDocument().querySelectorAll(selector)];
     } catch {
       /* Not a valid selector; use the anchor. */
     }
