@@ -279,7 +279,7 @@ run("the fork's boot migration upgrades it in place without changing a row", asy
   // As server/node.ts does at boot.
   db = postgresDatabase(url, await loadPostgres());
   await db.migrate();
-  expect((await raw.query("SELECT version FROM komo_schema")).rows).toEqual([{ version: 6 }]);
+  expect((await raw.query("SELECT version FROM komo_schema")).rows).toEqual([{ version: 7 }]);
 
   const after = await dump(raw, upstreamColumns);
   for (const table of UPSTREAM_TABLES.filter((table) => table !== "komo_schema"))
@@ -292,6 +292,15 @@ run("the fork's boot migration upgrades it in place without changing a row", asy
 
   const columns = await columnsOf(raw);
   expect(columns.threads.slice(-2)).toEqual(["tags", "scope"]);
+  // 007 only adds nullable session columns; upgraded sessions leave them NULL.
+  expect(columns.sessions).toEqual([...upstreamColumns.sessions, "via", "created_at"]);
+  expect(
+    (await raw.query("SELECT column_name,is_nullable,column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='sessions' AND column_name IN ('via','created_at') ORDER BY 1")).rows,
+  ).toEqual([
+    { column_name: "created_at", is_nullable: "YES", column_default: null },
+    { column_name: "via", is_nullable: "YES", column_default: null },
+  ]);
+  expect((await raw.query("SELECT DISTINCT via,created_at FROM sessions")).rows).toEqual([{ via: null, created_at: null }]);
   expect((await raw.query("SELECT DISTINCT tags,scope FROM threads")).rows).toEqual([{ tags: "[]", scope: "page" }]);
   expect(
     (await raw.query("SELECT project,webhook_url,webhook_secret,webhook_events,webhook_enabled FROM project_settings ORDER BY project")).rows,
@@ -409,6 +418,19 @@ run("old sessions authenticate and old threads read and write through the API", 
   const exported = await call("/project/export?table=threads", { token: tokens.owner });
   expect(exported.status).toBe(200);
   expect(exported.data.rows.map((row: { id: string }) => row.id)).toEqual(expect.arrayContaining([ids.open, ids.resolved, ids.main]));
+
+  // Behind a sign-in proxy, upgraded sessions don't pass: the proxy didn't
+  // sign them in, so reviewers sign in again through it. Without one they do.
+  const behindProxy = { DB: db, PROJECTS: JSON.stringify(PROJECTS), KOMO_IAP_AUDIENCE: "/projects/1/global/backendServices/2" } as unknown as Env;
+  const proxied = await worker.fetch(
+    new Request(`http://localhost:8080/me?project=review`, {
+      headers: { Origin: "https://pr-42.preview.example.com", Authorization: `Bearer ${tokens.owner}` },
+    }) as unknown as Parameters<typeof worker.fetch>[0],
+    behindProxy,
+    { waitUntil: () => {} } as unknown as ExecutionContext,
+  );
+  expect(proxied.status).toBe(401);
+  expect((await call("/me", { token: tokens.owner })).status).toBe(200);
 
   // Sessions and OAuth states survive startup maintenance; only expired rows ever go.
   expect((await raw.query("SELECT COUNT(*)::int AS n FROM sessions")).rows[0].n).toBe(5);

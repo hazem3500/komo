@@ -35,7 +35,8 @@ async function call(
     token,
     jwt,
     project = "review",
-  }: { method?: string; data?: unknown; token?: string; jwt?: string; project?: string } = {},
+    from = origin,
+  }: { method?: string; data?: unknown; token?: string; jwt?: string; project?: string; from?: string | null } = {},
 ) {
   const url = new URL(path, "https://comments.example.com");
   if (!url.searchParams.has("project")) url.searchParams.set("project", project);
@@ -45,7 +46,7 @@ async function call(
     new Request(url, {
       method,
       headers: {
-        Origin: origin,
+        ...(from ? { Origin: from } : {}),
         ...(data ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(jwt ? { "x-goog-iap-jwt-assertion": jwt } : {}),
@@ -76,12 +77,18 @@ async function iapJwt(claims: Record<string, unknown> = {}) {
   );
   return `${head}.${payload}.${Buffer.from(signature).toString("base64url")}`;
 }
-async function addSession(token: string, user: string, expiresAt: number, project = "review") {
+/** A stored session; `via` and `createdAt` stay NULL like rows from before migration 007. */
+async function addSession(
+  token: string,
+  user: string,
+  expiresAt: number,
+  { project = "review", via = null, createdAt = null }: { project?: string; via?: string | null; createdAt?: number | null } = {},
+) {
   await db.prepare("INSERT INTO users(id,name,verified) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING")
     .bind(user, user.split(":")[0], user.startsWith("guest:") ? 0 : 1)
     .run();
-  await db.prepare("INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES(?,?,?,?)")
-    .bind(sha(token), user, project, expiresAt)
+  await db.prepare("INSERT INTO sessions(token_hash,user_id,project,expires_at,via,created_at) VALUES(?,?,?,?,?,?)")
+    .bind(sha(token), user, project, expiresAt, via, createdAt)
     .run();
 }
 const expiry = async (token: string) =>
@@ -152,26 +159,51 @@ describe("auth options on PostgreSQL", () => {
 
   run("KOMO_SESSION_MAX_AGE_DAYS caps new sessions and rejects older ones", async () => {
     const now = Date.now();
+    // From before migration 007: no created_at, dated by the default lifetime.
     await addSession("default-41d", "google:aged", now - 41 * DAY + DEFAULT_LIFETIME);
     await addSession("default-29d", "google:young", now - 29 * DAY + DEFAULT_LIFETIME);
-    await addSession("capped-20d-left", "google:capped", now + 20 * DAY);
+    // A 30-day session issued 10 days ago by a server that capped sessions
+    // itself: its shorter lifetime makes it look older, so a cap refuses it.
+    await addSession("short-lived", "google:capped", now + 20 * DAY);
 
     const uncapped = environment({ KOMO_REQUIRE_SESSION_FOR_READS: "true" });
-    for (const token of ["default-41d", "default-29d", "capped-20d-left"])
+    for (const token of ["default-41d", "default-29d", "short-lived"])
       expect((await call(uncapped, "/threads", { token })).status).toBe(200);
     const fresh = (await (await call(uncapped, "/auth/guest", { method: "POST", data: { name: "Default" } })).json()) as { token: string };
     expect(await expiry(fresh.token)).toBeGreaterThan(now + 99 * 365 * DAY);
+    const stored = await db.prepare("SELECT via,created_at FROM sessions WHERE token_hash=?").bind(sha(fresh.token)).first<{ via: string; created_at: number }>();
+    expect(stored?.via).toBe("guest");
+    expect(Number(stored?.created_at)).toBeGreaterThanOrEqual(now);
 
     const env = environment({ KOMO_REQUIRE_SESSION_FOR_READS: "true", KOMO_SESSION_MAX_AGE_DAYS: "30" });
     expect((await call(env, "/threads", { token: "default-41d" })).status).toBe(401);
     expect((await call(env, "/me", { token: "default-41d" })).status).toBe(401);
     expect((await call(env, "/threads", { token: "default-29d" })).status).toBe(200);
-    expect((await call(env, "/threads", { token: "capped-20d-left" })).status).toBe(200);
+    expect((await call(env, "/threads", { token: "short-lived" })).status).toBe(401);
     const capped = (await (await call(env, "/auth/guest", { method: "POST", data: { name: "Capped" } })).json()) as { token: string };
     const expires = await expiry(capped.token);
     expect(expires).toBeGreaterThan(now + 30 * DAY - 60000);
     expect(expires).toBeLessThanOrEqual(Date.now() + 30 * DAY);
     expect((await call(env, "/threads", { token: capped.token })).status).toBe(200);
+  });
+
+  run("lowering the cap from 30 to 7 days refuses every older session, whatever its expiry", async () => {
+    const now = Date.now();
+    const thirty = environment({ KOMO_REQUIRE_SESSION_FOR_READS: "true", KOMO_SESSION_MAX_AGE_DAYS: "30" });
+    const seven = environment({ KOMO_REQUIRE_SESSION_FOR_READS: "true", KOMO_SESSION_MAX_AGE_DAYS: "7" });
+    // Issued under the 30-day cap on day 0, seen on each later day.
+    for (const day of [1, 6, 8, 10, 22, 23, 24, 29]) {
+      const token = `cap-day-${day}`;
+      await addSession(token, `google:day${day}`, now - day * DAY + 30 * DAY, { via: "google", createdAt: now - day * DAY });
+      expect((await call(thirty, "/threads", { token })).status, `30 days, day ${day}`).toBe(200);
+      expect((await call(seven, "/threads", { token })).status, `7 days, day ${day}`).toBe(day < 7 ? 200 : 401);
+    }
+    // Rows without created_at stay refused as they near expiry: dating never moves forward.
+    for (const left of [20, 5, 1]) {
+      const token = `legacy-${left}`;
+      await addSession(token, `google:legacy${left}`, now + left * DAY);
+      expect((await call(seven, "/threads", { token })).status, `${left} days left`).toBe(401);
+    }
   });
 
   run("a proxy signs reviewers in, forces strict reads and keeps prefixed URLs", async () => {
@@ -186,7 +218,9 @@ describe("auth options on PostgreSQL", () => {
       GITHUB_CLIENT_ID: "github-id",
       GITHUB_CLIENT_SECRET: "github-secret",
     });
-    expect(await (await call(env, "/config")).json()).toMatchObject({ google: true, github: false, guests: false, snapshots: { guests: false } });
+    const config = (await (await call(env, "/config")).json()) as Record<string, unknown>;
+    expect(config).toMatchObject({ google: true, github: false, guests: false, tokens: false, snapshots: { guests: false } });
+    expect(config.repo).toBeUndefined();
     expect((await call(env, "/threads")).status).toBe(401);
     expect((await call(env, "/auth/guest", { method: "POST", data: { name: "Guest" } })).status).toBe(403);
     expect((await call(env, "/auth/github/start", { method: "POST" })).status).toBe(503);
@@ -195,10 +229,26 @@ describe("auth options on PostgreSQL", () => {
     expect((await call(env, "/auth/google/callback?state=x")).status).toBe(404);
     expect((await call(env, "/auth/google/authorize?state=x", { jwt: await iapJwt() })).status).toBe(404);
 
-    // An existing Google OAuth account signs in as itself.
+    // An existing Google OAuth account signs in as itself. Its OAuth session,
+    // and an access token it made, work without the proxy but not behind it.
     await db.prepare("INSERT INTO users(id,name,verified,avatar_url) VALUES(?,?,1,?)")
       .bind("google:555", "Lead Reviewer", "https://photos.example/lead.jpg")
       .run();
+    await addSession("lead-oauth", "google:555", Date.now() + DAY, { via: "google", createdAt: Date.now() });
+    const open = environment({ KOMO_PUBLIC_PATH: "/komo" });
+    expect((await call(open, "/threads", { token: "lead-oauth" })).status).toBe(200);
+    const pat = await call(open, "/account/tokens", {
+      method: "POST",
+      token: "lead-oauth",
+      data: { name: "ci", scopes: ["comments:read", "comments:write"] },
+    });
+    expect(pat.status).toBe(201);
+    const { token: accessToken } = (await pat.json()) as { token: string };
+    expect((await call(open, "/threads", { token: accessToken })).status).toBe(200);
+    expect((await call(env, "/threads", { token: "lead-oauth" })).status).toBe(401);
+    const refusedToken = await call(env, "/threads", { token: accessToken });
+    expect(refusedToken.status).toBe(403);
+    expect(await refusedToken.json()).toEqual({ error: "Access tokens are off behind the sign-in proxy. Use /auth/proxy/session." });
     const start = (await (await call(env, "/auth/google/start", { method: "POST" })).json()) as { url: string };
     const authorize = new URL(start.url);
     expect(`${authorize.origin}${authorize.pathname}`).toBe("https://comments.example.com/komo/backoffice/auth/google/authorize");
@@ -216,25 +266,36 @@ describe("auth options on PostgreSQL", () => {
     expect((await db.prepare("SELECT email FROM users WHERE id=?").bind("google:555").first<{ email: string }>())?.email).toBe("lead@example.com");
     expect(await expiry(message.token)).toBeLessThanOrEqual(Date.now() + 30 * DAY);
     expect((await call(env, "/threads", { token: message.token })).status).toBe(200);
+    expect(((await (await call(env, "/config", { token: message.token })).json()) as { repo?: string }).repo).toBe("team/site");
+    expect((await call(env, "/account/tokens", { token: message.token })).status).toBe(403);
     // The state is single-use.
     expect((await call(env, `/backoffice/auth/google/authorize${authorize.search}`, { jwt: await iapJwt() })).status).toBe(400);
 
     for (const path of ["/backoffice/auth/proxy/session", "/backoffice/auth/iap/session"]) {
-      expect((await call(env, path, { method: "POST" })).status).toBe(401);
-      expect((await call(env, path, { method: "POST", jwt: await iapJwt({ aud: "/projects/1/global/backendServices/2" }) })).status).toBe(401);
-      const exchanged = await call(env, path, { method: "POST", jwt: await iapJwt({ sub: "accounts.google.com:777", email: "Bot@Example.com" }) });
+      expect((await call(env, path, { method: "POST", from: null })).status).toBe(401);
+      expect((await call(env, path, { method: "POST", from: null, jwt: await iapJwt({ aud: "/projects/1/global/backendServices/2" }) })).status).toBe(401);
+      // A page, even on an approved site, can't exchange its visitor's sign-in.
+      for (const from of [origin, "https://elsewhere.example"]) {
+        const refused = await call(env, path, { method: "POST", from, jwt: await iapJwt() });
+        expect(refused.status).toBe(403);
+        expect(refused.headers.get("Access-Control-Allow-Origin")).toBeNull();
+      }
+      expect((await call(env, path, { method: "POST", from: "https://comments.example.com", jwt: await iapJwt() })).status).toBe(201);
+      const exchanged = await call(env, path, { method: "POST", from: null, jwt: await iapJwt({ sub: "accounts.google.com:777", email: "Bot@Example.com" }) });
       expect(exchanged.status).toBe(201);
       const body = (await exchanged.json()) as { token: string; user: { id: string } };
       expect(body.user).toMatchObject({ id: "google:777", name: "bot", verified: true });
       expect((await call(env, "/threads", { token: body.token })).status).toBe(200);
     }
-    expect((await call(env, "/auth/proxy/session", { method: "POST", jwt: await iapJwt() })).status).toBe(404);
+    expect((await call(env, "/auth/proxy/session", { method: "POST", from: null, jwt: await iapJwt() })).status).toBe(404);
 
     // Sessions from before the proxy was turned on don't read through it.
     await addSession("left-guest", "guest:left", Date.now() + DAY);
     await addSession("left-github", "github:left", Date.now() + DAY);
-    expect((await call(env, "/threads", { token: "left-guest" })).status).toBe(401);
-    expect((await call(env, "/threads", { token: "left-github" })).status).toBe(403);
+    for (const token of ["left-guest", "left-github"]) {
+      expect((await call(env, "/threads", { token })).status).toBe(401);
+      expect((await call(env, "/usage", { token })).status).toBe(401);
+    }
   });
 
   run("generated links keep the path from PUBLIC_URL", async () => {

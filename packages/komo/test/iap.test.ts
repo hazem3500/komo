@@ -135,14 +135,18 @@ beforeAll(async () => {
       KOMO_ALLOW_GUESTS: "true",
       KOMO_REQUIRE_SESSION_FOR_READS: "false",
     },
-    // Sessions from before the cap carry the default century-long expiry.
+    // Sessions from before the proxy: a Google OAuth one from yesterday with
+    // the default century-long expiry, a guest and a GitHub one. Then proxy
+    // sessions 10 and 40 days old.
     seed: `
-      INSERT INTO users(id,name,verified) VALUES('google:old','Old',1),('google:recent','Recent',1),('guest:left','Guest',0),('github:left','Coder',1);
+      INSERT INTO users(id,name,verified) VALUES('google:oauth','OAuth',1),('google:recent','Recent',1),('google:old','Old',1),('guest:left','Guest',0),('github:left','Coder',1);
       INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES
-        ('${sha("old-session")}','google:old','test',${now - 40 * DAY + DEFAULT_LIFETIME}),
-        ('${sha("recent-session")}','google:recent','test',${now - 10 * DAY + DEFAULT_LIFETIME}),
+        ('${sha("oauth-session")}','google:oauth','test',${now - DAY + DEFAULT_LIFETIME}),
         ('${sha("guest-session")}','guest:left','test',${now + DEFAULT_LIFETIME}),
         ('${sha("github-session")}','github:left','test',${now + DEFAULT_LIFETIME});
+      INSERT INTO sessions(token_hash,user_id,project,expires_at,via,created_at) VALUES
+        ('${sha("recent-session")}','google:recent','test',${now + 20 * DAY},'proxy',${now - 10 * DAY}),
+        ('${sha("old-session")}','google:old','test',${now + 20 * DAY},'proxy',${now - 40 * DAY});
     `,
   });
   port = api.port;
@@ -153,12 +157,17 @@ afterAll(async () => {
 
 describe("proxy sign-in on D1", () => {
   it("offers only Google sign-in and refuses anonymous reads and guests", async () => {
-    expect(await (await request("config")).json()).toMatchObject({
+    const config = await (await request("config")).json();
+    expect(config).toMatchObject({
       google: true,
       github: false,
       guests: false,
+      tokens: false,
       snapshots: { guests: false },
     });
+    // Anonymous callers don't learn the repository.
+    expect(config.repo).toBeUndefined();
+    expect((await (await request("config", "GET", { token: "recent-session" })).json()).repo).toBe("owner/site");
     const anonymous = await request("threads");
     expect(anonymous.status).toBe(401);
     expect(await anonymous.json()).toEqual({ error: "Sign in to see comments." });
@@ -253,6 +262,15 @@ describe("proxy sign-in on D1", () => {
   it("gives agents a project session from their proxy identity on both routes", async () => {
     for (const path of ["/auth/proxy/session", "/auth/iap/session"]) {
       const url = `http://localhost:${port}${prefix}${path}?project=test`;
+      // A web page can't exchange a visitor's proxy sign-in, even from an approved site.
+      for (const site of [origin, "https://elsewhere.example"]) {
+        const refused = await fetch(url, {
+          method: "POST",
+          headers: { Origin: site, "x-goog-iap-jwt-assertion": await iapJwt() },
+        });
+        expect(refused.status).toBe(403);
+        expect(refused.headers.get("Access-Control-Allow-Origin")).toBeNull();
+      }
       expect((await fetch(url, { method: "POST" })).status).toBe(401);
       expect(
         (await fetch(`http://localhost:${port}${prefix}${path}?project=missing`, {
@@ -277,11 +295,19 @@ describe("proxy sign-in on D1", () => {
   });
 
   it("caps session age and refuses sessions the proxy did not sign in", async () => {
-    expect((await request("threads", "GET", { token: "old-session" })).status).toBe(401);
     expect((await request("threads", "GET", { token: "recent-session" })).status).toBe(200);
-    const guest = await request("threads", "GET", { token: "guest-session" });
-    expect(guest.status).toBe(401);
-    expect(await guest.json()).toEqual({ error: "Guest comments are disabled." });
-    expect((await request("threads", "GET", { token: "github-session" })).status).toBe(403);
+    expect((await request("threads", "GET", { token: "old-session" })).status).toBe(401);
+    // Signed in before the proxy, by Google OAuth, GitHub or as a guest: sign in again.
+    for (const token of ["oauth-session", "github-session", "guest-session"]) {
+      const refused = await request("threads", "GET", { token });
+      expect(refused.status, token).toBe(401);
+      expect(await refused.json(), token).toEqual({ error: "Your session expired. Sign in again." });
+      expect((await request("me", "GET", { token })).status, token).toBe(401);
+      expect((await request("usage", "GET", { token })).status, token).toBe(401);
+    }
+    // Personal access tokens don't pass the proxy either.
+    const token = await request("threads", "GET", { token: `komo_pat_${"a".repeat(40)}` });
+    expect(token.status).toBe(403);
+    expect((await request("account/tokens", "GET", { token: "recent-session" })).status).toBe(403);
   });
 });

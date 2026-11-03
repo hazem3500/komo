@@ -46,6 +46,9 @@ beforeAll(async () => {
         ('${sha("old-session")}','google:old','test',${now - 31 * DAY + DEFAULT_LIFETIME}),
         ('${sha("recent-session")}','google:recent','test',${now - 1 * DAY + DEFAULT_LIFETIME}),
         ('${sha("guest-session")}','guest:left','test',${now + DAY});
+      INSERT INTO sessions(token_hash,user_id,project,expires_at,via,created_at) VALUES
+        ('${sha("dated-old")}','google:old','test',${now + 60 * DAY},'google',${now - 31 * DAY}),
+        ('${sha("dated-recent")}','google:recent','test',${now + 60 * DAY},'google',${now - 29 * DAY});
     `,
   });
 }, 240000);
@@ -54,11 +57,14 @@ afterAll(async () => {
 });
 
 it("needs a session to read and refuses guests on D1", async () => {
-  expect(await (await request("config")).json()).toMatchObject({
+  const config = await (await request("config")).json();
+  expect(config).toMatchObject({
     google: true,
     guests: false,
     snapshots: { guests: false },
   });
+  expect(config.repo).toBeUndefined();
+  expect((await (await request("config", { token: "recent-session" })).json()).repo).toBe("owner/site");
   const anonymous = await request("threads");
   expect(anonymous.status).toBe(401);
   expect(await anonymous.json()).toEqual({ error: "Sign in to see comments." });
@@ -70,8 +76,12 @@ it("needs a session to read and refuses guests on D1", async () => {
 });
 
 it("rejects sessions older than KOMO_SESSION_MAX_AGE_DAYS on D1", async () => {
-  expect((await request("threads", { token: "old-session" })).status).toBe(401);
-  expect((await request("me", { token: "old-session" })).status).toBe(401);
+  // Dated by the default lifetime (no created_at), and by created_at.
+  for (const token of ["old-session", "dated-old"]) {
+    expect((await request("threads", { token })).status, token).toBe(401);
+    expect((await request("me", { token })).status, token).toBe(401);
+  }
+  expect((await request("threads", { token: "dated-recent" })).status).toBe(200);
 });
 
 it("keeps the public path in sign-in and setup URLs on D1", async () => {

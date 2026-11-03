@@ -73,7 +73,8 @@ describe("sign-in options", () => {
     expect(() => authOptions({ ...proxy, KOMO_AUTH_PATH_PREFIX: "/a", KOMO_AUTH_PREFIX: "/b" })).toThrow("different values");
     expect(() => authOptions({ KOMO_AUTH_PATH_PREFIX: "/backoffice" })).toThrow("only applies with KOMO_PROXY_AUTH");
     expect(authPrefix(undefined)).toBe("");
-    for (const bad of ["backoffice", "/back office", "/../x?"]) expect(() => authPrefix(bad)).toThrow("KOMO_AUTH_PATH_PREFIX");
+    for (const bad of ["backoffice", "/back office", "/../x?", "/.", "/..", "/a/../b", "/a/./b", "//x", "/a//b"])
+      expect(() => authPrefix(bad), bad).toThrow("KOMO_AUTH_PATH_PREFIX");
   });
 
   it("parses PUBLIC_URL with an optional path", () => {
@@ -89,17 +90,26 @@ describe("IAP assertion", () => {
   const base64url = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
   let keySets: { kid: string; key: CryptoKeyPair }[][] = [];
   let fetched = 0;
+  let down = false;
+  let signals: unknown[] = [];
   const pair = () =>
     crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]) as Promise<CryptoKeyPair>;
 
   async function setup(...sets: { kid: string; key: CryptoKeyPair }[][]) {
     keySets = sets;
     fetched = 0;
+    down = false;
+    signals = [];
     // A fresh module per test starts with an empty key cache.
     vi.resetModules();
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.stubGlobal("fetch", async (input: unknown) => {
+    vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
       expect(String(input)).toBe(KEYS_URL);
+      signals.push(init?.signal);
+      if (down) {
+        fetched++;
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      }
       const set = keySets[Math.min(fetched++, keySets.length - 1)];
       return Response.json({
         keys: await Promise.all(
@@ -142,7 +152,9 @@ describe("IAP assertion", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
+  const encode = (value: string) => Buffer.from(value).toString("base64url");
 
   it("returns the Google account id and the lower-cased email", async () => {
     const a = await pair();
@@ -177,6 +189,64 @@ describe("IAP assertion", () => {
       expect(await status(iapIdentity(request(assertion), audience))).toBe(401);
     // Within the clock-skew allowance either side.
     expect(await status(iapIdentity(request(await jwt("a", a, { exp: now - 30, iat: now + 30 })), audience))).toBe(200);
+  });
+
+  it("rejects malformed assertions with 401, not a server error", async () => {
+    const a = await pair();
+    const iapIdentity = await setup([{ kid: "a", key: a }]);
+    const [head, payload] = (await jwt("a", a)).split(".");
+    for (const assertion of [
+      `${encode("null")}.${payload}.abc`,
+      `${encode("[]")}.${payload}.abc`,
+      `${encode("1")}.${payload}.abc`,
+      `${head}.${encode("null")}.abc`,
+      `${head}.${payload}.!!!!`,
+      `${head}.${payload}.a`,
+      `${head}.${payload}.`,
+      `${encode('{"alg":"none","kid":"a"}')}.${payload}.`,
+      `${encode('{"alg":"ES256","kid":"__proto__"}')}.${payload}.abc`,
+    ])
+      expect(await status(iapIdentity(request(assertion), audience)), assertion).toBe(401);
+  });
+
+  it("times out the key fetch and backs off after a failure", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const a = await pair();
+    const iapIdentity = await setup([{ kid: "a", key: a }]);
+    down = true;
+    expect(await status(iapIdentity(request(await jwt("a", a)), audience))).toBe(503);
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    // Within 30 seconds of a failure, no new attempt.
+    vi.setSystemTime(Date.now() + 29000);
+    expect(await status(iapIdentity(request(await jwt("a", a)), audience))).toBe(503);
+    expect(fetched).toBe(1);
+    down = false;
+    vi.setSystemTime(Date.now() + 2000);
+    expect(await status(iapIdentity(request(await jwt("a", a)), audience))).toBe(200);
+    expect(fetched).toBe(2);
+  });
+
+  it("keeps using the last keys for a day while a refresh fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const a = await pair();
+    const iapIdentity = await setup([{ kid: "a", key: a }]);
+    await iapIdentity(request(await jwt("a", a)), audience);
+    down = true;
+    vi.setSystemTime(Date.now() + 61 * 60000);
+    expect(await status(iapIdentity(request(await jwt("a", a)), audience))).toBe(200);
+    expect(fetched).toBe(2);
+    // Backing off: no fetch, still verified with the stale keys.
+    vi.setSystemTime(Date.now() + 10000);
+    expect(await status(iapIdentity(request(await jwt("a", a)), audience))).toBe(200);
+    expect(fetched).toBe(2);
+    // An unknown key id doesn't fetch while backing off either.
+    expect(await status(iapIdentity(request(await jwt("b", await pair())), audience))).toBe(401);
+    expect(fetched).toBe(2);
+    // Past the 24-hour grace, stale keys are no longer trusted.
+    vi.setSystemTime(Date.now() + 24 * 3600000);
+    expect(await status(iapIdentity(request(await jwt("a", a)), audience))).toBe(503);
+    vi.setSystemTime(Date.now() + 10000);
+    expect(await status(iapIdentity(request(await jwt("a", a)), audience))).toBe(503);
   });
 
   it("caches the keys for an hour", async () => {
