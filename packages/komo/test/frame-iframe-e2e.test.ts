@@ -626,7 +626,9 @@ describe.skipIf(!chrome)("Frame's Simulate real viewport row", () => {
     expect(documents).toEqual([`${origin}/${query}`]);
     // The page itself is framed, scaled to Fit, with no loading or fallback note.
     expect(await page.locator("main").evaluate((node) => getComputedStyle(node).transform)).not.toBe("none");
-    expect(await page.locator(".frame-tip").textContent()).toMatch(/^Layout follows your browser window\..*Resize the browser window/);
+    // Without the row, the tip doesn't point at it.
+    expect(await page.locator(".frame-tip").textContent()).toBe("Layout follows your browser window, not this size.");
+    expect(await page.locator(".frame-info").getAttribute("aria-description")).toBe("Layout follows your browser window, not this size.");
     // The size menu doesn't offer it.
     await page.locator(".frame-size-trigger").click();
     await page.getByRole("menuitemradio").first().waitFor();
@@ -746,7 +748,9 @@ describe.skipIf(!chrome)("Frame's compact bar", () => {
     expect(await frameLabel(page)).toMatch(/^Tablet 768 × 1024 · \d+%$/);
     const info = page.getByRole("button", { name: "Why the layout follows your browser window" });
     expect(await info.isVisible()).toBe(true);
-    expect(await info.getAttribute("aria-description")).toMatch(/^Layout follows your browser window\. Media queries.*Turn on Simulate real viewport/);
+    const sentence = "Layout follows your browser window, not this size. Turn on Simulate real viewport in this menu for real breakpoints.";
+    expect(await page.locator(".frame-tip").textContent()).toBe(sentence);
+    expect(await info.getAttribute("aria-description")).toBe(sentence);
     await info.hover();
     await expect.poll(() => page.locator(".frame-tip").evaluate((node) => getComputedStyle(node).opacity)).toBe("1");
     await page.screenshot({ path: join(shots, "bar-info-tip.png") });

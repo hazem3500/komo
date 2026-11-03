@@ -921,6 +921,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         onFrame,
         shortcuts,
         textEntry,
+        shell: shellWanted,
         // Switching to 100% keeps the open comment's target in view.
         anchor() {
           const thread = threads.find((item) => item.id === selected);

@@ -174,6 +174,8 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
     await frame.click("#next");
     await expect.poll(() => new URL(page.url()).pathname).toBe("/other");
     await page.locator(".frame-size-trigger").click();
+    // The app runs once here, so the row doesn't warn about a second copy.
+    expect(await page.locator("#frame-sim-hint").textContent()).toBe("Reloads this page inside a frame so breakpoints and popovers match this size.");
     await page.getByRole("menuitemcheckbox", { name: "Simulate real viewport" }).click();
     await page.waitForURL((url) => !url.searchParams.has("komo-shell"));
     await page.waitForFunction(() => !!(window as any).qa?.mounts.length);

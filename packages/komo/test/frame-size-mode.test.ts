@@ -7,12 +7,12 @@ const key = "branch-comments:frame-size:mode-test:example/review";
 const box = { left: 24, top: 48, width: 852, height: 728 };
 const mounted: Array<{ destroy(): void }> = [];
 
-function mount(viewport: false | "iframe" | "transform", stored?: object) {
+function mount(viewport: false | "iframe" | "transform", stored?: object, hooks: { shell?: boolean } = {}) {
   if (stored) localStorage.setItem(key, JSON.stringify(stored));
   const host = document.body.appendChild(document.createElement("div"));
   const root = host.attachShadow({ mode: "open" });
   const toggles: boolean[] = [];
-  const controls = mountFrameSize(root, () => document.body, key, (toggled) => toggles.push(!!toggled), frameView, viewport);
+  const controls = mountFrameSize(root, () => document.body, key, (toggled) => toggles.push(!!toggled), frameView, viewport, hooks);
   mounted.push(controls);
   controls.update(box);
   const row = () => root.querySelector<HTMLElement>('[role="menuitemcheckbox"]');
@@ -63,6 +63,26 @@ describe("Frame's simulated viewport choice", () => {
     expect(frame.controls.separate).toBe(false);
     expect(row.getAttribute("aria-checked")).toBe("false");
     expect(frame.stored()).toMatchObject({ inPlace: true });
+  });
+
+  it("says a second copy runs only without the single-copy shell", () => {
+    const hint = (frame: ReturnType<typeof mount>) => frame.root.getElementById("frame-sim-hint")!.textContent;
+    expect(hint(mount("iframe"))).toBe("Reloads the page in a frame so breakpoints and popovers match this size. Runs a second copy of the app.");
+    mounted.splice(0).forEach((controls) => controls.destroy());
+    document.body.replaceChildren();
+    expect(hint(mount("iframe", undefined, { shell: true }))).toBe("Reloads this page inside a frame so breakpoints and popovers match this size.");
+  });
+
+  it("points the window note at the row only when the menu has it", () => {
+    const tip = (frame: ReturnType<typeof mount>) => {
+      const info = frame.root.querySelector(".frame-info")!;
+      expect(info.getAttribute("aria-description")).toBe(frame.root.querySelector(".frame-tip")!.textContent);
+      return info.getAttribute("aria-description");
+    };
+    expect(tip(mount(false))).toBe("Layout follows your browser window, not this size.");
+    mounted.splice(0).forEach((controls) => controls.destroy());
+    document.body.replaceChildren();
+    expect(tip(mount("transform"))).toBe("Layout follows your browser window, not this size. Turn on Simulate real viewport in this menu for real breakpoints.");
   });
 
   it("starts checked by default with mode iframe", () => {

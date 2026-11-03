@@ -219,7 +219,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     await page.waitForTimeout(200);
     const tip = page.locator(".frame-tip");
     expect(await tip.isVisible()).toBe(true);
-    expect(await tip.textContent()).toContain("Media queries");
+    expect(await tip.textContent()).toBe("Layout follows your browser window, not this size.");
     await page.screenshot({ path: join(shots, "preset-mobile-note.png") });
     await page.mouse.move(10, 10);
     await page.locator(".frame-size-trigger").click();

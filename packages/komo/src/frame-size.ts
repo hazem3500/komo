@@ -160,6 +160,8 @@ export function mountFrameSize(
     onFrame?: typeof onFrame;
     /** komo's own shortcuts: Fit and 100% yield to one configured on the same key. */
     shortcuts?: Record<string, Shortcut | null>;
+    /** Single-copy simulated viewport (frame.shell): turning it on reloads into komo's shell, with no second copy. */
+    shell?: boolean;
     /** komo's text-entry test, so Fit and 100% pause while typing. */
     textEntry?: typeof textEntry;
   } = {},
@@ -232,7 +234,8 @@ export function mountFrameSize(
   const note = element("span", "frame-note", { hidden: "" });
   const info = element("button", "frame-info", { type: "button" });
   const tip = element("span", "frame-tip", { role: "tooltip", "aria-hidden": "true" });
-  const windowTip = `Layout follows your browser window. Media queries, window.innerWidth and resize events still match it, because the page has no viewport of its own here. ${viewport ? "Turn on Simulate real viewport in the size menu for real breakpoints." : "Resize the browser window to see another breakpoint."}`;
+  // The second sentence points at the Simulate real viewport row, so only when the menu has it.
+  const windowTip = `Layout follows your browser window, not this size.${viewport ? " Turn on Simulate real viewport in this menu for real breakpoints." : ""}`;
   // While the simulated viewport loads, a short word stands in for the icon.
   const loading = element("span", "frame-loading", { role: "status" });
   note.append(loading, info, tip);
@@ -314,7 +317,10 @@ export function mountFrameSize(
   });
   simulate.append(
     element("b", "", { id: "frame-sim-label" }, "Simulate real viewport"),
-    element("span", "", { id: "frame-sim-hint" }, "Reloads the page in a frame so breakpoints and popovers match this size. Runs a second copy of the app."),
+    // With frame.shell the app runs once, in the frame, so there is no second copy to warn about.
+    element("span", "", { id: "frame-sim-hint" }, hooks.shell
+      ? "Reloads this page inside a frame so breakpoints and popovers match this size."
+      : "Reloads the page in a frame so breakpoints and popovers match this size. Runs a second copy of the app."),
   );
   if (viewport) menu.append(separator(), simulate);
   const edge = element("div", "frame-handle", {
