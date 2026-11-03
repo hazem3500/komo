@@ -18,8 +18,14 @@ const valid: Array<[string, string]> = [
     "https://preview-*.your-site.com:8443",
   ],
   ["http://localhost:4340", "http://localhost:4340"],
+  ["https://dev.your-site.com:*", "https://dev.your-site.com:*"],
+  ["https://*-preview.your-site.com:*", "https://*-preview.your-site.com:*"],
+  ["http://localhost:*", "http://localhost:*"],
 ];
 const invalid = [
+  "https://your-site.com:3000:*",
+  "https://your-site.com:4*",
+  "https://*.com:*",
   "https://*.com",
   "https://*",
   "https://a.*.your-site.com",

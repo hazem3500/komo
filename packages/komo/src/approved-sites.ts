@@ -3,11 +3,14 @@ import { button, el, icon } from "./dom.js";
 
 type SiteList = { sites: string[]; fixed: string[] };
 
-/** Normalize a typed site into an origin, keeping a `*` host wildcard. */
+/**
+ * Normalize a typed site into an origin, keeping a `*` host wildcard and a
+ * `:*` any-port wildcard, as the server accepts.
+ */
 export function siteInput(value: string): string {
   const site = value.trim().replace(/\/$/, "").toLowerCase();
-  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(site)) return site;
-  const match = /^https:\/\/([^/?#@\s]+)$/.exec(
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:(\d+|\*))?$/.test(site)) return site;
+  const match = /^https:\/\/([^/?#@\s:]+)(:(\d+|\*))?$/.exec(
     site.includes("://") ? site : `https://${site}`
   );
   const [first = "", ...rest] = (match?.[1] ?? "").split(".");
@@ -21,7 +24,7 @@ export function siteInput(value: string): string {
     throw new Error(
       "That doesn’t look like a site. Try your-site.com or *-preview.your-site.com."
     );
-  return `https://${match[1]}`;
+  return `https://${match[1]}${match[2] ?? ""}`;
 }
 
 /**
