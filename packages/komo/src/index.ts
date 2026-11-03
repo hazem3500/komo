@@ -918,7 +918,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         geometry();
       }, frameView, viewportEnabled && (options.frame?.defaultMode === "transform" ? "transform" : "iframe"), {
         pan: schedulePan,
-        reserved: (event) => Object.values(shortcuts).some((shortcut) => matchesShortcut(event, shortcut)),
+        shortcuts,
         // Switching to 100% keeps the open comment's target in view.
         anchor() {
           const thread = threads.find((item) => item.id === selected);

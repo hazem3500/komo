@@ -205,7 +205,7 @@ describe.skipIf(!chrome)("keyboard shortcut help", () => {
   it("lists the current mode's groups first", async () => {
     const page = await open("theme=light");
     await openFromMenu(page);
-    expect(await headings(page)).toEqual(["General", "Comments", "Design canvas", "Experimental geometry", "Text editing", "Compare"]);
+    expect(await headings(page)).toEqual(["General", "Comments", "Frame", "Design canvas", "Experimental geometry", "Text editing", "Compare"]);
     await page.keyboard.press("Escape");
     await help(page).waitFor({ state: "detached" });
     // Focus returned to More; the page takes the next shortcut.
@@ -217,7 +217,7 @@ describe.skipIf(!chrome)("keyboard shortcut help", () => {
     await page.keyboard.press("Escape");
     await design(page);
     await openFromLink(page);
-    expect(await headings(page)).toEqual(["Design canvas", "Experimental geometry", "Text editing", "Compare", "General", "Comments"]);
+    expect(await headings(page)).toEqual(["Design canvas", "Experimental geometry", "Text editing", "Compare", "General", "Comments", "Frame"]);
     await shot(page, "design-first");
     await page.close();
   }, 30000);

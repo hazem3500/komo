@@ -793,6 +793,7 @@ describe.skipIf(!chrome)("Frame's compact bar", () => {
     await page.locator(".frame-bar").evaluate((bar) => (bar.style.width = "200px"));
     expect(await shown()).toBe("768 × 1024");
     expect(await fits()).toBe(true);
+    await page.screenshot({ path: join(shots, "bar-compact-trigger.png"), clip: { x: 0, y: 0, width: 400, height: 120 } });
     // Its accessible name still carries everything.
     expect(await frameLabel(page)).toMatch(/^Tablet 768 × 1024 · \d+%$/);
     await page.close();

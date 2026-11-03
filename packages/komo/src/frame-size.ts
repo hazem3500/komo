@@ -1,7 +1,7 @@
 import { onPage, textEntry } from "./dom.js";
 import { renderKbd } from "./kbd.js";
 import type { FrameView, frameView as placeView } from "./review-layout.js";
-import type { Shortcut } from "./shortcuts.js";
+import { matchesShortcut, type Shortcut } from "./shortcuts.js";
 
 type Box = { left: number; top: number; width: number; height: number };
 type Size = [number, number];
@@ -156,8 +156,8 @@ export function mountFrameSize(
     pan?(): void;
     /** A point (window pixels) to keep in view when switching to 100%, e.g. the selection. */
     anchor?(): { x: number; y: number } | null;
-    /** True for a key komo's own shortcuts already use, so Fit and 100% yield to it. */
-    reserved?(event: KeyboardEvent): boolean;
+    /** komo's own shortcuts: Fit and 100% yield to one configured on the same key. */
+    shortcuts?: Record<string, Shortcut | null>;
   } = {},
 ): FrameSizeControls {
   let raw: string | null = null;
@@ -449,7 +449,7 @@ export function mountFrameSize(
     if (index < 0 || layer.hidden || !event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
     let active = document.activeElement;
     while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
-    if (event.isComposing || textEntry(event.composedPath()[0]) || textEntry(active) || hooks.reserved?.(event)) return;
+    if (event.isComposing || textEntry(event.composedPath()[0]) || textEntry(active) || Object.values(hooks.shortcuts ?? {}).some((shortcut) => matchesShortcut(event, shortcut))) return;
     event.preventDefault();
     zoomTo(!!index);
   }, { signal: abort.signal });
@@ -466,8 +466,9 @@ export function mountFrameSize(
     event.preventDefault();
     panBy(dx, dy);
   }, { capture: true, passive: false, signal: abort.signal });
+  // The point under the pointer anchors Fit to 100%; Frame's own bar and menu don't count.
   document.addEventListener("pointermove", (event) => {
-    if (!lastBox || event.pointerType === "touch") return;
+    if (!lastBox || event.pointerType === "touch" || event.composedPath().includes(layer)) return;
     const inside = event.clientX >= lastBox.left && event.clientX <= lastBox.left + lastBox.width &&
       event.clientY >= lastBox.top && event.clientY <= lastBox.top + lastBox.height;
     pointer = inside ? { x: event.clientX / lastZoom, y: event.clientY / lastZoom } : pointer;
