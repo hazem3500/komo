@@ -59,7 +59,10 @@ function flag(env: OptionEnv, name: string, fallback: boolean) {
 export function authPrefix(value: string | undefined): string {
   if (!value) return "";
   const prefix = value.replace(/\/+$/, "");
-  if (!/^(\/[A-Za-z0-9._~-]+)+$/.test(prefix))
+  if (
+    !/^(\/[A-Za-z0-9._~-]+)+$/.test(prefix) ||
+    prefix.split("/").some((segment) => segment === "." || segment === "..")
+  )
     throw new ConfigError("KOMO_AUTH_PATH_PREFIX must be a path such as /backoffice.");
   return prefix;
 }

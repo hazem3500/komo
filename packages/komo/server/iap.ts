@@ -10,31 +10,49 @@ const KEY_LIFETIME = 3600000;
 // An unknown key id refetches the set, at most this often, so forged ids
 // can't turn each request into a fetch.
 const REFETCH_GAP = 30000;
+// After a failed fetch, wait this long before trying again, and keep using
+// the last keys for up to STALE_GRACE.
+const RETRY_GAP = 30000;
+const STALE_GRACE = 24 * KEY_LIFETIME;
+const FETCH_TIMEOUT = 5000;
 // Allowed clock difference between IAP and this server, in seconds.
 const SKEW = 60;
 
 let cached: { keys: Map<string, CryptoKey>; fetched: number } | undefined;
 let pending: Promise<void> | undefined;
+let failed = -Infinity;
 
 async function load() {
-  const response = await fetch(KEYS_URL);
-  check(response.ok, 503, "Could not verify sign-in. Try again shortly.");
-  const { keys: list } = (await response.json()) as {
-    keys?: (JsonWebKey & { kid?: string })[];
-  };
+  let list: (JsonWebKey & { kid?: string })[] | undefined;
+  try {
+    const response = await fetch(KEYS_URL, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT),
+    });
+    if (!response.ok) throw new Error(`IAP keys returned ${response.status}`);
+    list = ((await response.json()) as { keys?: typeof list }).keys;
+    if (!Array.isArray(list)) throw new Error("IAP keys are not a list");
+  } catch (error) {
+    failed = Date.now();
+    console.error("iap_keys_unavailable", String(error));
+    throw new HttpError(503, "Could not verify sign-in. Try again shortly.");
+  }
   const keys = new Map<string, CryptoKey>();
-  for (const { kid, ...key } of list ?? [])
+  for (const { kid, ...key } of list)
     if (kid && key.kty === "EC" && key.crv === "P-256")
-      keys.set(
-        kid,
-        await crypto.subtle.importKey(
-          "jwk",
-          key,
-          { name: "ECDSA", namedCurve: "P-256" },
-          false,
-          ["verify"],
-        ),
-      );
+      try {
+        keys.set(
+          kid,
+          await crypto.subtle.importKey(
+            "jwk",
+            key,
+            { name: "ECDSA", namedCurve: "P-256" },
+            false,
+            ["verify"],
+          ),
+        );
+      } catch {
+        /* Skip a key this runtime can't import. */
+      }
   cached = { keys, fetched: Date.now() };
 }
 function refresh() {
@@ -42,10 +60,23 @@ function refresh() {
   return pending;
 }
 async function signingKey(kid: string) {
-  if (!cached || Date.now() - cached.fetched >= KEY_LIFETIME) await refresh();
+  const now = Date.now();
+  const age = cached ? now - cached.fetched : Infinity;
+  const mayFetch = now - failed >= RETRY_GAP;
+  if (age >= KEY_LIFETIME) {
+    try {
+      check(mayFetch, 503, "Could not verify sign-in. Try again shortly.");
+      await refresh();
+    } catch (error) {
+      // While IAP's key endpoint is down, keep verifying with the last keys.
+      if (age >= STALE_GRACE) throw error;
+    }
+  }
   // IAP rotates keys: refetch once before rejecting an unknown key id.
-  if (!cached!.keys.has(kid) && Date.now() - cached!.fetched >= REFETCH_GAP)
-    await refresh();
+  if (!cached!.keys.has(kid) && now - cached!.fetched >= REFETCH_GAP && mayFetch)
+    await refresh().catch(() => {
+      /* Keep the known keys; this one is refused below. */
+    });
   return cached!.keys.get(kid);
 }
 
@@ -68,25 +99,30 @@ export async function iapIdentity(
   );
   let header: { alg?: unknown; kid?: unknown };
   let claims: Record<string, unknown>;
+  let signed: Uint8Array<ArrayBuffer>;
   try {
     header = JSON.parse(new TextDecoder().decode(decode(head)));
     claims = JSON.parse(new TextDecoder().decode(decode(payload)));
+    signed = decode(signature);
   } catch {
     throw new HttpError(401, "Invalid sign-in.");
   }
   check(
-    header.alg === "ES256" && typeof header.kid === "string",
+    header && typeof header === "object" && claims && typeof claims === "object" &&
+      header.alg === "ES256" && typeof header.kid === "string",
     401,
     "Invalid sign-in.",
   );
   const key = await signingKey(header.kid);
   check(key, 401, "Invalid sign-in.");
-  const valid = await crypto.subtle.verify(
-    { name: "ECDSA", hash: "SHA-256" },
-    key,
-    decode(signature),
-    new TextEncoder().encode(`${head}.${payload}`),
-  );
+  const valid = await crypto.subtle
+    .verify(
+      { name: "ECDSA", hash: "SHA-256" },
+      key,
+      signed,
+      new TextEncoder().encode(`${head}.${payload}`),
+    )
+    .catch(() => false);
   const now = Date.now() / 1000;
   check(
     valid &&
