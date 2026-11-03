@@ -1,7 +1,7 @@
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
 import { isolated, textEntry } from "./dom.js";
 import { isMac } from "./kbd.js";
-import { isElement, pageDocument } from "./frame-target.js";
+import { isElement, pageDocument, pageFrame } from "./frame-target.js";
 import { matchesShortcut, resolveDesignKeys, type DesignKeys } from "./shortcuts.js";
 
 // Check ancestors in the composed path, including widgets across shadow boundaries.
@@ -50,8 +50,9 @@ export function designKeyboard(options: {
     if (selected && (!path.includes(options.host) || focused?.matches(".design-geometry__frame"))) options.select(selected);
     const back = focused?.isConnected ? focused : field && root?.querySelector(`[data-field-property="${CSS.escape(field)}"] ${focused!.localName}`);
     if (back instanceof HTMLElement) back.focus({ preventScroll: true });
-    // The button takes focus; from the canvas, give it back so canvas keys keep working.
-    if (!path.includes(options.host)) (root?.activeElement as HTMLElement | null)?.blur();
+    // The button takes focus; from the canvas, give it back so canvas keys keep working. Focus in
+    // Frame's viewport iframe is on the canvas already, so it stays there.
+    if (!path.includes(options.host) && root?.activeElement !== pageFrame()) (root?.activeElement as HTMLElement | null)?.blur();
   };
   return (event: KeyboardEvent): boolean => {
     if (event.isComposing || event.keyCode === 229) return false;
