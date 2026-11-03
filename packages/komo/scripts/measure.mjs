@@ -210,8 +210,9 @@ await writeFile(
 // claims the shell and leaves it when the viewport can't show (initial +~580); entering, leaving
 // and the URL sync are an on-demand chunk (~590). The allowance includes the latest main budget plus
 // the shell feature's measured increase and CI margin; pnpm size verifies the combined result.
-// 242,700 -> 243,300: Frame's compact bar (one size-and-zoom trigger, Fit/100% rows with ⇧1/⇧0, the ⓘ note, Simulate real viewport row) grows the on-demand frame-size chunk ~500; 243,094 measured on main df7075d, plus CI margin.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 243_300)
+// 242,700 -> 243,450: Viewport move Before/After in the on-demand design comment chunk (the stand-in in the framed document, re-applied after the app's commits, empty-note keys, wrapper-free labels and named places); 243,315 measured on main df7075d5 with this branch, initial flat, plus ~130 for CI's measurement.
+// 243,450 -> 244,200: Frame's compact bar (one size-and-zoom trigger, Fit/100% menu rows with ⇧1/⇧0, the ⓘ note, the Simulate real viewport row) grows the on-demand frame-size chunk ~600 and initial ~20 (the hooks it is passed); 244,058 measured on main 7025c77, plus CI margin.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 244_200)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

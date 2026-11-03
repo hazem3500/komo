@@ -1,7 +1,7 @@
-import { onPage, textEntry } from "./dom.js";
-import { renderKbd } from "./kbd.js";
+import type { textEntry } from "./dom.js";
 import type { FrameView, frameView as placeView } from "./review-layout.js";
-import { matchesShortcut, type Shortcut } from "./shortcuts.js";
+import type { onFrame } from "./frame-target.js";
+import type { Shortcut } from "./shortcuts.js";
 
 type Box = { left: number; top: number; width: number; height: number };
 type Size = [number, number];
@@ -156,8 +156,12 @@ export function mountFrameSize(
     pan?(): void;
     /** A point (window pixels) to keep in view when switching to 100%, e.g. the selection. */
     anchor?(): { x: number; y: number } | null;
+    /** Listens in Frame's viewport iframe too; passed in, like frameView, so this chunk shares no module with core. */
+    onFrame?: typeof onFrame;
     /** komo's own shortcuts: Fit and 100% yield to one configured on the same key. */
     shortcuts?: Record<string, Shortcut | null>;
+    /** komo's text-entry test, so Fit and 100% pause while typing. */
+    textEntry?: typeof textEntry;
   } = {},
 ): FrameSizeControls {
   let raw: string | null = null;
@@ -288,8 +292,9 @@ export function mountFrameSize(
   const zoomKeys: Shortcut[] = ["1", "0"].map((key) => ({ key, shift: true, alt: false, ctrl: false, meta: false, label: `Shift+${key}` }));
   const zooms = (["Fit", "100%"] as const).map((label, index) => {
     const item = element("button", "", { type: "button", role: "menuitemradio", "aria-keyshortcuts": zoomKeys[index].label }, label);
-    const keys = renderKbd(zoomKeys[index]);
-    keys.setAttribute("aria-hidden", "true");
+    // Keycaps as komo draws them elsewhere (⇧ on Apple platforms).
+    const keys = element("span", "komo-kbd", { "aria-hidden": "true", "data-variant": "surface" });
+    for (const cap of [/mac|iphone|ipad/i.test(navigator.platform) ? "⇧" : "Shift", zoomKeys[index].key]) keys.append(element("kbd", "", {}, cap));
     item.append(keys);
     item.addEventListener("click", () => {
       close();
@@ -355,6 +360,8 @@ export function mountFrameSize(
   const host = root.host as HTMLElement;
   // The simulated viewport's port scrolls natively; this pans the page itself.
   const panning = () => !!current?.pan && !layer.hidden && !state.active;
+  // Space+drag pans either: the in-place frame, or the viewport iframe's port.
+  const grabbable = () => !!current?.pan && !layer.hidden;
   const panTo = (x: number, y: number) => {
     const next = clampPan([x, y], range);
     if (next[0] === pan[0] && next[1] === pan[1]) return;
@@ -379,7 +386,7 @@ export function mountFrameSize(
   });
   // Space+drag pans from anywhere, the hand tool; nothing underneath is clicked.
   const hand = element("div", "frame-hand", { hidden: "", "aria-hidden": "true" });
-  let grab: { x: number; y: number; pan: Size; id: number } | null = null;
+  let grab: { x: number; y: number; pan: Size; id: number; port: HTMLElement | null } | null = null;
   let spaceHeld = false;
   layer.append(hand, ...bars.map((bar) => bar.track));
   let lastBox: Box | null = null;
@@ -444,15 +451,21 @@ export function mountFrameSize(
   hintFull.addEventListener("click", () => zoomTo(true));
   // ⇧1 fits and ⇧0 shows 100% while Frame is on, also with focus in the simulated viewport,
   // except while typing or when one of komo's own shortcuts uses the key.
-  onPage<KeyboardEvent>(root, "keydown", (event) => {
+  // Bubbling to the window, after komo's own keys and never while shortcut help holds the keyboard.
+  const taken = zoomKeys.map(({ key }) => Object.values(hooks.shortcuts ?? {}).some((shortcut) =>
+    !!shortcut?.shift && !shortcut.alt && !shortcut.ctrl && !shortcut.meta && shortcut.key === key));
+  const zoomKey = (event: KeyboardEvent) => {
     const index = ["Digit1", "Digit0"].indexOf(event.code);
-    if (index < 0 || layer.hidden || !event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
+    if (index < 0 || taken[index] || layer.hidden || !event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented || event.isComposing) return;
     let active = document.activeElement;
     while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
-    if (event.isComposing || textEntry(event.composedPath()[0]) || textEntry(active) || Object.values(hooks.shortcuts ?? {}).some((shortcut) => matchesShortcut(event, shortcut))) return;
+    const entry = hooks.textEntry ?? typing;
+    if (entry(event.composedPath()[0]) || (active?.localName !== "iframe" && entry(active ?? undefined))) return;
     event.preventDefault();
     zoomTo(!!index);
-  }, { signal: abort.signal });
+  };
+  window.addEventListener("keydown", zoomKey, { signal: abort.signal });
+  hooks.onFrame?.("keydown", zoomKey, { signal: abort.signal }, "window");
   hintClose.addEventListener("click", dismissHint);
   const typing = (node: EventTarget | undefined) =>
     !!(node as HTMLElement | undefined)?.isContentEditable || !!(node as Element | undefined)?.matches?.("input,textarea,select");
@@ -477,7 +490,12 @@ export function mountFrameSize(
     spaceHeld = false;
     if (!grab) hand.hidden = true;
   };
-  window.addEventListener("keydown", (event) => {
+  // Space and its release fire in the viewport iframe's document once a click there focused it.
+  const listen = (type: string, listener: (event: KeyboardEvent) => void) => {
+    window.addEventListener(type, listener as EventListener, { capture: true, signal: abort.signal });
+    hooks.onFrame?.(type, listener, { capture: true, signal: abort.signal }, "window");
+  };
+  listen("keydown", (event) => {
     if (event.key !== " " || event.ctrlKey || event.metaKey || event.altKey) return;
     if (!hand.hidden) {
       event.preventDefault();
@@ -485,30 +503,35 @@ export function mountFrameSize(
       return;
     }
     const path = event.composedPath();
-    if (!panning() || event.repeat || path.includes(host) || typing(path[0])) return;
+    if (!grabbable() || event.repeat || path.includes(host) || typing(path[0])) return;
     event.preventDefault();
     event.stopPropagation();
     spaceHeld = true;
     hand.hidden = false;
-  }, { capture: true, signal: abort.signal });
-  window.addEventListener("keyup", (event) => {
+  });
+  listen("keyup", (event) => {
     if (event.key !== " " || hand.hidden) return;
     // A focused button would click on Space's release.
     event.preventDefault();
     event.stopPropagation();
     release();
-  }, { capture: true, signal: abort.signal });
+  });
+  // Focus leaving the page drops the hand: this window's blur, or the iframe's unless focus came back here.
   window.addEventListener("blur", release, { signal: abort.signal });
+  hooks.onFrame?.("blur", () => setTimeout(() => document.hasFocus() || release()), { signal: abort.signal }, "window");
   hand.addEventListener("pointerdown", (event) => {
     if (event.button) return;
     event.preventDefault();
     hand.setPointerCapture(event.pointerId);
     hand.dataset.grabbing = "";
-    grab = { x: event.clientX, y: event.clientY, pan, id: event.pointerId };
+    const port = state.active ? surface() : null;
+    grab = { x: event.clientX, y: event.clientY, pan: port ? [port.scrollLeft, port.scrollTop] : pan, id: event.pointerId, port };
   });
   hand.addEventListener("pointermove", (event) => {
-    if (grab?.id === event.pointerId)
-      panTo(grab.pan[0] - (event.clientX - grab.x) / ratio, grab.pan[1] - (event.clientY - grab.y) / ratio);
+    if (grab?.id !== event.pointerId) return;
+    const [dx, dy] = [event.clientX - grab.x, event.clientY - grab.y];
+    if (grab.port) grab.port.scrollTo(grab.pan[0] - dx, grab.pan[1] - dy);
+    else panTo(grab.pan[0] - dx / ratio, grab.pan[1] - dy / ratio);
   });
   const drop = () => {
     grab = null;

@@ -918,7 +918,9 @@ export function initComments(options: CommentsOptions): CommentsController {
         geometry();
       }, frameView, viewportEnabled && (options.frame?.defaultMode === "transform" ? "transform" : "iframe"), {
         pan: schedulePan,
+        onFrame,
         shortcuts,
+        textEntry,
         // Switching to 100% keeps the open comment's target in view.
         anchor() {
           const thread = threads.find((item) => item.id === selected);
@@ -6087,8 +6089,8 @@ export function initComments(options: CommentsOptions): CommentsController {
               draftText = "";
               draftProposal = proposal ?? "";
               draftTags = [];
-              // The centre of the element's visible part, so a page-wide proposal (on body) pins in view.
-              const rect = element.getBoundingClientRect();
+              // The centre of the element's visible part on screen, so a page-wide proposal (on body) pins in view.
+              const rect = screenRect(element);
               const center = {
                 x: (Math.max(rect.left, 0) + Math.min(rect.right, innerWidth)) / 2,
                 y: (Math.max(rect.top, 0) + Math.min(rect.bottom, innerHeight)) / 2,
