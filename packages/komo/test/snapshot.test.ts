@@ -95,6 +95,17 @@ describe("snapshot capture", () => {
     expect(await captureSnapshot(null, { html: true })).toBeNull();
   });
 
+  it("captures pages whose root carries the registered design tokens marker", async () => {
+    document.documentElement.setAttribute("data-komo-design-tokens", "3");
+    try {
+      const root = fixture(`<p id="tokens">Themed</p>`);
+      expect(skipped(root.querySelector("#tokens")!)).toBe(false);
+      expect(await captureSnapshot(root.querySelector("#tokens"), { html: true })).toEqual({ html: '<p id="tokens">Themed</p>' });
+    } finally {
+      document.documentElement.removeAttribute("data-komo-design-tokens");
+    }
+  });
+
   const limits = { guests: false, maxImageBytes: 262_144, maxHtmlBytes: 32_768 };
   it("captures nothing when no kind is turned on, and once per anchor", async () => {
     const root = fixture(`<p>Hello</p>`);
