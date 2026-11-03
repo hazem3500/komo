@@ -188,6 +188,36 @@ describe.skipIf(!chrome)("Before/After on posted design proposals", () => {
     await page.close();
   }, 30000);
 
+  it("rings keyboard focus in the panel accent, inside the Before/After track", async () => {
+    const page = await open("move");
+    const ring = (locator: ReturnType<Page["locator"]>) => locator.evaluate(node => {
+      const css = getComputedStyle(node);
+      return { color: css.outlineColor, style: css.outlineStyle, width: parseFloat(css.outlineWidth), offset: parseFloat(css.outlineOffset), shadow: css.boxShadow };
+    });
+    // Keyboard focus: Tab from Before to After shows the ring; a mouse click doesn't.
+    await toggle(page, "Before").focus();
+    await page.keyboard.press("Tab");
+    const after = toggle(page, "After");
+    expect(await after.evaluate(node => node.matches(":focus-visible"))).toBe(true);
+    const shown = await ring(after);
+    expect(shown).toMatchObject({ style: "solid", width: 2, offset: -2 });
+    expect(shown.color).not.toBe("rgb(244, 129, 32)");
+    // The inset ring stays within the segment, so it never spills past the track or the card.
+    const [button, track] = await Promise.all([after.boundingBox(), page.locator(".design-toggle").first().boundingBox()]);
+    expect(button!.x + button!.width).toBeLessThanOrEqual(track!.x + track!.width);
+    expect(button!.y + button!.height).toBeLessThanOrEqual(track!.y + track!.height);
+    // Other buttons ring outside at 2px, and text fields take the same accent.
+    const reply = page.locator(".thread-pane textarea, .sidebar-replies textarea").first();
+    if (await reply.count()) {
+      await reply.focus();
+      expect((await ring(reply)).shadow).not.toContain("244, 129, 32");
+    }
+    const css = await page.evaluate(() => [...document.querySelectorAll("*")].flatMap(node => node.shadowRoot ? [...node.shadowRoot.querySelectorAll("style")].map(style => style.textContent ?? "") : []).join(""));
+    expect(css.toLowerCase()).not.toContain("#f48120");
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
   it("previews a resize and a style change together, then hands the style attribute back", async () => {
     const page = await open("resize");
     const before = await snapshot(page);
