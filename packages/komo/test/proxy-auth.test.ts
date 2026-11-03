@@ -1,0 +1,309 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { authOptions, authPrefix, publicLocation } from "../server/proxy-auth";
+import { checkProjects, clientAddress, trustedProxyHops } from "../server/node-config";
+import { originAllowed, sitePattern } from "../server/validation";
+
+const audience = "/projects/123/global/backendServices/456";
+const KEYS_URL = "https://www.gstatic.com/iap/verify/public_key-jwk";
+
+describe("sign-in options", () => {
+  it("keeps every option off by default", () => {
+    expect(authOptions({})).toEqual({
+      proxy: undefined,
+      signInPrefix: "",
+      requireSessionForReads: false,
+      allowGuests: true,
+      sessionMaxAge: undefined,
+    });
+  });
+
+  it("turns each option on by itself", () => {
+    expect(authOptions({ KOMO_REQUIRE_SESSION_FOR_READS: "true" })).toMatchObject({
+      requireSessionForReads: true,
+      allowGuests: true,
+    });
+    expect(authOptions({ KOMO_ALLOW_GUESTS: "false" })).toMatchObject({
+      requireSessionForReads: false,
+      allowGuests: false,
+    });
+    expect(authOptions({ KOMO_ALLOW_GUESTS: false })).toMatchObject({ allowGuests: false });
+    expect(authOptions({ KOMO_SESSION_MAX_AGE_DAYS: "30" }).sessionMaxAge).toBe(30 * 86400000);
+    for (const bad of ["0", "-1", "1.5", "30d", "36501"])
+      expect(() => authOptions({ KOMO_SESSION_MAX_AGE_DAYS: bad })).toThrow("KOMO_SESSION_MAX_AGE_DAYS");
+    for (const bad of ["yes", "1", "TRUE"]) {
+      expect(() => authOptions({ KOMO_ALLOW_GUESTS: bad })).toThrow("KOMO_ALLOW_GUESTS must be true or false.");
+      expect(() => authOptions({ KOMO_REQUIRE_SESSION_FOR_READS: bad })).toThrow("KOMO_REQUIRE_SESSION_FOR_READS");
+    }
+  });
+
+  it("forces session reads on and guests off under a proxy", () => {
+    for (const env of [
+      { KOMO_PROXY_AUTH: "gcp-iap", KOMO_PROXY_AUDIENCE: audience },
+      { KOMO_IAP_AUDIENCE: audience },
+      { KOMO_PROXY_AUTH: "gcp-iap", KOMO_IAP_AUDIENCE: audience },
+    ]) {
+      const options = authOptions({
+        ...env,
+        KOMO_ALLOW_GUESTS: "true",
+        KOMO_REQUIRE_SESSION_FOR_READS: "false",
+      });
+      expect(options.proxy).toMatchObject({ name: "gcp-iap", signIn: "google" });
+      expect(options).toMatchObject({ requireSessionForReads: true, allowGuests: false });
+    }
+  });
+
+  it("fails clearly on an unknown or incomplete proxy setup", () => {
+    expect(() => authOptions({ KOMO_PROXY_AUTH: "cloudflare-access", KOMO_PROXY_AUDIENCE: "x" })).toThrow(
+      'KOMO_PROXY_AUTH "cloudflare-access" is not supported. Use one of: gcp-iap.',
+    );
+    expect(() => authOptions({ KOMO_PROXY_AUTH: "gcp-iap" })).toThrow("KOMO_PROXY_AUTH=gcp-iap needs KOMO_PROXY_AUDIENCE.");
+    expect(() => authOptions({ KOMO_PROXY_AUDIENCE: audience })).toThrow("KOMO_PROXY_AUDIENCE needs KOMO_PROXY_AUTH");
+    expect(() => authOptions({ KOMO_PROXY_AUTH: "gcp-iap", KOMO_PROXY_AUDIENCE: "456" })).toThrow(
+      "KOMO_PROXY_AUDIENCE must be the IAP audience",
+    );
+    expect(() =>
+      authOptions({ KOMO_PROXY_AUDIENCE: audience, KOMO_IAP_AUDIENCE: "/projects/1/global/backendServices/2", KOMO_PROXY_AUTH: "gcp-iap" }),
+    ).toThrow("KOMO_PROXY_AUDIENCE and KOMO_IAP_AUDIENCE are set to different values.");
+  });
+
+  it("accepts both names for the sign-in prefix, only with a proxy", () => {
+    const proxy = { KOMO_IAP_AUDIENCE: audience };
+    expect(authOptions({ ...proxy, KOMO_AUTH_PATH_PREFIX: "/backoffice/" }).signInPrefix).toBe("/backoffice");
+    expect(authOptions({ ...proxy, KOMO_AUTH_PREFIX: "/backoffice" }).signInPrefix).toBe("/backoffice");
+    expect(() => authOptions({ ...proxy, KOMO_AUTH_PATH_PREFIX: "/a", KOMO_AUTH_PREFIX: "/b" })).toThrow("different values");
+    expect(() => authOptions({ KOMO_AUTH_PATH_PREFIX: "/backoffice" })).toThrow("only applies with KOMO_PROXY_AUTH");
+    expect(authPrefix(undefined)).toBe("");
+    for (const bad of ["backoffice", "/back office", "/../x?"]) expect(() => authPrefix(bad)).toThrow("KOMO_AUTH_PATH_PREFIX");
+  });
+
+  it("parses PUBLIC_URL with an optional path", () => {
+    expect(publicLocation("https://comments.example.com")).toEqual({ origin: "https://comments.example.com", path: "" });
+    expect(publicLocation("https://comments.example.com/komo/")).toEqual({ origin: "https://comments.example.com", path: "/komo" });
+    expect(publicLocation("http://localhost:8080")).toEqual({ origin: "http://localhost:8080", path: "" });
+    for (const bad of ["http://comments.example.com", "https://comments.example.com/komo?x=1", "https://user:pw@comments.example.com", "https://comments.example.com/ko mo"])
+      expect(() => publicLocation(bad)).toThrow("PUBLIC_URL");
+  });
+});
+
+describe("IAP assertion", () => {
+  const base64url = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
+  let keySets: { kid: string; key: CryptoKeyPair }[][] = [];
+  let fetched = 0;
+  const pair = () =>
+    crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]) as Promise<CryptoKeyPair>;
+
+  async function setup(...sets: { kid: string; key: CryptoKeyPair }[][]) {
+    keySets = sets;
+    fetched = 0;
+    // A fresh module per test starts with an empty key cache.
+    vi.resetModules();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.stubGlobal("fetch", async (input: unknown) => {
+      expect(String(input)).toBe(KEYS_URL);
+      const set = keySets[Math.min(fetched++, keySets.length - 1)];
+      return Response.json({
+        keys: await Promise.all(
+          set.map(async ({ kid, key }) => ({ ...(await crypto.subtle.exportKey("jwk", key.publicKey)), kid })),
+        ),
+      });
+    });
+    return (await import("../server/iap")).iapIdentity;
+  }
+  async function jwt(kid: string, key: CryptoKeyPair, claims: Record<string, unknown> = {}, alg = "ES256") {
+    const now = Math.floor(Date.now() / 1000);
+    const head = base64url(new TextEncoder().encode(JSON.stringify({ alg, kid })));
+    const payload = base64url(
+      new TextEncoder().encode(
+        JSON.stringify({
+          iss: "https://cloud.google.com/iap",
+          aud: audience,
+          sub: "accounts.google.com:1234567890",
+          email: "Reviewer@Example.COM",
+          iat: now,
+          exp: now + 600,
+          ...claims,
+        }),
+      ),
+    );
+    const signature = new Uint8Array(
+      await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key.privateKey, new TextEncoder().encode(`${head}.${payload}`)),
+    );
+    return `${head}.${payload}.${base64url(signature)}`;
+  }
+  const request = (assertion?: string) =>
+    new Request("https://comments.example.com/", {
+      headers: assertion ? { "x-goog-iap-jwt-assertion": assertion } : {},
+    });
+  const status = (promise: Promise<unknown>) =>
+    promise.then(
+      () => 200,
+      (error: { status?: number }) => error.status,
+    );
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("returns the Google account id and the lower-cased email", async () => {
+    const a = await pair();
+    const iapIdentity = await setup([{ kid: "a", key: a }]);
+    expect(await iapIdentity(request(await jwt("a", a)), audience)).toEqual({
+      id: "google:1234567890",
+      email: "reviewer@example.com",
+    });
+  });
+
+  it("rejects a bad issuer, audience, expiry, issue time, subject, algorithm or signature", async () => {
+    const a = await pair();
+    const other = await pair();
+    const iapIdentity = await setup([{ kid: "a", key: a }]);
+    const now = Math.floor(Date.now() / 1000);
+    for (const assertion of [
+      undefined,
+      "not-a-jwt",
+      await jwt("a", a, { iss: "https://accounts.google.com" }),
+      await jwt("a", a, { aud: "/projects/1/global/backendServices/2" }),
+      await jwt("a", a, { exp: now - 61 }),
+      await jwt("a", a, { exp: undefined }),
+      await jwt("a", a, { iat: now + 61 }),
+      await jwt("a", a, { iat: "now" }),
+      await jwt("a", a, { sub: "1234567890" }),
+      await jwt("a", a, { sub: "accounts.google.com:12ab" }),
+      await jwt("a", a, { sub: "other.example:1234567890" }),
+      await jwt("a", a, { email: "no-at-sign" }),
+      await jwt("a", a, {}, "HS256"),
+      await jwt("a", other),
+    ])
+      expect(await status(iapIdentity(request(assertion), audience))).toBe(401);
+    // Within the clock-skew allowance either side.
+    expect(await status(iapIdentity(request(await jwt("a", a, { exp: now - 30, iat: now + 30 })), audience))).toBe(200);
+  });
+
+  it("caches the keys for an hour", async () => {
+    const a = await pair();
+    const iapIdentity = await setup([{ kid: "a", key: a }]);
+    const assertion = await jwt("a", a);
+    await iapIdentity(request(assertion), audience);
+    vi.setSystemTime(Date.now() + 59 * 60000);
+    await iapIdentity(request(await jwt("a", a)), audience);
+    expect(fetched).toBe(1);
+    vi.setSystemTime(Date.now() + 2 * 60000);
+    await iapIdentity(request(await jwt("a", a)), audience);
+    expect(fetched).toBe(2);
+  });
+
+  it("refetches once for an unknown key id, at most every 30 seconds", async () => {
+    const a = await pair();
+    const b = await pair();
+    const iapIdentity = await setup([{ kid: "a", key: a }], [{ kid: "a", key: a }, { kid: "b", key: b }]);
+    await iapIdentity(request(await jwt("a", a)), audience);
+    // Just fetched: an unknown id is refused without asking again.
+    expect(await status(iapIdentity(request(await jwt("b", b)), audience))).toBe(401);
+    expect(fetched).toBe(1);
+    vi.setSystemTime(Date.now() + 31000);
+    expect(await iapIdentity(request(await jwt("b", b)), audience)).toMatchObject({ id: "google:1234567890" });
+    expect(fetched).toBe(2);
+    // An id still unknown after the refetch costs no further fetches.
+    const forged = await pair();
+    expect(await status(iapIdentity(request(await jwt("c", forged)), audience))).toBe(401);
+    expect(await status(iapIdentity(request(await jwt("c", forged)), audience))).toBe(401);
+    expect(fetched).toBe(2);
+  });
+});
+
+describe("forwarded client address", () => {
+  it("trusts no X-Forwarded-For unless hops are configured", () => {
+    expect(trustedProxyHops({})).toBe(0);
+    expect(clientAddress("203.0.113.9", 0, "10.0.0.2")).toBe("10.0.0.2");
+    expect(clientAddress(undefined, 0, undefined)).toBe("local");
+  });
+
+  it("counts trusted hops from the right and ignores spoofed entries on the left", () => {
+    // Client sent "1.1.1.1"; three proxies appended the client, the LB and the proxy before the app.
+    const header = "1.1.1.1, 203.0.113.9, 10.0.0.1, 10.0.0.2";
+    expect(clientAddress(header, 3, "10.0.0.3")).toBe("203.0.113.9");
+    expect(clientAddress(header, 1, "10.0.0.3")).toBe("10.0.0.2");
+    expect(clientAddress(["1.1.1.1, 203.0.113.9", "10.0.0.1"], 2, "10.0.0.3")).toBe("203.0.113.9");
+    expect(clientAddress("2001:db8::1, 10.0.0.1", 2, "10.0.0.3")).toBe("2001:db8::1");
+    // Too few entries or a non-address at that position: fall back to the peer.
+    expect(clientAddress("10.0.0.1", 3, "10.0.0.3")).toBe("10.0.0.3");
+    expect(clientAddress("evil, 10.0.0.1", 2, "10.0.0.3")).toBe("10.0.0.3");
+    expect(clientAddress(undefined, 2, "10.0.0.3")).toBe("10.0.0.3");
+  });
+
+  it("reads both option names and rejects bad values", () => {
+    expect(trustedProxyHops({ KOMO_TRUSTED_PROXY_HOPS: "3" })).toBe(3);
+    expect(trustedProxyHops({ KOMO_PROXY_HOPS: "2" })).toBe(2);
+    expect(trustedProxyHops({ KOMO_PROXY_HOPS: "2", KOMO_TRUSTED_PROXY_HOPS: "2" })).toBe(2);
+    expect(() => trustedProxyHops({ KOMO_PROXY_HOPS: "2", KOMO_TRUSTED_PROXY_HOPS: "3" })).toThrow("different values");
+    for (const bad of ["-1", "9", "1.5", "two"])
+      expect(() => trustedProxyHops({ KOMO_TRUSTED_PROXY_HOPS: bad })).toThrow("KOMO_TRUSTED_PROXY_HOPS");
+  });
+});
+
+describe("site patterns", () => {
+  it("accepts a wildcard port on a host, a host pattern and localhost", () => {
+    for (const site of [
+      "https://dev.example.com:*",
+      "https://*-preview.example.com:*",
+      "http://localhost:*",
+      "http://127.0.0.1:*",
+      "https://dev.example.com:3000",
+    ])
+      expect(sitePattern(site)).toBe(site);
+    for (const bad of [
+      "https://dev.example.com:3000:*",
+      "https://dev.example.com:4*",
+      "https://*.com:*",
+      "https://dev.*.example.com:*",
+      "http://dev.example.com:*",
+      "https://dev.example.com:*/path",
+      "http://localhost:3*",
+    ])
+      expect(() => sitePattern(bad)).toThrow("Use an HTTPS site");
+  });
+
+  it("matches any port, or none, but never widens the host or scheme", () => {
+    const patterns = ["https://dev.example.com:*"];
+    expect(originAllowed("https://dev.example.com:3000", patterns)).toBe(true);
+    expect(originAllowed("https://dev.example.com:65535", patterns)).toBe(true);
+    // The default port: browsers send the origin without it.
+    expect(originAllowed("https://dev.example.com", patterns)).toBe(true);
+    for (const origin of [
+      "https://evil-dev.example.com:3000",
+      "https://dev.example.com.evil.test:3000",
+      "https://sub.dev.example.com:3000",
+      "http://dev.example.com:3000",
+      "https://dev.example.com:3000x",
+    ])
+      expect(originAllowed(origin, patterns)).toBe(false);
+  });
+
+  it("combines a wildcard port with a leftmost-label wildcard", () => {
+    const patterns = ["https://*-preview.example.com:*"];
+    expect(originAllowed("https://pr-1-preview.example.com:8443", patterns)).toBe(true);
+    expect(originAllowed("https://pr-1-preview.example.com", patterns)).toBe(true);
+    for (const origin of [
+      "https://a.pr-1-preview.example.com:8443",
+      "https://pr-1-preview.example.com.evil.test",
+      "https://pr-1-preview.example.org:8443",
+    ])
+      expect(originAllowed(origin, patterns)).toBe(false);
+    // Patterns without :* keep their exact port.
+    expect(originAllowed("https://pr-1-preview.example.com:8443", ["https://*-preview.example.com"])).toBe(false);
+  });
+
+  it("names the project and origin when PROJECTS is invalid", () => {
+    expect(() =>
+      checkProjects(JSON.stringify({ review: { repo: "team/site", origins: ["https://dev.example.com:*", "http://localhost:*"] } })),
+    ).not.toThrow();
+    expect(() =>
+      checkProjects(JSON.stringify({ review: { repo: "team/site", origins: ["https://dev.example.com:4*"] } })),
+    ).toThrow('PROJECTS.review has an invalid origin "https://dev.example.com:4*". Use an HTTPS site');
+    expect(() =>
+      checkProjects(JSON.stringify({ review: { repo: "team/site", origins: ["https://Dev.example.com/"] } })),
+    ).toThrow('PROJECTS.review has origin "https://Dev.example.com/"; write it as "https://dev.example.com".');
+    expect(() => checkProjects(JSON.stringify({ review: { origins: [] } }))).toThrow("PROJECTS.review needs a repo");
+    expect(() => checkProjects("{")).toThrow("PROJECTS must be JSON");
+  });
+});

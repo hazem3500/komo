@@ -1,20 +1,17 @@
-import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
-import { createServer } from "node:net";
+// Proxy sign-in (KOMO_PROXY_AUTH=gcp-iap) on workerd + D1. The same options run
+// on Node + PostgreSQL in postgres-auth-options.test.ts.
+import { createHash } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { authPrefix, publicLocation } from "../server/iap";
+import { startLocalApi } from "./wrangler-local";
 
-const root = fileURLToPath(new URL("../../../", import.meta.url));
 const origin = "http://localhost:4321";
 const audience = "/projects/123/global/backendServices/456";
-// The Lab serves komo at /komo behind a proxy that strips it, with sign-in
-// under the IAP-protected /backoffice prefix.
+// komo served at /komo behind a proxy that strips it, with sign-in under the
+// proxy-protected /backoffice prefix.
 const publicPath = "/komo";
 const prefix = "/backoffice";
+const DAY = 86400000;
+const DEFAULT_LIFETIME = 100 * 365 * DAY;
 const anchor = {
   selector: "#hero",
   text: "Workers",
@@ -26,10 +23,8 @@ const anchor = {
   pageY: 300,
   viewportWidth: 1200,
 };
-let directory = "",
-  worker: ChildProcess | undefined,
+let api: Awaited<ReturnType<typeof startLocalApi>>,
   port = 0,
-  output = "",
   iapKey: CryptoKeyPair,
   otherKey: CryptoKeyPair;
 
@@ -99,6 +94,7 @@ async function popupSignIn(jwt: string) {
     },
   );
 }
+const sha = (value: string) => createHash("sha256").update(value).digest("hex");
 
 beforeAll(async () => {
   iapKey = (await crypto.subtle.generateKey(
@@ -115,128 +111,60 @@ beforeAll(async () => {
     ...(await crypto.subtle.exportKey("jwk", iapKey.publicKey)),
     kid: "test-kid",
   };
-  directory = await mkdtemp(join(tmpdir(), "komo-iap-test-"));
-  const freePort = () =>
-    new Promise<number>((resolve) => {
-      const server = createServer();
-      server.listen(0, "127.0.0.1", () => {
-        const address = server.address();
-        const value = typeof address === "object" && address ? address.port : 0;
-        server.close(() => resolve(value));
-      });
-    });
-  port = await freePort();
-  // api and iap tests start wrangler dev in parallel; left to its default, each
-  // probes 9229 for the inspector and both can bind it at once, so one fails.
-  const inspectorPort = await freePort();
-  const config = JSON.parse(
-    await readFile(
-      new URL("../server/wrangler.jsonc", import.meta.url),
-      "utf8",
-    ),
-  );
-  config.name = "komo-iap-test";
-  const apiPath = fileURLToPath(new URL("../server/index.ts", import.meta.url));
-  config.main = join(directory, "worker.ts");
-  // Serve the test key as IAP's published JWK set; everything else is real.
-  await writeFile(
-    config.main,
-    `
-    import api from ${JSON.stringify(apiPath)};
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input, init) =>
-      String(input) === "https://www.gstatic.com/iap/verify/public_key-jwk"
-        ? Response.json({ keys: [${JSON.stringify(jwk)}] })
-        : originalFetch(input, init);
-    export default api;
-  `,
-  );
-  delete config.account_id;
-  config.vars.PROJECTS = JSON.stringify({
-    test: { repo: "owner/site", origins: [origin], allowGuests: false },
-  });
-  config.vars.KOMO_IAP_AUDIENCE = audience;
-  config.vars.KOMO_AUTH_PREFIX = prefix;
-  config.vars.KOMO_PUBLIC_PATH = publicPath;
-  config.d1_databases = [
-    {
-      binding: "DB",
-      database_name: "iap",
-      database_id: "iap",
-      migrations_dir: fileURLToPath(
-        new URL("../server/migrations", import.meta.url),
-      ),
+  const now = Date.now();
+  api = await startLocalApi({
+    name: "komo-iap-test",
+    // Serve the test key as IAP's published JWK set; everything else is real.
+    prelude: `
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (input, init) =>
+        String(input) === "https://www.gstatic.com/iap/verify/public_key-jwk"
+          ? Response.json({ keys: [${JSON.stringify(jwk)}] })
+          : originalFetch(input, init);
+    `,
+    vars: {
+      PROJECTS: JSON.stringify({
+        test: { repo: "owner/site", origins: [origin], allowGuestSnapshots: true },
+      }),
+      KOMO_PROXY_AUTH: "gcp-iap",
+      KOMO_PROXY_AUDIENCE: audience,
+      KOMO_AUTH_PATH_PREFIX: prefix,
+      KOMO_PUBLIC_PATH: publicPath,
+      KOMO_SESSION_MAX_AGE_DAYS: "30",
+      // Forced the other way while a proxy signs reviewers in.
+      KOMO_ALLOW_GUESTS: "true",
+      KOMO_REQUIRE_SESSION_FOR_READS: "false",
     },
-  ];
-  const configPath = join(directory, "wrangler.json");
-  await writeFile(configPath, JSON.stringify(config));
-  await promisify(execFile)(
-    "pnpm",
-    [
-      "exec",
-      "wrangler",
-      "d1",
-      "migrations",
-      "apply",
-      "DB",
-      "--local",
-      "--persist-to",
-      join(directory, "state"),
-      "--config",
-      configPath,
-    ],
-    { cwd: root, timeout: 45000 },
-  );
-  worker = spawn(
-    "pnpm",
-    [
-      "exec",
-      "wrangler",
-      "dev",
-      "--config",
-      configPath,
-      "--port",
-      String(port),
-      "--inspector-port",
-      String(inspectorPort),
-      "--persist-to",
-      join(directory, "state"),
-    ],
-    { cwd: root, stdio: ["ignore", "pipe", "pipe"], detached: true },
-  );
-  worker.stdout?.on("data", (chunk) => (output += String(chunk)));
-  worker.stderr?.on("data", (chunk) => (output += String(chunk)));
-  for (let i = 0; i < 100; i++) {
-    try {
-      if ((await fetch(`http://localhost:${port}/health`)).ok) return;
-    } catch {
-      /* Wait for workerd. */
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error(`Worker failed to start: ${output}`);
-});
+    // Sessions from before the cap carry the default century-long expiry.
+    seed: `
+      INSERT INTO users(id,name,verified) VALUES('google:old','Old',1),('google:recent','Recent',1),('guest:left','Guest',0),('github:left','Coder',1);
+      INSERT INTO sessions(token_hash,user_id,project,expires_at) VALUES
+        ('${sha("old-session")}','google:old','test',${now - 40 * DAY + DEFAULT_LIFETIME}),
+        ('${sha("recent-session")}','google:recent','test',${now - 10 * DAY + DEFAULT_LIFETIME}),
+        ('${sha("guest-session")}','guest:left','test',${now + DEFAULT_LIFETIME}),
+        ('${sha("github-session")}','github:left','test',${now + DEFAULT_LIFETIME});
+    `,
+  });
+  port = api.port;
+}, 240000);
 afterAll(async () => {
-  if (worker?.pid) {
-    try {
-      process.kill(-worker.pid, "SIGTERM");
-    } catch {
-      /* Already stopped. */
-    }
-  }
-  if (directory) await rm(directory, { recursive: true, force: true });
+  await api?.stop();
 });
 
-describe("IAP sign-in", () => {
+describe("proxy sign-in on D1", () => {
   it("offers only Google sign-in and refuses anonymous reads and guests", async () => {
     expect(await (await request("config")).json()).toMatchObject({
       google: true,
+      github: false,
       guests: false,
+      snapshots: { guests: false },
     });
-    expect((await request("threads")).status).toBe(401);
-    expect(
-      (await request("auth/guest", "POST", { data: { name: "Guest" } })).status,
-    ).toBe(403);
+    const anonymous = await request("threads");
+    expect(anonymous.status).toBe(401);
+    expect(await anonymous.json()).toEqual({ error: "Sign in to see comments." });
+    const guest = await request("auth/guest", "POST", { data: { name: "Guest" } });
+    expect(guest.status).toBe(403);
+    expect(await guest.json()).toEqual({ error: "Guest comments are disabled." });
     expect(
       (await request("auth/github/start", "POST", { data: {} })).status,
     ).toBe(503);
@@ -248,44 +176,42 @@ describe("IAP sign-in", () => {
       (await fetch(`http://localhost:${port}/auth/google/callback?state=x`))
         .status,
     ).toBe(404);
-    // Sign-in handlers exist only under the IAP prefix.
+    // Sign-in handlers exist only under the proxy-protected prefix.
     expect(
       (await fetch(`http://localhost:${port}/auth/google/authorize?state=x`, {
         headers: { "x-goog-iap-jwt-assertion": await iapJwt() },
       })).status,
     ).toBe(404);
-    expect(
-      (await fetch(`http://localhost:${port}/auth/iap/session?project=test`, {
-        method: "POST",
-        headers: { "x-goog-iap-jwt-assertion": await iapJwt() },
-      })).status,
-    ).toBe(404);
+    for (const path of ["/auth/proxy/session", "/auth/iap/session"])
+      expect(
+        (await fetch(`http://localhost:${port}${path}?project=test`, {
+          method: "POST",
+          headers: { "x-goog-iap-jwt-assertion": await iapJwt() },
+        })).status,
+      ).toBe(404);
     expect((await fetch(`http://localhost:${port}${prefix}/anything`)).status).toBe(404);
   });
 
   it("issues a session from the popup only with a valid IAP assertion", async () => {
+    const now = Math.floor(Date.now() / 1000);
     expect((await popupSignIn("")).status).toBe(401);
-    expect(
-      (await popupSignIn(await iapJwt({}, otherKey.privateKey))).status,
-    ).toBe(401);
-    expect(
-      (
-        await popupSignIn(
-          await iapJwt({ aud: "/projects/1/global/backendServices/2" }),
-        )
-      ).status,
-    ).toBe(401);
-    expect(
-      (
-        await popupSignIn(
-          await iapJwt({ exp: Math.floor(Date.now() / 1000) - 1 }),
-        )
-      ).status,
-    ).toBe(401);
+    for (const jwt of [
+      await iapJwt({}, otherKey.privateKey),
+      await iapJwt({ aud: "/projects/1/global/backendServices/2" }),
+      await iapJwt({ iss: "https://accounts.google.com" }),
+      await iapJwt({ exp: now - 120 }),
+      await iapJwt({ iat: now + 120 }),
+      await iapJwt({ sub: "1234567890" }),
+    ])
+      expect((await popupSignIn(jwt)).status).toBe(401);
 
     const page = await popupSignIn(await iapJwt());
     expect(page.status).toBe(200);
+    expect(page.headers.get("Cache-Control")).toBe("no-store");
+    const csp = page.headers.get("Content-Security-Policy")!;
+    expect(csp).toMatch(/^default-src 'none'; script-src 'nonce-[0-9a-f-]{36}'; frame-ancestors 'none'$/);
     const html = await page.text();
+    expect(html).toContain(`<script nonce="${csp.match(/nonce-([0-9a-f-]+)/)![1]}">`);
     const message = JSON.parse(
       html.match(/postMessage\((\{.*?\}),"http:\/\/localhost:4321"\)/)![1],
     );
@@ -324,36 +250,38 @@ describe("IAP sign-in", () => {
     expect((await fetch(url, { headers })).status).toBe(400);
   });
 
-  it("gives agents a project session from their IAP identity", async () => {
-    const url = `http://localhost:${port}${prefix}/auth/iap/session?project=test`;
-    expect((await fetch(url, { method: "POST" })).status).toBe(401);
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "x-goog-iap-jwt-assertion": await iapJwt({
-          sub: "accounts.google.com:999",
-          email: "agent@example-project.iam.gserviceaccount.com",
-        }),
-      },
-    });
-    expect(response.status).toBe(201);
-    const { token, user } = await response.json();
-    expect(user).toMatchObject({ id: "google:999", verified: true });
-    expect((await request("threads", "GET", { token })).status).toBe(200);
+  it("gives agents a project session from their proxy identity on both routes", async () => {
+    for (const path of ["/auth/proxy/session", "/auth/iap/session"]) {
+      const url = `http://localhost:${port}${prefix}${path}?project=test`;
+      expect((await fetch(url, { method: "POST" })).status).toBe(401);
+      expect(
+        (await fetch(`http://localhost:${port}${prefix}${path}?project=missing`, {
+          method: "POST",
+          headers: { "x-goog-iap-jwt-assertion": await iapJwt() },
+        })).status,
+      ).toBe(404);
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "x-goog-iap-jwt-assertion": await iapJwt({
+            sub: "accounts.google.com:999",
+            email: "Agent@Example-Project.iam.gserviceaccount.com",
+          }),
+        },
+      });
+      expect(response.status).toBe(201);
+      const { token, user } = await response.json();
+      expect(user).toMatchObject({ id: "google:999", name: "agent", verified: true });
+      expect((await request("threads", "GET", { token })).status).toBe(200);
+    }
   });
-});
 
-describe("IAP configuration", () => {
-  it("parses PUBLIC_URL with an optional path", () => {
-    expect(publicLocation("https://labs.example.com")).toEqual({ origin: "https://labs.example.com", path: "" });
-    expect(publicLocation("https://labs.example.com/komo/")).toEqual({ origin: "https://labs.example.com", path: "/komo" });
-    expect(publicLocation("http://localhost:8080")).toEqual({ origin: "http://localhost:8080", path: "" });
-    for (const bad of ["http://labs.example.com", "https://labs.example.com/komo?x=1", "https://user:pw@labs.example.com", "https://labs.example.com/ko mo"])
-      expect(() => publicLocation(bad)).toThrow("PUBLIC_URL");
-  });
-  it("validates the sign-in prefix", () => {
-    expect(authPrefix(undefined)).toBe("");
-    expect(authPrefix("/backoffice/")).toBe("/backoffice");
-    for (const bad of ["backoffice", "/back office", "/../x?"]) expect(() => authPrefix(bad)).toThrow("KOMO_AUTH_PREFIX");
+  it("caps session age and refuses sessions the proxy did not sign in", async () => {
+    expect((await request("threads", "GET", { token: "old-session" })).status).toBe(401);
+    expect((await request("threads", "GET", { token: "recent-session" })).status).toBe(200);
+    const guest = await request("threads", "GET", { token: "guest-session" });
+    expect(guest.status).toBe(401);
+    expect(await guest.json()).toEqual({ error: "Guest comments are disabled." });
+    expect((await request("threads", "GET", { token: "github-session" })).status).toBe(403);
   });
 });

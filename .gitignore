@@ -9,6 +9,8 @@ dist/
 coverage/
 worker-configuration.d.ts
 packages/komo/server/setup-client.txt
+# Temporary Node server bundle from test/node-startup.test.ts.
+packages/komo/server/.node-startup-*.mjs
 
 # Rendered launch media stays local; reproducible source is committed.
 tools/launch-video/output/
