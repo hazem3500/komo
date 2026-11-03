@@ -26,6 +26,9 @@ Status: working preview / controlled beta. Not ready for an unrestricted public 
 
 - Element snapshots (an image and trimmed HTML per thread) are opt-in on the client and may contain page content or user data. They are readable only with a session, served inert (`text/plain` HTML, `Content-Security-Policy: sandbox`, `nosniff`, private caching), counted against quotas and a per-project snapshot cap, refused for guests unless a project allows them, and deleted with their thread.
 
+- Self-hosted servers can tighten sign-in, all off by default: a trusted identity proxy (`KOMO_PROXY_AUTH`), session-only reads (`KOMO_REQUIRE_SESSION_FOR_READS`), no guests (`KOMO_ALLOW_GUESTS=false`) and a session age cap (`KOMO_SESSION_MAX_AGE_DAYS`). A proxy forces session-only reads and no guests. See [NODE.md](./NODE.md#sign-in-through-an-identity-proxy).
+- The Node server trusts `X-Forwarded-For` only for the configured number of proxy hops (`KOMO_TRUSTED_PROXY_HOPS`); by default it rate-limits by socket address.
+
 - The setup URL manages accounts, limits, and approved sites. Reviewers leave comments on an installed, approved website.
 - A public project key identifies a link-accessible review workspace. Site restrictions do not implement private repository membership or prove domain ownership.
 - Self-hosted project counts cover the user's connected projects configured on that service, not unrelated deployments.

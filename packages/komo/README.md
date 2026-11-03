@@ -665,7 +665,7 @@ Branch detection also supports `CF_PAGES_BRANCH`, `WORKERS_CI_BRANCH`, `VERCEL_G
 | `bootstrapHash` | Generated | SHA-256 owner-claim key hash. |
 | `suspended` | `false` | Disable a project. |
 | `writesPerDay` | `10000` self-hosted | Daily write-request allowance; hosted uses 500. |
-| `allowGuestSnapshots` | `false` | Let guest sessions attach element snapshots to their own threads. |
+| `allowGuestSnapshots` | `false` | Let guest sessions attach element snapshots to their own threads. Has no effect when the server turns guests off (`KOMO_ALLOW_GUESTS=false`). |
 | `maxSnapshotBytes` | `52428800` (50 MiB) | Total snapshot bytes stored per project; hosted uses 5 MiB. |
 
 Worker bindings: `DB` (D1), optional `EDGE_LIMIT` (rate limiter). Variables: `PROJECTS`, `GOOGLE_CLIENT_ID`, optional `GITHUB_CLIENT_ID`, `KOMO_HOSTED="true"` to enable hosted provisioning, and `KOMO_PAUSED="true"` to pause service requests. Store `GOOGLE_CLIENT_SECRET` and optional `GITHUB_CLIENT_SECRET` as Worker secrets. Hosted configuration uses an hourly cleanup trigger. `/health` remains available while paused.

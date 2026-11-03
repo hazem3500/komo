@@ -31,26 +31,87 @@ The browser widget and CLI use the same API protocol on Cloudflare and Node. Thi
 
 For a guest-only project, you can skip the generator and set `DATABASE_URL`, `PUBLIC_URL`, and `PROJECTS` directly. For example, `PROJECTS={"review":{"repo":"your-org/your-repo","origins":["https://pr-*.preview.example.com"],"allowGuests":true}}`. Anyone on an approved site can then comment; do not use guest-only mode for confidential reviews. `PROJECTS` must remain on one line in an env file. Google sign-in requires both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
+### Approved origins
+
+Each `origins` entry in `PROJECTS` is an exact origin or a pattern:
+
+- `https://pr-*.preview.example.com`: `*` in the leftmost host label matches one label of letters, digits and hyphens. It never spans dots.
+- `https://dev.example.com:*`: a trailing `:*` matches any port on that host, and also no port, which is how browsers send the default port 443. It never widens the host or the scheme, so `https://evil-dev.example.com:3000` and `https://dev.example.com.evil.test:3000` don't match. It combines with a host wildcard, as in `https://*-preview.example.com:*`.
+- `http://localhost:*` and `http://127.0.0.1:*`: local development on any port.
+
+The server refuses to start on an invalid entry and names it, for example `PROJECTS.review has an invalid origin "https://dev.example.com:4*"`.
+
 ### Serve under a path
 
-If a reverse proxy serves komo under a path, include it in `PUBLIC_URL`, for example `PUBLIC_URL=https://labs.example.com/komo`. Sign-in links and redirect URLs then include `/komo`. Requests are accepted whether or not the proxy strips the path. Register OAuth redirect URIs with the path, for example `https://labs.example.com/komo/auth/google/callback`.
+If a reverse proxy serves komo under a path, include it in `PUBLIC_URL`, for example `PUBLIC_URL=https://comments.example.com/komo`. Every URL komo generates then includes `/komo`: sign-in links and popups, OAuth redirect URIs, setup and invitation pages, and snapshot links. Requests are accepted whether or not the proxy strips the path. Register OAuth redirect URIs with the path, for example `https://comments.example.com/komo/auth/google/callback`.
 
-### Google Cloud Identity-Aware Proxy (IAP) sign-in
+### Sign in through an identity proxy
 
-Behind a Google Cloud load balancer with IAP, komo can trust IAP's signed identity instead of running its own Google OAuth client. This is off by default. To turn it on:
+Behind a proxy that authenticates users and signs each request, komo can trust the proxy's identity instead of running its own OAuth client. This is off by default. One provider is supported:
 
-- **`KOMO_IAP_AUDIENCE`:** set it to the IAP backend audience, `/projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID`. komo then verifies the `x-goog-iap-jwt-assertion` header against Google's IAP signing keys, checking the issuer, audience and expiry. It mints a session for that Google account, so `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` aren't needed.
-- **`KOMO_AUTH_PREFIX`** (optional, for example `/backoffice`): serves the sign-in handlers only under this prefix, so the load balancer can protect just that path with IAP. The handlers are `PREFIX/auth/google/authorize` (the browser popup) and `POST PREFIX/auth/iap/session?project=KEY` (agents exchange their IAP identity for a project session). The same handlers without the prefix return 404.
+- **`KOMO_PROXY_AUTH=gcp-iap`:** Google Cloud Identity-Aware Proxy (IAP). Set **`KOMO_PROXY_AUDIENCE`** to the backend audience, `/projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID`. komo verifies the `x-goog-iap-jwt-assertion` ES256 JWT against Google's IAP keys. It caches them for an hour, and fetches them again for an unknown key ID, at most every 30 seconds. It checks the issuer, audience, expiry and issue time, allowing 60 seconds of clock skew. The subject must be `accounts.google.com:DIGITS`. The account ID is `google:DIGITS`, the same ID Google OAuth sign-in uses, so an existing account signs in as itself. The email is stored in lower case. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` aren't needed.
+- **`KOMO_IAP_AUDIENCE`**, the older name, still works: set alone, it means `gcp-iap` with that audience.
+- **`KOMO_AUTH_PATH_PREFIX`** (optional, for example `/backoffice`, older name `KOMO_AUTH_PREFIX`): serves the sign-in handlers only under this path, so the proxy can protect just that path. Without the prefix, those handlers return 404. It needs `KOMO_PROXY_AUTH`; set without one, the server doesn't start.
 
-While IAP is on:
+Any other `KOMO_PROXY_AUTH` value stops the server at startup with the list of supported providers.
 
-- Google is the only sign-in method. Guest and GitHub sign-in are refused.
-- Reading or writing comments requires a session from an IAP-verified account.
-- Missing, forged, expired or wrong-audience assertions are rejected.
-- The rest of the API stays outside IAP: the widget calls it cross-origin with the bearer session from the popup.
-- IAP carries only an email, so reviewers show their initial. Pass the widget's `avatar` option to supply photo URLs; reviewers who signed in with Google OAuth before keep their stored photo.
+The sign-in handlers are:
 
-Make sure clients can't reach the prefixed handlers without going through IAP. The signed assertion check rejects forged headers either way.
+- `PREFIX/auth/google/authorize`: the browser popup. It checks the one-use sign-in state from `/auth/google/start`, mints a session for the proxy's account without a Google redirect, and posts it to the site that opened it. The page sends `Cache-Control: no-store` and a nonce-based Content Security Policy with `frame-ancestors 'none'`.
+- `POST PREFIX/auth/proxy/session?project=KEY` (older name `/auth/iap/session`): agents and CLIs exchange their proxy identity for a project session, returned as `{"token":…,"user":…}`. It's limited to 60 sessions an hour per account and project.
+
+While a proxy is on:
+
+- Google is the only sign-in method, and `/config` reports `google: true`. GitHub sign-in returns 503, and the GitHub and Google OAuth handlers return 403 or 404.
+- Reads need a session and guests are off, whatever `KOMO_REQUIRE_SESSION_FOR_READS` and `KOMO_ALLOW_GUESTS` say. Reading or writing comments also needs a session from a Google account. Sessions from before the proxy was turned on, from guests or GitHub, are refused.
+- Missing, forged, expired, future-dated or wrong-audience assertions are rejected.
+- The rest of the API stays outside the proxy: the widget calls it cross-origin with the bearer session from the popup.
+- IAP carries only an email, so reviewers show their initial. Pass the widget's `avatar` option to supply photo URLs. Reviewers who signed in with Google OAuth before keep their stored photo.
+
+Make sure clients can't reach the prefixed handlers without going through the proxy. The signed assertion check rejects forged headers either way.
+
+### Reader, guest and session options
+
+Each option is off by default and works on Node and on a self-hosted Worker:
+
+- **`KOMO_REQUIRE_SESSION_FOR_READS=true`:** listing or fetching threads and comments needs a valid session. Other reads, such as snapshots, usage and exports, already need one. Anonymous reads return 401 `Sign in to see comments.` Guest sessions still count, unless guests are off.
+- **`KOMO_ALLOW_GUESTS=false`:** refuses guest sign-in on every project with `Guest comments are disabled.`, and refuses existing guest sessions with the same message. `/config` then reports `guests: false` and `snapshots.guests: false`, even if a project sets `allowGuestSnapshots`. While guests are allowed, a project's own `allowGuests: false` still applies.
+- **`KOMO_SESSION_MAX_AGE_DAYS=N`** (1 to 36500): new sessions expire after N days, and existing sessions older than N days are refused. Without it, sessions last until sign-out (100 years). Sessions store only their expiry, so a session with more time left than the cap counts as issued with the 100-year lifetime. Lowering the cap therefore also refuses sessions issued under a higher cap that still have more time left than the new one. Personal access tokens keep the expiry chosen when they were created.
+
+The flags take only `true` or `false`. An invalid value stops the Node server at startup, and makes every Worker request fail with the option named in the logs.
+
+### Deploy behind Google Cloud IAP
+
+Build the image with `docker build -f Dockerfile.node -t komo-node .`. It runs `pnpm --filter @hazem3500/komo build`, which builds the server with `build:node`, and starts `node packages/komo/dist/node.mjs`. Outside Docker, run `pnpm install --frozen-lockfile && pnpm --filter @hazem3500/komo build`, then `node packages/komo/dist/node.mjs`.
+
+Put only `PREFIX/auth/google/authorize` and `PREFIX/auth/proxy/session` behind IAP. Leave the rest of the API outside it.
+
+| Variable | Purpose | Default | Example |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | PostgreSQL connection | required | `postgresql://komo:PASSWORD@postgres:5432/komo` |
+| `PUBLIC_URL` | Public URL, including any path the gateway strips | required | `https://comments.example.com/komo` |
+| `PROJECTS` | Project keys, repositories and approved origins, on one line | required | `{"site":{"repo":"your-org/your-repo","origins":["https://*-web.preview.example.com","https://dev.example.com:*"],"allowGuests":false}}` |
+| `PORT` | Listen port | `8080` | `8080` |
+| `KOMO_PROXY_AUTH` | Identity proxy provider | off | `gcp-iap` |
+| `KOMO_PROXY_AUDIENCE` | IAP audience (older name `KOMO_IAP_AUDIENCE`) | unset | `/projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID` |
+| `KOMO_AUTH_PATH_PREFIX` | Path IAP protects for sign-in (older name `KOMO_AUTH_PREFIX`) | none | `/backoffice` |
+| `KOMO_SESSION_MAX_AGE_DAYS` | Session lifetime cap | unset (100 years) | `30` |
+| `KOMO_TRUSTED_PROXY_HOPS` | Proxies that append `X-Forwarded-For` before komo (older name `KOMO_PROXY_HOPS`) | `0` | `3` |
+| `KOMO_REQUIRE_SESSION_FOR_READS` | Reads need a session | `false` | forced `true` by the proxy; leave unset |
+| `KOMO_ALLOW_GUESTS` | Guest sign-in | `true` | forced `false` by the proxy; leave unset |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth | unset | not needed with IAP |
+| `KOMO_TOKEN_PEPPER` | Secret mixed into access token hashes | unset | a long random secret |
+| `KOMO_WEBHOOK_KEYS` | Webhook secret encryption keys | unset | see Configure, step 2 |
+
+### Move a patched upstream server to this package
+
+For a server that ran upstream komo with a local IAP patch:
+
+1. Back up and upgrade the database as in [Upgrade a database from upstream komo](#upgrade-a-database-from-upstream-komo). This package adds no migrations of its own for these options.
+2. Keep `KOMO_IAP_AUDIENCE`, or rename it to `KOMO_PROXY_AUTH=gcp-iap` plus `KOMO_PROXY_AUDIENCE`. `KOMO_PROXY_HOPS` keeps its meaning.
+3. Replace a patched session lifetime with `KOMO_SESSION_MAX_AGE_DAYS`. Sessions issued with that lifetime stay valid until they expire. Sessions issued with upstream's 100-year lifetime are dated from when they were issued.
+4. Set `PUBLIC_URL` to the external URL, including the path the gateway strips, and `KOMO_AUTH_PATH_PREFIX` to the path IAP protects. `/auth/google/start` then returns `https://HOST/PATH/PREFIX/auth/google/authorize`, so a proxy rewrite of that response is no longer needed. komo serves the prefixed handlers itself.
+5. Point health checks at `GET /health`. komo doesn't answer `GET /` with 200.
 
 ## Connect a preview and bot
 
@@ -89,4 +150,4 @@ To roll back, restore the backup. Redeploying the old image is not enough: the u
 
 The API's storage contract is `prepare().bind().first()/all()/run()` plus atomic `batch()`. `server/postgres.ts` implements it with a PostgreSQL pool, parameterized statements, and one transaction per batch. `server/postgres/001_initial.sql` mirrors the SQLite schema and its quota, revision, retention, and deletion triggers; later numbered files, such as `005_snapshots.sql` for element snapshots (`bytea`), mirror later D1 migrations. Add a numbered PostgreSQL migration whenever the D1 schema changes. Existing D1 migrations and the Worker entry point stay separate. The Node server runs the same request handler; transport and storage are the only new adapters.
 
-The Node process runs retention cleanup after requests, as the self-hosted Worker does. It handles `SIGTERM` by closing its HTTP listener and database pool. Database connection failures prevent startup; request errors return the existing API error format. Rate limits use the direct socket IP by default. Behind a trusted reverse proxy, set `KOMO_PROXY_HOPS` to the number of proxy-added `X-Forwarded-For` entries before the app; check your load balancer’s forwarding behavior for the correct value. Only enable this when requests cannot bypass that proxy. Client-supplied `CF-Connecting-IP` is ignored.
+The Node process runs retention cleanup after requests, as the self-hosted Worker does. It handles `SIGTERM` by closing its HTTP listener and database pool. Database connection failures prevent startup; request errors return the existing API error format. Rate limits use the direct socket IP by default, and never trust a client's `X-Forwarded-For`. Behind trusted reverse proxies, set `KOMO_TRUSTED_PROXY_HOPS` (older name `KOMO_PROXY_HOPS`, 0 to 8) to the number of proxies that append to `X-Forwarded-For` before the app. The client address is then that many entries from the right; entries further left are ignored. If the header has fewer entries, or that entry isn't an IP address, the socket IP is used. Check your load balancer’s forwarding behavior for the correct value, and only set it when requests can't bypass those proxies. Client-supplied `CF-Connecting-IP` is ignored. The Cloudflare Worker uses Cloudflare's `CF-Connecting-IP`.
