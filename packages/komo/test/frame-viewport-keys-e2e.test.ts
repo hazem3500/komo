@@ -106,8 +106,11 @@ const inFrame = (page: Review) => page.inPlace
   ? page.evaluate(() => !document.activeElement?.closest("[data-branch-comments]"))
   : page.frame!.evaluate(() => document.hasFocus());
 async function clickInto(page: Review, id = "heading", dx = 4) {
-  const at = await box(page, id);
-  await page.mouse.click(at.x + dx, at.y + 4);
+  // The frame may still be settling after a mode change; measure again until the click lands in it.
+  for (let tries = 0; tries < 3 && !(tries && await inFrame(page)); tries++) {
+    const at = await box(page, id);
+    await page.mouse.click(at.x + dx, at.y + 4);
+  }
   expect(await inFrame(page)).toBe(true);
 }
 async function press(page: Review, key: string) {
@@ -256,6 +259,8 @@ describe.skipIf(!chrome)("Viewport keys with focus inside the framed document", 
     // D leaves Design mode, C picks a comment target and L closes Frame, all from inside the frame.
     await press(page, "d");
     await expect.poll(() => active(page)).toBe(false);
+    // The inspector finishes closing before the page takes the next click.
+    await page.locator(".design-inspector").waitFor({ state: "hidden" });
     await clickInto(page);
     await press(page, "c");
     const card = await box(page, "card");
