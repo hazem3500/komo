@@ -1271,7 +1271,11 @@ async function route(
   // No anonymous reads. Behind a sign-in proxy the session must also belong to
   // an account the proxy signs in, not one left from before it was turned on.
   if (auth.requireSessionForReads) {
-    check(request.headers.get("Authorization"), 401, "Sign in to see comments.");
+    check(
+      request.method !== "GET" || request.headers.get("Authorization"),
+      401,
+      "Sign in to see comments."
+    );
     const reader = await authenticate(request, env, project, access);
     check(
       !auth.proxy ||
