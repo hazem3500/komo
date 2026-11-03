@@ -10,6 +10,7 @@ import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openDesign } from "./design-e2e.js";
+import { frameZoom } from "./frame-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -166,7 +167,7 @@ describe.skipIf(!chrome)("keyboard shortcut help", () => {
     const page = await open("theme=dark");
     await design(page);
     for (const zoom of ["Fit", "100%"]) {
-      await page.getByRole("button", { name: zoom, exact: true }).click();
+      await frameZoom(page, zoom);
       await page.waitForTimeout(200);
       await openFromLink(page);
       const state = await layout(page);
@@ -279,7 +280,7 @@ describe.skipIf(!chrome)("keyboard shortcut help", () => {
       }
       await page.keyboard.press("Escape");
       await help(page).waitFor({ state: "detached" });
-      await page.getByRole("button", { name: "100%", exact: true }).click();
+      await frameZoom(page, "100%");
       await page.waitForTimeout(200);
       await openFromLink(page);
       await shot(page, `design-100-${theme}`);

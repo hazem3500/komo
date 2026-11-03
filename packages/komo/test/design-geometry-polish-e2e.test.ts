@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openDesign } from "./design-e2e.js";
+import { frameZoom } from "./frame-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -133,7 +134,7 @@ describe.skipIf(!chrome)("geometry polish", () => {
     const { page, errors } = await open("frame");
     try {
       for (const scale of [0.53, 0.67, 0.86, 1]) {
-        if (scale === 1) { await page.getByRole("button", { name: "100%", exact: true }).click(); await page.waitForTimeout(150); }
+        if (scale === 1) { await frameZoom(page, "100%"); await page.waitForTimeout(150); }
         else expect(Math.abs(parseInt((await fit(page, scale))!) - scale * 100)).toBeLessThanOrEqual(1);
         for (const id of ["card", "medium"]) {
           await pick(page, id);
@@ -377,7 +378,7 @@ describe.skipIf(!chrome)("geometry polish screenshots", () => {
     try {
       for (const scale of [0.53, 0.67, 0.86, 1]) {
         if (scale === 1) {
-          await framed.page.getByRole("button", { name: "100%", exact: true }).click();
+          await frameZoom(framed.page, "100%");
           // 100% keeps the last point in view; pan the stage back to the page's top-left.
           await framed.page.mouse.move(8, 400);
           await framed.page.mouse.wheel(-5000, -5000);

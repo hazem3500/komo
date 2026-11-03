@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { chromium, type Browser, type Locator, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openDesign } from "./design-e2e.js";
+import { frameZoom } from "./frame-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -91,7 +92,7 @@ async function open(zoom: string, viewport = { width: 1280, height: 760 }) {
   // The card is picked at Fit, where all of it shows, then the zoom changes.
   await tab.locator("#card").click({ force: true });
   await tab.locator('[data-field-property="color"] .design-token-binding').waitFor();
-  await tab.getByRole("button", { name: zoom, exact: true }).click();
+  await frameZoom(tab, zoom);
   await settle(tab);
   await tab.mouse.move(2, 2);
   await settle(tab);

@@ -918,6 +918,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         geometry();
       }, frameView, viewportEnabled && (options.frame?.defaultMode === "transform" ? "transform" : "iframe"), {
         pan: schedulePan,
+        reserved: (event) => Object.values(shortcuts).some((shortcut) => matchesShortcut(event, shortcut)),
         // Switching to 100% keeps the open comment's target in view.
         anchor() {
           const thread = threads.find((item) => item.id === selected);
@@ -2868,7 +2869,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     void import("./shortcut-help.js").then(({ showShortcutHelp }) => showShortcutHelp(shadow, [
       ...helpItems.map(({ label, shortcut, group }) => ({ label, shortcut, group: group === "Comments & view" ? "Comments" : "General" })),
       { label: "Restore feedback", shortcut: shortcuts.restore, group: "General" },
-    ], designEnabled, designActive ? "design" : commentMode ? "comment" : undefined, designKeys));
+    ], designEnabled, designActive ? "design" : commentMode ? "comment" : undefined, designKeys, canFrame));
   }
   function renderToolbar() {
     toolbar.style.display = toolbarDismissed ? "none" : "";

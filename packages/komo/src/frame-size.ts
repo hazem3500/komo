@@ -1,4 +1,7 @@
+import { onPage, textEntry } from "./dom.js";
+import { renderKbd } from "./kbd.js";
 import type { FrameView, frameView as placeView } from "./review-layout.js";
+import type { Shortcut } from "./shortcuts.js";
 
 type Box = { left: number; top: number; width: number; height: number };
 type Size = [number, number];
@@ -31,7 +34,7 @@ export const FRAME_PRESETS: Array<[string, number, number]> = [
 const LIMITS = [[240, 3840], [240, 2160]];
 /** Remembered sizes carry this version; anything older predates the window-at-Fit default. */
 const VERSION = 2;
-const css = `.frame-size{position:fixed;inset:0;pointer-events:none;z-index:3;font-size:12px;font-weight:500;line-height:1;color:#d6d3ce}.frame-size>*{pointer-events:auto;position:fixed}.frame-size [hidden]{display:none}.frame-bar,.frame-zoom,.frame-custom{display:flex;align-items:center;gap:6px}.frame-size button,.frame-size input,.frame-zoom,.frame-menu{font:inherit;color:inherit;background:#1c1c1c;border:1px solid #ffffff14;border-radius:8px;height:28px;padding:0 10px;cursor:pointer}.frame-size button:hover{background:#262626}.frame-size :focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:1px}.frame-zoom{gap:2px;padding:2px}.frame-zoom button{height:22px;border:0;padding:0 8px}.frame-size [aria-pressed=true],.frame-size [aria-checked=true]{background:#ffffff1f;color:#f1efeb}.frame-menu{display:grid;height:auto;min-width:200px;padding:4px;border:0;border-radius:10px;background:#232323;box-shadow:0 0 0 1px #ffffff14,0 12px 32px #0008;font-size:11px;cursor:auto}.frame-menu>button{display:flex;gap:12px;padding:0 8px;border:0;background:none}.frame-menu>button>span{margin-left:auto}.frame-menu>button::after{content:"";width:7px;height:3.5px;align-self:center;margin:-3px 3px 0 0;border:solid #0000;border-width:0 0 1.5px 1.5px;rotate:-45deg}.frame-menu>[aria-checked=true]::after{border-color:#bda6ef}.frame-size .frame-menu>[aria-checked=true]{background:none}.frame-size span,.frame-readout,.frame-custom{color:#898680;font-variant-numeric:tabular-nums}.frame-custom{gap:4px;padding:4px 4px 2px;border-top:1px solid #ffffff0d}.frame-custom input{width:64px;padding:0 6px;cursor:text}.frame-handle{width:10px;margin-left:-5px;cursor:ew-resize;touch-action:none}.frame-corner{width:18px;height:18px;margin:-9px 0 0 -9px;cursor:nwse-resize;touch-action:none}.frame-handle::after,.frame-corner::after{content:'';position:absolute;left:3px;top:calc(50% - 20px);width:4px;height:40px;border-radius:2px;background:#ffffff40}.frame-corner::after{inset:4px;width:auto;height:auto;background:none;border:solid #ffffff59;border-width:0 2px 2px 0;border-radius:0 0 4px 0}.frame-handle:hover::after,.frame-handle[data-active]::after{background:var(--accent,#bda6ef)}.frame-corner:hover::after,.frame-corner[data-active]::after{border-color:var(--accent,#bda6ef)}.frame-readout{padding:5px 8px;border-radius:6px;background:#1c1c1cf2;color:#f1efeb}.frame-scroll{box-sizing:border-box;touch-action:none}.frame-scroll[data-axis=y]{width:12px}.frame-scroll[data-axis=x]{height:12px}.frame-thumb{position:absolute;border-radius:4px;background:#2a2a2ad9;box-shadow:0 0 0 1px #ffffff2e}.frame-scroll[data-axis=y] .frame-thumb{left:3px;right:3px}.frame-scroll[data-axis=x] .frame-thumb{top:3px;bottom:3px}.frame-scroll:hover .frame-thumb,.frame-scroll:focus-visible .frame-thumb,.frame-thumb[data-active]{background:#3a3a3af2;box-shadow:0 0 0 1px #ffffff59}.frame-hand{cursor:grab;touch-action:none}.frame-hand[data-grabbing]{cursor:grabbing}.frame-hint{display:flex;align-items:center;gap:8px;box-sizing:border-box;padding:4px 4px 4px 12px;border:1px solid #ffffff14;border-radius:10px;background:#1c1c1cf2;box-shadow:0 8px 24px #0006;line-height:1.35}.frame-hint span{color:#d6d3ce}.frame-size .frame-hint-close{width:28px;padding:0;border:0;background:none;color:#898680;font-size:16px}.frame-bar{white-space:nowrap}.frame-bar .frame-scale{min-width:44px;color:#f1efeb;font-size:14px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums}.frame-note{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding-left:4px}.frame-note>span:first-child{overflow:hidden;text-overflow:ellipsis}.frame-bar .frame-info{flex:none;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:none;color:#898680}.frame-bar .frame-info:hover{background:#ffffff12;color:#f1efeb}.frame-info::before{content:"i";display:inline-grid;place-items:center;width:12px;height:12px;border:1.2px solid;border-radius:50%;font:italic 600 9px/1 Georgia,serif}.frame-size .frame-tip{position:absolute;z-index:1;top:calc(100% + 8px);right:0;width:260px;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font-weight:400;line-height:1.45;white-space:normal;opacity:0;visibility:hidden;transition:opacity .15s}.frame-info:is(:hover,:focus-visible)+.frame-tip{opacity:1;visibility:visible}.frame-note[data-reason]>span:first-child{color:#f3c27a}.frame-menu>.frame-sim{position:relative;display:grid;gap:3px;width:0;min-width:100%;height:auto;margin-top:4px;padding:8px 32px 8px 8px;text-align:left;line-height:1.3;white-space:normal}.frame-sim::before{content:"";position:absolute;top:8px;right:8px;width:14px;height:14px;box-sizing:border-box;border:1.5px solid #ffffff59;border-radius:4px;transition:background-color .15s,border-color .15s}.frame-sim[aria-checked=true]::before{border-color:var(--accent,#bda6ef);background:var(--accent,#bda6ef)}.frame-menu>.frame-sim::after{position:absolute;top:12px;right:11.5px;margin:0}.frame-menu>.frame-sim[aria-checked=true]::after{border-color:#1c1c1c}.frame-sim>b{font-weight:inherit}.frame-menu>.frame-sim>span{margin:0;font-weight:400;color:#a19d96}`;
+const css = `.frame-size{position:fixed;inset:0;pointer-events:none;z-index:3;font-size:12px;font-weight:500;line-height:1;color:#d6d3ce}.frame-size>*{pointer-events:auto;position:fixed}.frame-size [hidden]{display:none}.frame-bar,.frame-custom{display:flex;align-items:center;gap:6px}.frame-size button,.frame-size input,.frame-menu{font:inherit;color:inherit;background:#1c1c1c;border:1px solid #ffffff14;border-radius:8px;height:28px;padding:0 10px;cursor:pointer}.frame-size button:hover{background:#262626}.frame-size :focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:1px}.frame-size [aria-checked=true]{background:#ffffff1f;color:#f1efeb}.frame-menu{display:grid;height:auto;min-width:200px;padding:4px;border:0;border-radius:10px;background:#232323;box-shadow:0 0 0 1px #ffffff14,0 12px 32px #0008;font-size:11px;cursor:auto}.frame-menu>button{display:flex;gap:12px;padding:0 8px;border:0;background:none}.frame-menu>button>span{margin-left:auto}.frame-menu>button::after{content:"";width:7px;height:3.5px;align-self:center;margin:-3px 3px 0 0;border:solid #0000;border-width:0 0 1.5px 1.5px;rotate:-45deg}.frame-menu>[aria-checked=true]::after{border-color:#bda6ef}.frame-size .frame-menu>[aria-checked=true]{background:none}.frame-size span,.frame-readout,.frame-custom{color:#898680;font-variant-numeric:tabular-nums}.frame-custom{gap:4px;padding:4px 4px 2px;border-top:1px solid #ffffff0d}.frame-custom input{width:64px;padding:0 6px;cursor:text}.frame-handle{width:10px;margin-left:-5px;cursor:ew-resize;touch-action:none}.frame-corner{width:18px;height:18px;margin:-9px 0 0 -9px;cursor:nwse-resize;touch-action:none}.frame-handle::after,.frame-corner::after{content:'';position:absolute;left:3px;top:calc(50% - 20px);width:4px;height:40px;border-radius:2px;background:#ffffff40}.frame-corner::after{inset:4px;width:auto;height:auto;background:none;border:solid #ffffff59;border-width:0 2px 2px 0;border-radius:0 0 4px 0}.frame-handle:hover::after,.frame-handle[data-active]::after{background:var(--accent,#bda6ef)}.frame-corner:hover::after,.frame-corner[data-active]::after{border-color:var(--accent,#bda6ef)}.frame-readout{padding:5px 8px;border-radius:6px;background:#1c1c1cf2;color:#f1efeb}.frame-scroll{box-sizing:border-box;touch-action:none}.frame-scroll[data-axis=y]{width:12px}.frame-scroll[data-axis=x]{height:12px}.frame-thumb{position:absolute;border-radius:4px;background:#2a2a2ad9;box-shadow:0 0 0 1px #ffffff2e}.frame-scroll[data-axis=y] .frame-thumb{left:3px;right:3px}.frame-scroll[data-axis=x] .frame-thumb{top:3px;bottom:3px}.frame-scroll:hover .frame-thumb,.frame-scroll:focus-visible .frame-thumb,.frame-thumb[data-active]{background:#3a3a3af2;box-shadow:0 0 0 1px #ffffff59}.frame-hand{cursor:grab;touch-action:none}.frame-hand[data-grabbing]{cursor:grabbing}.frame-hint{display:flex;align-items:center;gap:8px;box-sizing:border-box;padding:4px 4px 4px 12px;border:1px solid #ffffff14;border-radius:10px;background:#1c1c1cf2;box-shadow:0 8px 24px #0006;line-height:1.35}.frame-hint span{color:#d6d3ce}.frame-size .frame-hint-close{width:28px;padding:0;border:0;background:none;color:#898680;font-size:16px}.frame-bar{gap:2px;white-space:nowrap;pointer-events:none;container-type:inline-size}.frame-bar>*{flex:none;pointer-events:auto}.frame-size .frame-size-trigger{display:flex;align-items:center;gap:0;padding-right:9px;font-variant-numeric:tabular-nums}.frame-name{margin-right:4px}.frame-at{margin:0 4px}.frame-size-trigger span{color:inherit}.frame-size-trigger::after{content:"";width:5px;height:5px;margin:-3px 0 0 9px;border:solid;border-width:0 1.5px 1.5px 0;rotate:45deg;opacity:.6}@container (max-width:240px){.frame-name,.frame-at,.frame-scale{display:none}}.frame-note{position:relative;display:flex;align-items:center}.frame-loading:not(:empty){padding:0 6px}.frame-bar .frame-info{flex:none;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:none;color:#898680}.frame-bar .frame-info:hover{background:#ffffff12;color:#f1efeb}.frame-info::before{content:"i";display:inline-grid;place-items:center;width:12px;height:12px;border:1.2px solid;border-radius:50%;font:italic 600 9px/1 Georgia,serif}.frame-size .frame-tip{position:absolute;z-index:1;top:calc(100% + 8px);left:0;width:260px;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font-weight:400;line-height:1.45;white-space:normal;opacity:0;visibility:hidden;transition:opacity .15s}.frame-info:is(:hover,:focus-visible)+.frame-tip{opacity:1;visibility:visible}.frame-bar [data-reason] .frame-info{color:#f3c27a}.frame-sep{height:1px;margin:4px 0;background:#ffffff0d}.frame-heading{padding:6px 8px 2px;color:#898680;font-size:10px}.frame-menu>.frame-sim{position:relative;display:grid;gap:3px;width:0;min-width:100%;height:auto;margin-top:4px;padding:8px 32px 8px 8px;text-align:left;line-height:1.3;white-space:normal}.frame-sim::before{content:"";position:absolute;top:8px;right:8px;width:14px;height:14px;box-sizing:border-box;border:1.5px solid #ffffff59;border-radius:4px;transition:background-color .15s,border-color .15s}.frame-sim[aria-checked=true]::before{border-color:var(--accent,#bda6ef);background:var(--accent,#bda6ef)}.frame-menu>.frame-sim::after{position:absolute;top:12px;right:11.5px;margin:0}.frame-menu>.frame-sim[aria-checked=true]::after{border-color:#1c1c1c}.frame-sim>b{font-weight:inherit}.frame-menu>.frame-sim>span{margin:0;font-weight:400;color:#a19d96}`;
 
 const element = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -153,6 +156,8 @@ export function mountFrameSize(
     pan?(): void;
     /** A point (window pixels) to keep in view when switching to 100%, e.g. the selection. */
     anchor?(): { x: number; y: number } | null;
+    /** True for a key komo's own shortcuts already use, so Fit and 100% yield to it. */
+    reserved?(event: KeyboardEvent): boolean;
   } = {},
 ): FrameSizeControls {
   let raw: string | null = null;
@@ -208,31 +213,26 @@ export function mountFrameSize(
     role: "toolbar",
     "aria-label": "Frame size",
   });
+  // One trigger names the size and zoom, e.g. "Tablet 768 × 1024 · 64%"; a narrow bar keeps only the size.
   const trigger = element("button", "frame-size-trigger", {
     type: "button",
     "aria-haspopup": "menu",
     "aria-expanded": "false",
   });
-  const scale = element("span", "frame-scale", { "aria-live": "polite", title: "Zoom" });
-  const zoom = element("div", "frame-zoom", {
-    role: "group",
-    "aria-label": "Zoom",
-  });
-  const fit = element("button", "", { type: "button", title: "Show the whole viewport" }, "Fit");
-  const full = element("button", "", { type: "button", title: "Actual CSS pixels" }, "100%");
-  zoom.append(fit, full);
-  // The page itself keeps the browser window's media queries; say so when they disagree.
+  const sizeName = element("span", "frame-name");
+  const sizeText = element("span", "");
+  const scale = element("span", "frame-scale");
+  trigger.append(sizeName, sizeText, element("span", "frame-at", {}, "·"), scale);
+  // An info icon beside it says why the page itself keeps the window's breakpoints, or why the
+  // simulated viewport couldn't load.
   const note = element("span", "frame-note", { hidden: "" });
-  const noteText = element("span", "", {}, "Layout follows your browser window");
-  const info = element("button", "frame-info", {
-    type: "button",
-    "aria-label": "Why the layout follows your browser window",
-    "aria-describedby": "frame-tip",
-  });
-  const tip = element("span", "frame-tip", { id: "frame-tip", role: "tooltip" });
-  const windowTip = `Media queries, window.innerWidth and resize events still match your browser window, because the page has no viewport of its own here. ${viewport ? "Turn on Simulate real viewport in the size menu for real breakpoints." : "Resize the browser window to see another breakpoint."}`;
-  note.append(noteText, info, tip);
-  bar.append(trigger, scale, zoom, note);
+  const info = element("button", "frame-info", { type: "button" });
+  const tip = element("span", "frame-tip", { role: "tooltip", "aria-hidden": "true" });
+  const windowTip = `Layout follows your browser window. Media queries, window.innerWidth and resize events still match it, because the page has no viewport of its own here. ${viewport ? "Turn on Simulate real viewport in the size menu for real breakpoints." : "Resize the browser window to see another breakpoint."}`;
+  // While the simulated viewport loads, a short word stands in for the icon.
+  const loading = element("span", "frame-loading", { role: "status" });
+  note.append(loading, info, tip);
+  bar.append(trigger, note);
   const menu = element("div", "frame-menu", {
     role: "menu",
     "aria-label": "Frame size",
@@ -284,7 +284,21 @@ export function mountFrameSize(
     close();
     change([clamp(+fields[0].value), clamp(+fields[1].value, 1)], actual);
   });
-  menu.append(...items, custom);
+  // Zoom: Fit and 100%, with their keys (⇧1 and ⇧0, as in design tools).
+  const zoomKeys: Shortcut[] = ["1", "0"].map((key) => ({ key, shift: true, alt: false, ctrl: false, meta: false, label: `Shift+${key}` }));
+  const zooms = (["Fit", "100%"] as const).map((label, index) => {
+    const item = element("button", "", { type: "button", role: "menuitemradio", "aria-keyshortcuts": zoomKeys[index].label }, label);
+    const keys = renderKbd(zoomKeys[index]);
+    keys.setAttribute("aria-hidden", "true");
+    item.append(keys);
+    item.addEventListener("click", () => {
+      close();
+      zoomTo(!!index);
+    });
+    return item;
+  });
+  const separator = () => element("div", "frame-sep", { role: "separator" });
+  menu.append(...items, custom, separator(), element("div", "frame-heading", { "aria-hidden": "true" }, "Zoom"), ...zooms);
   // The simulated viewport is a checkbox row at the end of the size menu, offered only when the host enables it.
   // Toggling it keeps the menu open, so the reviewer sees the switch happen.
   const simulate = element("button", "frame-sim", {
@@ -297,7 +311,7 @@ export function mountFrameSize(
     element("b", "", { id: "frame-sim-label" }, "Simulate real viewport"),
     element("span", "", { id: "frame-sim-hint" }, "Reloads the page in a frame so breakpoints and popovers match this size. Runs a second copy of the app."),
   );
-  if (viewport) menu.append(simulate);
+  if (viewport) menu.append(separator(), simulate);
   const edge = element("div", "frame-handle", {
     role: "slider",
     tabindex: "0",
@@ -418,20 +432,27 @@ export function mountFrameSize(
   document.addEventListener("pointerdown", (event) => {
     if (!menu.hidden && !event.composedPath().some((node) => node === menu || node === trigger)) close();
   }, { capture: true, signal: abort.signal });
-  fit.addEventListener("click", () => change(size, false));
+  function zoomTo(full: boolean) {
+    if (full) dismissHint();
+    change(size, full);
+  }
   simulate.addEventListener("click", () => {
     chosen = true;
     change(size, actual, true, !separate);
     simulate.setAttribute("aria-checked", String(separate));
   });
-  full.addEventListener("click", () => {
-    dismissHint();
-    change(size, true);
-  });
-  hintFull.addEventListener("click", () => {
-    dismissHint();
-    change(size, true);
-  });
+  hintFull.addEventListener("click", () => zoomTo(true));
+  // ⇧1 fits and ⇧0 shows 100% while Frame is on, also with focus in the simulated viewport,
+  // except while typing or when one of komo's own shortcuts uses the key.
+  onPage<KeyboardEvent>(root, "keydown", (event) => {
+    const index = ["Digit1", "Digit0"].indexOf(event.code);
+    if (index < 0 || layer.hidden || !event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
+    let active = document.activeElement;
+    while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+    if (event.isComposing || textEntry(event.composedPath()[0]) || textEntry(active) || hooks.reserved?.(event)) return;
+    event.preventDefault();
+    zoomTo(!!index);
+  }, { signal: abort.signal });
   hintClose.addEventListener("click", dismissHint);
   const typing = (node: EventTarget | undefined) =>
     !!(node as HTMLElement | undefined)?.isContentEditable || !!(node as Element | undefined)?.matches?.("input,textarea,select");
@@ -653,28 +674,33 @@ export function mountFrameSize(
           ? choice === size
           : choice[0] === size[0] && choice[1] === size[1],
       );
-      trigger.textContent = `${preset < 0 ? "Custom" : choices[preset][0]} · ${dimensions(logical())}`;
+      const name = preset < 0 ? "" : choices[preset][0];
+      sizeName.textContent = name;
+      sizeName.hidden = !name;
+      sizeText.textContent = dimensions(logical());
+      scale.textContent = `${Math.round(view.scale * 100)}%`;
+      trigger.setAttribute("aria-label", `${name} ${sizeText.textContent} · ${scale.textContent}`.trim());
       readouts[0].textContent = dimensions([innerWidth / zoom, innerHeight / zoom]);
       readouts[1].textContent = dimensions([box.width / zoom, box.height / zoom]);
       items.forEach((item, index) => item.setAttribute("aria-checked", String(index === preset)));
-      fit.setAttribute("aria-pressed", String(!actual));
-      full.setAttribute("aria-pressed", String(actual));
-      scale.textContent = `${Math.round(view.scale * 100)}%`;
+      zooms.forEach((item, index) => item.setAttribute("aria-checked", String(!!index === actual)));
       simulate.setAttribute("aria-checked", String(separate));
-      // The page itself because the simulated viewport can't load: say why, in place of the breakpoint note.
+      // The page itself because the simulated viewport can't load: the icon says why, in place of the breakpoint note.
       const failed = separate && !state.active && !state.loading && !!state.reason;
-      noteText.textContent = failed ? "Simulated viewport unavailable" : state.loading ? "Loading simulated viewport…" : "Layout follows your browser window";
-      tip.textContent = failed ? `${state.reason} Showing the page itself.` : windowTip;
-      info.hidden = !!state.loading;
+      tip.textContent = failed ? `Simulated viewport unavailable. ${state.reason} Showing the page itself.` : windowTip;
       info.setAttribute("aria-label", failed ? "Why the simulated viewport is unavailable" : "Why the layout follows your browser window");
+      info.setAttribute("aria-description", tip.textContent);
       note.toggleAttribute("data-reason", failed);
+      loading.textContent = state.loading ? "Loading…" : "";
+      info.hidden = !!state.loading;
       note.hidden = state.active || (!failed && !state.loading && Math.abs(view.width - innerWidth / zoom) < 1);
       edge.setAttribute("aria-valuenow", String(Math.round(view.width)));
       edge.setAttribute("aria-valuetext", `${dimensions(logical())} pixels`);
       // The bar sits in the gutter above the box; handles follow the visual frame.
       const top = Math.max(8, box.top - 40);
       place(bar, box.left, top);
-      bar.style.maxWidth = `${box.width}px`;
+      // The bar spans the box, so its container query can shorten the trigger before anything would clip.
+      bar.style.width = `${box.width}px`;
       place(menu, box.left, top + 34);
       // The tip waits while the size menu is open, and goes once seen through.
       // The simulated viewport has no scaled-transform offsets to warn about.

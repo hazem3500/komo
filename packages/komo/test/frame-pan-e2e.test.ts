@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { frameLabel, frameZoom } from "./frame-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -125,7 +126,7 @@ describe.skipIf(!chrome)("panning a 100% Frame inside its stage", () => {
     const errors: string[] = [];
     tab.on("pageerror", (error) => errors.push(error.message));
     await open(tab);
-    expect(await tab.locator(".frame-bar .frame-size-trigger").textContent()).toBe("Custom · 1600 × 1200");
+    expect(await frameLabel(tab)).toBe("1600 × 1200 · 100%");
     expect(await tab.locator('.frame-scroll[data-axis="x"]').isVisible()).toBe(true);
     expect(await tab.locator('.frame-scroll[data-axis="y"]').isVisible()).toBe(true);
     const start = await panOf(tab);
@@ -168,7 +169,7 @@ describe.skipIf(!chrome)("panning a 100% Frame inside its stage", () => {
     expect(action.y).toBeGreaterThanOrEqual(stage.top);
     expect(action.y + action.height).toBeLessThanOrEqual(stage.top + stage.height);
     // Back to Fit resets the pan.
-    await tab.getByRole("button", { name: "Fit", exact: true }).click();
+    await frameZoom(tab, "Fit");
     await tab.waitForTimeout(150);
     expect(await tab.locator('.frame-scroll[data-axis="y"]').isVisible()).toBe(false);
     expect(errors).toEqual([]);
@@ -226,12 +227,12 @@ describe.skipIf(!chrome)("panning a 100% Frame inside its stage", () => {
   it("keeps the point under the pointer when Fit switches to 100%", async () => {
     const tab = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await open(tab);
-    await tab.getByRole("button", { name: "Fit", exact: true }).click();
+    await frameZoom(tab, "Fit");
     await tab.waitForTimeout(200);
     const target = await center(tab, "#target");
     await tab.mouse.move(target.x, target.y);
     await tab.waitForTimeout(50);
-    await tab.getByRole("button", { name: "100%", exact: true }).click();
+    await frameZoom(tab, "100%");
     await tab.waitForTimeout(200);
     // The target's middle stays under where the pointer was.
     const after = (await tab.locator("#target").boundingBox())!;
