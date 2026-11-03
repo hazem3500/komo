@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openDesign } from "./design-e2e.js";
+import { frameZoom } from "./frame-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -320,7 +321,7 @@ describe.skipIf(!chrome)("Figma-style geometry handles", () => {
       await page.getByRole("button", { name: "Set" }).click();
       await page.waitForTimeout(150);
       for (const zoom of ["Fit", "100%"]) {
-        if (zoom === "100%") { await page.getByRole("button", { name: "100%", exact: true }).click(); await page.waitForTimeout(150); }
+        if (zoom === "100%") { await frameZoom(page, "100%"); await page.waitForTimeout(150); }
         await pick(page, "card");
         const state = await layout(page, "card");
         const scale = state.rect.width / 240;

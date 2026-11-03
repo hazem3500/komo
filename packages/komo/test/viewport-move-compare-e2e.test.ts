@@ -11,6 +11,7 @@ import { join, resolve } from "node:path";
 import { chromium, type Browser, type Frame, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openDesign } from "./design-e2e.js";
+import { frameZoom } from "./frame-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -125,7 +126,7 @@ async function open(mode: Mode) {
     });
     app = page.frames().find((item) => item.name() === "komo-viewport")!;
   } else await page.locator("#new").waitFor();
-  await page.getByRole("button", { name: "Fit", exact: true }).click();
+  await frameZoom(page, "Fit");
   await page.waitForTimeout(200);
   return { page, app, errors };
 }

@@ -197,7 +197,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   const surface =
     getComputedStyle(root).display === "contents" ? document.body : root;
   const canFrame = surface !== document.body;
-  // Single-copy Viewport (frame.shell): this load is komo's shell when it carries the nonce komo
+  // Single-copy simulated viewport (frame.shell): this load is komo's shell when it carries the nonce komo
   // set in this tab, and the app runs only in the frame.
   const shellWanted = options.frame?.mode === "iframe" && options.frame.scale !== true && options.frame.shell === true;
   const shell = shellWanted ? shellNonce(options.project) : "";
@@ -759,7 +759,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   let frameControls: FrameSizeControls | undefined;
   let frameControlsLoading = false;
   let frameArea: { left: number; top: number; width: number; height: number } | null = null;
-  // Viewport mode (frame.mode "iframe"): the page in its own same-origin iframe.
+  // The simulated viewport (frame.mode "iframe"): the page in its own same-origin iframe.
   const viewportEnabled = options.frame?.mode === "iframe" && options.frame.scale !== true;
   let viewport: FrameViewport | undefined;
   let viewportOpening = false;
@@ -823,7 +823,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     viewport.destroy();
     viewport = undefined;
     viewportShown = false;
-    // In place again: the bar's note, the stage pan and its scrollbars come back.
+    // The page itself again: the bar's note, the stage pan and its scrollbars come back.
     frameControls?.status({ active: false });
     followSelection();
   }
@@ -903,7 +903,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     void import("./frame-size.js").then(({ mountFrameSize }) => {
       if (destroyed) return;
       frameControls = mountFrameSize(shadow, () => (viewportShown && viewport ? viewport.port : surface), frameSizeKey, (toggled) => {
-        // Choosing Viewport again retries one that couldn't load, and asks for a single copy again.
+        // Turning Simulate real viewport on again retries one that couldn't load, and asks for a single copy again.
         if (toggled) {
           viewportFailed = "";
           shellSkipped = false;
@@ -919,6 +919,9 @@ export function initComments(options: CommentsOptions): CommentsController {
       }, frameView, viewportEnabled && (options.frame?.defaultMode === "transform" ? "transform" : "iframe"), {
         pan: schedulePan,
         onFrame,
+        shortcuts,
+        textEntry,
+        shell: shellWanted,
         // Switching to 100% keeps the open comment's target in view.
         anchor() {
           const thread = threads.find((item) => item.id === selected);
@@ -2869,7 +2872,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     void import("./shortcut-help.js").then(({ showShortcutHelp }) => showShortcutHelp(shadow, [
       ...helpItems.map(({ label, shortcut, group }) => ({ label, shortcut, group: group === "Comments & view" ? "Comments" : "General" })),
       { label: "Restore feedback", shortcut: shortcuts.restore, group: "General" },
-    ], designEnabled, designActive ? "design" : commentMode ? "comment" : undefined, designKeys));
+    ], designEnabled, designActive ? "design" : commentMode ? "comment" : undefined, designKeys, canFrame));
   }
   function renderToolbar() {
     toolbar.style.display = toolbarDismissed ? "none" : "";
@@ -7076,7 +7079,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     // komo started in its shell: the guard's fallback stands down.
     claimShell(shell);
     shellReady = true;
-    if (!canFrame) leaveShell("Single-copy Viewport needs the app's root element in the page's HTML.");
+    if (!canFrame) leaveShell("Single-copy mode needs the app's root element in the page's HTML.");
     else if (!expanded) toggleExpanded(true);
   }
   void openDeepLink();

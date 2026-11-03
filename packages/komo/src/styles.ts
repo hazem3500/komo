@@ -70,7 +70,7 @@ a:focus-visible {
   outline-offset: 2px;
 }
 /* Segments ring inside their track, so the ring never spills past the control. */
-:is(.design-toggle, .design-inspector__compare, .frame-zoom, .design-segments) button:focus-visible {
+:is(.design-toggle, .design-inspector__compare, .design-segments) button:focus-visible {
   outline-offset: -2px;
 }
 input,

@@ -13,6 +13,12 @@ export function reviewCommands() {
   ];
 }
 
+/** Frame's zoom keys, active while Frame is on. */
+export const frameCommands = () => [
+  command("Zoom to fit", "1", "Frame", { shift: true }),
+  command("Zoom to 100%", "0", "Frame", { shift: true }),
+];
+
 export function designCommands(mac = isMac(), visibility?: Shortcut | null, keys: DesignKeys = resolveDesignKeys()) {
   const canvas = "Design canvas", geometry = "Experimental geometry", text = "Text editing", compare = "Compare";
   const bound = (label: string, group: string, shortcut: Shortcut | null) => ({ label, group, shortcut });

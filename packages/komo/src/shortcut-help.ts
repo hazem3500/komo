@@ -1,4 +1,4 @@
-import { designCommands, designGestures, reviewCommands } from "./design-commands.js";
+import { designCommands, designGestures, frameCommands, reviewCommands } from "./design-commands.js";
 import { button, el } from "./dom.js";
 import { renderKbd, renderKeycaps, shortcutKeys } from "./kbd.js";
 import type { DesignKeys, Shortcut } from "./shortcuts.js";
@@ -37,7 +37,7 @@ const css = `.komo-shortcuts{box-sizing:border-box;width:min(720px,calc(100vw - 
  * Escape, ?, the close button and a click outside close it at once and return focus to
  * the control that opened it. Opening it again while it is open keeps it open.
  */
-export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], design = false, mode?: "design" | "comment", keys?: DesignKeys) {
+export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], design = false, mode?: "design" | "comment", keys?: DesignKeys, frame = false) {
   const open = root.querySelector<HTMLDialogElement>("dialog.komo-shortcuts");
   if (open) return open.querySelector<HTMLElement>("[autofocus]")?.focus();
   const active = root.activeElement ?? document.activeElement;
@@ -67,7 +67,7 @@ export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], desi
   body.setAttribute("aria-label", "Shortcuts");
   // Design mode reuses the comments visibility key for its overlays.
   const own: HelpCommand[] = design ? [...designGestures(), ...designCommands(undefined, commands.find(item => /^(Hide|Show) comments$/.test(item.label))?.shortcut, keys)] : [];
-  const review: HelpCommand[] = [...commands, ...reviewCommands()];
+  const review: HelpCommand[] = [...commands, ...reviewCommands(), ...(frame ? frameCommands() : [])];
   const listed = (mode === "design" ? [...own, ...review] : [...review, ...own])
     .filter(item => item.shortcut || item.keys?.length || item.gesture);
   const groups = [...new Set(listed.map(item => item.group ?? "General"))]

@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { chromium, type Browser, type Frame, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openDesign } from "./design-e2e.js";
+import { frameLabel, frameZoom } from "./frame-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -56,8 +57,9 @@ beforeAll(async () => {
       };
       const params=new URLSearchParams(location.search);
       window.komo=initKomo({endpoint:location.origin,project:'frame-iframe',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
+        ...(params.has('keys')?{shortcuts:{visibility:'Shift+1'}}:{}),
         design:{tokens:discoverCssTokens(),experimentalGeometry:params.has('geometry')},
-        frame:{mode:params.has('transform')?'transform':'iframe',...(params.has('inplace')?{defaultMode:'transform'}:{}),...(params.get('url')?{iframeUrl:()=>params.get('url')}:{})}});
+        frame:{...(params.has('nomode')?{}:{mode:params.has('transform')?'transform':'iframe'}),...(params.has('inplace')?{defaultMode:'transform'}:{}),...(params.get('url')?{iframeUrl:()=>params.get('url')}:{})}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -114,6 +116,14 @@ async function open(page: Page, query = "") {
   await page.waitForFunction(() => !!(window as any).komo);
   await page.keyboard.press("l");
   await page.locator(".frame-bar").waitFor();
+}
+/** Sets Simulate real viewport from the size menu, then closes the menu. */
+async function simulate(page: Page, on: boolean) {
+  await page.locator(".frame-size-trigger").click();
+  const row = page.getByRole("menuitemcheckbox", { name: "Simulate real viewport" });
+  if ((await row.getAttribute("aria-checked")) !== String(on)) await row.click();
+  expect(await row.getAttribute("aria-checked")).toBe(String(on));
+  await page.keyboard.press("Escape");
 }
 async function choose(page: Page, name: string) {
   await page.locator(".frame-size-trigger").click();
@@ -173,7 +183,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     const rows = await Promise.all(["mobile", "tablet", "wide"].map(async (name) =>
       `<tr><th>${name}</th><td><img src="${await image(`inplace-${name}-fit.png`)}"></td><td><img src="${await image(`viewport-${name}-fit.png`)}"></td></tr>`));
     const sheet = await browser.newPage({ viewport: { width: 1360, height: 900 } });
-    await sheet.setContent(`<style>body{margin:0;background:#111;color:#eee;font:16px system-ui}table{border-spacing:12px}img{width:640px;border-radius:6px}th{font-weight:500}</style><table><tr><th></th><th>In place (before)</th><th>Viewport (after)</th></tr>${rows.join("")}</table>`);
+    await sheet.setContent(`<style>body{margin:0;background:#111;color:#eee;font:16px system-ui}table{border-spacing:12px}img{width:640px;border-radius:6px}th{font-weight:500}</style><table><tr><th></th><th>Page itself (before)</th><th>Simulated viewport (after)</th></tr>${rows.join("")}</table>`);
     await sheet.screenshot({ path: join(shots, "contact-sheet.png"), fullPage: true });
     await sheet.close();
     await page.close();
@@ -193,7 +203,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     expectOn(await pin.boundingBox(), await framed(page, "card-3"), "viewport pin at Fit");
     await page.screenshot({ path: join(shots, "viewport-pin-fit.png") });
     // 100%: the frame pans inside its port, and the pin follows the card.
-    await page.getByRole("button", { name: "100%", exact: true }).click();
+    await frameZoom(page, "100%");
     await page.waitForTimeout(200);
     expectOn(await pin.boundingBox(), await framed(page, "card-3"), "viewport pin at 100%");
     await page.evaluate(() => [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!.querySelector(".frame-port")!.scrollBy(0, 120));
@@ -208,7 +218,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     expectNear((await page.locator(".component-hover").boundingBox())!, card, "100% outline", 4);
     await page.keyboard.press("Escape");
     await page.screenshot({ path: join(shots, "viewport-pin-100.png") });
-    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    await frameZoom(page, "Fit");
     await page.waitForTimeout(200);
     // The same comment resolves on the same element in place.
     await page.goto(`${origin}/?transform`);
@@ -244,7 +254,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     const frame = await viewportFrame(page);
     const color = () => frame.locator("#card-2").evaluate((node) => getComputedStyle(node).color);
     for (const zoom of ["Fit", "100%"]) {
-      await page.getByRole("button", { name: zoom, exact: true }).click();
+      await frameZoom(page, zoom);
       await page.waitForTimeout(200);
       await openDesign(page);
       const card = await framed(page, "card-2");
@@ -272,7 +282,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await openDesign(page);
     // Re-entry brings the last selection back; a press on the backdrop around the frame deselects.
     await expect.poll(() => page.locator(".design-inspector__target").textContent()).toContain("div#card-2");
-    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    await frameZoom(page, "Fit");
     const outer = (await page.locator("iframe").first().boundingBox())!;
     await page.mouse.click(outer.x + outer.width / 2, outer.y + outer.height + 8);
     await page.getByRole("button", { name: "Edit tokens", exact: true }).click();
@@ -293,7 +303,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await bar.getByRole("button", { name: "After", exact: true }).click();
     expect(await frame.locator("#card-1").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(255, 128, 0)");
     // The preview belongs to the page, so it holds at 100%.
-    await page.getByRole("button", { name: "100%", exact: true }).click();
+    await frameZoom(page, "100%");
     await page.waitForTimeout(200);
     expect(await frame.locator("#card-1").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(255, 128, 0)");
     expect(errors).toEqual([]);
@@ -343,7 +353,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
       return iframe.getBoundingClientRect().width / iframe.offsetWidth;
     });
     for (const zoom of ["Fit", "100%"]) {
-      await page.getByRole("button", { name: zoom, exact: true }).click();
+      await frameZoom(page, zoom);
       await page.waitForTimeout(200);
       await openDesign(page);
       const card = await framed(page, "card-2");
@@ -392,34 +402,34 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await page.close();
   });
 
-  it("starts In place with defaultMode transform until the reviewer picks Viewport, then remembers it", async () => {
+  it("starts on the page itself with defaultMode transform until the reviewer checks Simulate real viewport, then remembers it", async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     const page = await context.newPage();
     await open(page, "?inplace");
     await page.waitForTimeout(400);
-    // No second copy of the app until it's asked for.
+    // No second copy of the app until it's asked for, and no mode switch in the bar.
     expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
-    expect(await page.getByRole("button", { name: "In place", exact: true }).getAttribute("aria-pressed")).toBe("true");
-    // Each mode says what it trades, on hover.
-    for (const [name, text] of [["In place", "No extra copy"], ["Viewport", "Runs a second copy of the app"]]) {
-      const button = page.getByRole("button", { name, exact: true });
-      await button.hover();
-      expect(await button.evaluate((node) => getComputedStyle(node, "::after").content)).toContain(text);
-    }
-    await page.screenshot({ path: join(shots, "mode-tooltip.png") });
-    await page.getByRole("button", { name: "Viewport", exact: true }).click();
+    expect(await page.locator(".frame-bar").getByRole("button", { name: /^(Viewport|In place)$/ }).count()).toBe(0);
+    await page.locator(".frame-size-trigger").click();
+    const row = page.getByRole("menuitemcheckbox", { name: "Simulate real viewport" });
+    expect(await row.getAttribute("aria-checked")).toBe("false");
+    // The row says what it trades.
+    expect(await row.evaluate((node) => (node.getRootNode() as ShadowRoot).getElementById(node.getAttribute("aria-describedby")!)!.textContent)).toContain("Runs a second copy of the app");
+    await page.screenshot({ path: join(shots, "simulate-row.png") });
+    await row.click();
     await viewportFrame(page);
     // The reviewer's choice wins over the host's default after a reload.
     await open(page, "?inplace");
     await viewportFrame(page);
-    expect(await page.getByRole("button", { name: "Viewport", exact: true }).getAttribute("aria-pressed")).toBe("true");
+    await page.locator(".frame-size-trigger").click();
+    expect(await row.getAttribute("aria-checked")).toBe("true");
     await context.close();
   });
 
-  it("lays out Fit and 100% in Viewport and In place, for frames smaller and larger than the stage", async () => {
+  it("lays out Fit and 100% in the simulated viewport and on the page itself, for frames smaller and larger than the stage", async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     const page = await context.newPage();
-    // A stored size larger than the window, at 100%, opens straight into Viewport mode.
+    // A stored size larger than the window, at 100%, opens straight into the simulated viewport.
     await page.addInitScript(() => {
       if (sessionStorage.getItem("seeded")) return;
       sessionStorage.setItem("seeded", "1");
@@ -442,9 +452,9 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await open(page);
     await viewportFrame(page);
     await page.waitForTimeout(300);
-    // Viewport, 100%, larger on both axes: the port is the stage, it scrolls exactly the frame, from its top-left.
+    // Simulated viewport, 100%, larger on both axes: the port is the stage, it scrolls exactly the frame, from its top-left.
     let state = await layout();
-    expect(await page.locator(".frame-size-trigger").textContent()).toBe("Custom · 1600 × 1200");
+    expect(await frameLabel(page)).toMatch(/^1600 × 1200 · \d+%$/);
     for (const key of ["left", "top", "width", "height"] as const) near(state.port![key], stage[key], `port ${key}`);
     expect(state.scroll).toEqual([0, 0, 1600, 1200, state.scroll![4], state.scroll![5]]);
     near(state.iframe!.left, stage.left, "iframe left");
@@ -460,16 +470,16 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     expect(dot.x).toBeGreaterThanOrEqual(card.x - dot.width);
     expect(dot.x).toBeLessThanOrEqual(card.x + card.width);
     // Fit: the whole frame inside the stage, no scrolling.
-    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    await frameZoom(page, "Fit");
     await page.waitForTimeout(250);
     state = await layout();
     // A fitted frame never scrolls its port, even programmatically (overflow: clip).
     expect(state.scroll!.slice(0, 2)).toEqual([0, 0]);
     expect(state.iframe!.left).toBeGreaterThanOrEqual(stage.left - 0.5);
     expect(state.iframe!.left + state.iframe!.width).toBeLessThanOrEqual(stage.left + stage.width + 0.5);
-    // Fit back to 100% starts from the frame's top-left in Viewport mode.
+    // Fit back to 100% starts from the frame's top-left in the simulated viewport.
     await page.mouse.move(500, 500);
-    await page.getByRole("button", { name: "100%", exact: true }).click();
+    await frameZoom(page, "100%");
     await page.waitForTimeout(250);
     state = await layout();
     near(state.port!.left, stage.left, "100% again port left");
@@ -487,12 +497,12 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     expect(state.scroll!.slice(0, 2)).toEqual([0, 0]);
     expect(state.scroll![2]).toBe(state.scroll![4]);
     await page.screenshot({ path: join(shots, "viewport-100-smaller.png") });
-    // In place, 100%, larger: the stage pans the page itself, with its own scrollbars.
+    // The page itself, 100%, larger: the stage pans the page, with its own scrollbars.
     await page.locator(".frame-size-trigger").click();
     await page.getByLabel("Width", { exact: true }).fill("1600");
     await page.getByLabel("Height", { exact: true }).fill("1200");
     await page.getByRole("button", { name: "Set" }).click();
-    await page.getByRole("button", { name: "In place", exact: true }).click();
+    await simulate(page, false);
     await page.waitForTimeout(400);
     state = await layout();
     expect(state.port).toBeNull();
@@ -500,12 +510,12 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     expect(state.main!.left).toBeLessThanOrEqual(stage.left + 0.5);
     expect(state.main!.left + state.main!.width).toBeGreaterThanOrEqual(stage.left + stage.width - 0.5);
     await page.screenshot({ path: join(shots, "inplace-100-larger.png") });
-    // Closing and reopening Frame, then back to Viewport, keeps the layout right.
+    // Closing and reopening Frame, then back to the simulated viewport, keeps the layout right.
     await page.getByRole("button", { name: "Close sidebar", exact: true }).click();
     await page.waitForTimeout(400);
     await page.keyboard.press("l");
     await page.locator(".frame-bar").waitFor();
-    await page.getByRole("button", { name: "Viewport", exact: true }).click();
+    await simulate(page, true);
     await viewportFrame(page);
     await page.waitForTimeout(300);
     state = await layout();
@@ -521,13 +531,18 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
   ])("falls back in place with a specific reason when the frame can't show /%s", async (route, reason) => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await open(page, `?url=/${route}`);
-    const note = page.locator(".frame-note");
-    await expect.poll(() => note.textContent()).toContain("Viewport unavailable");
+    // The bar keeps only an icon beside the trigger; its tooltip and description say why.
+    const why = page.getByRole("button", { name: "Why the simulated viewport is unavailable" });
+    await why.waitFor();
+    expect(await page.locator(".frame-note").getAttribute("data-reason")).toBe("");
+    expect(await page.locator(".frame-tip").textContent()).toContain("Simulated viewport unavailable.");
     expect(await page.locator(".frame-tip").textContent()).toContain(reason);
+    expect(await why.getAttribute("aria-description")).toBe(await page.locator(".frame-tip").textContent());
+    expect(await page.locator(".frame-tip").textContent()).toContain("Showing the page itself.");
     expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
-    // In place: the page itself is framed and scaled to Fit.
+    // The page itself is framed and scaled to Fit.
     expect(await page.locator("main").evaluate((node) => getComputedStyle(node).transform)).not.toBe("none");
-    await page.getByRole("button", { name: "Why the viewport is unavailable" }).hover();
+    await why.hover();
     await page.waitForTimeout(200);
     await page.screenshot({ path: join(shots, `fallback-${route}.png`) });
     await page.close();
@@ -546,17 +561,17 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     // The frame opens where the reviewer was reading.
     expect(original[0]).toBe(240);
     expect(await frame.evaluate(() => scrollY)).toBe(240);
-    // A draft in the viewport survives switching to In place and back.
+    // A draft in the viewport survives switching to the page itself and back.
     await page.keyboard.press("c");
     const card = await framed(page, "card-2");
     await page.mouse.click(card.x + 20, card.y + 20);
     await page.locator(".new-comment-composer textarea").waitFor();
     await page.keyboard.type("Keep me");
-    await page.getByRole("button", { name: "In place", exact: true }).click();
+    await simulate(page, false);
     await page.waitForTimeout(300);
     expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
     expect(await page.locator(".new-comment-composer textarea").inputValue()).toBe("Keep me");
-    await page.getByRole("button", { name: "Viewport", exact: true }).click();
+    await simulate(page, true);
     await viewportFrame(page);
     expect(await page.locator(".new-comment-composer textarea").inputValue()).toBe("Keep me");
     await page.keyboard.press("Escape");
@@ -567,6 +582,278 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     expect(await snapshot()).toEqual(original);
     await page.evaluate(() => (window as any).komo.destroy());
     expect(await snapshot()).toEqual(original);
+    await page.close();
+  });
+});
+
+const frameSizeKey = "branch-comments:frame-size:frame-iframe:example/review";
+/** A context whose first page load remembers the reviewer choosing the simulated viewport. */
+async function rememberingSimulation() {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await context.addInitScript((key) => {
+    if (window !== top || sessionStorage.getItem("seeded")) return;
+    sessionStorage.setItem("seeded", "1");
+    localStorage.setItem(key, JSON.stringify({ v: 2, size: null, actual: false, inPlace: false }));
+  }, frameSizeKey);
+  return context;
+}
+const relativeLuminance = (color: string) => {
+  const [r, g, b] = color.match(/[\d.]+/g)!.slice(0, 3).map((value) => {
+    const channel = +value / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a: string, b: string) => {
+  const [light, dark] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+};
+
+describe.skipIf(!chrome)("Frame's Simulate real viewport row", () => {
+  it.each([
+    ["mode transform", "?transform"],
+    ["no mode", "?nomode"],
+    ["an iframeUrl without mode", "?nomode&url=/other"],
+  ])("never loads a second copy with %s, even when the reviewer chose the simulated viewport before", async (_, query) => {
+    const context = await rememberingSimulation();
+    const page = await context.newPage();
+    const documents: string[] = [];
+    page.on("request", (request) => void (request.resourceType() === "document" && documents.push(request.url())));
+    await open(page, query);
+    await page.waitForTimeout(600);
+    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(page.frames()).toHaveLength(1);
+    expect(documents).toEqual([`${origin}/${query}`]);
+    // The page itself is framed, scaled to Fit, with no loading or fallback note.
+    expect(await page.locator("main").evaluate((node) => getComputedStyle(node).transform)).not.toBe("none");
+    // Without the row, the tip doesn't point at it.
+    expect(await page.locator(".frame-tip").textContent()).toBe("Layout follows your browser window, not this size.");
+    expect(await page.locator(".frame-info").getAttribute("aria-description")).toBe("Layout follows your browser window, not this size.");
+    // The size menu doesn't offer it.
+    await page.locator(".frame-size-trigger").click();
+    await page.getByRole("menuitemradio").first().waitFor();
+    expect(await page.getByRole("menuitemcheckbox").count()).toBe(0);
+    await page.keyboard.press("Escape");
+    // Another size still loads nothing, and the old choice is kept, unused.
+    await choose(page, "Tablet");
+    await page.waitForTimeout(300);
+    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(documents).toHaveLength(1);
+    expect(JSON.parse((await page.evaluate((key) => localStorage.getItem(key), frameSizeKey))!)).toEqual({ v: 2, size: [768, 1024], actual: false, inPlace: false });
+    await context.close();
+  });
+
+  it("honours the kept choice once the host offers the simulated viewport again", async () => {
+    const context = await rememberingSimulation();
+    const page = await context.newPage();
+    await open(page, "?nomode");
+    await page.waitForTimeout(400);
+    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    await open(page, "?inplace");
+    await viewportFrame(page);
+    await context.close();
+  });
+
+  it("loads the simulated viewport when checked and the page itself when unchecked, by pointer or keyboard, and remembers it", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    await open(page, "?inplace");
+    const trigger = page.locator(".frame-size-trigger");
+    const menu = page.getByRole("menu", { name: "Frame size" });
+    const row = page.getByRole("menuitemcheckbox", { name: "Simulate real viewport" });
+    const frames = () => page.locator("iframe[data-komo-viewport]").count();
+    const focused = () => row.evaluate((node) => (node.getRootNode() as ShadowRoot).activeElement === node);
+    await trigger.click();
+    expect(await row.getAttribute("aria-checked")).toBe("false");
+    // Pointer: checking loads the frame, unchecking returns to the page; the menu stays open.
+    await row.click();
+    await viewportFrame(page);
+    expect(await row.getAttribute("aria-checked")).toBe("true");
+    expect(await menu.isVisible()).toBe(true);
+    await row.click();
+    await expect.poll(frames).toBe(0);
+    expect(await row.getAttribute("aria-checked")).toBe("false");
+    // Keyboard: Space and Enter toggle the focused row, which keeps focus, and the menu stays open.
+    await row.focus();
+    await page.keyboard.press("Space");
+    await viewportFrame(page);
+    expect(await row.getAttribute("aria-checked")).toBe("true");
+    expect(await menu.isVisible()).toBe(true);
+    expect(await focused()).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect.poll(frames).toBe(0);
+    expect(await row.getAttribute("aria-checked")).toBe("false");
+    expect(await focused()).toBe(true);
+    await page.keyboard.press("Space");
+    await viewportFrame(page);
+    // Escape closes the menu.
+    await page.keyboard.press("Escape");
+    expect(await menu.isVisible()).toBe(false);
+    // The choice outlasts a reload, over the host's default.
+    await open(page, "?inplace");
+    await viewportFrame(page);
+    await trigger.click();
+    expect(await row.getAttribute("aria-checked")).toBe("true");
+    await row.click();
+    await expect.poll(frames).toBe(0);
+    await open(page, "?inplace");
+    await page.waitForTimeout(400);
+    expect(await frames()).toBe(0);
+    await trigger.click();
+    expect(await row.getAttribute("aria-checked")).toBe("false");
+    await context.close();
+  });
+
+  it.each(["light", "dark"] as const)("reads clearly and toggles with a %s colour scheme", async (scheme) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, colorScheme: scheme });
+    await open(page, "?inplace");
+    if (scheme === "dark") await page.evaluate(() => (document.documentElement.style.background = document.body.style.background = "#0b0b0f"));
+    await page.locator(".frame-size-trigger").click();
+    const row = page.getByRole("menuitemcheckbox", { name: "Simulate real viewport" });
+    const look = () => row.evaluate((node) => {
+      const style = (element: Element, pseudo?: string) => getComputedStyle(element, pseudo);
+      return {
+        label: style(node.querySelector("b")!).color,
+        hint: style(node.querySelector("span")!).color,
+        menu: style(node.parentElement!).backgroundColor,
+        box: style(node, "::before").backgroundColor,
+      };
+    });
+    const before = await look();
+    expect(contrast(before.label, before.menu)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(before.hint, before.menu)).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: join(shots, `simulate-row-${scheme}.png`) });
+    await row.click();
+    await viewportFrame(page);
+    await page.waitForTimeout(200);
+    // Checked, the box fills with the accent.
+    expect((await look()).box).not.toBe(before.box);
+    await page.screenshot({ path: join(shots, `simulate-row-${scheme}-checked.png`) });
+    await page.close();
+  });
+});
+
+describe.skipIf(!chrome)("Frame's compact bar", () => {
+  const zoomChecked = (page: Page) => page.locator(".frame-menu [aria-keyshortcuts]").evaluateAll((items) => items.map((item) => item.getAttribute("aria-checked")));
+  const fitted = async (page: Page) => (await zoomChecked(page))[0] === "true";
+
+  it("is one trigger naming the size and zoom, with an info icon only when the layout follows the window", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    await open(page, "?inplace");
+    // No zoom buttons, readout or mode switch of their own: the bar holds the trigger and, sometimes, the icon.
+    expect(await page.locator(".frame-bar").getByRole("button").count()).toBe(1);
+    expect(await frameLabel(page)).toMatch(/^Desktop 1280 × 800 · \d+%$/);
+    expect(await page.locator(".frame-note").isVisible()).toBe(false);
+    await choose(page, "Tablet");
+    expect(await frameLabel(page)).toMatch(/^Tablet 768 × 1024 · \d+%$/);
+    const info = page.getByRole("button", { name: "Why the layout follows your browser window" });
+    expect(await info.isVisible()).toBe(true);
+    const sentence = "Layout follows your browser window, not this size. Turn on Simulate real viewport in this menu for real breakpoints.";
+    expect(await page.locator(".frame-tip").textContent()).toBe(sentence);
+    expect(await info.getAttribute("aria-description")).toBe(sentence);
+    await info.hover();
+    await expect.poll(() => page.locator(".frame-tip").evaluate((node) => getComputedStyle(node).opacity)).toBe("1");
+    await page.screenshot({ path: join(shots, "bar-info-tip.png") });
+    // A custom size has no preset name.
+    await page.mouse.move(10, 10);
+    await page.locator(".frame-size-trigger").click();
+    await page.getByLabel("Width", { exact: true }).fill("703");
+    await page.getByLabel("Height", { exact: true }).fill("785");
+    await page.getByRole("button", { name: "Set" }).click();
+    expect(await frameLabel(page)).toMatch(/^703 × 785 · \d+%$/);
+    // The menu: presets and Custom, then Zoom, then the simulated viewport.
+    await page.locator(".frame-size-trigger").click();
+    const roles = await page.locator(".frame-menu").evaluate((menu) => [...menu.children].map((node) => node.getAttribute("role") ?? node.localName));
+    expect(roles).toEqual([...Array(6).fill("menuitemradio"), "form", "separator", "div", "menuitemradio", "menuitemradio", "separator", "menuitemcheckbox"]);
+    expect(await page.getByRole("menuitemradio", { name: "Fit", exact: true }).getAttribute("aria-keyshortcuts")).toBe("Shift+1");
+    expect(await page.getByRole("menuitemradio", { name: "100%", exact: true }).getAttribute("aria-keyshortcuts")).toBe("Shift+0");
+    expect(await zoomChecked(page)).toEqual(["true", "false"]);
+    await page.screenshot({ path: join(shots, "bar-menu.png") });
+    await frameZoom(page, "100%");
+    expect(await frameLabel(page)).toBe("703 × 785 · 100%");
+    expect(await page.locator(".frame-menu").isHidden()).toBe(true);
+    // Size and zoom outlast a reload.
+    await open(page, "?inplace");
+    expect(await frameLabel(page)).toBe("703 × 785 · 100%");
+    await page.close();
+  });
+
+  it("never clips its labels, shortening the trigger to the size in a narrow bar", async () => {
+    // The narrowest window that still frames the page.
+    const page = await browser.newPage({ viewport: { width: 761, height: 700 } });
+    await open(page, "?inplace");
+    await choose(page, "Tablet");
+    const fits = () => page.locator(".frame-bar").evaluate((bar) => {
+      const edge = bar.getBoundingClientRect().right;
+      return [...bar.querySelectorAll<HTMLElement>("button")].filter((node) => node.offsetParent).every((node) =>
+        node.scrollWidth <= node.clientWidth && node.getBoundingClientRect().right <= edge + 0.5);
+    });
+    const shown = () => page.locator(".frame-size-trigger").evaluate((node) =>
+      [...node.children].filter((child) => getComputedStyle(child).display !== "none").map((child) => child.textContent).join(" "));
+    expect(await fits()).toBe(true);
+    expect(await shown()).toMatch(/^Tablet 768 × 1024 · \d+%$/);
+    await page.screenshot({ path: join(shots, "bar-narrowest-window.png"), clip: { x: 0, y: 0, width: 761, height: 120 } });
+    // Narrower than any stage today: the trigger keeps only the size, whole.
+    await page.locator(".frame-bar").evaluate((bar) => (bar.style.width = "200px"));
+    expect(await shown()).toBe("768 × 1024");
+    expect(await fits()).toBe(true);
+    await page.screenshot({ path: join(shots, "bar-compact-trigger.png"), clip: { x: 0, y: 0, width: 400, height: 120 } });
+    // Its accessible name still carries everything.
+    expect(await frameLabel(page)).toMatch(/^Tablet 768 × 1024 · \d+%$/);
+    await page.close();
+  });
+
+  it("fits with Shift+1 and shows 100% with Shift+0 while Frame is on, pausing while typing", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    await open(page, "?inplace");
+    await page.locator(".frame-size-trigger").click();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Shift+Digit0");
+    await expect.poll(() => frameLabel(page)).toBe("Desktop 1280 × 800 · 100%");
+    await page.keyboard.press("Shift+Digit1");
+    await expect.poll(() => fitted(page)).toBe(true);
+    expect(await frameLabel(page)).not.toContain("100%");
+    // Typing in a page field (here a capital 0 is ")") leaves the zoom alone.
+    await page.locator("#field").click();
+    await page.keyboard.press("Shift+Digit0");
+    await page.waitForTimeout(150);
+    expect(await fitted(page)).toBe(true);
+    expect(await page.locator("#field").inputValue()).toBe(")");
+    // Also from inside the simulated viewport.
+    await simulate(page, true);
+    const frame = await viewportFrame(page);
+    await frame.locator("#title").click();
+    await page.keyboard.press("Shift+Digit0");
+    await expect.poll(() => frameLabel(page)).toBe("Desktop 1280 × 800 · 100%");
+    await page.keyboard.press("Shift+Digit1");
+    await expect.poll(() => fitted(page)).toBe(true);
+    // Frame off: the keys belong to the page.
+    await page.getByRole("button", { name: "Close sidebar", exact: true }).click();
+    await page.waitForTimeout(400);
+    await page.keyboard.press("Shift+Digit0");
+    await page.keyboard.press("l");
+    await page.locator(".frame-bar").waitFor();
+    expect(await fitted(page)).toBe(true);
+    await page.close();
+  });
+
+  it("yields Shift+1 to a komo shortcut configured on it, and lists the zoom keys in shortcut help", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    await open(page, "?inplace&keys");
+    await page.keyboard.press("Shift+Digit0");
+    await expect.poll(() => frameLabel(page)).toBe("Desktop 1280 × 800 · 100%");
+    // Shift+1 is the visibility shortcut here: it hides comments and leaves the zoom at 100%.
+    await page.keyboard.press("Shift+Digit1");
+    await page.waitForTimeout(200);
+    expect(await frameLabel(page)).toBe("Desktop 1280 × 800 · 100%");
+    await page.locator('[data-menu-item="more"]').evaluate((node: HTMLElement) => { node.focus(); node.click(); });
+    await page.locator('[data-menu-item="shortcuts"]').evaluate((node: HTMLElement) => { node.focus(); node.click(); });
+    const help = page.locator("dialog.komo-shortcuts");
+    await help.waitFor();
+    const rows = await help.locator("section", { has: page.locator("h3", { hasText: /^Frame$/ }) }).locator(".komo-shortcuts__row").evaluateAll((items) =>
+      items.map((item) => [item.firstElementChild!.textContent, item.getAttribute("aria-keyshortcuts")]));
+    expect(rows).toEqual([["Zoom to fit", "Shift+1"], ["Zoom to 100%", "Shift+0"]]);
+    await page.keyboard.press("Escape");
     await page.close();
   });
 });

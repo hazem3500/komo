@@ -39,14 +39,14 @@ describe("remembered Frame size", () => {
       expect(readFrameSize(frameSizeRecord(size as never, actual))).toEqual({ size, actual });
   });
 
-  it("remembers choosing In place over Viewport mode, even at the default size", () => {
+  it("remembers turning Simulate real viewport off, even at the default size", () => {
     const record = frameSizeRecord("window", false, true)!;
     expect(JSON.parse(record)).toEqual({ v: 2, size: null, actual: false, inPlace: true });
     expect(readFrameSize(record)).toEqual({ size: "window", actual: false, inPlace: true });
     expect(readFrameSize('{"size":null,"actual":false,"inPlace":true}')).toEqual(fallback);
   });
 
-  it("remembers choosing Viewport too, so a host's In place default doesn't override it", () => {
+  it("remembers turning it on too, so a host's defaultMode transform doesn't override it", () => {
     const record = frameSizeRecord("window", false, false)!;
     expect(JSON.parse(record)).toEqual({ v: 2, size: null, actual: false, inPlace: false });
     expect(readFrameSize(record)).toEqual({ size: "window", actual: false, inPlace: false });

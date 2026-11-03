@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openDesign } from "./design-e2e.js";
+import { frameZoom } from "./frame-e2e.js";
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -118,9 +119,10 @@ function frame(page: Page) {
       logical: [document.getElementById("app")!.offsetWidth, document.getElementById("app")!.offsetHeight],
       scroll: [main.scrollWidth - main.clientWidth, main.scrollHeight - main.clientHeight],
       transform: getComputedStyle(main).transform,
-      label: shadow.querySelector(".frame-size-trigger")!.textContent,
+      // The trigger's size part, e.g. "Tablet 768 × 1024" or "1000 × 700"; the zoom is `scale`.
+      label: shadow.querySelector(".frame-size-trigger")!.getAttribute("aria-label")!.replace(/ · \d+%$/, ""),
       scale: shadow.querySelector(".frame-scale")!.textContent,
-      pressed: [...shadow.querySelectorAll(".frame-zoom:not(.frame-mode) button")].map((button) => button.getAttribute("aria-pressed")),
+      pressed: [...shadow.querySelectorAll(".frame-menu [aria-keyshortcuts]")].map((item) => item.getAttribute("aria-checked")),
       note: !shadow.querySelector<HTMLElement>(".frame-note")!.hidden,
     };
   });
@@ -179,21 +181,21 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     const fitted = await frame(page);
     expectFitted(fitted, [1280, 800]);
     expect(fitted.transform).not.toBe("none");
-    expect(fitted.label).toBe("Desktop · 1280 × 800");
+    expect(fitted.label).toBe("Desktop 1280 × 800");
     expect(fitted.scale).toBe("67%");
     expect(fitted.pressed).toEqual(["true", "false"]);
     expect(fitted.note).toBe(false);
     expect(await select(page, 2, 9)).toEqual({ target: [2, 9], coordinates: [2, 9] });
     await page.screenshot({ path: join(shots, "default-window-fit.png") });
     // 100% shows the same viewport in CSS pixels and pans.
-    await page.getByRole("button", { name: "100%", exact: true }).click();
+    await frameZoom(page, "100%");
     await page.waitForTimeout(100);
     const window100 = await frame(page);
     expect(window100.logical).toEqual([1280, 800]);
     expect(window100.scale).toBe("100%");
     expect(window100.transform).toBe("none");
     await page.screenshot({ path: join(shots, "default-window-100.png") });
-    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    await frameZoom(page, "Fit");
     await page.waitForTimeout(100);
     expectFitted(await frame(page), [1280, 800]);
     // The space beside the comments, unscaled: the page reflows in place.
@@ -201,23 +203,23 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     const available = await frame(page);
     expectFitted(available, [852, 728]);
     expect(available.transform).toBe("none");
-    expect(available.label).toBe("Available · 852 × 728");
+    expect(available.label).toBe("Available 852 × 728");
     expect(available.note).toBe(true);
     for (const [name, width, height] of [["Wide", 1440, 900], ["Laptop", 1280, 800], ["Tablet", 768, 1024], ["Mobile", 390, 844]] as const) {
       await choose(page, name);
       const state = await frame(page);
       expectFitted(state, [width, height]);
-      expect(state.label).toBe(`${name} · ${width} × ${height}`);
+      expect(state.label).toBe(`${name} ${width} × ${height}`);
       expect(state.note).toBe(width !== 1280);
       expect(await select(page, 2, 9)).toEqual({ target: [2, 9], coordinates: [2, 9] });
       await page.screenshot({ path: join(shots, `preset-${name.toLowerCase()}-fit.png`) });
     }
-    // In place, a narrower viewport cannot change media queries; the bar says why.
+    // On the page itself, a narrower viewport cannot change media queries; the bar says why.
     await page.getByRole("button", { name: "Why the layout follows your browser window" }).hover();
     await page.waitForTimeout(200);
-    const tip = page.getByRole("tooltip");
+    const tip = page.locator(".frame-tip");
     expect(await tip.isVisible()).toBe(true);
-    expect(await tip.textContent()).toContain("Media queries");
+    expect(await tip.textContent()).toBe("Layout follows your browser window, not this size.");
     await page.screenshot({ path: join(shots, "preset-mobile-note.png") });
     await page.mouse.move(10, 10);
     await page.locator(".frame-size-trigger").click();
@@ -227,11 +229,11 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     await page.waitForTimeout(100);
     const custom = await frame(page);
     expectFitted(custom, [1000, 700]);
-    expect(custom.label).toBe("Custom · 1000 × 700");
+    expect(custom.label).toBe("1000 × 700");
     await page.screenshot({ path: join(shots, "custom-1000x700-fit.png") });
 
     await choose(page, "Wide");
-    await page.getByRole("button", { name: "100%", exact: true }).click();
+    await frameZoom(page, "100%");
     await page.waitForTimeout(100);
     const actual = await frame(page);
     expect(actual.logical).toEqual([1440, 900]);
@@ -252,7 +254,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     expect(await page.evaluate(() => [window.scrollX, window.scrollY])).toEqual([0, 0]);
     expect(await select(page, 3, 10)).toEqual({ target: [3, 10], coordinates: [3, 10] });
     await page.screenshot({ path: join(shots, "preset-wide-100.png") });
-    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    await frameZoom(page, "Fit");
     await page.waitForTimeout(100);
     expectFitted(await frame(page), [1440, 900]);
     expect(await page.evaluate(() => [window.scrollX, window.scrollY])).toEqual([0, 0]);
@@ -281,7 +283,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     await open(page);
     const state = await frame(page);
     expectFitted(state, [1280, 800]);
-    expect(state.label).toBe("Desktop · 1280 × 800");
+    expect(state.label).toBe("Desktop 1280 × 800");
     expect(state.scale).toBe("67%");
     expect(state.note).toBe(false);
     // The old entry is gone, and opening at the default stores nothing.
@@ -315,7 +317,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     expect((await frame(page)).scale).toBe("100%");
     expect(await hint.isVisible()).toBe(false);
     // Seen through once, it stays away, also back at Fit and after a reload.
-    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    await frameZoom(page, "Fit");
     await page.waitForTimeout(150);
     expect(await hint.isVisible()).toBe(false);
     await page.reload();
@@ -368,7 +370,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     await page.locator(".frame-bar").waitFor();
     await page.waitForTimeout(350);
     expectFitted(await frame(page), [562, 610]);
-    expect((await frame(page)).label).toBe("Custom · 562 × 610");
+    expect((await frame(page)).label).toBe("562 × 610");
     await page.close();
   });
 
@@ -464,7 +466,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
           await page.getByLabel("Height", { exact: true }).fill("887");
           await page.getByRole("button", { name: "Set" }).click();
         } else await choose(page, name);
-        await page.getByRole("button", { name: zoom, exact: true }).click();
+        await frameZoom(page, zoom);
         await page.waitForTimeout(150);
         const state = await frame(page);
         for (const [thread, cellId] of [["fixture-thread", "cell-4-11"], ["centre-thread", "cell-3-13"]]) {

@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { chromium, type Browser, type Frame, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-// Single-copy Viewport (frame.shell): the top window becomes komo's shell and the app
+// Single-copy simulated viewport (frame.shell): the top window becomes komo's shell and the app
 // runs once, in the frame. The fixture app mounts only when isShell() is false, and
 // every copy registers on the top window, so the tests can count them.
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
@@ -135,7 +135,7 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
     await page.close();
   });
 
-  it("reloads into a shell on Viewport, after asking, and runs the app once, in the frame", async () => {
+  it("reloads into a shell for the simulated viewport, after asking, and runs the app once, in the frame", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
@@ -168,12 +168,15 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
     await page.close();
   });
 
-  it("leaves for the normal page on the frame's route when the reviewer picks In place", async () => {
+  it("leaves for the normal page on the frame's route when the reviewer turns Simulate real viewport off", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     const { frame } = await enter(page);
     await frame.click("#next");
     await expect.poll(() => new URL(page.url()).pathname).toBe("/other");
-    await page.getByRole("button", { name: "In place", exact: true }).click();
+    await page.locator(".frame-size-trigger").click();
+    // The app runs once here, so the row doesn't warn about a second copy.
+    expect(await page.locator("#frame-sim-hint").textContent()).toBe("Reloads this page inside a frame so breakpoints and popovers match this size.");
+    await page.getByRole("menuitemcheckbox", { name: "Simulate real viewport" }).click();
     await page.waitForURL((url) => !url.searchParams.has("komo-shell"));
     await page.waitForFunction(() => !!(window as any).qa?.mounts.length);
     const now = await state(page);

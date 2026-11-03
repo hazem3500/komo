@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { chromium, type Browser, type Locator, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openDesign } from "./design-e2e.js";
+import { frameZoom } from "./frame-e2e.js";
 
 // Clicks anywhere inside the color popup keep it open, in the Tokens view's rows and in the
 // element's properties, at Frame Fit and 100%. Only an outside click, Escape or the toggle close it.
@@ -111,7 +112,7 @@ describe.skipIf(!chrome).each(["Fit", "100%"].flatMap(zoom => ["css-variables", 
     await tab.waitForFunction(() => !!(window as any).komo);
     await openDesign(tab);
     await settle(tab);
-    await tab.getByRole("button", { name: zoom, exact: true }).click();
+    await frameZoom(tab, zoom);
     await settle(tab);
     let toggle: Locator;
     if (where === "Tokens view row") {

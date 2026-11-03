@@ -1,4 +1,4 @@
-// `@hazem3500/komo/shell`: the entry guard for single-copy Viewport mode. It has no
+// `@hazem3500/komo/shell`: the entry guard for Frame's single-copy simulated viewport. It has no
 // top-level side effects, so `import.meta.env.DEV && isShell(project)` drops it
 // from production builds.
 
@@ -11,7 +11,7 @@ export interface ShellOptions {
 }
 
 /**
- * True when this page load is komo's single-copy Viewport shell for `project`:
+ * True when this page load is komo's single-copy simulated-viewport shell for `project`:
  * skip mounting the app, and start komo with `frame: { mode: "iframe", shell: true }`.
  *
  * Only komo makes a shell: it sets a random nonce in this tab's sessionStorage and
