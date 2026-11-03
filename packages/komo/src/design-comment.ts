@@ -789,8 +789,8 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   if (toggles.length) listenForShortcut(container.getRootNode());
 }
 
-// B flips the open design comment between Before and After from anywhere but a text field,
-// and B, ← and → also from a comment composer whose note is still empty.
+// B flips the open design comment between Before and After from anywhere but a text field.
+// ← and → also flip it from a comment composer whose note is still empty; B there is just a letter.
 let shortcutBound = false;
 const boundRoots = new WeakSet<Node>();
 function flip(event: KeyboardEvent) {
@@ -800,7 +800,7 @@ function flip(event: KeyboardEvent) {
   const path = event.composedPath();
   const focused = [...visibleToggles].find(item => item.isConnected && path.includes(item));
   const note = path[0] as HTMLTextAreaElement;
-  const empty = note?.localName === "textarea" && !note.value && !!note.closest?.(".composer");
+  const empty = key !== -1 && note?.localName === "textarea" && !note.value && !!note.closest?.(".composer");
   if (!focused && !empty && (key !== -1 || textEntry(path[0]))) return;
   const own = empty ? note.closest("form")?.querySelector<HTMLElement>(".design-toggle") : null;
   const toggle = focused ?? own ?? [...visibleToggles].reverse().find(item => item.isConnected);

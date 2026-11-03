@@ -192,18 +192,22 @@ describe.skipIf(!chrome)("Before/After for a move in Viewport and In place", () 
       await page.screenshot({ path: join(shots, `${mode}-composer-after.png`) });
       await flip(page, app, draft, `${mode} composer`);
 
-      // B and ←/→ from the composer's (empty) note.
+      // ←/→ from the composer's (empty) note; B there types, so a note can start with "b".
       const note = page.locator(".new-comment-composer textarea");
       await note.focus();
-      await page.keyboard.press("b");
-      await expect.poll(() => order(app), `${mode} B`).toEqual(BEFORE);
-      expect(await note.inputValue()).toBe("");
-      await page.keyboard.press("ArrowRight");
-      await expect.poll(() => order(app), `${mode} →`).toEqual(AFTER);
       await page.keyboard.press("ArrowLeft");
       await expect.poll(() => order(app), `${mode} ←`).toEqual(BEFORE);
+      await page.keyboard.press("ArrowRight");
+      await expect.poll(() => order(app), `${mode} →`).toEqual(AFTER);
       await page.keyboard.press("b");
-      await expect.poll(() => order(app), `${mode} B again`).toEqual(AFTER);
+      expect(await note.inputValue()).toBe("b");
+      expect(await order(app), `${mode} b types`).toEqual(AFTER);
+      // With text in the note, the arrows move the caret.
+      await page.keyboard.press("ArrowLeft");
+      expect(await order(app), `${mode} ← in text`).toEqual(AFTER);
+      await page.keyboard.press("End");
+      await page.keyboard.press("Backspace");
+      expect(await note.inputValue()).toBe("");
 
       // The framed app re-renders while After shows: a commit that rewrites the button's display,
       // and a remount of the whole toolbar. The stand-in stays and the original stays hidden.
