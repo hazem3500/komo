@@ -63,10 +63,15 @@ button:disabled {
   opacity: 0.45;
   cursor: wait;
 }
+/* One keyboard focus ring, in the panel accent. */
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #f48120;
-  outline-offset: 3px;
+  outline: 2px solid var(--accent, #bda6ef);
+  outline-offset: 2px;
+}
+/* Segments ring inside their track, so the ring never spills past the control. */
+:is(.design-toggle, .design-inspector__compare, .frame-zoom, .design-segments) button:focus-visible {
+  outline-offset: -2px;
 }
 input,
 textarea,
@@ -81,7 +86,7 @@ select {
 input:focus,
 textarea:focus,
 select:focus {
-  box-shadow: inset 0 0 0 2px #f48120;
+  box-shadow: inset 0 0 0 2px var(--accent, #bda6ef);
 }
 textarea {
   resize: vertical;
@@ -2404,7 +2409,7 @@ ${collapsed} .avatar img { display: none; }
 .pin-cluster { position: fixed; z-index: 2; translate: -50% -50%; pointer-events: auto; }
 .pin-cluster > summary { min-width: 26px; height: 26px; margin: 0; border-radius: 13px; font-size: 12px; }
 .pin-cluster:is(:hover, [open]) > summary { scale: 1.1; }
-.pin-cluster > summary:focus-visible { outline: 2px solid #f48120; outline-offset: 3px; }
+.pin-cluster > summary:focus-visible { outline: 2px solid var(--accent, #bda6ef); outline-offset: 2px; }
 .pin-cluster .menu-action { max-width: 300px; }
 .pin-cluster .menu-action:last-child { margin: 0; }
 .pin-cluster .menu-action:last-child::before { content: none; }
