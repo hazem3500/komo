@@ -576,7 +576,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     const anchored = resolveAnchor(anchor);
     let found: Element[] = [];
     try {
-      if (selector) found = [...document.querySelectorAll(selector)];
+      if (selector) found = [...pageDocument().querySelectorAll(selector)];
     } catch {
       /* Not a valid selector; use the anchor. */
     }
@@ -6086,8 +6086,8 @@ export function initComments(options: CommentsOptions): CommentsController {
               draftText = "";
               draftProposal = proposal ?? "";
               draftTags = [];
-              // The centre of the element's visible part, so a page-wide proposal (on body) pins in view.
-              const rect = element.getBoundingClientRect();
+              // The centre of the element's visible part on screen, so a page-wide proposal (on body) pins in view.
+              const rect = screenRect(element);
               const center = {
                 x: (Math.max(rect.left, 0) + Math.min(rect.right, innerWidth)) / 2,
                 y: (Math.max(rect.top, 0) + Math.min(rect.bottom, innerHeight)) / 2,

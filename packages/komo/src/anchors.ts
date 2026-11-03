@@ -329,9 +329,12 @@ export function locateAnchor(
 } {
   return measure(anchor, resolveAnchor(anchor, target));
 }
+/** A comment preview that moves an element hides it and shows this stand-in in its place. */
+export const STAND_IN = Symbol.for("komo.stand-in");
 function measure(anchor: Anchor, element: Element | null) {
   if (element) {
-    const rect = screenRect(element);
+    const stand = (element as Element & { [STAND_IN]?: Element })[STAND_IN];
+    const rect = screenRect(stand?.isConnected ? stand : element);
     if (rect.width && rect.height)
       return {
         x: rect.left + rect.width * anchor.x,

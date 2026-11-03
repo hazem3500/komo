@@ -13,3 +13,12 @@ export function elementLabel(element: Element | null, tag = element?.localName ?
   const name = raw.length > 28 ? `${raw.slice(0, 27)}…` : raw;
   return [kind, name && `“${name}”`].filter(Boolean).join(" ") || tag || "Element";
 }
+
+// Wrapper names that say nothing about what an element is: primitives, slots, refs and providers.
+const WRAPPER = /^(?:Primitive(?:\.\w+)?|Slot|Slottable|ForwardRef|Memo|Anonymous|Unknown|Fragment|Suspense|Presence|Context|[\w$]*\.(?:Provider|Consumer))$/;
+
+/** A component name worth showing, or undefined for an anonymous wrapper; `ForwardRef(Card)` reads as `Card`. */
+export function namedComponent(name?: string): string | undefined {
+  const own = name?.trim().replace(/^(?:ForwardRef|Memo)\((.+)\)$/, "$1");
+  return own && !WRAPPER.test(own) ? own : undefined;
+}
