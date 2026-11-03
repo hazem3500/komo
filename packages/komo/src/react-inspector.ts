@@ -72,9 +72,11 @@ export function adaptComponentEditor(identity: ComponentIdentity, editor: Compon
 
 /** Resolve only an adapter's renderer-proven instance; registered text owners never migrate. */
 export function currentInspectableElement(element: Element): Element | null {
-  // A root registered in Frame's viewport iframe answers from that realm's registry.
+  // A root registered in Frame's viewport iframe answers from that realm's registry;
+  // an adapter editor komo made here for a framed element stays in this realm's map.
   const bridged = frameBridge(element)?.currentInspectableElement;
-  if (bridged) return bridged(element as never) as Element | null;
+  const framed = bridged?.(element as never) as Element | null | undefined;
+  if (framed) return framed;
   const entry = adapted.get(element);
   if (!entry || entry.editor.available?.() === false) return null;
   const next = entry.editor.currentElement?.();
@@ -189,7 +191,8 @@ export function inspectableFor(
   target: Element | null,
 ): RegisteredInspectableComponent | null {
   const bridged = frameBridge(target)?.inspectableFor;
-  if (bridged) return bridged(target as never) as RegisteredInspectableComponent | null;
+  const framed = bridged?.(target as never) as RegisteredInspectableComponent | null | undefined;
+  if (framed) return framed;
   const registeredComponent = target && registered.get(target);
   if (registeredComponent &&
     target.getAttribute("data-komo-inspectable") === registeredComponent.definition.id
