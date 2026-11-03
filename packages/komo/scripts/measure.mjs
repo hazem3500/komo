@@ -57,6 +57,9 @@ const accountTokens = (await readdir("dist"))
 const snapshots = (await readdir("dist"))
   .filter((file) => /^snapshot-.*\.js$/.test(file))
   .map((file) => `dist/${file}`);
+const threadSnapshots = (await readdir("dist"))
+  .filter((file) => /^thread-snapshot-.*\.js$/.test(file))
+  .map((file) => `dist/${file}`);
 const entry = Object.keys(outputs).find(
   (path) => outputs[path].entryPoint === "dist/index.js"
 );
@@ -99,6 +102,7 @@ const report = {
   optionalGeometry: await sizes(new Set(geometry)),
   optionalAccountTokens: await sizes(new Set(accountTokens)),
   optionalSnapshots: await sizes(new Set(snapshots)),
+  optionalSnapshotView: await sizes(new Set(threadSnapshots)),
   optionalFrameViewport: await sizes(new Set(frameIframe)),
   optionalLiveColors: await sizes(new Set(liveColors)),
   optionalFieldControls: await sizes(new Set(fieldControls)),
@@ -205,6 +209,7 @@ await writeFile(
 // 236,050 -> 236,200: design proposals (#172), Design mode keys (#170) and #167 with #171 together,
 // 236,061 measured on main bc089fe, plus ~100 for CI's measurement.
 // 236,200 -> 241,100: opt-in comment snapshots, a 4,561-byte on-demand chunk (below) plus ~150 in initial for the /config gate, raw-body uploads and the hook (240,969 measured on main 4d26ac1 with #177).
+// 241,100 -> 245,800: showing those snapshots (thumbnails, the open card, the full-size viewer, HTML as text) is its own on-demand chunk, loaded the first time a thread with a snapshot is shown (4,046 measured).
 // 241,100 -> 241,500: all-pages comments on persistent layout (scope at create, page membership, list label, the … toggle) run at mount (~+400); 241,364 measured on main 4be3b4d, plus ~140 for CI's measurement.
 // 241,500 -> 242,700: single-copy Viewport (frame.shell). Core checks the shell's nonce at mount,
 // claims the shell and leaves it when the viewport can't show (initial +~580); entering, leaving
@@ -212,7 +217,9 @@ await writeFile(
 // the shell feature's measured increase and CI margin; pnpm size verifies the combined result.
 // 242,700 -> 243,450: Viewport move Before/After in the on-demand design comment chunk (the stand-in in the framed document, re-applied after the app's commits, empty-note keys, wrapper-free labels and named places); 243,315 measured on main df7075d5 with this branch, initial flat, plus ~130 for CI's measurement.
 // 243,450 -> 244,200: Frame's compact bar (one size-and-zoom trigger, Fit/100% menu rows with ⇧1/⇧0, the ⓘ note, the Simulate real viewport row) grows the on-demand frame-size chunk ~600 and initial ~20 (the hooks it is passed); 244,058 measured on main 7025c77, plus CI margin.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 244_200)
+// 244,200 -> 248,800: main's compact Frame bar and single-copy Viewport together with the snapshot view
+// chunk above (4,046) and its hooks; 248,610 measured on main 3aeee4d (0.9.101) with this branch, plus ~190 for CI.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 248_800)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -309,6 +316,9 @@ if (report.optionalAccountTokens.gzip > 5_850)
 // Comment snapshots (SVG foreignObject image, trimmed HTML, raw-file uploads) load only when snapshots are on, the server supports them and a reviewer starts a comment. 4,561 measured, plus ~3%.
 if (report.optionalSnapshots.gzip > 4_700)
   throw new Error("komo's comment snapshot chunk exceeds its gzip budget.");
+// Saved snapshots in the review UI (row thumbnails, the open card, the viewer, HTML as text) load the first time one is shown. 4,046 measured, plus ~3%.
+if (report.optionalSnapshotView.gzip > 4_200)
+  throw new Error("komo's snapshot view chunk exceeds its gzip budget.");
 // Viewport mode loads only when Frame opens with frame.mode "iframe": the iframe, its stage, the
 // same-origin and fallback checks (X-Frame-Options, frame-ancestors, cross-origin redirects, timeout) and
 // the frame geometry komo's page reads switch to. 2,216 measured, plus ~3%.

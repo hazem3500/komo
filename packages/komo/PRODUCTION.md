@@ -24,7 +24,13 @@ Status: working preview / controlled beta. Not ready for an unrestricted public 
 
 ## Product boundaries
 
-- Element snapshots (an image and trimmed HTML per thread) are opt-in on the client and may contain page content or user data. They are readable only with a session, served inert (`text/plain` HTML, `Content-Security-Policy: sandbox`, `nosniff`, private caching), counted against quotas and a per-project snapshot cap, refused for guests unless a project allows them, and deleted with their thread.
+- Element snapshots (an image and trimmed HTML per thread) are opt-in on the client (`snapshots.image` / `snapshots.html`, both off by default) and may contain page content or user data.
+  - Captured: the commented element only, as a WebP image at quality 0.8 by default (lower, then smaller, to fit `maxBytes`) and its trimmed HTML without scripts, styles or handlers. komo's own UI is never captured.
+  - Redacted: input, textarea and password values always; elements the host's `redact` callback matches; anything inside `data-komo-no-snapshot` is left out.
+  - Access: readable only with a reviewer's credentials (a session, or an access token where allowed; behind a sign-in proxy, a proxy-minted session), served inert (`text/plain` HTML, `Content-Security-Policy: sandbox`, `nosniff`, private caching). The review UI fetches thumbnails with the session token only when they are on screen, shows them through blob URLs it revokes on unmount, and shows HTML as text. The CLI saves them to a self-ignoring `.komo/snapshots` folder.
+  - Guests: refused unless a project sets `allowGuestSnapshots`.
+  - Retention: kept for the thread's lifetime, counted against quotas and a per-project snapshot cap, and deleted with their thread (resolved cleanup, retention, project deletion).
+  - Deletion: the thread's author or a signed-in reviewer removes one from the comment's actions menu (with confirmation) or with `DELETE /threads/:id/snapshot/:kind`.
 
 - Self-hosted servers can tighten sign-in, all off by default: a trusted identity proxy (`KOMO_PROXY_AUTH`), session-only reads (`KOMO_REQUIRE_SESSION_FOR_READS`), no guests (`KOMO_ALLOW_GUESTS=false`) and a session age cap (`KOMO_SESSION_MAX_AGE_DAYS`). A proxy forces session-only reads and no guests, accepts only sessions it signed in, and refuses personal access tokens. Its sign-in has no consent screen, so any page on an approved origin can start it; keep approved origins tight. See [NODE.md](./NODE.md#sign-in-through-an-identity-proxy).
 - The Node server trusts `X-Forwarded-For` only for the configured number of proxy hops (`KOMO_TRUSTED_PROXY_HOPS`); by default it rate-limits by socket address.

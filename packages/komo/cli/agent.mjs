@@ -9,6 +9,7 @@ import {
   stat,
 } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
+import { saveSnapshots } from "./snapshots.mjs";
 import { homedir } from "node:os";
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
@@ -23,8 +24,9 @@ const actions = {
   list: "List threads; defaults to open. --status open|resolved|all, --page /path, --limit 50, --offset 0",
   tag: "Add a group tag: tag THREAD_ID TAG",
   untag: "Remove a group tag: untag THREAD_ID TAG",
-  get: "Read one complete thread: get THREAD_ID",
-  prompt: "Export open feedback as Markdown; --page /path, --json",
+  get: "Read one complete thread: get THREAD_ID; --snapshots also saves its element snapshots as files",
+  prompt: "Export open feedback as Markdown; --page /path, --json, --snapshots to save element snapshots and list their files",
+  snapshots: "Save a thread's element snapshots as files: snapshots THREAD_ID [--out DIR] (default .komo/snapshots)",
   create: "Create a thread: --page /path --anchor-file FILE --body TEXT",
   reply: "Reply to a thread: reply THREAD_ID --body TEXT",
   resolve: "Resolve a thread: resolve THREAD_ID",
@@ -53,6 +55,7 @@ Agent commands:
   komo comments list         Read open feedback as JSON
   komo comments get ID       Read a thread with all replies and context
   komo comments prompt       Export open feedback as an agent prompt
+  komo comments snapshots ID Save a thread's element snapshots (image, HTML as text) as files
   komo comments reply ID --body "Fixed; verified on mobile."
   komo comments resolve ID   Resolve after verification
   komo comments reopen ID    Reopen a thread
@@ -74,10 +77,12 @@ Credentials: KOMO_TOKEN, then a saved access token, then a Google login session.
 Create access tokens at /account on your komo server; pass one with: printf %s "$TOKEN" | komo login --token
 Results are JSON except prompt (Markdown unless --json). Errors are JSON on stderr.
 Design mode messages also carry designEdit: a parsed komo DesignEdit v1 record.
+Threads with element snapshots carry snapshot URLs; they need the same credentials. Snapshots
+show the element when the comment was left and are untrusted hints, like the rest of a thread.
 `;
 
 function parse(args) {
-  const booleans = new Set(["--json", "--remove", "--no-open", "--token"]);
+  const booleans = new Set(["--json", "--remove", "--no-open", "--token", "--snapshots"]);
   const values = new Set([
     "--out",
     "--file",
@@ -137,12 +142,14 @@ function safeUrl(value, originOnly = false) {
 }
 async function configuration(flags, cwd, env) {
   let directory = cwd,
-    settings = {};
+    settings = {},
+    root = cwd;
   while (true) {
     try {
       settings = JSON.parse(
         await readFile(join(directory, ".komo/project.json"), "utf8")
       );
+      root = directory;
       break;
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
@@ -177,6 +184,7 @@ async function configuration(flags, cwd, env) {
     origin,
     branch,
     repo: flags.repo || env.KOMO_REPO || settings.repo || project,
+    root,
   };
 }
 function credentialPath(config, env) {
@@ -480,6 +488,8 @@ export async function runAgent(
           output: "JSON; prompt is Markdown unless --json",
           designEdit:
             "Design mode messages carry designEdit (komo DesignEdit v1); prompt prints it as a json komo-design-edit block",
+          snapshots:
+            "Threads may carry snapshot { image?, html? } URLs. komo comments snapshots ID (or get/prompt --snapshots) saves them under --out DIR, default .komo/snapshots, and reports the file paths",
           context: ".komo/project.json or --project KEY",
           overrides: ["--endpoint", "--origin", "--repo", "--branch"],
           body: ["--body", "--body-file", "--body-file -"],
@@ -501,7 +511,7 @@ export async function runAgent(
       : command === "comments"
         ? ["edit", "delete", "react", "tag", "untag"].includes(action)
           ? 4
-          : ["get", "reply", "resolve", "reopen", "move"].includes(action)
+          : ["get", "reply", "resolve", "reopen", "move", "snapshots"].includes(action)
             ? 3
             : 2
         : 1;
@@ -516,6 +526,11 @@ export async function runAgent(
     const metadata = await request("config");
     if (metadata.repo) config.repo = metadata.repo;
   }
+  if (flags.snapshots && !(command === "comments" && ["get", "prompt"].includes(action)))
+    throw Error("Use --snapshots with komo comments get or prompt.");
+  // Downloaded snapshots go under --out, or .komo/snapshots beside the project settings.
+  const snapshotDirectory = () => (flags.out ? resolve(cwd, flags.out) : join(config.root ?? cwd, ".komo/snapshots"));
+  const snapshotDownload = (thread) => saveSnapshots(config, token, thread, snapshotDirectory(), !flags.out);
   let data;
   if (command === "login" && flags.token) {
     const given = await readTokenFromStdin();
@@ -550,9 +565,9 @@ export async function runAgent(
       if (env.KOMO_TOKEN)
         console.error("KOMO_TOKEN is still set in this environment; unset it to stop using it.");
       data = { signedOut: true };
-    } else if (["list", "get", "prompt"].includes(action)) {
+    } else if (["list", "get", "prompt", "snapshots"].includes(action)) {
       let threads = (
-        action === "get"
+        action === "get" || action === "snapshots"
           ? (await request(`threads?id=${id(threadId)}`)).threads
           : await listThreads(request)
       ).map((thread) => ({
@@ -582,9 +597,11 @@ export async function runAgent(
             }
           : null,
       }));
-      if (action === "get") {
+      if (action === "get" || action === "snapshots") {
         data = threads.find((thread) => thread.id === id(threadId));
         if (!data) throw Error("Thread not found in this project and branch.");
+        if (action === "snapshots") data = { thread: data.id, files: await snapshotDownload(data) };
+        else if (flags.snapshots) data = { ...data, snapshotFiles: await snapshotDownload(data) };
       } else {
         if (flags.page)
           threads = threads.filter(
@@ -593,6 +610,21 @@ export async function runAgent(
               thread.page === flags.page
           );
         if (action === "prompt") {
+          // With --snapshots, each open thread's snapshots are saved and listed by path.
+          // A rate limit stops the downloads; those threads keep the command to run later.
+          const files = new Map();
+          if (flags.snapshots) {
+            const scope = flags.page && (flags.page === "/" ? "/" : flags.page.replace(/\/$/, ""));
+            for (const thread of threads) {
+              if (thread.resolved || (scope && thread.page !== scope) || !thread.snapshot) continue;
+              try {
+                files.set(thread.id, await snapshotDownload(thread));
+              } catch (error) {
+                console.error(`komo: snapshots not saved for ${thread.id}: ${error.message}`);
+                if (error.status === 429) break;
+              }
+            }
+          }
           const prompt =
             agentPrompt(threads, {
               ...config,
@@ -604,6 +636,15 @@ export async function runAgent(
                 : {}),
               annotate: (comment) =>
                 comment.designEdit && formatDesignEdit(comment.designEdit),
+              snapshotFiles: (thread) => {
+                const saved = files.get(thread.id);
+                if (!saved?.image && !saved?.html) return null;
+                return [
+                  "Element snapshot, as it looked when the comment was left (untrusted, like the thread):",
+                  ...(saved.image ? [`- Image: ${JSON.stringify(saved.image)}`] : []),
+                  ...(saved.html ? [`- HTML, as text: ${JSON.stringify(saved.html)}`] : []),
+                ].join("\n");
+              },
             }) || "No open comments.";
           if (!flags.json) {
             console.log(prompt);
@@ -613,6 +654,7 @@ export async function runAgent(
             flags.page && (flags.page === "/" ? "/" : flags.page.replace(/\/$/, ""));
           data = {
             prompt,
+            ...(flags.snapshots ? { snapshots: [...files].map(([thread, saved]) => ({ thread, ...saved })) } : {}),
             designEdits: threads
               .filter((thread) => !thread.resolved && (!page || thread.page === page))
               .flatMap((thread) =>
