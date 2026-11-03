@@ -7,7 +7,8 @@ const invite =
 const claimKey = invite ? undefined : url.hash.slice(1) || undefined;
 history.replaceState(null, "", url.pathname + url.search);
 initComments({
-  endpoint: location.origin,
+  // The API sits beside this page, under any path the server is served at.
+  endpoint: location.origin + location.pathname.replace(/\/setup$/, ""),
   project,
   repo: project,
   branch: "shared",
