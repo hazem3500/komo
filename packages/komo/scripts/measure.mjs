@@ -210,7 +210,8 @@ await writeFile(
 // claims the shell and leaves it when the viewport can't show (initial +~580); entering, leaving
 // and the URL sync are an on-demand chunk (~590). The allowance includes the latest main budget plus
 // the shell feature's measured increase and CI margin; pnpm size verifies the combined result.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 242_700)
+// 242,700 -> 243,450: Viewport move Before/After in the on-demand design comment chunk (the stand-in in the framed document, re-applied after the app's commits, empty-note keys, wrapper-free labels and named places); 243,315 measured on main df7075d5 with this branch, initial flat, plus ~130 for CI's measurement.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 243_450)
   throw new Error("komo exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.

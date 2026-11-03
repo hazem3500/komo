@@ -2,8 +2,8 @@ import { textEntry } from "./dom.js";
 // Loaded on demand: renders Design mode proposals as a change card with a
 // Before/After preview. The comment body stays plain text for agents and the CLI.
 import { isDesignTarget } from "./design-target.js";
-import { elementLabel } from "./element-label.js";
-import { isHTMLElement, onFrame, previewTarget } from "./frame-target.js";
+import { elementLabel, namedComponent } from "./element-label.js";
+import { isHTMLElement, onFrame, previewTarget, screenRect } from "./frame-target.js";
 import { inlineStyleSnapshot, removeEmptyStyle } from "./design-preview.js";
 import { previewText } from "./text-preview.js";
 import { sourceInfo, sourceInfoStyles, type SourceHref } from "./source-info.js";
@@ -14,6 +14,8 @@ export interface DesignChange {
   label: string;
   before: string;
   after: string;
+  /** A move's places by name, without positions, when both have one. */
+  place?: string;
   /** Token path such as color.brand, when the change binds a design token. */
   token?: string;
   /** How to preview it on the page; absent when only the app can apply it. */
@@ -69,7 +71,15 @@ function change(line: string, kind: string): DesignChange | null {
       apply: { kind: "style", property: match[1], also: [...match[4].matchAll(/ · sets ([\w-]+): ([^·]*[^\s·])/g)].map(([, property, value]) => [property, value]) } };
     // "- Move Link “Approvals”: from NavList (3rd) → NavList (2nd)"; its From/To lines locate both places.
     match = /^- Move (.+): from (.+) \((\d+\w+)\) → (.+) \((\d+\w+)\)$/.exec(line);
-    if (match) return { label: match[1], before: `${match[2]} · ${match[3]}`, after: match[4] === match[2] ? match[5] : `${match[4]} · ${match[5]}`, apply: { kind: "move", property: "" } };
+    if (match) {
+      // A place named by an anonymous wrapper (an older proposal) reads as its position alone;
+      // a named place reads without the position, which stays in the card's tooltip.
+      const named = (place: string) => /^[\w$.()]+$/.test(place) && !namedComponent(place) ? "" : place;
+      const [from, to] = [named(match[2]), named(match[4])], same = match[4] === match[2];
+      const at = (place: string, nth: string) => place ? `${place} · ${nth}` : nth;
+      return { label: match[1], before: at(from, match[3]), after: same ? match[5] : at(to, match[5]),
+        ...(from && (same || to) ? { place: same ? from : `${from} → ${to}` } : {}), apply: { kind: "move", property: "" } };
+    }
     match = /^- Move \(translate\): Δx (\S+), Δy ([^\s·]+)/.exec(line);
     if (match) return { label: "translate", before: "none", after: `${match[1]} ${match[2]}`, apply: { kind: "style", property: "translate" } };
     const [, label, before = "", after] = /^- (.+?): (?:(.*) → )?(.*)$/.exec(line) ?? [];
@@ -159,7 +169,8 @@ export function shortTarget(selector: string): string {
  * Selectors and class chains stay in the recorded proposal.
  */
 export function targetLabel(section: Pick<DesignSection, "component" | "target" | "changes">, element: Element | null): string {
-  if (section.component) return section.component;
+  const component = namedComponent(section.component);
+  if (component) return component;
   const tag = element?.localName ?? /(?:^|[\s>])([a-z][\w-]*)[^\s>]*$/i.exec(section.target ?? "")?.[1]?.toLowerCase() ?? "";
   return elementLabel(element, tag, section.changes.find(item => item.apply?.kind === "text")?.before);
 }
@@ -214,36 +225,80 @@ const kids = (parent: Element, skip?: Element) => [...parent.children].filter(ch
   !child.matches("script,style,template") && !/^(none|contents)$/.test(getComputedStyle(child).display));
 const indexOf = (element: Element, parent: Element) => kids(parent, element).filter(child => child.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING).length;
 const CLONE = "data-komo-move-clone";
+// Comment anchors measure this stand-in while it shows a moved element (anchors.ts).
+const STAND_IN = Symbol.for("komo.stand-in");
+type StandIn = Element & { [STAND_IN]?: Element };
 
 /**
  * A recorded move, shown with a stand-in at its destination while the element itself
  * is hidden. A reason instead when either place no longer matches the proposal.
+ * Both places are looked up in the element's own document: Frame's viewport iframe, or this page.
  */
 function movable(element: Element, { from, to }: NonNullable<DesignChange["apply"]>) {
-  const source = element.parentElement, target = to && document.querySelector(to.parent);
+  const page = element.ownerDocument, source = element.parentElement, target = to && page.querySelector(to.parent);
   if (!isDesignTarget(element) || !from || !to || !source || !target) return "Destination not found on this page";
-  if (document.querySelector(from.parent) !== source || indexOf(element, source) !== from.index)
+  if (page.querySelector(from.parent) !== source || indexOf(element, source) !== from.index)
     return target === source && indexOf(element, source) === to.index ? "Already moved on this page" : "This element has moved since";
   return "";
 }
-function previewMove(element: Element, move: NonNullable<DesignChange["apply"]>) {
+function previewMove(element: Element, move: NonNullable<DesignChange["apply"]>, selector?: string) {
   const why = movable(element, move);
   if (why || !isDesignTarget(element)) return why;
-  const source = element.parentElement!, target = document.querySelector(move.to!.parent)!, to = move.to!;
-  const box = element.getBoundingClientRect(), anchor = source.getBoundingClientRect();
-  const clone = element.cloneNode(true) as Element;
-  for (const node of [clone, ...clone.querySelectorAll("[id]")]) node.removeAttribute("id");
-  clone.setAttribute(CLONE, "");
-  clone.setAttribute("aria-hidden", "true");
-  (clone as HTMLElement).inert = true;
-  target.insertBefore(clone, kids(target, element)[to.index] ?? null);
-  const display = inlineStyleSnapshot(element, "display");
-  element.style.setProperty("display", "none", "important");
+  const page = element.ownerDocument, to = move.to!, source = element.parentElement!;
+  const box = screenRect(element), anchor = screenRect(source);
+  let original = element, target = page.querySelector(to.parent)!, clone!: Element, display!: ReturnType<typeof inlineStyleSnapshot>, look = "";
+  const hide = () => {
+    display = inlineStyleSnapshot(original, "display");
+    original.style.setProperty("display", "none", "important");
+  };
+  const build = () => {
+    clone?.remove();
+    clone = original.cloneNode(true) as Element;
+    for (const node of [clone, ...clone.querySelectorAll("[id]")]) node.removeAttribute("id");
+    clone.setAttribute(CLONE, "");
+    clone.setAttribute("aria-hidden", "true");
+    (clone as HTMLElement).inert = true;
+    clone.removeAttribute("style");
+    const style = original.getAttribute("style");
+    if (style) clone.setAttribute("style", style.replace(/(^|;)\s*display\s*:[^;]*/g, "$1"));
+    if (display.value) (clone as HTMLElement).style.setProperty("display", display.value, display.priority);
+    look = `${original.getAttribute("class")}\n${original.innerHTML}`;
+    (original as StandIn)[STAND_IN] = clone;
+  };
+  hide();
+  build();
+  // The page's own renderer can rewrite the original, replace it or its parents: put the preview back each time.
+  const sync = () => {
+    if (!original.isConnected) {
+      const next = selector ? [...page.querySelectorAll(selector)].find(node => !node.hasAttribute(CLONE)) ?? null : null;
+      if (!isDesignTarget(next)) return clone.remove();
+      delete (original as StandIn)[STAND_IN];
+      original = next;
+      (original as StandIn)[STAND_IN] = clone;
+      hide();
+    } else if (original.style.getPropertyValue("display") !== "none" || original.style.getPropertyPriority("display") !== "important") hide();
+    if (!target.isConnected) target = page.querySelector(to.parent) ?? target;
+    if (!target.isConnected) return clone.remove();
+    if (look !== `${original.getAttribute("class")}\n${original.innerHTML}`) build();
+    const before = kids(target, original)[to.index] ?? null;
+    if (clone.parentNode !== target || clone.nextElementSibling !== before) target.insertBefore(clone, before);
+  };
+  sync();
+  const observer = new MutationObserver(sync);
+  observer.observe(page.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["style", "class"] });
   return {
-    clone,
-    undo() { clone.remove(); display.restore(); },
+    shown: () => clone,
+    undo() {
+      observer.disconnect();
+      clone.remove();
+      delete (original as StandIn)[STAND_IN];
+      if (original.isConnected) display.restore();
+    },
     // The origin rides with its parent, so scrolling and reflow keep it in place.
-    origin() { const now = source.getBoundingClientRect(); return new DOMRect(box.left + now.left - anchor.left, box.top + now.top - anchor.top, box.width, box.height); },
+    origin() {
+      const now = screenRect(source.isConnected ? source : target);
+      return new DOMRect(box.left + now.left - anchor.left, box.top + now.top - anchor.top, box.width, box.height);
+    },
   };
 }
 
@@ -316,7 +371,7 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
   const skip = (item: DesignChange, why: string) => { reason ||= why; skipped.add(item.label); };
   for (const section of sections) {
     const element = resolve(section.target);
-    let shown: Element | null = element;
+    let shown = (): Element | null => element;
     for (const item of section.changes) {
       if (!item.apply || item.after === "(unset)") continue;
       if (item.apply.kind === "token") {
@@ -331,12 +386,12 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
         restore.push(() => previous ? root.style.setProperty(item.apply!.property, previous) : root.style.removeProperty(item.apply!.property));
       } else if (!element) skip(item, "Element not found on this page");
       else if (item.apply.kind === "move") {
-        const moved = previewMove(element, item.apply);
+        const moved = previewMove(element, item.apply, section.target);
         if (typeof moved === "string") skip(item, moved);
         else {
           restore.push(moved.undo);
           boxes.push({ box: moved.origin, origin: true });
-          shown = moved.clone;
+          shown = moved.shown;
         }
       } else if (item.apply.kind === "prop") {
         const undo = previewProp(element, item.apply.property, item.apply.value, show.design);
@@ -370,7 +425,7 @@ function apply(key: string, sections: DesignSection[], resolve: (selector?: stri
         else skip(item, UNAVAILABLE);
       } else skip(item, UNAVAILABLE);
     }
-    if (shown && section.changes.some(item => item.apply)) boxes.push({ box: () => shown!.isConnected ? shown!.getBoundingClientRect() : null });
+    if (element && section.changes.some(item => item.apply)) boxes.push({ box: () => { const node = shown(); return node?.isConnected ? screenRect(node) : null; } });
   }
   // One preview for every token row; its cleanup removes the adapter's stylesheet for Before.
   if (values.length) {
@@ -459,8 +514,8 @@ const css = `
 .design-card { min-width: 0; border-radius: 10px; background: #ffffff08; box-shadow: inset 0 0 0 1px #ffffff0d; font-size: 12px; }
 .design-card-head { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 40px; padding: 7px 8px 7px 12px; }
 .design-card-label { display: grid; flex: 1; min-width: 0; gap: 1px; }
-.design-card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #eee; }
-.design-card-target { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8a8a8a; font-size: 11px; }
+.design-card-title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; font-weight: 600; color: #eee; }
+.design-card-target { display: -webkit-box; min-width: 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; color: #8a8a8a; font-size: 11px; }
 .design-toggle { display: inline-flex; padding: 2px; border-radius: 7px; background: #ffffff0a; flex: none; }
 .design-toggle button { display: inline-flex; align-items: center; gap: 4px; border: 0; padding: 0 7px; height: 22px; border-radius: 5px; font: inherit; font-size: 11px; color: #9a9a9a; background: none; cursor: pointer; }
 .design-toggle svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
@@ -630,8 +685,8 @@ export function renderDesignComment(container: HTMLElement, body: string, option
     const move = block.changes.find(item => item.apply?.kind === "move");
     label.append(Object.assign(document.createElement("span"), { className: "design-card-title", textContent: move ? `Moved ${move.label}` : block.title }));
     const component = block.component ?? sections.find(section => section.target === block.target && section.component)?.component;
-    const where = move ? `${move.before} → ${move.after}` : block.target || component ? targetLabel({ ...block, component }, options.resolve(block.target)) : "";
-    if (where) label.append(Object.assign(document.createElement("span"), { className: "design-card-target", textContent: where, title: where }));
+    const where = move ? move.place ?? `${move.before} → ${move.after}` : block.target || component ? targetLabel({ ...block, component }, options.resolve(block.target)) : "";
+    if (where) label.append(Object.assign(document.createElement("span"), { className: "design-card-target", textContent: where, title: move ? `${move.before} → ${move.after}` : where }));
     head.append(label);
     if (block.source && !compact) head.append(sourceInfo(block.component || where || "Change", block.source, options.sourceHref));
     // One Before/After switch for the whole comment, top right of its first card.
@@ -731,28 +786,38 @@ export function renderDesignComment(container: HTMLElement, body: string, option
   root.append(unavailable);
   sync();
   container.replaceChildren(root);
-  if (toggles.length) listenForShortcut();
+  if (toggles.length) listenForShortcut(container.getRootNode());
 }
 
 // B flips the open design comment between Before and After from anywhere but a text field.
+// ← and → also flip it from a comment composer whose note is still empty; B there is just a letter.
 let shortcutBound = false;
-function listenForShortcut() {
+const boundRoots = new WeakSet<Node>();
+function flip(event: KeyboardEvent) {
+  // B toggles; ← shows Before and → shows After.
+  const key = event.key === "ArrowLeft" ? 0 : event.key === "ArrowRight" ? 1 : event.key.toLowerCase() === "b" ? -1 : null;
+  if (event.defaultPrevented || key === null || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) return;
+  const path = event.composedPath();
+  const focused = [...visibleToggles].find(item => item.isConnected && path.includes(item));
+  const note = path[0] as HTMLTextAreaElement;
+  const empty = key !== -1 && note?.localName === "textarea" && !note.value && !!note.closest?.(".composer");
+  if (!focused && !empty && (key !== -1 || textEntry(path[0]))) return;
+  const own = empty ? note.closest("form")?.querySelector<HTMLElement>(".design-toggle") : null;
+  const toggle = focused ?? own ?? [...visibleToggles].reverse().find(item => item.isConnected);
+  const buttons = toggle?.querySelectorAll<HTMLButtonElement>("button");
+  const next = key === -1 ? toggle?.querySelector<HTMLButtonElement>('button[aria-pressed="false"]') : buttons?.[key];
+  if (!next) return;
+  event.preventDefault();
+  next.click();
+}
+function listenForShortcut(root: Node) {
+  // komo's shadow root sees keys from its own fields, which never reach the document.
+  if (root instanceof ShadowRoot && !boundRoots.has(root)) {
+    boundRoots.add(root);
+    root.addEventListener("keydown", flip as EventListener);
+  }
   if (shortcutBound) return;
   shortcutBound = true;
-  const flip = (event: KeyboardEvent) => {
-    // B toggles; ← shows Before and → shows After.
-    const key = event.key === "ArrowLeft" ? 0 : event.key === "ArrowRight" ? 1 : event.key.toLowerCase() === "b" ? -1 : null;
-    if (event.defaultPrevented || key === null || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) return;
-    const path = event.composedPath();
-    const focused = [...visibleToggles].find(item => item.isConnected && path.includes(item));
-    if (!focused && (key !== -1 || textEntry(path[0]))) return;
-    const toggle = focused ?? [...visibleToggles].reverse().find(item => item.isConnected);
-    const buttons = toggle?.querySelectorAll<HTMLButtonElement>("button");
-    const next = key === -1 ? toggle?.querySelector<HTMLButtonElement>('button[aria-pressed="false"]') : buttons?.[key];
-    if (!next) return;
-    event.preventDefault();
-    next.click();
-  };
   document.addEventListener("keydown", flip);
   // Also with focus inside Frame's viewport iframe.
   onFrame("keydown", flip);

@@ -1,9 +1,9 @@
 import { cssSelector } from './design-export.js';
-import { elementLabel } from './element-label.js';
+import { elementLabel, namedComponent } from './element-label.js';
 import { changePreviewStyles, inlineStyleSnapshot } from './design-preview.js';
 import { STILL } from './host-motion.js';
 import type { DesignTarget } from './design-target.js';
-import { clientPoint, isHTMLElement, isSVGElement, onFrame, pageDocument, screenRect } from './frame-target.js';
+import { clientPoint, isElement, isHTMLElement, isSVGElement, onFrame, pageDocument, screenRect } from './frame-target.js';
 
 /** Where a box sits: its parent (selector, label, component) and its index among the parent's element children. */
 export type Place = { parent: string; label: string; index: number; component?: string; position?: 'before' | 'after' | 'inside' };
@@ -101,12 +101,14 @@ export function bindMove(hooks: MoveHooks) {
   /** What the page shows for this element: its clone while moved, else itself. */
   const shown = (element: Element): Element => { const entry = latest(element); return live(entry) && entry!.clone?.isConnected ? entry!.clone : element; };
   const detach = () => known.forEach(entry => entry.clone?.remove());
-  const label = (element: Element) => hooks.component(element) ?? elementLabel(element);
+  // Anonymous wrappers (primitives, slots) don't name an element; its role and text do.
+  const component = (element: Element) => namedComponent(hooks.component(element));
+  const label = (element: Element) => component(element) ?? elementLabel(element);
   // Containers read best as their component, role or name, else tag#id or tag.class.
-  const where = (element: Element) => hooks.component(element) ?? (element.matches('[role],[aria-label]') ? elementLabel(element)
+  const where = (element: Element) => component(element) ?? (element.matches('[role],[aria-label]') ? elementLabel(element)
     : `${element.localName}${element.id ? `#${element.id}` : element.classList[0] ? `.${element.classList[0]}` : ''}`);
   const place = (parent: Element, index: number, position?: Place['position']): Place => {
-    const component = hooks.component(parent);
+    const component = namedComponent(hooks.component(parent));
     return { parent: cssSelector(parent), label: where(parent), index, ...(component ? { component } : {}), ...(position ? { position } : {}) };
   };
   const indexIn = (parent: Element, before: Element | null, element: Element) => {
@@ -159,7 +161,7 @@ export function bindMove(hooks: MoveHooks) {
       entry.clone ??= copy(element, entry);
       // Other stand-ins sharing the spot don't count, or two at one end would swap places forever.
       let next = entry.clone.nextSibling;
-      while (next instanceof Element && clone(next)) next = next.nextSibling;
+      while (isElement(next) && clone(next)) next = next.nextSibling;
       if (entry.clone.parentNode !== place.parent || next !== place.before) place.parent.insertBefore(entry.clone, place.before);
     }
     const element = hooks.selected();
