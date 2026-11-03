@@ -4295,7 +4295,10 @@ export function initComments(options: CommentsOptions): CommentsController {
               () => {
                 // The owner approves this site on the komo service, where
                 // sign-in isn't blocked; returning to this tab retries.
-                const setup = new URL("/setup", options.endpoint);
+                const setup = new URL(
+                  "setup",
+                  options.endpoint.replace(/\/?$/, "/"),
+                );
                 setup.searchParams.set("workspace", options.project);
                 setup.searchParams.set("site", location.origin);
                 window.open(setup, "_blank", "noopener");

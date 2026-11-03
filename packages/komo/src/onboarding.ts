@@ -183,7 +183,7 @@ export function onboardingPanel(api: CommentsApi, options: OnboardingOptions) {
             history.replaceState(
               null,
               "",
-              `/setup?workspace=${encodeURIComponent(result.project)}`
+              `?workspace=${encodeURIComponent(result.project)}`
             );
             await showWorkspace();
             status.textContent = "Project ready. Return to your terminal.";

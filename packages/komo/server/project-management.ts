@@ -245,7 +245,7 @@ export async function manageProject(
     return Response.json(
       {
         invite,
-        url: `${url.origin}/setup?project=${encodeURIComponent(project)}#invite=${encodeURIComponent(invite)}`,
+        url: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/setup?project=${encodeURIComponent(project)}#invite=${encodeURIComponent(invite)}`,
         expiresInDays: 7,
       },
       { status: 201 }

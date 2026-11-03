@@ -1,25 +1,31 @@
-// Google Cloud Identity-Aware Proxy (IAP) sign-in. When KOMO_IAP_AUDIENCE names
-// the IAP-protected backend (/projects/<number>/global/backendServices/<id>),
-// the load balancer routes the sign-in paths through IAP. Sessions are minted
-// from IAP's signed identity instead of a Google OAuth client, and reading
-// comments requires one of those sessions.
-import { check, HttpError } from "./validation";
+// Google Cloud Identity-Aware Proxy (KOMO_PROXY_AUTH=gcp-iap). IAP signs every
+// request it forwards with an ES256 JWT in x-goog-iap-jwt-assertion; its
+// subject is the numeric Google account id that Google OAuth also uses.
+import type { ProxyAuthProvider, ProxyIdentity } from "./proxy-auth";
+import { check, ConfigError, HttpError } from "./validation";
 
 const KEYS_URL = "https://www.gstatic.com/iap/verify/public_key-jwk";
 const ISSUER = "https://cloud.google.com/iap";
-let cached: { keys: Map<string, CryptoKey>; expires: number } | undefined;
+const KEY_LIFETIME = 3600000;
+// An unknown key id refetches the set, at most this often, so forged ids
+// can't turn each request into a fetch.
+const REFETCH_GAP = 30000;
+// Allowed clock difference between IAP and this server, in seconds.
+const SKEW = 60;
 
-async function keys(refresh = false) {
-  if (!refresh && cached && cached.expires > Date.now()) return cached.keys;
+let cached: { keys: Map<string, CryptoKey>; fetched: number } | undefined;
+let pending: Promise<void> | undefined;
+
+async function load() {
   const response = await fetch(KEYS_URL);
   check(response.ok, 503, "Could not verify sign-in. Try again shortly.");
   const { keys: list } = (await response.json()) as {
     keys?: (JsonWebKey & { kid?: string })[];
   };
-  const imported = new Map<string, CryptoKey>();
+  const keys = new Map<string, CryptoKey>();
   for (const { kid, ...key } of list ?? [])
     if (kid && key.kty === "EC" && key.crv === "P-256")
-      imported.set(
+      keys.set(
         kid,
         await crypto.subtle.importKey(
           "jwk",
@@ -29,8 +35,18 @@ async function keys(refresh = false) {
           ["verify"],
         ),
       );
-  cached = { keys: imported, expires: Date.now() + 3600000 };
-  return imported;
+  cached = { keys, fetched: Date.now() };
+}
+function refresh() {
+  pending ??= load().finally(() => (pending = undefined));
+  return pending;
+}
+async function signingKey(kid: string) {
+  if (!cached || Date.now() - cached.fetched >= KEY_LIFETIME) await refresh();
+  // IAP rotates keys: refetch once before rejecting an unknown key id.
+  if (!cached!.keys.has(kid) && Date.now() - cached!.fetched >= REFETCH_GAP)
+    await refresh();
+  return cached!.keys.get(kid);
 }
 
 const decode = (part: string) =>
@@ -38,13 +54,11 @@ const decode = (part: string) =>
     c.charCodeAt(0),
   );
 
-export type IapIdentity = { id: string; email: string };
-
 /** Verify IAP's signed header and return the Google account it vouches for. */
 export async function iapIdentity(
   request: Request,
   audience: string,
-): Promise<IapIdentity> {
+): Promise<ProxyIdentity> {
   const jwt = request.headers.get("x-goog-iap-jwt-assertion") ?? "";
   const [head, payload, signature, extra] = jwt.split(".");
   check(
@@ -65,9 +79,7 @@ export async function iapIdentity(
     401,
     "Invalid sign-in.",
   );
-  const kid = header.kid;
-  // IAP rotates keys; refetch once before rejecting an unknown key id.
-  const key = (await keys()).get(kid) ?? (await keys(true)).get(kid);
+  const key = await signingKey(header.kid);
   check(key, 401, "Invalid sign-in.");
   const valid = await crypto.subtle.verify(
     { name: "ECDSA", hash: "SHA-256" },
@@ -81,13 +93,14 @@ export async function iapIdentity(
       claims.iss === ISSUER &&
       claims.aud === audience &&
       typeof claims.exp === "number" &&
-      claims.exp > now &&
+      claims.exp > now - SKEW &&
       typeof claims.iat === "number" &&
-      claims.iat < now + 60,
+      claims.iat <= now + SKEW,
     401,
     "Invalid sign-in.",
   );
-  // IAP's subject is the same numeric Google account id the OAuth flow stores.
+  // IAP's subject is the same numeric Google account id the OAuth flow stores,
+  // so both sign-ins share one account.
   const sub =
     typeof claims.sub === "string"
       ? claims.sub.match(/^accounts\.google\.com:(\d{1,40})$/)?.[1]
@@ -103,31 +116,14 @@ export async function iapIdentity(
   return { id: `google:${sub}`, email: claims.email.toLowerCase() };
 }
 
-/** Path prefix for IAP sign-in handlers, e.g. "/backoffice"; "" when unset. */
-export function authPrefix(value: string | undefined): string {
-  if (!value) return "";
-  const prefix = value.replace(/\/+$/, "");
-  if (!/^(\/[A-Za-z0-9._~-]+)+$/.test(prefix))
-    throw new Error("KOMO_AUTH_PREFIX must be a path such as /backoffice");
-  return prefix;
-}
-
-/** Split PUBLIC_URL into its origin and an optional path the app is served under. */
-export function publicLocation(value: string): { origin: string; path: string } {
-  const url = new URL(value);
-  const path = url.pathname.replace(/\/+$/, "");
-  if (
-    url.search ||
-    url.hash ||
-    url.username ||
-    url.password ||
-    (path && !/^(\/[A-Za-z0-9._~-]+)+$/.test(path)) ||
-    `${url.origin}${path}` !== value.replace(/\/+$/, "") ||
-    (url.protocol !== "https:" &&
-      !["localhost", "127.0.0.1"].includes(url.hostname))
-  )
-    throw new Error(
-      "PUBLIC_URL must be an HTTPS origin, optionally with a path such as https://example.com/komo (localhost allowed for development)",
+export function gcpIap(audience: string): ProxyAuthProvider {
+  if (!/^\/projects\/\d+\/[A-Za-z0-9/_-]+$/.test(audience))
+    throw new ConfigError(
+      "KOMO_PROXY_AUDIENCE must be the IAP audience, such as /projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID.",
     );
-  return { origin: url.origin, path };
+  return {
+    name: "gcp-iap",
+    signIn: "google",
+    identify: (request) => iapIdentity(request, audience),
+  };
 }

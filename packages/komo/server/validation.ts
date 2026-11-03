@@ -10,6 +10,8 @@ export class HttpError extends Error {
     super(message);
   }
 }
+/** A server option is set to a value komo can't run with. */
+export class ConfigError extends Error {}
 export function check(
   condition: unknown,
   status: number,
@@ -161,18 +163,23 @@ export function originAllowed(origin: string, patterns: string[]): boolean {
   if (url.origin !== origin) return false;
   return patterns.some((pattern) => {
     if (!pattern.includes("*")) return pattern === origin;
-    const escaped = pattern
+    // A trailing ":*" is any port, or none (the scheme's default port).
+    const anyPort = pattern.endsWith(":*");
+    const escaped = (anyPort ? pattern.slice(0, -2) : pattern)
       .split("*")
       .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
       .join("[a-zA-Z0-9-]+");
-    return new RegExp(`^${escaped}$`).test(origin);
+    return new RegExp(`^${escaped}${anyPort ? "(?::[0-9]{1,5})?" : ""}$`).test(
+      origin,
+    );
   });
 }
 
 /**
  * Validate an owner-approved site: an exact HTTPS origin, localhost, or an
  * HTTPS pattern with `*` in the leftmost host label only, such as
- * https://*-site.example.workers.dev. The wildcard never spans dots.
+ * https://*-site.example.workers.dev. The wildcard never spans dots. A
+ * trailing `:*` allows any port, or none, on that host or host pattern.
  */
 export function sitePattern(value: unknown): string {
   check(
@@ -181,25 +188,28 @@ export function sitePattern(value: unknown): string {
     "Enter a site address.",
   );
   const site = value.trim().replace(/\/$/, "").toLowerCase();
-  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(site)) return site;
-  const match = /^https:\/\/([^/?#@]+)$/.exec(site);
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:(\d+|\*))?$/.test(site)) return site;
+  const anyPort = site.endsWith(":*");
+  const base = anyPort ? site.slice(0, -2) : site;
+  const match = /^https:\/\/([^/?#@]+)$/.exec(base);
   const host = match?.[1] ?? "";
   const [first = "", ...rest] = host.split(".");
   let url: URL | undefined;
   try {
-    url = new URL(site);
+    url = new URL(base);
   } catch {
     url = undefined;
   }
   check(
     !!match &&
-      url?.origin === site &&
+      url?.origin === base &&
+      !(anyPort && url.port) &&
       !rest.join(".").includes("*") &&
       first.split("*").length - 1 <= 1 &&
       (!first.includes("*") ||
         (rest.length >= 2 && /^[a-z0-9*-]+$/.test(first))),
     400,
-    "Use an HTTPS site like https://your-site.com, or a wildcard like https://*-preview.your-site.com.",
+    "Use an HTTPS site like https://your-site.com, or a wildcard like https://*-preview.your-site.com or https://dev.your-site.com:*.",
   );
   return site;
 }

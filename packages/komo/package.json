@@ -29,6 +29,7 @@
     "server/digest.ts",
     "server/project-sites.ts",
     "server/iap.ts",
+    "server/proxy-auth.ts",
     "server/tokens.ts",
     "server/account-page.ts",
     "server/public-env.ts",
