@@ -212,6 +212,19 @@ describe.skipIf(!chrome)("thread snapshots in the review UI", () => {
     // The list row's thumbnail comes back from the cache, without another read.
     await page.locator('.thread-item[data-thread="hero"] .komo-snapshot[data-ready] img').waitFor();
     expect(api.reads.filter((read) => read.kind === "image")).toHaveLength(1);
+    // Unmounting komo closes an open viewer: the page gets its keyboard back and the blob URL goes.
+    await page.locator('.thread-item[data-thread="hero"] .komo-snapshot').focus();
+    await page.keyboard.press("Enter");
+    await viewer.waitFor();
+    const openSrc = (await viewer.locator("img").getAttribute("src"))!;
+    await page.evaluate(() => {
+      (window as any).keys = [];
+      window.addEventListener("keydown", (event) => (window as any).keys.push(event.key));
+      (window as any).komo.destroy();
+    });
+    await page.keyboard.press("x");
+    expect(await page.evaluate(() => (window as any).keys)).toEqual(["x"]);
+    expect(await page.evaluate(() => (window as any).blobs.revoked)).toContain(openSrc);
     expect(errors).toEqual([]);
     await page.close();
   });

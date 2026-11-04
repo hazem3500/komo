@@ -190,6 +190,7 @@ function watch(root: ShadowRoot) {
 
 /** Revokes the blob URLs shown in `root`, when its komo unmounts. */
 export function disposeSnapshots(root: ShadowRoot) {
+  for (const finish of [...(viewers.get(root) ?? [])]) finish();
   for (const [image, src] of live)
     if (image.getRootNode() === root) {
       URL.revokeObjectURL(src);
@@ -230,6 +231,9 @@ function code(html: string) {
   return block;
 }
 
+// Open viewers by root, so unmounting komo closes them and hands the keyboard back.
+const viewers = new Map<ShadowRoot, Set<() => void>>();
+
 /**
  * The full-size viewer: a modal dialog like shortcut help. Escape, the close button
  * or a click outside close it and return focus to the control that opened it.
@@ -257,17 +261,21 @@ export async function openSnapshotViewer(root: ShadowRoot, content: { src?: stri
     if (note) dialog.append(el("p", "", note));
     dialog.append(code(markup));
   }
+  // komo unmounted while the image decoded.
+  if (!root.host.isConnected) return release?.();
   const listeners = new AbortController();
   const { signal } = listeners;
   const finish = () => {
     if (signal.aborted) return;
     listeners.abort();
+    viewers.get(root)?.delete(finish);
     dialog.close();
     dialog.remove();
     release?.();
     if (previous?.isConnected) previous.focus({ preventScroll: true });
   };
   dialog.addEventListener("close", finish, { signal });
+  viewers.set(root, (viewers.get(root) ?? new Set()).add(finish));
   // The viewer owns the keyboard while open: komo's and the host's shortcuts wait.
   window.addEventListener(
     "keydown",

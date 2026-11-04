@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // The server stores at most 256 KiB per image and 32 KiB per HTML capture.
@@ -40,7 +40,9 @@ export async function saveSnapshots(config, token, thread, directory, ignore = f
         response.status === 429
           ? "Too many requests. Wait a minute, then run komo comments snapshots THREAD_ID."
           : response.status === 401
-            ? "Session missing or expired. Run komo login."
+            ? token.startsWith("komo_pat_")
+              ? "Access token invalid, expired, or revoked. Create a new one at /account."
+              : "Session missing or expired. Run komo login."
             : reason || `Could not download the ${kind} snapshot (${response.status}).`
       );
       error.status = response.status;
@@ -50,7 +52,9 @@ export async function saveSnapshots(config, token, thread, directory, ignore = f
     if (bytes.length > MAX_BYTES) throw Error(`The ${kind} snapshot is larger than expected.`);
     const type = response.headers.get("content-type") ?? "";
     const path = join(directory, `${name}.${kind === "html" ? "html.txt" : type.includes("png") ? "png" : "webp"}`);
-    await writeFile(path, bytes, { mode: 0o600 });
+    // A fresh file, never through a symlink a branch may have committed in its place.
+    await rm(path, { force: true });
+    await writeFile(path, bytes, { mode: 0o600, flag: "wx" });
     files[kind] = path;
   }
   return files;

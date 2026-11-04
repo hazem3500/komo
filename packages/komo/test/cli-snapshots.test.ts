@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, readdir, realpath, rm, stat, writeFile, mkdir } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,6 +68,16 @@ it("saves a thread's snapshots as files and lists them in the prompt", async () 
     expect(got.snapshot.image).toContain("/threads/t1/snapshot/image");
     expect(got.snapshotFiles).toEqual({ image: join(out, "t1.webp"), html: join(out, "t1.html.txt") });
     expect(await readdir(out)).toEqual(["t1.html.txt", "t1.webp"]);
+
+    // A symlink committed in a file's place is replaced, never written through.
+    const outside = join(directory, "outside.txt");
+    await writeFile(outside, "keep");
+    await rm(join(out, "t1.html.txt"));
+    await symlink(outside, join(out, "t1.html.txt"));
+    await run("comments", "snapshots", "t1", "--out", out);
+    expect(await readFile(outside, "utf8")).toBe("keep");
+    expect((await lstat(join(out, "t1.html.txt"))).isSymbolicLink()).toBe(false);
+    expect(await readFile(join(out, "t1.html.txt"), "utf8")).toBe(markup);
 
     const plain = await run("comments", "prompt");
     expect(plain).toContain('save it as files with komo comments snapshots "t1"');
