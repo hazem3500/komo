@@ -1,14 +1,14 @@
-# Run the komo API in a Node container
+# Run the Palette API in a Node container
 
 The browser widget and CLI use the same API protocol on Cloudflare and Node. This option uses PostgreSQL and does not change an existing Worker/D1 deployment. It starts one API service for your preview sites; each project key maps to one repository and an allowlist of site origins.
 
 ## Configure
 
-1. In your website repository, install komo and generate the Node project:
+1. In your website repository, install Palette and generate the Node project:
 
    ```sh
    npm install @hazem3500/komo
-   npx komo init --node \
+   npx palette init --node \
      --endpoint https://comments.example.com \
      --origin https://pr-42.preview.example.com \
      --preview-origin 'https://pr-*.preview.example.com' \
@@ -25,9 +25,9 @@ The browser widget and CLI use the same API protocol on Cloudflare and Node. Thi
 
 3. Build this repository's image with `docker build -f Dockerfile.node -t komo-node .`. Run it with the generated variables and HTTPS in front. For a local check, set `PUBLIC_URL=http://localhost:8080` in `.komo/node.env` and run `docker run --env-file /path/to/your-website/.komo/node.env -p 8080:8080 komo-node`. For Cloud Run, set the container port to 8080. Cloud SQL or another reachable PostgreSQL service can be used through `DATABASE_URL`; the database connection URL must be reachable from the container. Startup applies the bundled schema under a database lock. `/health` returns `{"ok":true}` after migrations succeed.
 
-   The image installs the PostgreSQL client (`pg`). To run `@hazem3500/komo/node` outside it, install `pg` next to komo: it is an optional peer, so browser installs of komo never include it.
+   The image installs the PostgreSQL client (`pg`). To run `@hazem3500/komo/node` outside it, install `pg` next to Palette: it is an optional peer, so browser installs of Palette never include it.
 
-4. Open the owner-claim URL printed by `komo init --node` and sign in with Google. The setup page claims ownership once; the owner can then manage approved sites and private access. The generated widget config contains your project key. Use the same project key and branch in the bot CLI.
+4. Open the owner-claim URL printed by `palette init --node` and sign in with Google. The setup page claims ownership once; the owner can then manage approved sites and private access. The generated widget config contains your project key. Use the same project key and branch in the bot CLI.
 
 For a guest-only project, you can skip the generator and set `DATABASE_URL`, `PUBLIC_URL`, and `PROJECTS` directly. For example, `PROJECTS={"review":{"repo":"your-org/your-repo","origins":["https://pr-*.preview.example.com"],"allowGuests":true}}`. Anyone on an approved site can then comment; do not use guest-only mode for confidential reviews. `PROJECTS` must remain on one line in an env file. Google sign-in requires both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
@@ -43,13 +43,13 @@ The server refuses to start on an invalid entry and names it, for example `PROJE
 
 ### Serve under a path
 
-If a reverse proxy serves komo under a path, include it in `PUBLIC_URL`, for example `PUBLIC_URL=https://comments.example.com/komo`. Every URL komo generates then includes `/komo`: sign-in links and popups, OAuth redirect URIs, setup and invitation pages, and snapshot links. Requests are accepted whether or not the proxy strips the path. Register OAuth redirect URIs with the path, for example `https://comments.example.com/komo/auth/google/callback`.
+If a reverse proxy serves Palette under a path, include it in `PUBLIC_URL`, for example `PUBLIC_URL=https://comments.example.com/komo`. Every URL Palette generates then includes `/komo`: sign-in links and popups, OAuth redirect URIs, setup and invitation pages, and snapshot links. Requests are accepted whether or not the proxy strips the path. Register OAuth redirect URIs with the path, for example `https://comments.example.com/komo/auth/google/callback`.
 
 ### Sign in through an identity proxy
 
-Behind a proxy that authenticates users and signs each request, komo can trust the proxy's identity instead of running its own OAuth client. This is off by default. One provider is supported:
+Behind a proxy that authenticates users and signs each request, Palette can trust the proxy's identity instead of running its own OAuth client. This is off by default. One provider is supported:
 
-- **`KOMO_PROXY_AUTH=gcp-iap`:** Google Cloud Identity-Aware Proxy (IAP). Set **`KOMO_PROXY_AUDIENCE`** to the backend audience, `/projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID`. komo verifies the `x-goog-iap-jwt-assertion` ES256 JWT against Google's IAP keys. It caches them for an hour, and fetches them again for an unknown key ID, at most every 30 seconds. A key fetch times out after 5 seconds. After a failed fetch it waits 30 seconds before trying again, and keeps verifying with the last keys for up to 24 hours. It checks the issuer, audience, expiry and issue time, allowing 60 seconds of clock skew. The subject must be `accounts.google.com:DIGITS`. The account ID is `google:DIGITS`, the same ID Google OAuth sign-in uses, so an existing account signs in as itself. The email is stored in lower case. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` aren't needed.
+- **`KOMO_PROXY_AUTH=gcp-iap`:** Google Cloud Identity-Aware Proxy (IAP). Set **`KOMO_PROXY_AUDIENCE`** to the backend audience, `/projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID`. Palette verifies the `x-goog-iap-jwt-assertion` ES256 JWT against Google's IAP keys. It caches them for an hour, and fetches them again for an unknown key ID, at most every 30 seconds. A key fetch times out after 5 seconds. After a failed fetch it waits 30 seconds before trying again, and keeps verifying with the last keys for up to 24 hours. It checks the issuer, audience, expiry and issue time, allowing 60 seconds of clock skew. The subject must be `accounts.google.com:DIGITS`. The account ID is `google:DIGITS`, the same ID Google OAuth sign-in uses, so an existing account signs in as itself. The email is stored in lower case. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` aren't needed.
 - **`KOMO_IAP_AUDIENCE`**, the older name, still works: set alone, it means `gcp-iap` with that audience.
 - **`KOMO_AUTH_PATH_PREFIX`** (optional, for example `/backoffice`, older name `KOMO_AUTH_PREFIX`): serves the sign-in handlers only under this path, so the proxy can protect just that path. Without the prefix, those handlers return 404. It needs `KOMO_PROXY_AUTH`; set without one, the server doesn't start.
 
@@ -118,8 +118,8 @@ For a server that ran upstream komo with a local IAP patch:
 1. Back up and upgrade the database as in [Upgrade a database from upstream komo](#upgrade-a-database-from-upstream-komo). Migration `007_session_origin.sql` adds two nullable columns to `sessions`, recording how and when each session was signed in. Existing rows keep NULL.
 2. Keep `KOMO_IAP_AUDIENCE`, or rename it to `KOMO_PROXY_AUTH=gcp-iap` plus `KOMO_PROXY_AUDIENCE`. `KOMO_PROXY_HOPS` keeps its meaning.
 3. Replace a patched session lifetime with `KOMO_SESSION_MAX_AGE_DAYS`. Behind the proxy, sessions issued before the upgrade aren't accepted, because nothing records that the proxy signed them in. Each reviewer and agent signs in through IAP once more. The popup does this without a prompt, and agents call `/auth/proxy/session`. Personal access tokens stop working behind the proxy.
-4. Set `PUBLIC_URL` to the external URL, including the path the gateway strips, and `KOMO_AUTH_PATH_PREFIX` to the path IAP protects. `/auth/google/start` then returns `https://HOST/PATH/PREFIX/auth/google/authorize`, so a proxy rewrite of that response is no longer needed. komo serves the prefixed handlers itself.
-5. Point health checks at `GET /health`. komo doesn't answer `GET /` with 200.
+4. Set `PUBLIC_URL` to the external URL, including the path the gateway strips, and `KOMO_AUTH_PATH_PREFIX` to the path IAP protects. `/auth/google/start` then returns `https://HOST/PATH/PREFIX/auth/google/authorize`, so a proxy rewrite of that response is no longer needed. Palette serves the prefixed handlers itself.
+5. Point health checks at `GET /health`. Palette doesn't answer `GET /` with 200.
 6. Startup is stricter. A server now stops with a named error on:
    - a `KOMO_PROXY_HOPS` value that isn't a single digit from 0 to 8, such as `01` or ` 1`;
    - `KOMO_AUTH_PREFIX` set without a proxy;
@@ -131,7 +131,7 @@ For a server that ran upstream komo with a local IAP patch:
 Use the existing widget options; only its API endpoint changes:
 
 ```js
-initKomo({
+initPalette({
   endpoint: "https://comments.example.com",
   project: "YOUR_GENERATED_PROJECT_KEY",
   repo: "your-org/your-repo",
@@ -140,12 +140,12 @@ initKomo({
 });
 ```
 
-Point the existing CLI at the same endpoint, project, repository, and branch. `komo login` uses Google when configured; `KOMO_TOKEN` accepts a personal access token (create one at `/account?project=KEY` on your server; see Bots and CI in the README) or a previously issued session token for a non-interactive bot. Store that token as a secret. Access tokens are limited by their scopes and projects; session tokens have the same permissions as their user. Optionally set `KOMO_TOKEN_PEPPER` to a long random secret to mix into stored token hashes; changing it revokes every access token. For example:
+Point the existing CLI at the same endpoint, project, repository, and branch. `palette login` uses Google when configured; `KOMO_TOKEN` accepts a personal access token (create one at `/account?project=KEY` on your server; see Bots and CI in the README) or a previously issued session token for a non-interactive bot. Store that token as a secret. Access tokens are limited by their scopes and projects; session tokens have the same permissions as their user. Optionally set `KOMO_TOKEN_PEPPER` to a long random secret to mix into stored token hashes; changing it revokes every access token. For example:
 
 ```sh
-komo comments list --endpoint https://comments.example.com --project YOUR_GENERATED_PROJECT_KEY --repo your-org/your-repo --branch pr-42 --origin https://pr-42.preview.example.com
-komo comments reply THREAD_ID --body "Fixed and verified" --endpoint https://comments.example.com --project YOUR_GENERATED_PROJECT_KEY --repo your-org/your-repo --branch pr-42 --origin https://pr-42.preview.example.com
-komo comments resolve THREAD_ID --endpoint https://comments.example.com --project YOUR_GENERATED_PROJECT_KEY --repo your-org/your-repo --branch pr-42 --origin https://pr-42.preview.example.com
+palette comments list --endpoint https://comments.example.com --project YOUR_GENERATED_PROJECT_KEY --repo your-org/your-repo --branch pr-42 --origin https://pr-42.preview.example.com
+palette comments reply THREAD_ID --body "Fixed and verified" --endpoint https://comments.example.com --project YOUR_GENERATED_PROJECT_KEY --repo your-org/your-repo --branch pr-42 --origin https://pr-42.preview.example.com
+palette comments resolve THREAD_ID --endpoint https://comments.example.com --project YOUR_GENERATED_PROJECT_KEY --repo your-org/your-repo --branch pr-42 --origin https://pr-42.preview.example.com
 ```
 
 The `--origin` value must be one approved preview origin. Each PR needs the same branch value in widget and bot to isolate its feedback. On the same project, an owner can edit approved sites after Google sign-in. Wildcard origins match one hostname label only, so `pr-*.preview.example.com` does not allow arbitrary subdomains of `example.com`.
@@ -157,7 +157,7 @@ A database created by upstream komo's Node server is upgraded in place. That ser
 1. Back up first, with a `pg_dump` from the same or a newer PostgreSQL major version: `pg_dump --format=custom --no-owner --file komo-before-upgrade.dump "$DATABASE_URL"`.
 2. Stop the old server. Then start this one with the same `DATABASE_URL`. `/health` returns `{"ok":true}` after the migrations finish.
 
-To roll back, restore the backup. Redeploying the old image is not enough: the upstream server refuses version 7 with `Unsupported PostgreSQL schema version`. Stop the server and create an empty database. Run `pg_restore --no-owner --exit-on-error --dbname "$NEW_DATABASE_URL" komo-before-upgrade.dump`, then start the old image with that URL. The backup doesn't include feedback written after the upgrade. To keep a copy, run `komo project export --out comments.json` against this server before you restore.
+To roll back, restore the backup. Redeploying the old image is not enough: the upstream server refuses version 7 with `Unsupported PostgreSQL schema version`. Stop the server and create an empty database. Run `pg_restore --no-owner --exit-on-error --dbname "$NEW_DATABASE_URL" komo-before-upgrade.dump`, then start the old image with that URL. The backup doesn't include feedback written after the upgrade. To keep a copy, run `palette project export --out comments.json` against this server before you restore.
 
 ## Database boundary
 

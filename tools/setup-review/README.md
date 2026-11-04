@@ -1,6 +1,6 @@
 # Setup review
 
-This isolated preview bundles the real komo widget inside the existing komo website template and styles. It does not ship in the npm package or the production website.
+This isolated preview bundles the real Palette widget inside the existing Palette website template and styles. It does not ship in the npm package or the production website.
 
 ```sh
 pnpm build

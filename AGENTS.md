@@ -1,6 +1,6 @@
-# komo
+# Palette
 
-- Product and brand name: **komo**, always lowercase. Preserve public API names such as `initKomo`.
+- Product and brand name: **Palette**; preserve public API names such as `initKomo` as deprecated aliases.
 - Package, CLI, API and tests: `packages/komo/`. Marketing website: `packages/komo-site/`.
 - Use pnpm with Node 22.12 or later. Run `pnpm build`, `pnpm typecheck`, `pnpm test`, and `pnpm size` before delivery.
 - Keep browser bundle costs within the existing measured budgets. CLI-only code must not enter browser bundles.
@@ -25,5 +25,5 @@
 ## Launch film
 
 - Render source lives in `tools/launch-video/remotion`, a Remotion project outside the package workspace. Keep recording dependencies out of the npm package and production browser runtime.
-- Use fixture feedback and the existing site/product components. The agent edits code; komo carries feedback. Keep that distinction visible.
+- Use fixture feedback and the existing site/product components. The agent edits code; Palette carries feedback. Keep that distinction visible.
 - Rendered media stays in the sibling `../komo-promo/out/`, outside Git. Follow `tools/launch-video/remotion/README.md` for exact rendering and preview commands.

@@ -20,7 +20,7 @@ The accent picker loads on demand. CSS and published JavaScript are minified. Mo
 
 ## Runtime
 
-Synthetic desktop browser workload: 1280 × 900, 5,000 DOM rows, 250 open threads with long bodies, 100 text mutations per frame, 180 frames after a two-second warmup. No server writes. One run per configuration; frame intervals include host work and browser scheduling, not just komo CPU time.
+Synthetic desktop browser workload: 1280 × 900, 5,000 DOM rows, 250 open threads with long bodies, 100 text mutations per frame, 180 frames after a two-second warmup. No server writes. One run per configuration; frame intervals include host work and browser scheduling, not just Palette CPU time.
 
 | Metric | Before | After |
 | --- | ---: | ---: |
@@ -29,7 +29,7 @@ Synthetic desktop browser workload: 1280 × 900, 5,000 DOM rows, 250 open thread
 | Selector queries during measurement | 44,500 | 0 |
 | Occlusion hit tests | 22,250 | 2,581 |
 
-With no comments, komo made no geometry reads, selector queries, or hit tests during the mutation workload. Mean frame interval was 8.28 ms, compared with 8.25 ms without komo.
+With no comments, Palette made no geometry reads, selector queries, or hit tests during the mutation workload. Mean frame interval was 8.28 ms, compared with 8.25 ms without Palette.
 
 Changes remove repeated full-thread serialization, cache connected anchor elements, skip offscreen hit tests, coalesce pointer work, avoid duplicate refresh renders, and pause mutation observation in background tabs. Static icons no longer create temporary React roots.
 
