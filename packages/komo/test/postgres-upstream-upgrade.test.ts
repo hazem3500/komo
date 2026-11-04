@@ -246,6 +246,8 @@ async function seed(pool: Pool) {
 beforeAll(async () => {
   if (!connection) return;
   admin = new Pool({ connectionString: connection });
+  // Dropping the database at the end closes its idle connections; that isn't a failure.
+  admin.on("error", () => {});
   await admin.query(`CREATE DATABASE ${name}`);
   const target = new URL(connection);
   target.pathname = `/${name}`;
@@ -255,6 +257,7 @@ beforeAll(async () => {
   await upstream.migrate();
   await upstream.close();
   raw = new Pool({ connectionString: url });
+  raw.on("error", () => {});
   await seed(raw);
   upstreamCatalog = await catalog(raw);
   upstreamColumns = await columnsOf(raw);
