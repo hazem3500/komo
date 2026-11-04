@@ -1,6 +1,6 @@
 # React props inspector fixture
 
-This opt-in fixture demonstrates Komo's React-aware Design mode inspector. The
+This opt-in fixture demonstrates Palette's React-aware Design mode inspector. The
 TypeScript compiler generates the prop manifest at build time from the marked
 component. Only string, number, boolean, and literal-union scalar props are
 editable. Function, `ReactNode`, object, generic, nullable-union, and other
@@ -8,7 +8,7 @@ complex types are read-only. The generator currently targets explicitly marked
 exported function components with a named props declaration; it does not claim
 coverage for every React component form or interpret `defaultProps`. The
 component supplies a state callback, so the preview uses React's normal rerender
-path. Komo's core never reads React Fiber internals or rewrites source files.
+path. Palette's core never reads React Fiber internals or rewrites source files.
 
 The fixture's heading registers `textProp: "text"` for one leaf `<h2>`. This
 opt-in mapping lets Design mode edit that prop through the app's state callback
@@ -24,7 +24,7 @@ override (keeping the original token as provenance), or rebinds to another
 `var(--token)` in a local preview. You can also explicitly preview a shared
 theme value and see the registered selector's match count. Both actions are temporary; the shared edit resets on refresh,
 widget destruction, or Reset. Matching selectors are an estimate of scope, not
-a discovery of all CSS consumers. Komo does not import arbitrary DTCG files,
+a discovery of all CSS consumers. Palette does not import arbitrary DTCG files,
 persist tokens, or write application source.
 
 Add `?tokens=classes` for a class-based token adapter and `?theme` for a
@@ -56,13 +56,13 @@ node examples/react-props/build.mjs
 ```
 
 The generated `.generated/` bundle is ignored and should not be committed.
-The fixture uses the normal Komo comments API configuration; use a disposable
+The fixture uses the normal Palette comments API configuration; use a disposable
 project/database for any live comment testing.
 
 ## Design choice
 
 React Developer Tools is the right reference for component/prop inspection, but
-its browser DevTools integration is not a small embeddable API for Komo. Komo
+its browser DevTools integration is not a small embeddable API for Palette. Palette
 therefore uses an explicit host registration marker and a TypeScript-generated
 allowlist. TypeScript's Compiler API can resolve declaration types before they
 are erased from JavaScript. React state remains owned by the application and is

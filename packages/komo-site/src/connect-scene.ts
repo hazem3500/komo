@@ -10,11 +10,11 @@ export function mountConnectScene() {
   const approved = scene.querySelector<HTMLElement>(".connect-approved")!;
   const signin = scene.querySelector<HTMLElement>(".connect-signin-window")!;
   const phases = [
-    "Choose Connect komo in your app’s sidebar.",
-    "Connect komo opens a setup form for your sites.",
+    "Choose Connect Palette in your app’s sidebar.",
+    "Connect Palette opens a setup form for your sites.",
     "Review the detected production and preview addresses.",
     "Sign in with Google in the separate window.",
-    "komo is connected. Commenting is open on your site.",
+    "Palette is connected. Commenting is open on your site.",
   ];
   const durations = [2000, 700, 1000, 2000, 2800];
   // The active workflow step for each loop phase.

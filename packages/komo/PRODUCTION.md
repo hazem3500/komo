@@ -25,7 +25,7 @@ Status: working preview / controlled beta. Not ready for an unrestricted public 
 ## Product boundaries
 
 - Element snapshots (an image and trimmed HTML per thread) are opt-in on the client (`snapshots.image` / `snapshots.html`, both off by default) and may contain page content or user data.
-  - Captured: the commented element only, as a WebP image at quality 0.8 by default (lower, then smaller, to fit `maxBytes`) and its trimmed HTML without scripts, styles or handlers. komo's own UI is never captured.
+  - Captured: the commented element only, as a WebP image at quality 0.8 by default (lower, then smaller, to fit `maxBytes`) and its trimmed HTML without scripts, styles or handlers. Palette's own UI is never captured.
   - Redacted: input, textarea and password values always; elements the host's `redact` callback matches; anything inside `data-komo-no-snapshot` is left out.
   - Access: readable only with a reviewer's credentials (a session, or an access token where allowed; behind a sign-in proxy, a proxy-minted session), served inert (`text/plain` HTML, `Content-Security-Policy: sandbox`, `nosniff`, private caching). The review UI fetches thumbnails with the session token only when they are on screen, shows them through blob URLs it revokes on unmount, and shows HTML as text. The CLI saves them to a self-ignoring `.komo/snapshots` folder.
   - Guests: refused unless a project sets `allowGuestSnapshots`.

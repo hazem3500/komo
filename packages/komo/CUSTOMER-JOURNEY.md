@@ -5,7 +5,7 @@ September 16, 2026 · `@hazem3500/komo` 0.1.0 published release
 ## Environment
 
 - Fresh Vite website outside the repository, installed first from the release artifact and then from the public npm registry into a second clean directory.
-- Dedicated hosted komo API and a new Google-owned workspace. No mocked API responses or seeded production identities.
+- Dedicated hosted Palette API and a new Google-owned workspace. No mocked API responses or seeded production identities.
 - Owner in Dia; independent guest reviewer in the Codex browser.
 - [Acceptance website](https://komo-customer-journey.lue-branch-comments-review.pages.dev/).
 - The acceptance project uses one owner project slot and stores two comments, including its reply.
@@ -69,7 +69,7 @@ This report covers the starter hosted journey and a self-host bundle check. It d
 
 - The offbr-style landing page uses a clean screenshot of this repository's Cloudflare Workers page and a separate, scripted three-agent walkthrough.
 - Desktop and 390 px layouts were inspected. Thread selection pauses playback; reply expansion, resolution, and replay work. Reduced-motion preferences stop autoplay and disable transitions. Offscreen and hidden-tab playback is suspended.
-- The actual komo widget posts to `komo-landing-demo` on the dedicated hosted API. An independent Dia browser on `komo.offbr.co` sees feedback posted from the deployment preview.
+- The actual Palette widget posts to `komo-landing-demo` on the dedicated hosted API. An independent Dia browser on `komo.offbr.co` sees feedback posted from the deployment preview.
 - Four messages were posted through the real UI. After persistence, both browsers and the API show only messages two through four. The oldest message is removed, with two replies retained under the new first message.
 - 37 package tests pass. The new real-SQLite test covers concurrent retention, cross-branch pruning, revision invalidation, preserved replies from another reviewer, accurate quota counters, and no retention in ordinary projects.
 - The website privacy page explains the public demo and per-reviewer retention. Guest identity is browser-persistent, not a verified-person abuse boundary.
