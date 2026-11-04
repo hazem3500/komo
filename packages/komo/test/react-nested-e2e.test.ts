@@ -41,7 +41,7 @@ beforeAll(async () => {
           return React.createElement('section',null,shown?React.createElement(StableBranch,{key:identity,label}):null,React.createElement('output',{'data-parent-commit':tick},tick));
         }
         createRoot(document.querySelector('main')).render(React.createElement(App));
-        const adapter=discoverReactComponents({edit:true});
+        const adapter=discoverReactComponents({edit:true,schema:identity=>identity.name==='ActionButton'?['variant','aria-label'].map(name=>({name,kind:'string',required:true,typeLabel:'string'})):undefined});
         window.nestedQA={adapter,version:React.version};
         window.fetch=async()=>Response.json({threads:[],guests:true});
         const frame=new URLSearchParams(location.search).has('frame');

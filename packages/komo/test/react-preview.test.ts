@@ -126,6 +126,27 @@ describe.each([
     expect(editor.available!()).toBe(false);
   });
 
+  it("edits nothing and lists no props when the app declares no schema", () => {
+    function ExampleButton(props: any) {
+      return React.createElement("button", { disabled: props.disabled }, props.label);
+    }
+    const container = document.body.appendChild(document.createElement("main"));
+    const root = createRoot(container);
+    flushSync(() => root.render(React.createElement(ExampleButton, { label: "Original", disabled: false, count: 2 })));
+    mounted.push(() => flushSync(() => root.unmount()));
+    const button = container.querySelector("button")!;
+    for (const options of [{ edit: true }, { edit: true, schema: () => undefined }]) {
+      const adapter = discoverReactComponents(options);
+      const identity = adapter.identify(button)!;
+      expect(identity.props).toEqual({ label: "Original", disabled: false, count: 2 });
+      expect(adapter.editor!(identity)).toBeNull();
+      const panel = createReactPropsPanel(button, () => {}, undefined, undefined, { components: adapter })!;
+      expect(panel.querySelector(".design-react-name")?.textContent).toBe("ExampleButton");
+      expect(panel.hasAttribute("data-empty")).toBe(true);
+      expect(panel.querySelector("input, select, label, .design-react-status")).toBeNull();
+    }
+  });
+
   it("edits a memo/forwardRef component without exposing a ref control", async () => {
     const { button, panel, change } = setup(true);
     change("disabled", true);
@@ -156,7 +177,10 @@ describe.each([
     flushSync(() => root.render(React.createElement("section", null, React.createElement(StableBranch), React.createElement(UpdatingSibling))));
     mounted.push(() => flushSync(() => root.unmount()));
     const button = container.querySelector("button")!;
-    const adapter = discoverReactComponents({ edit: true });
+    const adapter = discoverReactComponents({ edit: true, schema: () => [
+      { name: "variant", kind: "string", required: true, typeLabel: "string" },
+      { name: "aria-label", kind: "string", required: true, typeLabel: "string" },
+    ] });
     const identity = adapter.identify(button)!;
     expect(identity.name).toBe("ActionButton");
     const editor = adapter.editor!(identity)!;

@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 // React's production builds keep no _debugSource / _debugStack, so the adapter must
-// show what is safe (name, props) and no source, and nothing for minified names.
+// keep what is safe (name, props for comment context) and no source, and nothing for minified names.
 const root = process.cwd();
 let directory = "";
 let bundle = "";
@@ -33,8 +33,8 @@ describe.each([
     expect(result.name).toBe("ProdCard");
     expect(result.props).toEqual({ title: "Hi" });
     expect(result.source).toBeUndefined();
-    expect(result.fields).toEqual({ title: '"Hi"' });
-    expect(result.panel).not.toContain("rendered at");
+    expect(result.fields).toEqual({});
+    expect(result.panel).toBe("ProdCard");
     expect(result.minified).toBeNull();
   });
 });
