@@ -22,8 +22,8 @@ export interface CustomHost {
 export function pickerEditor(options: TokenPickerOptions, host: CustomHost): HTMLElement & { live: true; refresh(value: string): void; destroy(): void } {
   const { property } = options;
   const initial = options.custom!.value;
-  const box = el("div", "komo-custom");
-  const body = el("div", "komo-custom__body");
+  const box = el("div", "palette-custom");
+  const body = el("div", "palette-custom__body");
   const exact = el("input");
   exact.value = initial;
   exact.setAttribute("aria-label", "CSS value");

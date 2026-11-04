@@ -28,10 +28,10 @@ beforeAll(async () => {
         id: "thread-" + index, page: location.pathname, anchor, resolved: false, resolvedBy: null, createdAt: Date.now(), updatedAt: Date.now(),
         comments: [{ id: "comment-" + index, body: "Synthetic note " + index, author: user, createdAt: Date.now(), editedAt: null, reactions: {} }],
       }));
-      const key = "branch-comments:" + location.origin + ":toolbar-order";
+      const key = "palette:" + location.origin + ":toolbar-order";
       localStorage.setItem(key, "synthetic-session");
       localStorage.setItem(key + ":user", JSON.stringify({ token: "synthetic-session", user }));
-      if (query.get("edge")) localStorage.setItem("branch-comments:drawer:toolbar-order:example/review", JSON.stringify({ x: 16, y: 260, edgeX: query.get("edge") }));
+      if (query.get("edge")) localStorage.setItem("palette:drawer:toolbar-order:example/review", JSON.stringify({ x: 16, y: 260, edgeX: query.get("edge") }));
       window.fetch = async () => Response.json({ user, threads, guests: true });
       window.palette = initPalette({
         endpoint: location.origin, project: "toolbar-order", repo: "example/review", branch: "fixture",

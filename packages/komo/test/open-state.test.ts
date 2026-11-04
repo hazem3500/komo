@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { openState } from "../src/open-state";
 
-const key = "branch-comments:open:fixture:fixture";
+const key = "palette:open:fixture:fixture";
 afterEach(() => {
   localStorage.clear();
   sessionStorage.clear();

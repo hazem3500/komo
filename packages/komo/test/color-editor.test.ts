@@ -162,14 +162,14 @@ describe("the color editor", () => {
     input(editor, "Green").dispatchEvent(paste);
     expect(paste.defaultPrevented).toBe(true);
     expect(host.commit).toHaveBeenLastCalledWith("rgb(255 0 0 / 25%)");
-    expect([...editor.querySelectorAll<HTMLInputElement>(".komo-color__channels input")].map(item => item.value)).toEqual(["255", "0", "0", "25"]);
+    expect([...editor.querySelectorAll<HTMLInputElement>(".palette-color__channels input")].map(item => item.value)).toEqual(["255", "0", "0", "25"]);
   });
 
   it("switches formats without keeping anything and remembers the choice", () => {
     const editor = open();
     for (const [name, values] of [["HSL", ["210", "50", "40", "100"]], ["HSB", ["210", "67", "60", "100"]], ["CSS", ["rgb(51 102 153)"]]] as const) {
       format(editor, name);
-      expect([...editor.querySelectorAll<HTMLInputElement>(".komo-color__channels input")].map(item => item.value)).toEqual(values);
+      expect([...editor.querySelectorAll<HTMLInputElement>(".palette-color__channels input")].map(item => item.value)).toEqual(values);
     }
     expect(host.commit).not.toHaveBeenCalled();
     type(input(editor, "CSS color"), "rebeccapurple");
@@ -207,12 +207,12 @@ describe("the color editor", () => {
     document.body.innerHTML = '<p style="color:#336699">A</p><p style="color:#c2410c">B</p>';
     rememberColor("#c2410c");
     const editor = open("#000000");
-    await vi.waitFor(() => expect(editor.querySelectorAll(".komo-color__swatches button").length).toBeGreaterThan(0));
-    const labels = [...editor.querySelectorAll(".komo-color__swatches button")].map(button => button.getAttribute("aria-label"));
+    await vi.waitFor(() => expect(editor.querySelectorAll(".palette-color__swatches button").length).toBeGreaterThan(0));
+    const labels = [...editor.querySelectorAll(".palette-color__swatches button")].map(button => button.getAttribute("aria-label"));
     expect(labels[0]).toBe("Recent color #c2410c");
     expect(labels).toContain("Document color #336699");
     expect(labels.filter(label => label?.endsWith("#c2410c"))).toHaveLength(1);
-    expect(editor.querySelectorAll(".komo-color__swatches small")).toHaveLength(0);
+    expect(editor.querySelectorAll(".palette-color__swatches small")).toHaveLength(0);
     editor.remove();
     localStorage.clear();
     // An empty page: the editor sits in a shadow root, as Palette's does, so only the page is sampled.
@@ -223,15 +223,15 @@ describe("the color editor", () => {
     const empty = pickerEditor({ trigger: document.body, tokens, property: "color", onSelect() {}, custom: { value: "#000000", onPreview: () => () => {}, onSelect() {} } }, host);
     shadow.append(empty);
     await new Promise(resolve => setTimeout(resolve, 40));
-    expect(empty.querySelector<HTMLElement>(".komo-color__swatches")!.hidden).toBe(true);
-    expect(empty.querySelectorAll(".komo-color__swatches button")).toHaveLength(0);
+    expect(empty.querySelector<HTMLElement>(".palette-color__swatches")!.hidden).toBe(true);
+    expect(empty.querySelectorAll(".palette-color__swatches button")).toHaveLength(0);
   });
 
   it("offers the token a swatch or value matches", async () => {
     document.body.innerHTML = '<p style="color:#336699">Swatch</p>';
     const editor = open("#000000");
     await vi.waitFor(() => expect(editor.querySelector('[aria-label="Document color #336699"]')).not.toBeNull());
-    const match = editor.querySelector<HTMLElement>(".komo-color__match")!;
+    const match = editor.querySelector<HTMLElement>(".palette-color__match")!;
     expect(match.hidden).toBe(true);
     editor.querySelector<HTMLButtonElement>('[aria-label="Document color #336699"]')!.click();
     expect(host.commit).toHaveBeenLastCalledWith("#336699");
@@ -252,25 +252,25 @@ describe("the live color popup", () => {
     const custom = { value: "#336699", onPreview: vi.fn(() => () => {}), onSelect: vi.fn(), onCommit: vi.fn(), onDone: vi.fn(), onCancel: vi.fn() };
     openTokenPicker({ trigger, tokens, property: "color", onSelect: vi.fn(), custom });
     // Tokens come first; Custom… swaps in the picker.
-    document.querySelector<HTMLElement>(".komo-tokens__more")!.click();
-    await vi.waitFor(() => expect(document.querySelector(".komo-color")).not.toBeNull());
-    expect(document.querySelector(".komo-custom")).toBeNull();
-    const hex = document.querySelector<HTMLInputElement>('.komo-color input[aria-label="Hex"]')!;
+    document.querySelector<HTMLElement>(".palette-tokens__more")!.click();
+    await vi.waitFor(() => expect(document.querySelector(".palette-color")).not.toBeNull());
+    expect(document.querySelector(".palette-custom")).toBeNull();
+    const hex = document.querySelector<HTMLInputElement>('.palette-color input[aria-label="Hex"]')!;
     hex.value = "112233";
     hex.dispatchEvent(new Event("input"));
     hex.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(custom.onCommit).toHaveBeenCalledExactlyOnceWith("#112233");
-    expect(document.querySelector(".komo-tokens")).not.toBeNull();
+    expect(document.querySelector(".palette-tokens")).not.toBeNull();
     hex.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(custom.onCancel).toHaveBeenCalledTimes(1);
     expect(custom.onDone).not.toHaveBeenCalled();
-    expect(document.querySelector(".komo-tokens")).toBeNull();
+    expect(document.querySelector(".palette-tokens")).toBeNull();
 
     openTokenPicker({ trigger, tokens, property: "color", onSelect: vi.fn(), custom });
     // Tokens come first; Custom… swaps in the picker.
-    document.querySelector<HTMLElement>(".komo-tokens__more")!.click();
-    await vi.waitFor(() => expect(document.querySelector(".komo-color")).not.toBeNull());
-    const typed = document.querySelector<HTMLInputElement>('.komo-color input[aria-label="Hex"]')!;
+    document.querySelector<HTMLElement>(".palette-tokens__more")!.click();
+    await vi.waitFor(() => expect(document.querySelector(".palette-color")).not.toBeNull());
+    const typed = document.querySelector<HTMLInputElement>('.palette-color input[aria-label="Hex"]')!;
     typed.value = "445566";
     typed.dispatchEvent(new Event("input"));
     document.body.dispatchEvent(new Event("pointerdown", { bubbles: true, composed: true }));

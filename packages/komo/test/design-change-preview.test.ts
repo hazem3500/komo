@@ -83,7 +83,7 @@ describe("Before/After for every posted proposal", () => {
     button(container, "After").click();
     expect(order()).toEqual(["Members", "Approvals", "Reports", "Time off"]);
     expect(approvals.style.getPropertyValue("display")).toBe("none");
-    const clone = document.querySelector("[data-komo-move-clone]")!;
+    const clone = document.querySelector("[data-palette-move-clone]")!;
     expect(clone.hasAttribute("id")).toBe(false);
     expect(clone.getAttribute("aria-hidden")).toBe("true");
     // The new spot in the selection colour, and a faint outline where it was.
@@ -195,7 +195,7 @@ describe("Before/After for every posted proposal", () => {
     // Switching threads keeps only the open thread's comments.
     resetDesignPreviews(new Set(["another-thread"]));
     expect(document.querySelector("#list")!.outerHTML).toBe(list);
-    expect(document.querySelectorAll(".design-mark, [data-komo-move-clone]")).toHaveLength(0);
+    expect(document.querySelectorAll(".design-mark, [data-palette-move-clone]")).toHaveLength(0);
   });
 
   it("flips the open thread with B", () => {
@@ -206,6 +206,6 @@ describe("Before/After for every posted proposal", () => {
     expect(button(container, "After").getAttribute("aria-pressed")).toBe("true");
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
     expect(button(container, "Before").getAttribute("aria-pressed")).toBe("true");
-    expect(document.querySelector("[data-komo-move-clone]")).toBeNull();
+    expect(document.querySelector("[data-palette-move-clone]")).toBeNull();
   });
 });

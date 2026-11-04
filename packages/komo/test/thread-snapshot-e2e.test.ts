@@ -32,7 +32,7 @@ function stripes() {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
 }
 const png = stripes();
-const note = "<!-- komo: no image snapshot, the element shows images from another origin. -->";
+const note = "<!-- palette: no image snapshot, the element shows images from another origin. -->";
 const markup = `${note}<div class="card"><b id="injected">Bold text</b><img src="x" onerror="window.injected=1"></div>`;
 
 beforeAll(async () => {
@@ -43,7 +43,7 @@ beforeAll(async () => {
       import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       const params=new URLSearchParams(location.search);
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+'/api:thread-snapshots';
+      const key='palette:'+location.origin+'/api:thread-snapshots';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       window.blobs={created:[],revoked:[]};
@@ -159,7 +159,7 @@ describe.skipIf(!chrome)("thread snapshots in the review UI", () => {
     const errors = await open(page);
     await page.keyboard.press("l");
     await page.locator(".thread-card").filter({ hasText: "Row 0 feedback" }).waitFor();
-    await page.locator('.thread-item[data-thread="row-0"] .komo-snapshot[data-ready] img').waitFor();
+    await page.locator('.thread-item[data-thread="row-0"] .palette-snapshot[data-ready] img').waitFor();
     await page.waitForTimeout(300);
     const first = api.reads.map((read) => read.id);
     expect(first.length).toBeGreaterThan(1);
@@ -169,13 +169,13 @@ describe.skipIf(!chrome)("thread snapshots in the review UI", () => {
     expect(new Set(api.reads.map((read) => read.auth))).toEqual(new Set(["Bearer fixture-session"]));
     expect(api.reads.every((read) => read.kind === "image")).toBe(true);
     // The thumbnail is a fixed small size with alt text naming the element.
-    const thumb = page.locator('.thread-item[data-thread="row-0"] .komo-snapshot img');
+    const thumb = page.locator('.thread-item[data-thread="row-0"] .palette-snapshot img');
     expect(await thumb.getAttribute("alt")).toBe("Snapshot of “Start building” when the comment was left");
     expect(await thumb.getAttribute("src")).toMatch(/^blob:/);
     expect(await thumb.evaluate((node) => [node.getBoundingClientRect().width, node.getBoundingClientRect().height])).toEqual([72, 48]);
     // Scrolling to the end loads the rows that came into view, not the ones already shown again.
     await shadowEval(page, `root.querySelector(".list").scrollTop = 1e6`);
-    await page.locator('.thread-item[data-thread="row-29"] .komo-snapshot[data-ready] img').waitFor();
+    await page.locator('.thread-item[data-thread="row-29"] .palette-snapshot[data-ready] img').waitFor();
     const ids = api.reads.map((read) => read.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(errors).toEqual([]);
@@ -189,31 +189,31 @@ describe.skipIf(!chrome)("thread snapshots in the review UI", () => {
     const errors = await open(page);
     await page.keyboard.press("l");
     await page.locator(".thread-card").filter({ hasText: "Tighten the button" }).click();
-    const card = page.locator(".dialog .message .komo-snapshot[data-ready] img");
+    const card = page.locator(".dialog .message .palette-snapshot[data-ready] img");
     await card.waitFor();
     const src = (await card.getAttribute("src"))!;
     expect(src).toMatch(/^blob:/);
     // Shown on the list row and the card, but fetched once: reads are cached per URL.
     expect(api.reads.filter((read) => read.kind === "image")).toHaveLength(1);
-    await page.locator(".dialog .message .komo-snapshot").focus();
+    await page.locator(".dialog .message .palette-snapshot").focus();
     await page.keyboard.press("Enter");
-    const viewer = page.locator("dialog.komo-snapshot-viewer[open]");
+    const viewer = page.locator("dialog.palette-snapshot-viewer[open]");
     await viewer.waitFor();
     expect(await viewer.locator("img").getAttribute("alt")).toBe("Snapshot of “Start building” when the comment was left");
     expect(await viewer.locator("img").getAttribute("src")).toMatch(/^blob:/);
     const viewerSrc = (await viewer.locator("img").getAttribute("src"))!;
     await page.keyboard.press("Escape");
     await viewer.waitFor({ state: "detached" });
-    expect(await shadowEval<string | undefined>(page, `return root.activeElement?.className`)).toBe("komo-snapshot");
+    expect(await shadowEval<string | undefined>(page, `return root.activeElement?.className`)).toBe("palette-snapshot");
     expect(await page.evaluate(() => (window as any).blobs.revoked)).toContain(viewerSrc);
     // Closing the card unmounts its thumbnail: its blob URL is revoked.
     await page.locator(".dialog .thread-back").click();
     await page.waitForFunction((url) => (window as any).blobs.revoked.includes(url), src);
     // The list row's thumbnail comes back from the cache, without another read.
-    await page.locator('.thread-item[data-thread="hero"] .komo-snapshot[data-ready] img').waitFor();
+    await page.locator('.thread-item[data-thread="hero"] .palette-snapshot[data-ready] img').waitFor();
     expect(api.reads.filter((read) => read.kind === "image")).toHaveLength(1);
     // Unmounting Palette closes an open viewer: the page gets its keyboard back and the blob URL goes.
-    await page.locator('.thread-item[data-thread="hero"] .komo-snapshot').focus();
+    await page.locator('.thread-item[data-thread="hero"] .palette-snapshot').focus();
     await page.keyboard.press("Enter");
     await viewer.waitFor();
     const openSrc = (await viewer.locator("img").getAttribute("src"))!;
@@ -240,28 +240,28 @@ describe.skipIf(!chrome)("thread snapshots in the review UI", () => {
     await page.keyboard.press("l");
     await page.locator(".thread-card").filter({ hasText: "The banner is gone" }).click();
     const status = page.locator(".dialog .thread-anchor-status");
-    await status.locator(".komo-snapshot[data-ready] img").waitFor();
+    await status.locator(".palette-snapshot[data-ready] img").waitFor();
     expect(await status.textContent()).toContain("Element not found on this page");
     const route = status.locator("a.thread-route");
     expect(await route.textContent()).toBe("/");
     expect(await route.getAttribute("href")).toBe(`${origin}/?comment=gone`);
-    expect(await status.locator(".komo-snapshot img").getAttribute("alt")).toBe("Snapshot of the commented element when the comment was left");
+    expect(await status.locator(".palette-snapshot img").getAttribute("alt")).toBe("Snapshot of the commented element when the comment was left");
     // The message's own thumbnail steps aside for the larger fallback.
-    expect(await page.locator(".dialog .message .komo-snapshot").isVisible()).toBe(false);
+    expect(await page.locator(".dialog .message .palette-snapshot").isVisible()).toBe(false);
 
     await page.locator(".dialog .thread-back").click();
     await page.locator(".thread-card").filter({ hasText: "Only markup here" }).click();
-    const code = page.locator(".dialog .thread-anchor-status pre.komo-snapshot-code");
+    const code = page.locator(".dialog .thread-anchor-status pre.palette-snapshot-code");
     await code.waitFor();
     expect(await code.textContent()).toBe(markup.slice(note.length));
     expect(await page.locator(".dialog .thread-anchor-status").textContent()).toContain("No image snapshot, the element shows images from another origin.");
-    expect(await shadowEval<number>(page, `return root.querySelectorAll("#injected, .komo-snapshot-code img").length`)).toBe(0);
+    expect(await shadowEval<number>(page, `return root.querySelectorAll("#injected, .palette-snapshot-code img").length`)).toBe(0);
     expect(await page.evaluate(() => (window as any).injected)).toBeUndefined();
     // The card has no image to show, so its HTML opens as text too.
-    await page.locator(".dialog .komo-snapshot-text").click();
-    await page.locator("dialog.komo-snapshot-viewer[open] pre").waitFor();
-    expect(await page.locator("dialog.komo-snapshot-viewer pre").textContent()).toContain("<b id=\"injected\">");
-    await page.locator('dialog.komo-snapshot-viewer button[aria-label="Close snapshot"]').click();
+    await page.locator(".dialog .palette-snapshot-text").click();
+    await page.locator("dialog.palette-snapshot-viewer[open] pre").waitFor();
+    expect(await page.locator("dialog.palette-snapshot-viewer pre").textContent()).toContain("<b id=\"injected\">");
+    await page.locator('dialog.palette-snapshot-viewer button[aria-label="Close snapshot"]').click();
     expect(errors).toEqual([]);
     await page.close();
   });
@@ -273,17 +273,17 @@ describe.skipIf(!chrome)("thread snapshots in the review UI", () => {
     const errors = await open(page);
     await page.keyboard.press("l");
     await page.locator(".thread-card").filter({ hasText: "Tighten the button" }).click();
-    await page.locator(".dialog .message .komo-snapshot[data-ready]").waitFor();
+    await page.locator(".dialog .message .palette-snapshot[data-ready]").waitFor();
     await page.locator('.dialog-head summary[aria-label="Comment actions"]').click();
     await page.getByRole("menuitem", { name: "Remove snapshot", exact: true }).click();
     // Nothing is removed until the reviewer confirms.
     await page.locator(".toast").filter({ hasText: "Remove this comment’s snapshot?" }).waitFor();
     expect(api.deletes).toEqual([]);
     await page.locator(".toast button").filter({ hasText: "Remove" }).click();
-    await page.locator(".dialog .komo-snapshot").waitFor({ state: "detached" });
+    await page.locator(".dialog .palette-snapshot").waitFor({ state: "detached" });
     await expect.poll(() => api.deletes.sort()).toEqual(["hero/html", "hero/image"]);
     await page.waitForTimeout(300);
-    expect(await page.locator(".komo-snapshot").count()).toBe(0);
+    expect(await page.locator(".palette-snapshot").count()).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   });
@@ -303,7 +303,7 @@ describe.skipIf(!chrome)("thread snapshots in the review UI", () => {
     await page.locator(".thread-card").filter({ hasText: "Plain feedback" }).click();
     await page.locator(".dialog .message").first().waitFor();
     await page.waitForTimeout(300);
-    expect(await page.locator(".komo-snapshot, .komo-snapshot-view, .komo-snapshot-text").count()).toBe(0);
+    expect(await page.locator(".palette-snapshot, .palette-snapshot-view, .palette-snapshot-text").count()).toBe(0);
     await page.locator('.dialog-head summary[aria-label="Comment actions"]').click();
     expect(await page.getByRole("menuitem", { name: "Remove snapshot" }).count()).toBe(0);
     expect(api.reads).toEqual([]);
@@ -321,7 +321,7 @@ describe.skipIf(!chrome)("thread snapshots in the review UI", () => {
     await page.waitForTimeout(150);
     await page.mouse.click(box.x + 40, box.y + 20);
     await page.locator(".new-comment-composer textarea").waitFor();
-    const preview = page.locator(".new-comment-composer .komo-snapshot-draft");
+    const preview = page.locator(".new-comment-composer .palette-snapshot-draft");
     await preview.waitFor({ timeout: 15_000 });
     expect(await preview.textContent()).toContain("Snapshot and HTML attached");
     expect(await preview.locator("img").getAttribute("src")).toMatch(/^data:image\/webp/);

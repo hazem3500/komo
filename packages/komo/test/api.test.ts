@@ -2585,7 +2585,7 @@ describe("personal access tokens", () => {
     const { response, body } = await create("owner-token");
     expect(response.status).toBe(201);
     const token = body.token as string;
-    expect(token).toMatch(/^komo_pat_[a-z0-9]{12}_[A-Za-z0-9_-]{43}$/);
+    expect(token).toMatch(/^palette_pat_[a-z0-9]{12}_[A-Za-z0-9_-]{43}$/);
     expect(body.item).toMatchObject({
       name: "CI bot",
       last4: token.slice(-4),
@@ -2599,7 +2599,9 @@ describe("personal access tokens", () => {
       await account("/account/tokens", "GET", "owner-token")
     ).json();
     const item = listed.tokens.find((t: any) => t.id === body.item.id);
-    expect(item.prefix).toBe(`komo_pat_${body.item.id}`);
+    // The listed prefix doesn't claim which name the token was issued under.
+    expect(item.prefix).toBe(`…_pat_${body.item.id}`);
+    expect(body.item.prefix).toBe(`…_pat_${body.item.id}`);
     expect(JSON.stringify(listed)).not.toContain(token.slice(-43));
     expect(listed.projects).toEqual(
       expect.arrayContaining(["other", "owned"])
@@ -2662,6 +2664,8 @@ describe("personal access tokens", () => {
     const use = (value: string) =>
       request("/me", "GET", undefined, value, "shared", "owner/site", "test");
     expect((await use(token)).status).toBe(200);
+    // A token issued before the rename starts komo_pat_; only the prefix differs.
+    expect((await use(token.replace(/^palette_pat_/, "komo_pat_"))).status).toBe(200);
     expect((await use(`${token.slice(0, -4)}AAAA`)).status).toBe(401);
     expect((await use("komo_pat_garbage")).status).toBe(401);
     expect(

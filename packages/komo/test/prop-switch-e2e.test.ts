@@ -36,7 +36,7 @@ beforeAll(async () => {
       function Option(initial){
         const[props,setProps]=React.useState(initial);
         const inspect=usePaletteInspectable({component:definition,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
-        return h('button',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],type:'button',className:'fixture-option',
+        return h('button',{ref:inspect.ref,'data-palette-inspectable':inspect['data-palette-inspectable'],type:'button',className:'fixture-option',
           'data-selected':String(props.selected),'data-loading':String(props.loading)},'Example option');
       }
       createRoot(document.querySelector('main')).render(h(Option,{selected:true,muted:false}));

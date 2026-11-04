@@ -6,12 +6,16 @@
 // every helper is the plain same-document read.
 import type { PreviewTarget } from "./design-system.js";
 
-/** The viewport iframe's name: Palette inside it stays inert, so only one instance reviews. */
+/**
+ * The viewport iframe's name: Palette inside it stays inert, so only one instance reviews.
+ * It keeps its name from before the rename, so an older framed copy still sees it is framed.
+ */
 export const FRAME_NAME = "komo-viewport";
-/** True inside Frame's viewport iframe. */
+/** True inside Frame's viewport iframe; either name and either attribute counts. */
 export const framedByPalette = () => {
   try {
-    return window.name === FRAME_NAME && !!window.frameElement?.hasAttribute("data-komo-viewport");
+    const frame = window.frameElement;
+    return /^(palette|komo)-viewport$/.test(window.name) && !!frame && ["data-palette-viewport", "data-komo-viewport"].some((name) => frame.hasAttribute(name));
   } catch {
     return false;
   }
@@ -41,16 +45,19 @@ export const previewTarget = (): PreviewTarget => {
  * registries (usePaletteInspectable, usePaletteDesignTokens) here, so Palette in this
  * window can read registrations made in the frame's own realm.
  */
-const FRAME_BRIDGE = Symbol.for("komo.frame-bridge");
+// Also published and read under the older "komo.frame-bridge", so either side may be an older release.
+const bridges = () => [Symbol.for("palette.frame-bridge"), Symbol.for("komo.frame-bridge")];
 type Bridge = Record<string, ((...args: never[]) => unknown) | undefined>;
 /** The viewport iframe's published registries, for a node or window from that frame. */
 export function frameBridge(from: Node | Window | null | undefined): Bridge | undefined {
   const view = from && ("nodeType" in from ? from.ownerDocument?.defaultView : from);
-  return view && view !== window ? (view as unknown as Record<symbol, Bridge | undefined>)[FRAME_BRIDGE] : undefined;
+  if (!view || view === window) return undefined;
+  const realm = view as unknown as Record<symbol, Bridge | undefined>;
+  return bridges().map((name) => realm[name]).find(Boolean);
 }
 /** Inside Frame's viewport iframe, publish this realm's registries for Palette in the parent window. */
 export function publishFrameBridge(entries: Bridge) {
-  if (framedByPalette()) Object.assign(((window as unknown as Record<symbol, Bridge>)[FRAME_BRIDGE] ??= {}), entries);
+  if (framedByPalette()) for (const name of bridges()) Object.assign(((window as unknown as Record<symbol, Bridge>)[name] ??= {}), entries);
 }
 /** The viewport iframe while it shows the page. */
 export const pageFrame = () => (frameDocument() ? frame : null);

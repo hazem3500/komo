@@ -319,7 +319,7 @@ describe("auth options on PostgreSQL", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const response = await call(environment({ KOMO_PROXY_AUTH: "other-proxy", KOMO_PROXY_AUDIENCE: "x" }), "/health");
     expect(response.status).toBe(500);
-    expect(error).toHaveBeenCalledWith("comments_request_failed", expect.objectContaining({ config: expect.stringContaining('KOMO_PROXY_AUTH "other-proxy" is not supported') }));
+    expect(error).toHaveBeenCalledWith("comments_request_failed", expect.objectContaining({ config: expect.stringContaining('PALETTE_PROXY_AUTH "other-proxy" is not supported') }));
     error.mockRestore();
   });
 });

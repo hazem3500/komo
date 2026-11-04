@@ -49,7 +49,7 @@ beforeAll(async () => {
         enumProp('variant',['primary','secondary']),enumProp('color',${JSON.stringify(COLORS.slice(1))},false),enumProp('size',['sm','md','lg'])]};
       function Button({onPropsChange,...props}){
         const inspect=usePaletteInspectable({component:definition,props,onChange:onPropsChange,enabled:true});
-        return h('button',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],type:'button',className:'fixture-button',
+        return h('button',{ref:inspect.ref,'data-palette-inspectable':inspect['data-palette-inspectable'],type:'button',className:'fixture-button',
           'data-variant':props.variant,'data-color':props.color,'data-size':props.size},h('span',null,'Example button'));
       }
       function App(){
@@ -120,7 +120,7 @@ async function sample(page: Page) {
         notice: /animation/i.test(note && !(note as HTMLElement).hidden ? note.textContent ?? "" : "") || !!root.querySelector(".design-geometry-wait:not([hidden])"),
         sections: tops(".design-section"),
         rows: tops(".design-react-row"),
-        list: tops(".komo-select"),
+        list: tops(".palette-select"),
       });
       if (!state.stop) requestAnimationFrame(frame);
     };
@@ -137,8 +137,8 @@ const PAINTS = ["rgb(255, 255, 255)", "rgb(233, 231, 227)", "rgb(217, 45, 32)", 
 const residue = (page: Page) => page.evaluate(() => {
   const button = document.querySelector(".fixture-button")!;
   // Other Palette features adopt sheets of their own; only the hold's must be gone.
-  const sheets = document.adoptedStyleSheets.filter(sheet => [...sheet.cssRules].some(rule => rule.cssText.includes("data-komo-still"))).length;
-  return { still: button.hasAttribute("data-komo-still"), style: button.getAttribute("style"), sheets, duration: getComputedStyle(button).transitionDuration };
+  const sheets = document.adoptedStyleSheets.filter(sheet => [...sheet.cssRules].some(rule => rule.cssText.includes("data-palette-still"))).length;
+  return { still: button.hasAttribute("data-palette-still"), style: button.getAttribute("style"), sheets, duration: getComputedStyle(button).transitionDuration };
 });
 
 describe.skipIf(!chrome)("host motion while Palette previews a component prop", () => {
@@ -152,7 +152,7 @@ describe.skipIf(!chrome)("host motion while Palette previews a component prop", 
   });
 
   async function previews(page: Page, errors: string[]) {
-    const option = (name: string) => page.locator(".komo-select").getByRole("option", { name, exact: true });
+    const option = (name: string) => page.locator(".palette-select").getByRole("option", { name, exact: true });
     const color = page.getByRole("combobox", { name: "Button color", exact: true });
     const attr = () => page.locator(".fixture-button").getAttribute("data-color");
     await color.waitFor();
@@ -171,13 +171,13 @@ describe.skipIf(!chrome)("host motion while Palette previews a component prop", 
     }
     const hovered = await pointer();
     await page.keyboard.press("Escape");
-    await page.locator(".komo-select").waitFor({ state: "detached" });
+    await page.locator(".palette-select").waitFor({ state: "detached" });
 
     // Arrow keys through the same five.
     const keys = await sample(page);
     await color.focus();
     await page.keyboard.press("ArrowDown");
-    await page.locator(".komo-select").waitFor();
+    await page.locator(".palette-select").waitFor();
     for (let i = 0; i < 4; i++) {
       await page.keyboard.press("ArrowDown");
       await page.waitForTimeout(220);
@@ -198,7 +198,7 @@ describe.skipIf(!chrome)("host motion while Palette previews a component prop", 
 
     // Enter commits; the host gets its transitions back and nothing of Palette's stays on the button.
     await page.keyboard.press("Enter");
-    await page.locator(".komo-select").waitFor({ state: "detached" });
+    await page.locator(".palette-select").waitFor({ state: "detached" });
     expect(await page.locator(".design-inspector__count").textContent()).toBe("1 change");
     await page.waitForTimeout(100);
     expect(await residue(page)).toEqual({ still: false, style: null, sheets: 0, duration: "0.15s, 0.15s, 0.15s" });

@@ -1,3 +1,4 @@
+import { forget } from "./storage-keys.js";
 import type { textEntry } from "./dom.js";
 import type { FrameView, frameView as placeView } from "./review-layout.js";
 import type { onFrame } from "./frame-target.js";
@@ -185,7 +186,7 @@ export function mountFrameSize(
     try {
       const record = frameSizeRecord(size, actual, choice());
       if (record) localStorage.setItem(key, record);
-      else localStorage.removeItem(key);
+      else forget(localStorage, key);
     } catch {
       /* Keep the size for this session when storage is blocked. */
     }
@@ -296,7 +297,7 @@ export function mountFrameSize(
   const zooms = (["Fit", "100%"] as const).map((label, index) => {
     const item = element("button", "", { type: "button", role: "menuitemradio", "aria-keyshortcuts": zoomKeys[index].label }, label);
     // Keycaps as Palette draws them elsewhere (⇧ on Apple platforms).
-    const keys = element("span", "komo-kbd", { "aria-hidden": "true", "data-variant": "surface" });
+    const keys = element("span", "palette-kbd", { "aria-hidden": "true", "data-variant": "surface" });
     for (const cap of [/mac|iphone|ipad/i.test(navigator.platform) ? "⇧" : "Shift", zoomKeys[index].key]) keys.append(element("kbd", "", {}, cap));
     item.append(keys);
     item.addEventListener("click", () => {

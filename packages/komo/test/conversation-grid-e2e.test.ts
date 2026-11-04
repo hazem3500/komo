@@ -29,7 +29,7 @@ const threads=[
   thread('other','/reports/summary','#target',[comment('o1','The summary needs a little more context.','Sam Lee',false,3600000)]),
 ];
 window.qa={writes:[],threads};
-const key='branch-comments:'+location.origin+':grid';
+const key='palette:'+location.origin+':grid';
 localStorage.setItem(key,'synthetic-session');
 localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
 window.fetch=async(input,init)=>{const method=init?.method||'GET',path=new URL(String(input),location.origin).pathname;

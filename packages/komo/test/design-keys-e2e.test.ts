@@ -29,7 +29,7 @@ beforeAll(async () => {
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':keys';
+      const key='palette:'+location.origin+':keys';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       window.fetch=async input=>{
@@ -144,12 +144,12 @@ describe.skipIf(!chrome)("Design mode keys", () => {
     await canvas(page);
     await page.keyboard.press("m");
     await page.keyboard.press("Alt+ArrowDown");
-    await expect.poll(() => page.locator("[data-komo-move-clone]").count()).toBe(1);
+    await expect.poll(() => page.locator("[data-palette-move-clone]").count()).toBe(1);
     await page.keyboard.press("Escape");
     await page.keyboard.press(UNDO);
-    await expect.poll(() => page.locator("[data-komo-move-clone]").count()).toBe(0);
+    await expect.poll(() => page.locator("[data-palette-move-clone]").count()).toBe(0);
     await page.keyboard.press(REDO);
-    await expect.poll(() => page.locator("[data-komo-move-clone]").count()).toBe(1);
+    await expect.poll(() => page.locator("[data-palette-move-clone]").count()).toBe(1);
     expect(await active(page)).toBe(true);
     expect(page.errors).toEqual([]);
     await page.close();
@@ -189,8 +189,8 @@ describe.skipIf(!chrome)("Design mode keys", () => {
       await page.keyboard.press("m");
       await page.waitForFunction(() => document.querySelector("[data-branch-comments]")!.shadowRoot!.activeElement?.classList.contains("design-geometry__frame"));
     }, false],
-    ["open listbox", async page => { await page.locator('[data-field-property="display"] select').focus(); await page.keyboard.press("ArrowDown"); await page.locator(".komo-select").waitFor(); }, false],
-    ["shortcuts dialog", async page => { await blur(page); await page.keyboard.press("?"); await page.locator("dialog.komo-shortcuts").waitFor(); }, false],
+    ["open listbox", async page => { await page.locator('[data-field-property="display"] select').focus(); await page.keyboard.press("ArrowDown"); await page.locator(".palette-select").waitFor(); }, false],
+    ["shortcuts dialog", async page => { await blur(page); await page.keyboard.press("?"); await page.locator("dialog.palette-shortcuts").waitFor(); }, false],
   ];
   for (const [name, focus, compares] of targets) {
     it(`${compares ? "compares" : "keeps its arrows"} on ← and → from the ${name}, and Escape closes the innermost thing`, async () => {

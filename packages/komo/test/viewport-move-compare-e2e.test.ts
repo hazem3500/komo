@@ -28,7 +28,7 @@ type Mode = "shell" | "viewport" | "inplace";
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-viewport-move-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-viewport-move-"));
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
@@ -56,7 +56,7 @@ beforeAll(async () => {
       }
       if(!shell)createRoot(document.getElementById('root')).render(h(App));
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':'+project;
+      const key='palette:'+location.origin+':'+project;
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       const stored=()=>JSON.parse(sessionStorage.getItem('qa-threads')||'[]');
@@ -113,7 +113,7 @@ async function open(mode: Mode) {
   await page.waitForFunction(() => !!(window as any).palette);
   await page.keyboard.press("l");
   if (mode === "shell") {
-    await page.waitForURL(/komo-shell=[0-9a-f]{32}/);
+    await page.waitForURL(/palette-shell=[0-9a-f]{32}/);
     await page.waitForFunction(() => !!(window as any).palette);
   }
   await page.locator(".frame-bar").waitFor();
@@ -121,7 +121,7 @@ async function open(mode: Mode) {
   if (mode !== "inplace") {
     await page.waitForFunction(() => {
       const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;
-      const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+      const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
       return !!frame?.contentDocument?.getElementById("new") && !root!.querySelector(".frame-stage[data-loading]");
     });
     app = page.frames().find((item) => item.name() === "komo-viewport")!;
@@ -134,7 +134,7 @@ async function open(mode: Mode) {
 /** The toolbar as the page shows it: visible children by text, the stand-in marked with *. */
 const order = (app: Frame) => app.evaluate(() => [...document.getElementById("toolbar")!.children]
   .filter((node) => getComputedStyle(node).display !== "none")
-  .map((node) => `${node.textContent}${node.hasAttribute("data-komo-move-clone") ? "*" : ""}`));
+  .map((node) => `${node.textContent}${node.hasAttribute("data-palette-move-clone") ? "*" : ""}`));
 /** Card labels whose text is cut off: wider or taller than their box. */
 const clipped = (card: ReturnType<Page["locator"]>) => card.locator(".design-card-title, .design-card-target").evaluateAll((nodes) =>
   nodes.filter((node) => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1).map((node) => node.textContent));
@@ -143,7 +143,7 @@ const BEFORE = ["New goal", "Edit", "Share"], AFTER = ["Edit", "New goal*", "Sha
 /** An element's box on screen, through the viewport iframe's offset and scale. */
 const onScreen = (page: Page, id: string) => page.evaluate((id) => {
   const root = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
-  const frame = root.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+  const frame = root.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
   const outer = frame?.getBoundingClientRect(), scale = frame ? outer!.width / frame.offsetWidth : 1;
   const inner = (frame?.contentDocument ?? document).getElementById(id)!.getBoundingClientRect();
   return { x: (outer?.left ?? 0) + inner.left * scale, y: (outer?.top ?? 0) + inner.top * scale, width: inner.width * scale, height: inner.height * scale };
@@ -169,7 +169,7 @@ async function flip(page: Page, app: Frame, card: ReturnType<Page["locator"]>, l
   await toggle("After").click();
   await expect.poll(() => order(app), `${label} click After`).toEqual(AFTER);
   // The stand-in sits after Edit in the page itself, not only in the DOM order.
-  const [edit, clone] = await app.evaluate(() => [document.getElementById("edit")!, document.querySelector("[data-komo-move-clone]")!].map((node) => node.getBoundingClientRect().left));
+  const [edit, clone] = await app.evaluate(() => [document.getElementById("edit")!, document.querySelector("[data-palette-move-clone]")!].map((node) => node.getBoundingClientRect().left));
   expect(clone, `${label} stand-in position`).toBeGreaterThan(edit);
   expect(await app.evaluate(() => getComputedStyle(document.getElementById("new")!).display)).toBe("none");
 }
@@ -220,7 +220,7 @@ describe.skipIf(!chrome)("Before/After for a move in Viewport and In place", () 
       // Before hands the remounted toolbar back exactly.
       await draft.locator(".design-toggle button", { hasText: "Before" }).click();
       await expect.poll(() => order(app), `${mode} Before after a remount`).toEqual(BEFORE);
-      expect(await app.evaluate(() => [document.getElementById("new")!.getAttribute("style"), document.querySelectorAll("[data-komo-move-clone]").length])).toEqual(["display: inline-block;", 0]);
+      expect(await app.evaluate(() => [document.getElementById("new")!.getAttribute("style"), document.querySelectorAll("[data-palette-move-clone]").length])).toEqual(["display: inline-block;", 0]);
 
       // Once the note has text, B and the arrows belong to it.
       await note.focus();
@@ -249,7 +249,7 @@ describe.skipIf(!chrome)("Before/After for a move in Viewport and In place", () 
       await expect.poll(() => order(app), `${mode} posted after a commit`).toEqual(AFTER);
       await card.locator(".design-toggle button", { hasText: "Before" }).click();
       await expect.poll(() => order(app), `${mode} posted Before`).toEqual(BEFORE);
-      expect(await app.locator("[data-komo-move-clone]").count()).toBe(0);
+      expect(await app.locator("[data-palette-move-clone]").count()).toBe(0);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   }, 60000);

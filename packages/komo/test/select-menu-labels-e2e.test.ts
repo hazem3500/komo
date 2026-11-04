@@ -17,7 +17,7 @@ let server: Server, browser: Browser;
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-select-labels-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-select-labels-"));
   await build({
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
@@ -67,7 +67,7 @@ const settle = (tab: Page) => tab.evaluate(async () => {
 /** Opens a Palette select with the mouse and reads its list: labels, truncation, rows and the check column. */
 async function menu(tab: Page, trigger: Locator) {
   await trigger.click();
-  const list = tab.locator(".komo-select");
+  const list = tab.locator(".palette-select");
   await list.waitFor();
   await settle(tab);
   return list.evaluate((node, triggerWidth) => {
@@ -101,7 +101,7 @@ describe.skipIf(!chrome).each([{ width: 1280, height: 860 }, { width: 390, heigh
     await tab.mouse.move(2, 2);
     const shots: string[] = [];
     const shot = async (name: string) => {
-      const path = join(tmpdir(), `komo-select-labels-${name}-${viewport.width}.png`);
+      const path = join(tmpdir(), `palette-select-labels-${name}-${viewport.width}.png`);
       await tab.screenshot({ path });
       shots.push(path);
     };
@@ -112,7 +112,7 @@ describe.skipIf(!chrome).each([{ width: 1280, height: 860 }, { width: 390, heigh
     await color.scrollIntoViewIfNeeded();
     await settle(tab);
     await color.locator('input[type="color"]').click();
-    const format = tab.locator(".komo-tokens").getByRole("combobox", { name: "Color format", exact: true });
+    const format = tab.locator(".palette-tokens").getByRole("combobox", { name: "Color format", exact: true });
     await format.waitFor();
     await settle(tab);
     const formats = await menu(tab, format);
@@ -120,16 +120,16 @@ describe.skipIf(!chrome).each([{ width: 1280, height: 860 }, { width: 390, heigh
     expect(formats).toMatchObject({ labels: ["Hex", "RGB", "HSL", "HSB", "CSS"], truncated: [], heights: [28], wide: true, check: true, selected: "Hex" });
     await tab.keyboard.press("Escape");
     await tab.keyboard.press("Escape");
-    await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
+    await expect.poll(() => tab.locator(".palette-tokens").count()).toBe(0);
 
     // A unit select inside the Custom popup: two radii keep the per-corner editor.
     const radius = tab.locator('[data-field-property="border-radius"]');
     await radius.scrollIntoViewIfNeeded();
     await settle(tab);
     await radius.locator("select[data-picker]").click();
-    await tab.locator(".komo-tokens").waitFor(); if (await tab.locator(".komo-tokens__more").isVisible()) await tab.locator(".komo-tokens__more").click();
-    await tab.locator(".komo-tokens .komo-custom").waitFor();
-    const unit = tab.locator(".komo-tokens select").filter({ has: tab.locator("option[value=rem]") }).first();
+    await tab.locator(".palette-tokens").waitFor(); if (await tab.locator(".palette-tokens__more").isVisible()) await tab.locator(".palette-tokens__more").click();
+    await tab.locator(".palette-tokens .palette-custom").waitFor();
+    const unit = tab.locator(".palette-tokens select").filter({ has: tab.locator("option[value=rem]") }).first();
     await unit.waitFor();
     await settle(tab);
     const units = await menu(tab, unit);
@@ -139,7 +139,7 @@ describe.skipIf(!chrome).each([{ width: 1280, height: 860 }, { width: 390, heigh
     expect(units).toMatchObject({ wide: true, check: true });
     await tab.keyboard.press("Escape");
     await tab.keyboard.press("Escape");
-    await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
+    await expect.poll(() => tab.locator(".palette-tokens").count()).toBe(0);
 
     // A select in the panel itself.
     const layout = tab.locator('select[data-property="display"]');

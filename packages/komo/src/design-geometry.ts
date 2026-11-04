@@ -258,7 +258,7 @@ export function bindGeometry(hooks: Hooks) {
   const surface = document.createElement('div');
   surface.className = 'design-geometry';
   const style = document.createElement('style');
-  style.textContent = `.design-geometry{--komo-sel:var(--komo-selection,#0c93f5);position:fixed;inset:0;pointer-events:none;z-index:2}.design-geometry[hidden],.design-geometry [hidden],.design-geometry-note[hidden],.design-geometry-note [hidden]{display:none}.design-geometry:not([data-on])>*{display:none}.design-outline[data-kind=selected]:has(~.design-geometry[data-on]:not([hidden])){outline:0}:host(.design-active[data-komo-overlays-hidden]) :is(.design-geometry,.design-outline,.pins){visibility:hidden}.design-geometry>*{position:fixed;box-sizing:border-box}.design-geometry__frame{border:1px solid var(--komo-sel);outline:0}.design-geometry__frame:focus-visible{box-shadow:0 0 0 2px color-mix(in oklab,var(--komo-sel) 35%,transparent)}.design-geometry__frame,.design-geometry__handle{transition:opacity .12s ease}.design-geometry__handle{opacity:0;pointer-events:auto;touch-action:none}.design-geometry:is([data-near],[data-active],[data-focus]) .design-geometry__handle{opacity:1}.design-geometry[data-quiet] .design-geometry__handle{opacity:0;pointer-events:none}.design-geometry[data-quiet] .design-geometry__frame{opacity:.4}.design-geometry[data-preview] .design-geometry__frame{opacity:0}.design-geometry__handle::before{content:'';position:absolute;left:var(--x);top:var(--y);width:${SQUARE}px;height:${SQUARE}px;box-sizing:border-box;border-radius:1px;background:#fff;border:1px solid var(--komo-sel);box-shadow:0 1px 2px #0000001f}.design-geometry__handle:hover::before,.design-geometry__handle[data-active]::before{background:var(--komo-sel)}.design-geometry__handle[data-small]::before{display:none}[data-handle=n],[data-handle=s]{cursor:ns-resize}[data-handle=e],[data-handle=w]{cursor:ew-resize}[data-handle=nw],[data-handle=se]{cursor:nwse-resize}[data-handle=ne],[data-handle=sw]{cursor:nesw-resize}.design-geometry__guide{background:var(--komo-selection,#0c93f5)}.design-geometry__readout{translate:-50% 0;padding:2px 6px;border-radius:4px;background:var(--komo-sel);color:#fff;font:500 11px/16px system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 1px 3px #0003}.design-geometry[data-dragging] :is(.design-geometry__handle,.design-geometry__guide){display:none}.design-geometry__line{background:var(--komo-sel);border-radius:1px}.design-geometry__drop{border:2px dashed var(--komo-sel);border-radius:4px}.design-geometry__chip{translate:none}@media (prefers-reduced-motion:reduce){.design-geometry__frame,.design-geometry__handle{transition:none}}.design-geometry-note{display:grid;gap:8px;padding:0 12px 12px;color:#a19d97;font-size:11px;line-height:1.45}.design-geometry-note p{margin:0}.design-geometry-note div{display:flex;flex-wrap:wrap;gap:6px}.design-geometry-note button{height:24px;padding:0 8px;border-radius:6px;background:#ffffff0f;color:#e9e6e1;font-size:11px}.design-geometry-note button:hover{background:#ffffff1a}.design-geometry-note button[aria-pressed=true]{background:color-mix(in oklab,var(--accent,#bda6ef) 32%,transparent)}.design-inspector__eye{display:grid;place-items:center;flex:none;min-width:28px;height:28px;border-radius:7px;color:#909090}.design-inspector__eye:hover{background:#161616;color:#eee}.design-inspector__eye svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.3}.design-geometry-wait{order:1;width:5px;height:5px;margin-left:4px;border-radius:50%;background:#e7c27d;opacity:.7}`;
+  style.textContent = `.design-geometry{--palette-sel:var(--palette-selection,var(--komo-selection,#0c93f5));position:fixed;inset:0;pointer-events:none;z-index:2}.design-geometry[hidden],.design-geometry [hidden],.design-geometry-note[hidden],.design-geometry-note [hidden]{display:none}.design-geometry:not([data-on])>*{display:none}.design-outline[data-kind=selected]:has(~.design-geometry[data-on]:not([hidden])){outline:0}:host(.design-active[data-palette-overlays-hidden]) :is(.design-geometry,.design-outline,.pins){visibility:hidden}.design-geometry>*{position:fixed;box-sizing:border-box}.design-geometry__frame{border:1px solid var(--palette-sel);outline:0}.design-geometry__frame:focus-visible{box-shadow:0 0 0 2px color-mix(in oklab,var(--palette-sel) 35%,transparent)}.design-geometry__frame,.design-geometry__handle{transition:opacity .12s ease}.design-geometry__handle{opacity:0;pointer-events:auto;touch-action:none}.design-geometry:is([data-near],[data-active],[data-focus]) .design-geometry__handle{opacity:1}.design-geometry[data-quiet] .design-geometry__handle{opacity:0;pointer-events:none}.design-geometry[data-quiet] .design-geometry__frame{opacity:.4}.design-geometry[data-preview] .design-geometry__frame{opacity:0}.design-geometry__handle::before{content:'';position:absolute;left:var(--x);top:var(--y);width:${SQUARE}px;height:${SQUARE}px;box-sizing:border-box;border-radius:1px;background:#fff;border:1px solid var(--palette-sel);box-shadow:0 1px 2px #0000001f}.design-geometry__handle:hover::before,.design-geometry__handle[data-active]::before{background:var(--palette-sel)}.design-geometry__handle[data-small]::before{display:none}[data-handle=n],[data-handle=s]{cursor:ns-resize}[data-handle=e],[data-handle=w]{cursor:ew-resize}[data-handle=nw],[data-handle=se]{cursor:nwse-resize}[data-handle=ne],[data-handle=sw]{cursor:nesw-resize}.design-geometry__guide{background:var(--palette-selection,var(--komo-selection,#0c93f5))}.design-geometry__readout{translate:-50% 0;padding:2px 6px;border-radius:4px;background:var(--palette-sel);color:#fff;font:500 11px/16px system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 1px 3px #0003}.design-geometry[data-dragging] :is(.design-geometry__handle,.design-geometry__guide){display:none}.design-geometry__line{background:var(--palette-sel);border-radius:1px}.design-geometry__drop{border:2px dashed var(--palette-sel);border-radius:4px}.design-geometry__chip{translate:none}@media (prefers-reduced-motion:reduce){.design-geometry__frame,.design-geometry__handle{transition:none}}.design-geometry-note{display:grid;gap:8px;padding:0 12px 12px;color:#a19d97;font-size:11px;line-height:1.45}.design-geometry-note p{margin:0}.design-geometry-note div{display:flex;flex-wrap:wrap;gap:6px}.design-geometry-note button{height:24px;padding:0 8px;border-radius:6px;background:#ffffff0f;color:#e9e6e1;font-size:11px}.design-geometry-note button:hover{background:#ffffff1a}.design-geometry-note button[aria-pressed=true]{background:color-mix(in oklab,var(--accent,#bda6ef) 32%,transparent)}.design-inspector__eye{display:grid;place-items:center;flex:none;min-width:28px;height:28px;border-radius:7px;color:#909090}.design-inspector__eye:hover{background:#161616;color:#eee}.design-inspector__eye svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.3}.design-geometry-wait{order:1;width:5px;height:5px;margin-left:4px;border-radius:50%;background:#e7c27d;opacity:.7}`;
   const frame = node('div', 'design-geometry__frame', surface);
   frame.tabIndex = 0;
   frame.setAttribute('role', 'group');
@@ -273,7 +273,7 @@ export function bindGeometry(hooks: Hooks) {
   const readout = node('div', 'design-geometry__readout', surface);
   readout.setAttribute('aria-hidden', 'true');
   // Moves and resizes announce through Palette's one polite live region.
-  const say = (text: string) => surface.dispatchEvent(new CustomEvent('komo-announce', { detail: text, bubbles: true, composed: true }));
+  const say = (text: string) => surface.dispatchEvent(new CustomEvent('palette-announce', { detail: text, bubbles: true, composed: true }));
   // Reasons, side effects and the grid option live in the panel's Layout section, never over the page.
   const note = document.createElement('div');
   note.className = 'design-geometry-note';
@@ -315,7 +315,7 @@ export function bindGeometry(hooks: Hooks) {
   /** Hide every Design overlay (selection, hover outline, pins and move feedback), or show them again. */
   function peek(on: boolean) {
     hidden = on;
-    hooks.options.host.toggleAttribute('data-komo-overlays-hidden', on);
+    hooks.options.host.toggleAttribute('data-palette-overlays-hidden', on);
     eye.setAttribute('aria-pressed', String(on));
     eye.setAttribute('aria-label', eye.title = `${on ? 'Show' : 'Hide'} selection${keys}`);
     eye.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>${on ? '<path d="M2.5 13.5l11-11"/>' : ''}</svg>`;
@@ -323,7 +323,7 @@ export function bindGeometry(hooks: Hooks) {
   peek(false);
   // Canvas selection color for outlines, handles, Design mode's hover outline and move feedback; the panel keeps its accent.
   const color = hooks.options.design?.selectionColor;
-  if (color) hooks.options.host.style.setProperty('--komo-selection', color);
+  if (color) hooks.options.host.style.setProperty('--palette-selection', color);
   eye.addEventListener('click', () => peek(!hidden));
   /**
    * Handles show near the pointer, while resizing or dragging, or with keyboard focus; over the panel,
@@ -331,9 +331,9 @@ export function bindGeometry(hooks: Hooks) {
    */
   function state() {
     const root = hooks.options.root, inspector = hooks.panel().closest('.design-inspector'), focused = root.activeElement;
-    const popup = root.querySelector('.komo-select:popover-open,.komo-tokens:popover-open');
+    const popup = root.querySelector('.palette-select:popover-open,.palette-tokens:popover-open');
     const typing = !!focused && !!inspector?.contains(focused) && focused.matches('input,textarea,select,[contenteditable]');
-    surface.toggleAttribute('data-quiet', !gesture && (!!popup || typing || !!root.querySelector('.komo-color') || (!!inspector && over.includes(inspector))));
+    surface.toggleAttribute('data-quiet', !gesture && (!!popup || typing || !!root.querySelector('.palette-color') || (!!inspector && over.includes(inspector))));
     surface.toggleAttribute('data-preview', !!popup && over.includes(popup));
     surface.toggleAttribute('data-near', !!outline && point.x > outline.left - NEAR && point.x < outline.right + NEAR && point.y > outline.top - NEAR && point.y < outline.bottom + NEAR);
     surface.toggleAttribute('data-active', !!gesture || surface.hasAttribute('data-dragging'));
@@ -605,7 +605,7 @@ export function bindGeometry(hooks: Hooks) {
     const { moves, sizes } = net(recorded(element));
     const done = moves.flatMap(change => change.move ? [moveLines(change.move)[0].slice(2)] : []);
     let seen = true;
-    try { seen = !!localStorage.getItem('komo:geometry-moved'); } catch { /* No hint without storage. */ }
+    try { seen = !!localStorage.getItem('palette:geometry-moved'); } catch { /* No hint without storage. */ }
     text.textContent = [reason, still].filter(Boolean).join(' · ') || [...new Set([...done, ...[...gesture?.changes ?? [], ...moves, ...sizes].flatMap(change => change.effects)])].join(' · ')
       || (seen || moved ? '' : 'Drag to reorder · M, then ⌥↑/⌥↓');
     const heading = panel.closest('.design-inspector')?.querySelector('.design-inspector__heading');
@@ -627,7 +627,7 @@ export function bindGeometry(hooks: Hooks) {
     // On a background close to the selection color, the selection turns magenta so it stays visible.
     const rgb = (node: Element, property: 'backgroundColor') => getComputedStyle(node)[property].match(/[\d.]+/g)?.map(Number) ?? [];
     const [own, mark] = [rgb(box, 'backgroundColor'), rgb(guides[0], 'backgroundColor')];
-    surface.style.setProperty('--komo-sel', own.length > 2 && (own[3] ?? 1) > 0.5 && Math.hypot(own[0] - mark[0], own[1] - mark[1], own[2] - mark[2]) < 90 ? '#e5359b' : '');
+    surface.style.setProperty('--palette-sel', own.length > 2 && (own[3] ?? 1) > 0.5 && Math.hypot(own[0] - mark[0], own[1] - mark[1], own[2] - mark[2]) < 90 ? '#e5359b' : '');
     Object.assign(frame.style, {
       left: px(left), top: px(top), width: px(right - left), height: px(bottom - top),
       clipPath: `inset(${[bounds.top - top, right - bounds.right, bottom - bounds.bottom, bounds.left - left].map(value => px(Math.max(0, value))).join(' ')})`,

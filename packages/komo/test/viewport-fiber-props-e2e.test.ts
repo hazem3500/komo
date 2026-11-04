@@ -15,13 +15,13 @@ import { openDesign } from "./design-e2e.js";
 // copy of the app outside the frame is never touched.
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
-const shots = join(tmpdir(), "komo-viewport-fiber-props");
+const shots = join(tmpdir(), "palette-viewport-fiber-props");
 let directory: string, origin: string;
 let server: Server, browser: Browser;
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-viewport-fiber-props-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-viewport-fiber-props-"));
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
@@ -46,14 +46,14 @@ beforeAll(async () => {
       function Tag(){
         const[props,setProps]=React.useState({label:'Example tag'});
         const inspect=usePaletteInspectable({component:tag,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
-        return h('span',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],id:'tag'},props.label);
+        return h('span',{ref:inspect.ref,'data-palette-inspectable':inspect['data-palette-inspectable'],id:'tag'},props.label);
       }
       function App(){
         return h('section',null,h('p',{id:'copy'},'Page copy'),h(Button,{variant:'primary',pill:false},'Example button'),h(Tag));
       }
       if(!shell)createRoot(document.querySelector('main')).render(h(App));
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':'+project;
+      const key='palette:'+location.origin+':'+project;
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       window.fetch=async(input,init)=>{
@@ -105,12 +105,12 @@ async function load(page: Page, mode: Mode): Promise<Page | Frame> {
   if (mode === "shell") page.once("dialog", (dialog) => void dialog.accept());
   await page.keyboard.press("l");
   if (mode === "shell") {
-    await page.waitForURL(/komo-shell=[0-9a-f]{32}/);
+    await page.waitForURL(/palette-shell=[0-9a-f]{32}/);
     await page.waitForFunction(() => !!(window as any).palette);
   }
   await page.waitForFunction(() => {
     const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;
-    const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+    const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
     return !!frame?.contentDocument?.querySelector(".fixture-button") && !root!.querySelector(".frame-stage[data-loading]");
   });
   return page.frames().find((item) => item.name() === "komo-viewport")!;
@@ -119,7 +119,7 @@ async function load(page: Page, mode: Mode): Promise<Page | Frame> {
 /** The centre of `selector` on screen, inside the viewport iframe when one shows the page. */
 const onScreen = (page: Page, selector: string) => page.evaluate((selector) => {
   const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;
-  const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+  const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
   const outer = frame?.getBoundingClientRect(), scale = frame && outer ? outer.width / frame.offsetWidth : 1;
   const inner = (frame?.contentDocument ?? document).querySelector(selector)!.getBoundingClientRect();
   return { x: (outer?.left ?? 0) + (inner.left + inner.width / 2) * scale, y: (outer?.top ?? 0) + (inner.top + inner.height / 2) * scale };
@@ -156,12 +156,12 @@ describe.skipIf(!chrome)("Discovered React props across Frame modes", () => {
 
     // Hover previews in the reviewed app; choosing commits.
     await variant.click();
-    await page.locator(".komo-select").getByRole("option", { name: "ghost", exact: true }).hover();
+    await page.locator(".palette-select").getByRole("option", { name: "ghost", exact: true }).hover();
     await expect.poll(() => attr("variant")).toBe("ghost");
-    await page.locator(".komo-select").getByRole("option", { name: "secondary", exact: true }).hover();
+    await page.locator(".palette-select").getByRole("option", { name: "secondary", exact: true }).hover();
     await expect.poll(() => attr("variant")).toBe("secondary");
-    await page.locator(".komo-select").getByRole("option", { name: "secondary", exact: true }).click();
-    await page.locator(".komo-select").waitFor({ state: "detached" });
+    await page.locator(".palette-select").getByRole("option", { name: "secondary", exact: true }).click();
+    await page.locator(".palette-select").waitFor({ state: "detached" });
     expect(await attr("variant")).toBe("secondary");
     await page.getByRole("switch", { name: "Button pill", exact: true }).click();
     await expect.poll(() => attr("pill")).toBe("true");

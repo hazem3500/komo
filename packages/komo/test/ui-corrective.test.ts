@@ -16,7 +16,7 @@ let server: Server, browser: Browser;
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-token-ownership-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-token-ownership-"));
   await build({
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
@@ -44,7 +44,7 @@ beforeAll(async () => {
       const anchor={selector:'#target',text:'',x:.5,y:.5,width:0,height:0,pageX:0,pageY:0,viewportWidth:1280};
       const thread={id:'radius-thread',page:location.pathname,anchor,resolved:false,resolvedBy:null,createdAt:Date.now(),updatedAt:Date.now(),comments:[{id:'radius-comment',body:'Synthetic radius conversation',author:{id:'synthetic-reviewer',name:'Example reviewer',verified:true},createdAt:Date.now(),editedAt:null,reactions:{}}]};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
-      if(radius){const key='branch-comments:'+location.origin+':ownership';localStorage.setItem(key,'synthetic-session');localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));localStorage.setItem(key+':'+JSON.stringify(['example/review','local'])+':threads',JSON.stringify({token:'synthetic-session',threads:[thread]}))}
+      if(radius){const key='palette:'+location.origin+':ownership';localStorage.setItem(key,'synthetic-session');localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));localStorage.setItem(key+':'+JSON.stringify(['example/review','local'])+':threads',JSON.stringify({token:'synthetic-session',threads:[thread]}))}
       window.fetch=async(input,init)=>{const method=init?.method??(input instanceof Request?input.method:'GET');if(method!=='GET'){qa.writes.push(method);throw Error('Unexpected fixture write')}return Response.json({...(radius?{user}:{}),threads:radius?[thread]:[],guests:true})};
       const mode=new URLSearchParams(location.search).get('mode');
       if(mode==='floating')document.body.append(document.createElement('aside'));
@@ -99,12 +99,12 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await page.waitForFunction(() => !!(window as any).palette);
       await page.locator('[data-menu-item="more"]').evaluate((el:HTMLElement)=>{el.focus();el.click()});
       await page.locator('[data-menu-item="shortcuts"]').evaluate((el:HTMLElement)=>{el.focus();el.click()});
-      await expect.poll(() => page.locator('dialog.komo-shortcuts[open]').count()).toBe(1);
-      const restore = page.locator('dialog.komo-shortcuts .komo-shortcuts__row').filter({ hasText: 'Restore feedback' });
+      await expect.poll(() => page.locator('dialog.palette-shortcuts[open]').count()).toBe(1);
+      const restore = page.locator('dialog.palette-shortcuts .palette-shortcuts__row').filter({ hasText: 'Restore feedback' });
       expect(await restore.getByRole('img', { name: 'Shift + J', exact: true }).count()).toBe(1);
       expect(await restore.locator('kbd').last().textContent()).toBe('J');
       await page.keyboard.press('Escape');
-      expect(await page.locator('dialog.komo-shortcuts[open]').count()).toBe(0);
+      expect(await page.locator('dialog.palette-shortcuts[open]').count()).toBe(0);
       expect(await page.locator('[data-menu-item="more"]').evaluate(el=>el.getRootNode().activeElement===el)).toBe(true);
       const dismiss = page.locator('.morphing-menu__shortcut[data-menu-item="dismiss"]');
       expect(await dismiss.getAttribute('aria-keyshortcuts')).toBeNull();
@@ -123,7 +123,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await page.waitForFunction(() => !!(window as any).palette);
       await openDesign(page); await page.locator('#target').click();
       await page.locator('[data-field-property="color"] select[data-picker]').click();
-      await page.locator('.komo-tokens__more').click();
+      await page.locator('.palette-tokens__more').click();
       const value=page.getByRole('textbox',{name:'Hex',exact:true});
       await expect.poll(()=>value.inputValue()).toBe('CCCCCC');
       await page.evaluate(()=>(window as any).radiusQA.theme('light'));
@@ -141,7 +141,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       const original = await target.evaluate(el => [el.className, el.getAttribute('style')]);
       await openDesign(page); await target.click();
       await page.locator('[data-field-property="color"] select[data-picker]').click();
-      await page.locator('.komo-tokens__more').click();
+      await page.locator('.palette-tokens__more').click();
       const value = page.getByRole('textbox', { name: 'Hex', exact: true });
       await expect.poll(() => value.inputValue(), { timeout: 4000 }).toBe('CCCCCC');
       // Each switch lands while the previous refresh may still be settling.
@@ -168,14 +168,14 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       const before=await target.evaluate(el=>[el.className,el.getAttribute('style')]);
       await openDesign(page); await target.click();
       await page.locator('[data-field-property="color"] select[data-picker]').click();
-      await page.locator('.komo-tokens__more').click();
+      await page.locator('.palette-tokens__more').click();
       await page.getByRole('textbox',{name:'Hex',exact:true}).fill('336699');
       const opacity=page.getByRole('textbox',{name:'Opacity',exact:true});
       await opacity.fill('50'); await opacity.press('Enter');
       expect(await target.evaluate(el=>getComputedStyle(el).color)).toBe('rgba(51, 102, 153, 0.5)');
       // The first Undo press closes the popup, which keeps the visit as one entry, then undoes it.
       await page.getByRole('button',{name:'Undo',exact:true}).click();
-      expect(await page.locator('.komo-tokens').count()).toBe(0);
+      expect(await page.locator('.palette-tokens').count()).toBe(0);
       expect(await target.evaluate(el=>[el.className,el.getAttribute('style')])).toEqual(before);
       expect(await page.locator('button[aria-label="Undo"]').isDisabled()).toBe(true);
     } finally { await page.close(); }
@@ -188,7 +188,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await openDesign(page);await page.locator('#target').click();
       const trigger=page.locator('[data-field-property="color"] select[data-picker]');
       await trigger.click();
-      await page.locator('.komo-tokens__more').click();
+      await page.locator('.palette-tokens__more').click();
       await page.getByRole('textbox',{name:'Hex',exact:true}).fill('336699');
       const input=page.getByRole('textbox',{name:'Opacity',exact:true});
       await input.fill('50');
@@ -196,7 +196,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await expect.poll(()=>page.locator('#target').evaluate(el=>getComputedStyle(el).color)).toBe('rgba(51, 102, 153, 0.5)');
       expect(await input.inputValue()).toBe('50');
       await input.press('Escape');
-      expect(await page.locator('.komo-tokens').count()).toBe(0);
+      expect(await page.locator('.palette-tokens').count()).toBe(0);
       expect(await page.locator('#target').evaluate(el=>getComputedStyle(el).color)).toBe('rgb(85, 85, 85)');
       expect(await trigger.evaluate(el=>el.getRootNode().activeElement===el)).toBe(true);
       expect(await page.locator('button[aria-label="Undo"]').isDisabled()).toBe(true);
@@ -210,13 +210,13 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await openDesign(page);await target.click();
       const trigger=page.locator('[data-field-property="color"] select[data-picker]');
       await trigger.click();
-      await page.locator('.komo-tokens__more').click();
+      await page.locator('.palette-tokens__more').click();
       await page.getByRole('textbox',{name:'Hex',exact:true}).fill('336699');
       const opacity=page.getByRole('textbox',{name:'Opacity',exact:true});
       await opacity.fill('50');await opacity.press('Enter');
-      await trigger.click();await expect.poll(()=>page.locator('.komo-tokens').count()).toBe(0);const custom=await state();
+      await trigger.click();await expect.poll(()=>page.locator('.palette-tokens').count()).toBe(0);const custom=await state();
       await trigger.click();
-      await page.locator('.komo-tokens [role=option]').filter({hasText:'Primary'}).first().click();const token=await state();
+      await page.locator('.palette-tokens [role=option]').filter({hasText:'Primary'}).first().click();const token=await state();
       expect(await target.evaluate(el=>getComputedStyle(el).color)).toBe('rgb(105, 65, 198)');
       await page.getByRole('button',{name:'Edit color value',exact:true}).click();
       const raw=page.locator('input[data-property="color"]');await raw.fill('#112233');await raw.press('Enter');
@@ -242,10 +242,10 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
         });
         await page.locator('[data-menu-item="more"]').evaluate((el: HTMLElement) => { el.focus(); el.click(); });
         await page.locator('[data-menu-item="shortcuts"]').evaluate((el: HTMLElement) => { el.focus(); el.click(); });
-        await page.locator('dialog.komo-shortcuts[open]').waitFor();
+        await page.locator('dialog.palette-shortcuts[open]').waitFor();
         const before = await page.locator('main').getAttribute('style');
         await page.keyboard.press('Escape');
-        await expect.poll(() => page.locator('dialog.komo-shortcuts[open]').count()).toBe(0);
+        await expect.poll(() => page.locator('dialog.palette-shortcuts[open]').count()).toBe(0);
         expect(await page.locator('#host-dialog').evaluate((el: HTMLDialogElement) => el.open)).toBe(true);
         expect(await page.locator('[data-field-property="color"]').count()).toBe(1);
         expect(await page.locator('main').getAttribute('style')).toBe(before);
@@ -266,9 +266,9 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
         await draft.fill('Unsent synthetic draft');
         await page.locator('[data-menu-item="more"]').evaluate((el: HTMLElement) => { el.focus(); el.click(); });
         await page.locator('[data-menu-item="shortcuts"]').evaluate((el: HTMLElement) => { el.focus(); el.click(); });
-        await page.locator('dialog.komo-shortcuts[open]').waitFor();
+        await page.locator('dialog.palette-shortcuts[open]').waitFor();
         await page.keyboard.press('Escape');
-        await expect.poll(() => page.locator('dialog.komo-shortcuts[open]').count()).toBe(0);
+        await expect.poll(() => page.locator('dialog.palette-shortcuts[open]').count()).toBe(0);
         expect(await draft.inputValue()).toBe('Unsent synthetic draft');
         expect(await page.evaluate(() => (window as any).radiusQA.writes)).toEqual([]);
         expect(await page.locator('[data-menu-item="more"]').evaluate(el => (el.getRootNode() as ShadowRoot).activeElement === el)).toBe(true);
@@ -287,21 +287,21 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
           await openDesign(page); await target.click();
           const trigger = page.locator('[data-field-property="color"] select[data-picker]');
           await trigger.click();
-          await page.locator('.komo-tokens__more').click();
+          await page.locator('.palette-tokens__more').click();
           if (kind === 'format') await page.getByRole('combobox', { name: 'Color format', exact: true }).selectOption('CSS');
           const input = page.getByRole('textbox', { name: kind === 'format' ? 'CSS color' : 'Hex', exact: true });
           await input.waitFor();
           if (kind === 'invalid') await input.fill('12zz');
           if (kind === 'dirty') await input.fill('112233');
           await input.focus();
-          await input.evaluate((el: HTMLInputElement) => { el.setSelectionRange(1, 3); (window as any).savedInput = el; (window as any).savedPopup = el.closest('.komo-tokens'); });
+          await input.evaluate((el: HTMLInputElement) => { el.setSelectionRange(1, 3); (window as any).savedInput = el; (window as any).savedPopup = el.closest('.palette-tokens'); });
           const pending = await input.inputValue();
           for (const theme of ['light', 'dark', 'light']) {
             await page.evaluate(theme => (window as any).radiusQA.theme(theme), theme);
             await expect.poll(() => page.locator('#target').evaluate(el => getComputedStyle(el).color), { timeout: 4000 }).toBe(kind === 'dirty' ? 'rgb(17, 34, 51)' : kind === 'offToken' || theme === 'dark' ? 'rgb(204, 204, 204)' : 'rgb(85, 85, 85)');
           }
           if (kind === 'untouched') await expect.poll(() => input.inputValue()).toBe('555555');
-          expect(await input.evaluate((el: HTMLInputElement) => el === (window as any).savedInput && el.closest('.komo-tokens') === (window as any).savedPopup && (el.getRootNode() as ShadowRoot).activeElement === el && el.selectionStart === 1 && el.selectionEnd === 3)).toBe(true);
+          expect(await input.evaluate((el: HTMLInputElement) => el === (window as any).savedInput && el.closest('.palette-tokens') === (window as any).savedPopup && (el.getRootNode() as ShadowRoot).activeElement === el && el.selectionStart === 1 && el.selectionEnd === 3)).toBe(true);
           if (kind === 'untouched') {
             if (process.env.KOMO_UI_EVIDENCE) await page.screenshot({ path: join(process.env.KOMO_UI_EVIDENCE, `custom-${mode}.png`) });
           }
@@ -316,12 +316,12 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
             const undo = page.locator('button[aria-label="Undo"]');
             if (!(await undo.isDisabled())) await undo.click();
             else await trigger.click();
-            await expect.poll(() => page.locator('.komo-tokens').count()).toBe(0);
+            await expect.poll(() => page.locator('.palette-tokens').count()).toBe(0);
             expect(await undo.isDisabled()).toBe(true);
           }
           expect(await target.evaluate(el => [el.className, el.getAttribute('style')])).toEqual(original);
           await trigger.click();
-          await page.locator('.komo-tokens__more').click();
+          await page.locator('.palette-tokens__more').click();
           await input.waitFor(); await input.press('Escape');
           expect(await target.evaluate(el => [el.className, el.getAttribute('style')])).toEqual(original);
           expect(await trigger.evaluate(el => (el.getRootNode() as ShadowRoot).activeElement === el)).toBe(true);
@@ -342,12 +342,12 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
         const original = await target.evaluate(el => [el.className, el.getAttribute('style')]);
         const trigger = page.locator('[data-field-property="color"] select[data-picker]');
         await trigger.click();
-        await page.locator('.komo-tokens__more').click();
-        const popup = page.locator('.komo-tokens');
+        await page.locator('.palette-tokens__more').click();
+        const popup = page.locator('.palette-tokens');
         const area = page.getByRole('slider', { name: 'Saturation and brightness', exact: true });
         const hue = page.getByRole('slider', { name: 'Hue', exact: true });
         await area.waitFor();
-        expect(await popup.locator('input[type=color], .react-colorful, .komo-custom').count()).toBe(0);
+        expect(await popup.locator('input[type=color], .react-colorful, .palette-custom').count()).toBe(0);
         await area.click({ position: { x: 60, y: 30 } });
         await hue.focus(); await hue.press('ArrowRight');
         const input = page.getByRole('textbox', { name: 'Hex', exact: true });
@@ -357,7 +357,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
         const committed = await target.evaluate(el => [el.className, el.getAttribute('style')]);
         expect(committed).not.toEqual(original);
         await trigger.click();
-        await page.locator('.komo-tokens__more').click();
+        await page.locator('.palette-tokens__more').click();
         await hue.waitFor(); await hue.focus();
         const beforeKey = await input.inputValue();
         await hue.press('ArrowRight');
@@ -392,8 +392,8 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       await target.click();
       const trigger = page.locator('[data-field-property="color"] select[data-picker]');
       await trigger.click();
-      await page.locator('.komo-tokens__more').click();
-      const popup = page.locator(".komo-tokens");
+      await page.locator('.palette-tokens__more').click();
+      const popup = page.locator(".palette-tokens");
       const format = page.getByRole("combobox", { name: "Color format", exact: true });
       await format.waitFor();
       const popupNode = await popup.elementHandle();
@@ -415,10 +415,10 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       expect(await target.evaluate(node => getComputedStyle(node).color)).toBe("rgba(51, 102, 153, 0.5)");
       expect(await page.locator('button[aria-label="Undo"]').isDisabled()).toBe(true);
       await format.selectOption("HSL");
-      expect(await popup.locator(".komo-color__channels input").evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).value))).toEqual(["210", "50", "40", "50"]);
+      expect(await popup.locator(".palette-color__channels input").evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).value))).toEqual(["210", "50", "40", "50"]);
       expect(await popup.evaluate((node, expected) => node === expected, popupNode)).toBe(true);
       await format.selectOption("RGB");
-      expect(await popup.locator(".komo-color__channels input").evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).value))).toEqual(["51", "102", "153", "50"]);
+      expect(await popup.locator(".palette-color__channels input").evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).value))).toEqual(["51", "102", "153", "50"]);
       expect(await target.evaluate(node => getComputedStyle(node).color)).toBe("rgba(51, 102, 153, 0.5)");
       const red = page.getByRole("textbox", { name: "Red", exact: true });
       await red.fill("abc");
@@ -428,7 +428,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       expect(await target.evaluate(node => [node.className, node.getAttribute("style")])).toEqual(original);
       expect(await trigger.evaluate(node => (node.getRootNode() as ShadowRoot).activeElement === node)).toBe(true);
       await trigger.click();
-      await page.locator('.komo-tokens__more').click();
+      await page.locator('.palette-tokens__more').click();
       await red.fill("51");
       await page.getByRole("textbox", { name: "Green", exact: true }).fill("102");
       await page.getByRole("textbox", { name: "Blue", exact: true }).fill("153");
@@ -457,7 +457,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       expect(await field.locator('.design-field__label').textContent()).toBe('Corner radius');
       await expect.poll(() => field.locator('.design-field__unit').textContent()).toBe('px');
       await field.locator('select[data-picker]').click();
-      await page.locator('.komo-tokens [role=option]').filter({ hasText: 'Full' }).click();
+      await page.locator('.palette-tokens [role=option]').filter({ hasText: 'Full' }).click();
       expect(await page.locator('#other').evaluate(el => parseFloat(getComputedStyle(el).borderTopLeftRadius))).toBeGreaterThan(96);
     } finally { await page.close(); }
   });

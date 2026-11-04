@@ -288,12 +288,12 @@ describe("custom token adapter in Design mode", () => {
     await open({ tokens: classAdapter() });
     const trigger = picker("color");
     trigger.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", button: 0 }));
-    await vi.waitFor(() => expect(shadow.querySelector(".komo-tokens")).not.toBeNull());
-    const search = shadow.querySelector<HTMLInputElement>(".komo-tokens input")!;
+    await vi.waitFor(() => expect(shadow.querySelector(".palette-tokens")).not.toBeNull());
+    const search = shadow.querySelector<HTMLInputElement>(".palette-tokens input")!;
     const press = (key: string) => search.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true }));
-    const primary = shadow.querySelector<HTMLElement>('.komo-tokens [role="option"][aria-label*="text-primary"]')!;
-    expect(shadow.querySelectorAll('.komo-tokens [role="option"]')).toHaveLength(2);
-    expect(shadow.querySelector('.komo-tokens [aria-selected="true"]')?.getAttribute("aria-label")).toContain("text-secondary");
+    const primary = shadow.querySelector<HTMLElement>('.palette-tokens [role="option"][aria-label*="text-primary"]')!;
+    expect(shadow.querySelectorAll('.palette-tokens [role="option"]')).toHaveLength(2);
+    expect(shadow.querySelector('.palette-tokens [aria-selected="true"]')?.getAttribute("aria-label")).toContain("text-secondary");
     for (let i = 0; i < 12; i++) {
       primary.dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
       expect(label.className).toBe("text-primary");
@@ -306,7 +306,7 @@ describe("custom token adapter in Design mode", () => {
     press("Enter");
     expect(label.className).toBe("text-primary");
     expect(proposedDesignChanges(label)).toContain("color.text.primary");
-    expect(shadow.querySelector(".komo-tokens")).toBeNull();
+    expect(shadow.querySelector(".palette-tokens")).toBeNull();
     tool("Undo").click();
     expect(label.className).toBe("text-secondary");
     expect(tool("Undo").disabled).toBe(true);
@@ -316,12 +316,12 @@ describe("custom token adapter in Design mode", () => {
     await open({ tokens: classAdapter() });
     choose("color", "color.text.primary");
     picker("color").dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", button: 0 }));
-    await vi.waitFor(() => expect(shadow.querySelector(".komo-tokens")).not.toBeNull());
-    shadow.querySelectorAll<HTMLElement>('.komo-tokens [role="option"]')[1]
+    await vi.waitFor(() => expect(shadow.querySelector(".palette-tokens")).not.toBeNull());
+    shadow.querySelectorAll<HTMLElement>('.palette-tokens [role="option"]')[1]
       .dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
     expect(label.className).toBe("text-secondary");
     controller.setActive(false);
-    expect(shadow.querySelector(".komo-tokens")).toBeNull();
+    expect(shadow.querySelector(".palette-tokens")).toBeNull();
     expect(label.className).toBe("text-secondary");
     controller.setActive(true);
     expect(label.className).toBe("text-primary");
@@ -352,7 +352,7 @@ describe("custom token adapter in Design mode", () => {
     }]);
     // The CLI reads the same structured change back out of the comment text.
     expect(designEditFromComment(text, "label")).toEqual({
-      komo: "design-edit", version: 1, target: { selector: "label" }, tokens: "classes", changes: tokenSwapChanges(label),
+      palette: "design-edit", version: 1, target: { selector: "label" }, tokens: "classes", changes: tokenSwapChanges(label),
     });
     const [section] = parseDesignComment(text);
     expect(section).toMatchObject({ changes: [{ label: "color", token: "color.text.primary", after: "#1f1f1f", apply: { kind: "style", property: "color" } }] });
@@ -457,8 +457,8 @@ describe("custom token adapter in Design mode", () => {
       }, themes: [{ id: "mode", options: [{ id: "light" }, { id: "dark" }], current: () => root.getAttribute("data-review-mode")!, apply: id => root.setAttribute("data-review-mode", id) }] });
       choose("color", "color.text.primary");
       picker("color").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, composed: true }));
-      await vi.waitFor(() => expect(shadow.querySelector(".komo-tokens")).not.toBeNull());
-      const popup = shadow.querySelector(".komo-tokens")!;
+      await vi.waitFor(() => expect(shadow.querySelector(".palette-tokens")).not.toBeNull());
+      const popup = shadow.querySelector(".palette-tokens")!;
       const search = popup.querySelector<HTMLInputElement>("input")!;
       search.value = "text";
       search.dispatchEvent(new Event("input"));
@@ -470,7 +470,7 @@ describe("custom token adapter in Design mode", () => {
       for (const key of ["ArrowUp", "ArrowDown"]) search.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true }));
       releaseLight!();
       await vi.waitFor(() => expect(getComputedStyle(label).color).toBe("rgb(85, 85, 85)"));
-      expect(shadow.querySelector(".komo-tokens")).toBe(popup);
+      expect(shadow.querySelector(".palette-tokens")).toBe(popup);
       expect(popup.querySelector("input")).toBe(search);
       expect(search.value).toBe("text");
       expect(popup.querySelector("[data-active]")?.getAttribute("aria-label")).toContain("#555555");
@@ -564,8 +564,8 @@ describe("custom token adapter in Design mode", () => {
   const accent: DesignToken = { path: "color.text.accent", type: "color", value: "#123456", properties: ["color"], group: "Text", label: "Text accent", ref: "text-accent" };
   async function openPicker() {
     picker("color").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, composed: true }));
-    await vi.waitFor(() => expect(shadow.querySelector(".komo-tokens [role=option]")).not.toBeNull());
-    const popup = shadow.querySelector<HTMLElement>(".komo-tokens")!;
+    await vi.waitFor(() => expect(shadow.querySelector(".palette-tokens [role=option]")).not.toBeNull());
+    const popup = shadow.querySelector<HTMLElement>(".palette-tokens")!;
     const search = popup.querySelector<HTMLInputElement>("input")!;
     search.value = "text";
     search.dispatchEvent(new Event("input"));
@@ -594,7 +594,7 @@ describe("custom token adapter in Design mode", () => {
     listeners.forEach(listener => listener());
     await vi.waitFor(() => expect(popup.textContent).toContain("Text accent"));
     expect(adapter.list.mock.calls.length).toBe(calls + 1);
-    expect(shadow.querySelector(".komo-tokens")).toBe(popup);
+    expect(shadow.querySelector(".palette-tokens")).toBe(popup);
     expect(popup.querySelector("input")).toBe(search);
     expect(search.value).toBe("text");
     expect(active()).toBe(row);
@@ -623,7 +623,7 @@ describe("custom token adapter in Design mode", () => {
       late.textContent = ".text-accent{color:#123456}";
       document.head.append(late);
       await vi.waitFor(() => expect(popup.textContent).toContain("Text accent"));
-      expect(shadow.querySelector(".komo-tokens")).toBe(popup);
+      expect(shadow.querySelector(".palette-tokens")).toBe(popup);
       expect(search.value).toBe("text");
       expect(active()).toBe(row);
       late.remove();

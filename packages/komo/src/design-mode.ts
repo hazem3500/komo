@@ -339,7 +339,7 @@ export function createDesignMode(options: DesignModeOptions) {
     } satisfies PanelContext);
     if (retainedProps) controls.prepend(retainedProps);
     // Any design-system adapter needs the token and props controls, not only registered elements.
-    if (options.design?.tokens || options.design?.themes || componentAdapter(element, options.design) || element.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
+    if (options.design?.tokens || options.design?.themes || componentAdapter(element, options.design) || element.closest("[data-palette-inspectable],[data-komo-inspectable],[data-palette-design-tokens],[data-komo-design-tokens]")) {
       reactPanelPromise ??= import("./react-props-panel.js").then((module) => reactPanelModule = module).catch((error: unknown) => {
         reactPanelPromise = null;
         throw error;
@@ -662,7 +662,7 @@ export function createDesignMode(options: DesignModeOptions) {
   }
   function cancelPreview() {
     geometry?.cancel();
-    options.root.dispatchEvent(new Event("komo-preview-cancel"));
+    options.root.dispatchEvent(new Event("palette-preview-cancel"));
   }
   /** Style rows to propose or copy; a structural move's hidden original is not a `display` change. */
   function styles(element: DesignTarget) {
@@ -716,7 +716,7 @@ export function createDesignMode(options: DesignModeOptions) {
       renderOutlines();
     }
     updateActions();
-    options.root.dispatchEvent(new CustomEvent("komo-announce", { detail: "Undone" }));
+    options.root.dispatchEvent(new CustomEvent("palette-announce", { detail: "Undone" }));
     // A redrawn field gets its focus back (refocus); a control still shown keeps it. Otherwise focus
     // goes to Undo, or to the selection once nothing is left to undo, never to Exit.
     const now = options.root.activeElement;
@@ -733,7 +733,7 @@ export function createDesignMode(options: DesignModeOptions) {
     renderControls();
     renderOutlines();
     updateActions();
-    options.root.dispatchEvent(new CustomEvent("komo-announce", { detail: "Redone" }));
+    options.root.dispatchEvent(new CustomEvent("palette-announce", { detail: "Redone" }));
     // As for Undo: a redrawn field gets its focus back, a control still shown keeps it; otherwise
     // Redo, or the selection once nothing is left to redo, never Exit.
     const now = options.root.activeElement;
@@ -801,7 +801,7 @@ export function createDesignMode(options: DesignModeOptions) {
   for (const node of [controls, actions, editText])
     for (const type of ["pointerdown", "focusin", "click", "input"]) node.addEventListener(type, toAfter, true);
   // Moves, Undo and applied tokens announce in Palette's one polite live region (index.ts).
-  options.root.addEventListener("komo-announce", event => {
+  options.root.addEventListener("palette-announce", event => {
     const live = options.root.querySelector(".sr-only[aria-live]");
     if (live) live.textContent = (event as CustomEvent<string>).detail;
   }, { signal: listeners.signal });

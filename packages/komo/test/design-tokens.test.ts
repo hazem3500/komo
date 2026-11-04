@@ -62,7 +62,7 @@ describe("explicit design-token preview bridge", () => {
     expect(card.style.getPropertyValue("background-color")).toBe("var(--brand)");
     cleanup();
     expect(card.style.getPropertyValue("background-color")).toBe("");
-    expect(root.hasAttribute("data-komo-design-tokens")).toBe(false);
+    expect(root.hasAttribute("data-palette-design-tokens")).toBe(false);
   });
 
   it("previews global values only on explicit action, reports scope, and supports undo/reset", () => {

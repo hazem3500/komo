@@ -83,15 +83,15 @@ it("edits shadow layers in a 2×2 grid without losing nested color commas, and k
   expect(cssParts('1px 2px rgb(0, 0, 0), inset 0 1px red', true)).toHaveLength(2);
   expect(shadowLayers("var(--shadow)")).toBeUndefined();
   const e = editor("box-shadow", "1px 2px 3px 4px rgba(0, 0, 0, 0.2), inset 0px 1px red");
-  expect(e.box.querySelectorAll(".komo-typed__layer")).toHaveLength(2);
-  expect(e.box.querySelectorAll(".komo-typed__layer .komo-typed__grid .komo-typed__field")).toHaveLength(8);
+  expect(e.box.querySelectorAll(".palette-typed__layer")).toHaveLength(2);
+  expect(e.box.querySelectorAll(".palette-typed__layer .palette-typed__grid .palette-typed__field")).toHaveLength(8);
   e.type("Layer 1 x offset", "5");
   expect(e.preview).toHaveBeenLastCalledWith("5px 2px 3px 4px rgba(0, 0, 0, 0.2), inset 0px 1px red");
   e.key("Layer 1 x offset", "Enter");
   expect(e.commit).toHaveBeenCalledTimes(1);
   expect(e.box.querySelector('[aria-label="Layer 1 color"]')!.textContent).toBe("00000020%");
   expect(e.box.querySelector('[aria-label="Layer 2 color"] span')!.textContent).toBe("RED");
-  expect(e.box.querySelector(".komo-typed__tile i")!.getAttribute("style")).toContain("box-shadow");
+  expect(e.box.querySelector(".palette-typed__tile i")!.getAttribute("style")).toContain("box-shadow");
 });
 
 it("switches Drop and Inner, hides, removes and adds layers, each kept at once", () => {
@@ -103,7 +103,7 @@ it("switches Drop and Inner, hides, removes and adds layers, each kept at once",
   expect(e.commit).toHaveBeenLastCalledWith("inset 0px 2px 4px red");
   e.box.querySelector<HTMLButtonElement>('[aria-label="Add shadow layer"]')!.click();
   expect(e.commit).toHaveBeenLastCalledWith("inset 0px 2px 4px red, 0px 2px 4px 0px #00000040");
-  expect(e.box.querySelectorAll(".komo-typed__layer")).toHaveLength(2);
+  expect(e.box.querySelectorAll(".palette-typed__layer")).toHaveLength(2);
   const eye = e.box.querySelector<HTMLButtonElement>('[aria-label="Layer 1 visible"]')!;
   expect(eye.getAttribute("aria-pressed")).toBe("true");
   eye.click();
@@ -142,7 +142,7 @@ it("edits a typography token as family, weight, size and line height, with or wi
   const e = editor("font", "500 0.875rem/1.43", undefined, [{ path: "font.body", type: "fontFamily", value: '"Body Face", sans-serif', label: "Body" }]);
   // The popup header names the editor, so the editor itself has no title.
   expect(e.box.querySelector("strong")).toBeNull();
-  expect(e.box.querySelector(".komo-typed__hint")).toBeNull();
+  expect(e.box.querySelector(".palette-typed__hint")).toBeNull();
   expect(e.box.querySelector("details")!.open).toBe(false);
   expect(e.box.querySelector("summary")!.textContent).toBe("Edit as CSS");
   expect([...e.box.querySelectorAll<HTMLOptionElement>('select[aria-label="Font family"] option')].map(option => option.textContent)).toEqual(["Inherited family", "Body"]);
@@ -170,14 +170,14 @@ it("previews a hovered family or weight as the whole value and shows options as 
   const option = (name: string, value: string) => [...menu(name).options].find(item => item.value === value)!;
   expect(option("Font weight", "800").style.fontWeight).toBe("800");
   expect(option("Font family", '"Body Face", sans-serif').style.fontFamily).toContain("Body Face");
-  menu("Font weight").dispatchEvent(new CustomEvent("komo-preview", { detail: "800" }));
+  menu("Font weight").dispatchEvent(new CustomEvent("palette-preview", { detail: "800" }));
   expect(hover).toHaveBeenLastCalledWith("800 14px/20px serif");
-  menu("Font family").dispatchEvent(new CustomEvent("komo-preview", { detail: '"Body Face", sans-serif' }));
+  menu("Font family").dispatchEvent(new CustomEvent("palette-preview", { detail: '"Body Face", sans-serif' }));
   expect(hover).toHaveBeenLastCalledWith('500 14px/20px "Body Face", sans-serif');
-  menu("Font family").dispatchEvent(new CustomEvent("komo-preview", { detail: null }));
+  menu("Font family").dispatchEvent(new CustomEvent("palette-preview", { detail: null }));
   expect(hover).toHaveBeenLastCalledWith(undefined);
   box.destroy();
-  menu("Font weight").dispatchEvent(new CustomEvent("komo-preview", { detail: "300" }));
+  menu("Font weight").dispatchEvent(new CustomEvent("palette-preview", { detail: "300" }));
   expect(hover).toHaveBeenCalledTimes(3);
 });
 
@@ -185,7 +185,7 @@ it("shows primary font and only real token choices, retaining quoted fallback st
   const stack = '"Acme, Display", "Fallback Sans", sans-serif';
   expect(primaryFamily(stack)).toBe("Acme, Display");
   const e = editor("font-family", stack, undefined, [{ path: "font.body", type: "fontFamily", value: '"Body", serif' }]);
-  expect(e.box.querySelector(".komo-typed__sample span")!.textContent).toBe("Acme, Display");
+  expect(e.box.querySelector(".palette-typed__sample span")!.textContent).toBe("Acme, Display");
   expect(e.input("CSS value").value).toBe(stack);
   expect(e.box.querySelectorAll("option")).toHaveLength(2);
   e.type("CSS value", '"Other, Face", monospace');

@@ -103,17 +103,17 @@ describe.skipIf(!chrome).each([1280, 390])("single-value numeric rows at %ipx", 
 
     // The chip opens the token list alone; Custom… holds only Edit as CSS, collapsed.
     await row.locator("select[data-picker]").click();
-    const popup = tab.locator(".komo-tokens");
+    const popup = tab.locator(".palette-tokens");
     await popup.getByRole("option").first().waitFor();
-    expect(await popup.locator(".komo-tokens__head").isVisible()).toBe(false);
-    expect(await popup.locator(".komo-custom").count()).toBe(0);
-    await popup.locator(".komo-tokens__more").click();
-    await popup.locator("details.komo-typed__advanced").waitFor();
-    expect(await popup.locator(".komo-custom input:visible").count()).toBe(0);
-    expect(await popup.locator("details.komo-typed__advanced").evaluate(node => (node as HTMLDetailsElement).open)).toBe(false);
-    expect(await popup.locator("details.komo-typed__advanced summary").isVisible()).toBe(true);
+    expect(await popup.locator(".palette-tokens__head").isVisible()).toBe(false);
+    expect(await popup.locator(".palette-custom").count()).toBe(0);
+    await popup.locator(".palette-tokens__more").click();
+    await popup.locator("details.palette-typed__advanced").waitFor();
+    expect(await popup.locator(".palette-custom input:visible").count()).toBe(0);
+    expect(await popup.locator("details.palette-typed__advanced").evaluate(node => (node as HTMLDetailsElement).open)).toBe(false);
+    expect(await popup.locator("details.palette-typed__advanced summary").isVisible()).toBe(true);
     await tab.keyboard.press("Escape");
-    await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
+    await expect.poll(() => tab.locator(".palette-tokens").count()).toBe(0);
 
     // An arrow steps the value live, and the edit leaves the token.
     const before = await tab.locator("#card").evaluate((node, name) => getComputedStyle(node).getPropertyValue(name), property);
@@ -138,9 +138,9 @@ describe.skipIf(!chrome).each([1280, 390])("single-value numeric rows at %ipx", 
     const row = tab.locator('[data-field-property="padding"]');
     await row.scrollIntoViewIfNeeded();
     await row.locator("select[data-picker]").click();
-    await tab.locator(".komo-tokens__more").click();
-    await tab.locator(".komo-tokens .komo-custom input:visible").first().waitFor();
-    expect(await tab.locator(".komo-tokens .komo-custom input:visible").count()).toBeGreaterThanOrEqual(4);
+    await tab.locator(".palette-tokens__more").click();
+    await tab.locator(".palette-tokens .palette-custom input:visible").first().waitFor();
+    expect(await tab.locator(".palette-tokens .palette-custom input:visible").count()).toBeGreaterThanOrEqual(4);
     expect(errors).toEqual([]);
     await close();
   });

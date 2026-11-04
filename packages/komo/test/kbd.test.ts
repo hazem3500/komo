@@ -19,7 +19,7 @@ it("renders surface-aware filled keycaps by default and outlined caps on request
   expect(renderKbd(shortcut, true, "surface").dataset.variant).toBe("surface");
   const outline = renderKbd(shortcut, true, "outline");
   expect(outline.dataset.variant).toBe("outline");
-  expect(outline.className).toBe("komo-kbd");
+  expect(outline.className).toBe("palette-kbd");
   expect([...outline.querySelectorAll("kbd")].map(node => node.textContent)).toEqual(["⇧", "D"]);
 });
 
@@ -35,7 +35,7 @@ it("styles tooltips and keycaps from the shared surface and ink tokens", async (
   expect(tooltip).toContain("color: var(--mm-ink");
   expect(tooltip).not.toContain("light-dark");
   expect(from(styles, ":host {")).toContain("--mm-tooltip-surface: color-mix(in oklab, var(--mm-surface) 88%, var(--mm-ink))");
-  const caps = from(styles, ".komo-kbd kbd {");
+  const caps = from(styles, ".palette-kbd kbd {");
   expect(caps).toContain("background:color-mix(in oklab, currentColor");
   expect(caps).not.toContain("border:");
 });

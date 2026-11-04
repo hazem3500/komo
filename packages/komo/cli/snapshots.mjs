@@ -8,9 +8,9 @@ const MAX_BYTES = 512 * 1024;
  * Saves a thread's element snapshots under `directory` and returns their paths:
  * THREAD_ID.webp (or .png) for the image and THREAD_ID.html.txt for the HTML,
  * kept as text because it is evidence, never a page to open. Reads use the same
- * credentials as every other command (KOMO_TOKEN, a saved access token or a login
+ * credentials as every other command (PALETTE_TOKEN, a saved access token or a login
  * session), against the configured endpoint only. Behind a sign-in proxy, that is a
- * session from POST /auth/proxy/session passed as KOMO_TOKEN: the proxy refuses
+ * session from POST /auth/proxy/session passed as PALETTE_TOKEN: the proxy refuses
  * access tokens. A
  * default directory ignores itself in Git, since snapshots may hold page content.
  */
@@ -40,7 +40,7 @@ export async function saveSnapshots(config, token, thread, directory, ignore = f
         response.status === 429
           ? "Too many requests. Wait a minute, then run palette comments snapshots THREAD_ID."
           : response.status === 401
-            ? token.startsWith("komo_pat_")
+            ? /^(?:palette|komo)_pat_/.test(token)
               ? "Access token invalid, expired, or revoked. Create a new one at /account."
               : "Session missing or expired. Run palette login."
             : reason || `Could not download the ${kind} snapshot (${response.status}).`

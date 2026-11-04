@@ -22,7 +22,7 @@ const fixture = `
   import { captureAnchor } from ${JSON.stringify(resolve("src/anchors.ts"))};
   const query=new URLSearchParams(location.search),layout=query.get('layout')??'reflow';
   const user={id:'reviewer',name:'Example reviewer',verified:true};
-  const key='branch-comments:'+location.origin+':stacks';
+  const key='palette:'+location.origin+':stacks';
   localStorage.setItem(key,'fixture-session');
   localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
   const authors=[{id:'author-a',name:'Avery Example',verified:true,accentColor:'#7f56d9'},{id:'author-b',name:'Blake Sample',verified:true,accentColor:'#f79009'},{id:'author-c',name:'Casey Demo',verified:true,accentColor:'#12b76a'}];

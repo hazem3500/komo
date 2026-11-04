@@ -44,9 +44,9 @@ export interface TokenPickerOptions {
   };
 }
 
-const css = `.komo-tokens{display:flex;flex-direction:column;overflow:hidden}.komo-tokens__head{flex:none;display:flex;align-items:center;gap:4px;min-height:36px;padding:0 12px;color:#f1efeb;font-weight:500}.komo-tokens__back{display:grid;place-items:center;width:20px;height:20px;margin-left:-6px;padding:0;border:0;border-radius:5px;background:none;color:#898680;cursor:pointer}.komo-tokens__back:hover{background:#ffffff14;color:#f1efeb}.komo-tokens__back svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.komo-tokens__bar{flex:none;display:flex;gap:4px;padding:0 8px 8px;background:#232323;border-bottom:1px solid #ffffff0d}.komo-tokens__bar input{flex:1;min-width:0;height:28px;box-sizing:border-box;margin:0;padding:0 8px;border:0;border-radius:6px;outline:0;box-shadow:none;background:#ffffff0a;color:#f1efeb;font:inherit}.komo-tokens__bar input:focus{outline:0;box-shadow:inset 0 0 0 1px #bda6ef}.komo-tokens__widen{flex:none;height:28px;margin:0 4px 4px;padding:0 8px;border:0;border-radius:6px;background:none;color:#898680;font:inherit;text-align:left;cursor:pointer}.komo-tokens__widen:hover,.komo-tokens__more:hover{background:#ffffff0f;color:#f1efeb}.komo-tokens__more{flex:none;display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;border:0;border-top:1px solid #ffffff0d;background:none;color:#d9d6d1;font:inherit;text-align:left;cursor:pointer}.komo-tokens__more b{margin-right:auto;font-weight:500}.komo-tokens__more i{flex:none;width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1px #ffffff26;background:linear-gradient(var(--c),var(--c)),repeating-conic-gradient(#ffffff40 0 25%,#ffffff12 0 50%) 0 0/8px 8px}.komo-tokens__more span{max-width:50%;overflow:hidden;color:#898680;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}.komo-tokens [role=listbox]{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:0 4px 4px}.komo-tokens small:not(.komo-select *){position:sticky;top:0;z-index:1;display:block;padding:8px 8px 4px;background:#232323;color:#77736f;font-size:10px;font-weight:500}.komo-tokens [role=option]:not(.komo-select *){display:grid;grid-template-columns:20px minmax(0,1fr) 14px;align-items:center;gap:4px 8px;box-sizing:border-box;min-height:32px;padding:6px 8px;border-radius:7px;cursor:pointer}.komo-tokens [data-active]{background:#ffffff14;color:#f1efeb}.komo-tokens [aria-selected=true] .komo-tokens__name{color:#e6dcfb}.komo-tokens__name{grid-column:2;min-width:0;font-weight:500}.komo-tokens__name>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.komo-tokens__sub{grid-column:2/4;display:none;min-width:0;overflow:hidden;color:#77736f;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.komo-tokens [data-active] .komo-tokens__sub{display:block}.komo-tokens__check{grid-column:3;justify-self:center}.komo-tokens [aria-selected=true] .komo-tokens__check{width:7px;height:3.5px;margin-top:-3px;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-tokens__pv{display:flex;align-items:center;height:16px;overflow:hidden}.komo-tokens__sw{display:flex;width:16px;height:16px;border-radius:4px;overflow:hidden;background:repeating-conic-gradient(#ffffff40 0 25%,#ffffff0d 0 50%) 0 0/8px 8px;outline:1px solid #ffffff1f;outline-offset:-1px}.komo-tokens__sw>span{flex:1}.komo-tokens__sw>[data-unresolved]{display:grid;place-items:center;background:#393939;color:#b6b1aa;font-size:10px}.komo-tokens__dim{height:4px;min-width:2px;border-radius:2px;background:#bda6ef}.komo-tokens__corner{width:12px;height:12px;box-sizing:border-box;border:solid #bda6ef;border-width:1.5px 0 0 1.5px}.komo-tokens__shadow{width:16px;height:12px;margin-left:2px;border-radius:3px;background:#f1efeb}.komo-tokens__ag{color:#f1efeb;font-size:13px;line-height:1;white-space:nowrap}.komo-tokens__empty{padding:12px 8px;color:#77736f}@media (pointer:coarse){.komo-tokens{font-size:13px}.komo-tokens [role=option]:not(.komo-select *){min-height:44px}.komo-tokens__bar input,.komo-tokens__bar button{height:36px}}`;
+const css = `.palette-tokens{display:flex;flex-direction:column;overflow:hidden}.palette-tokens__head{flex:none;display:flex;align-items:center;gap:4px;min-height:36px;padding:0 12px;color:#f1efeb;font-weight:500}.palette-tokens__back{display:grid;place-items:center;width:20px;height:20px;margin-left:-6px;padding:0;border:0;border-radius:5px;background:none;color:#898680;cursor:pointer}.palette-tokens__back:hover{background:#ffffff14;color:#f1efeb}.palette-tokens__back svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.palette-tokens__bar{flex:none;display:flex;gap:4px;padding:0 8px 8px;background:#232323;border-bottom:1px solid #ffffff0d}.palette-tokens__bar input{flex:1;min-width:0;height:28px;box-sizing:border-box;margin:0;padding:0 8px;border:0;border-radius:6px;outline:0;box-shadow:none;background:#ffffff0a;color:#f1efeb;font:inherit}.palette-tokens__bar input:focus{outline:0;box-shadow:inset 0 0 0 1px #bda6ef}.palette-tokens__widen{flex:none;height:28px;margin:0 4px 4px;padding:0 8px;border:0;border-radius:6px;background:none;color:#898680;font:inherit;text-align:left;cursor:pointer}.palette-tokens__widen:hover,.palette-tokens__more:hover{background:#ffffff0f;color:#f1efeb}.palette-tokens__more{flex:none;display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;border:0;border-top:1px solid #ffffff0d;background:none;color:#d9d6d1;font:inherit;text-align:left;cursor:pointer}.palette-tokens__more b{margin-right:auto;font-weight:500}.palette-tokens__more i{flex:none;width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1px #ffffff26;background:linear-gradient(var(--c),var(--c)),repeating-conic-gradient(#ffffff40 0 25%,#ffffff12 0 50%) 0 0/8px 8px}.palette-tokens__more span{max-width:50%;overflow:hidden;color:#898680;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}.palette-tokens [role=listbox]{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:0 4px 4px}.palette-tokens small:not(.palette-select *){position:sticky;top:0;z-index:1;display:block;padding:8px 8px 4px;background:#232323;color:#77736f;font-size:10px;font-weight:500}.palette-tokens [role=option]:not(.palette-select *){display:grid;grid-template-columns:20px minmax(0,1fr) 14px;align-items:center;gap:4px 8px;box-sizing:border-box;min-height:32px;padding:6px 8px;border-radius:7px;cursor:pointer}.palette-tokens [data-active]{background:#ffffff14;color:#f1efeb}.palette-tokens [aria-selected=true] .palette-tokens__name{color:#e6dcfb}.palette-tokens__name{grid-column:2;min-width:0;font-weight:500}.palette-tokens__name>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.palette-tokens__sub{grid-column:2/4;display:none;min-width:0;overflow:hidden;color:#77736f;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.palette-tokens [data-active] .palette-tokens__sub{display:block}.palette-tokens__check{grid-column:3;justify-self:center}.palette-tokens [aria-selected=true] .palette-tokens__check{width:7px;height:3.5px;margin-top:-3px;border:solid #bda6ef;border-width:0 0 1.5px 1.5px;rotate:-45deg}.palette-tokens__pv{display:flex;align-items:center;height:16px;overflow:hidden}.palette-tokens__sw{display:flex;width:16px;height:16px;border-radius:4px;overflow:hidden;background:repeating-conic-gradient(#ffffff40 0 25%,#ffffff0d 0 50%) 0 0/8px 8px;outline:1px solid #ffffff1f;outline-offset:-1px}.palette-tokens__sw>span{flex:1}.palette-tokens__sw>[data-unresolved]{display:grid;place-items:center;background:#393939;color:#b6b1aa;font-size:10px}.palette-tokens__dim{height:4px;min-width:2px;border-radius:2px;background:#bda6ef}.palette-tokens__corner{width:12px;height:12px;box-sizing:border-box;border:solid #bda6ef;border-width:1.5px 0 0 1.5px}.palette-tokens__shadow{width:16px;height:12px;margin-left:2px;border-radius:3px;background:#f1efeb}.palette-tokens__ag{color:#f1efeb;font-size:13px;line-height:1;white-space:nowrap}.palette-tokens__empty{padding:12px 8px;color:#77736f}@media (pointer:coarse){.palette-tokens{font-size:13px}.palette-tokens [role=option]:not(.palette-select *){min-height:44px}.palette-tokens__bar input,.palette-tokens__bar button{height:36px}}`;
 
-const modeStyles = `.komo-tokens__custom{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}.komo-tokens__custom>.komo-custom{flex:none}.komo-tokens__custom .komo-custom__body{overflow:visible}.komo-tokens [hidden]{display:none!important}.komo-tokens button:focus-visible,.komo-tokens [role=listbox]:focus-visible{outline:1px solid #bda6ef;outline-offset:-2px}.komo-tokens[popover]{position:fixed;inset:auto;margin:0;border:0;padding:0}`;
+const modeStyles = `.palette-tokens__custom{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}.palette-tokens__custom>.palette-custom{flex:none}.palette-tokens__custom .palette-custom__body{overflow:visible}.palette-tokens [hidden]{display:none!important}.palette-tokens button:focus-visible,.palette-tokens [role=listbox]:focus-visible{outline:1px solid #bda6ef;outline-offset:-2px}.palette-tokens[popover]{position:fixed;inset:auto;margin:0;border:0;padding:0}`;
 /** Headers for properties without a field label. */
 const titles: Record<string, string> = { font: "Typography", "box-shadow": "Shadow", "text-shadow": "Text shadow" };
 const styled = new WeakSet<Node>();
@@ -70,10 +70,10 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 /** A small visual for the token's type: swatch, bar, corner, shadow card or "Ag". */
 export function tokenPreview(token: DesignToken): HTMLElement {
-  const box = el("span", "komo-tokens__pv");
+  const box = el("span", "palette-tokens__pv");
   box.setAttribute("aria-hidden", "true");
   const part = (name: string) => {
-    const node = el("span", `komo-tokens__${name}`);
+    const node = el("span", `palette-tokens__${name}`);
     box.append(node);
     return node;
   };
@@ -118,10 +118,10 @@ function row(token: DesignToken, id: string, selected: boolean, themes: readonly
   node.id = id;
   node.setAttribute("role", "option");
   node.setAttribute("aria-selected", String(selected));
-  const name = el("span", "komo-tokens__name");
+  const name = el("span", "palette-tokens__name");
   const label = el("span", "", tokenLabel(token));
   name.append(label);
-  const check = el("span", "komo-tokens__check");
+  const check = el("span", "palette-tokens__check");
   check.setAttribute("aria-hidden", "true");
   const unresolved = token.type === "color" && !resolvedColor(token.value);
   const perTheme = themes.flatMap((theme) => {
@@ -131,7 +131,7 @@ function row(token: DesignToken, id: string, selected: boolean, themes: readonly
   const shown = perTheme.length > 1 ? perTheme.join(", ") : token.value ?? "";
   // No tooltip: it would cover the rows around it. The hovered or active row shows its path and
   // value on a muted second line; the full details stay in the accessible name.
-  const sub = el("span", "komo-tokens__sub", [token.path, shown].filter(Boolean).join(" · "));
+  const sub = el("span", "palette-tokens__sub", [token.path, shown].filter(Boolean).join(" · "));
   sub.setAttribute("aria-hidden", "true");
   node.append(tokenPreview(token), name, check, sub);
   node.setAttribute("aria-label", [token.label, tokenTitle(token, shown, unresolved ? "Unresolved; no swatch available" : "")].filter(Boolean).join(" · "));
@@ -166,22 +166,22 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   const { trigger, property } = options;
   let tokens = options.tokens;
   const root = stylePicker(trigger);
-  const id = `komo-tokens-${++count}`;
+  const id = `palette-tokens-${++count}`;
   const color = /color|^(fill|stroke)$/.test(property);
-  const box = el("div", "komo-tokens");
+  const box = el("div", "palette-tokens");
   box.id = `${id}-popup`;
   box.setAttribute("role", "dialog");
   box.setAttribute("aria-label", `Edit ${property}`);
   // One shell for every popup: a pinned header, then either the matching tokens with a
   // "Custom…" row at the bottom, or, on demand, the Custom editor alone with a way back.
-  const head = el("div", "komo-tokens__head");
-  const back = el("button", "komo-tokens__back");
+  const head = el("div", "palette-tokens__head");
+  const back = el("button", "palette-tokens__back");
   back.type = "button";
   back.setAttribute("aria-label", "Back to tokens");
   back.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg>';
   const title = el("span", "", options.title || options.custom?.field?.label || titles[property] || property);
   head.append(back, title);
-  const bar = el("div", "komo-tokens__bar");
+  const bar = el("div", "palette-tokens__bar");
   const search = el("input");
   search.type = "text";
   search.placeholder = "Search tokens";
@@ -192,7 +192,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   search.setAttribute("aria-controls", id);
   search.setAttribute("aria-autocomplete", "list");
   search.setAttribute("aria-label", `Search tokens for ${property}`);
-  const list = el("div", "komo-tokens__list");
+  const list = el("div", "palette-tokens__list");
   list.id = id;
   list.tabIndex = 0;
   list.setAttribute("role", "listbox");
@@ -200,15 +200,15 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   let relevant = tokensFor(tokens, property);
   let all = !relevant.length;
   // "Show all" sits under the list; a search looks through every token anyway.
-  const widen = el("button", "komo-tokens__widen");
+  const widen = el("button", "palette-tokens__widen");
   widen.type = "button";
   bar.append(search);
   // The way into Custom: the current value's swatch or text, then the editor in place of the list.
-  const more = el("button", "komo-tokens__more");
+  const more = el("button", "palette-tokens__more");
   more.type = "button";
   const moreSwatch = el("i"), moreValue = el("span");
   more.append(el("b", "", "Custom…"), moreSwatch, moreValue);
-  const section = el("div", "komo-tokens__custom");
+  const section = el("div", "palette-tokens__custom");
   box.append(head, bar, list, widen, more);
   if (options.custom) box.append(section);
 
@@ -346,7 +346,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
     list.removeAttribute("aria-activedescendant");
     sections();
     if (!items.length) {
-      const empty = el("div", "komo-tokens__empty", terms.length ? "No matching tokens" : "No tokens");
+      const empty = el("div", "palette-tokens__empty", terms.length ? "No matching tokens" : "No tokens");
       list.append(empty);
       return;
     }
@@ -543,7 +543,7 @@ export function openTokenPicker(options: TokenPickerOptions, toggle = false) {
   host.append(box);
   box.showPopover?.();
   // The field read a settled value; Custom follows unless a preview or an edit is in progress.
-  host.addEventListener("komo-field-sync", () => {
+  host.addEventListener("palette-field-sync", () => {
     if (undoPreview || !options.custom) return;
     editor?.refresh(options.custom.value);
     sections();

@@ -72,7 +72,7 @@ input[type=text],select{min-height:44px;padding:0 12px;border-radius:10px;border
 const script = `
 const cfg=JSON.parse(document.getElementById("cfg").textContent);
 const $=(s)=>document.querySelector(s);
-const KEY="komo-account-session";
+const KEY="palette-account-session",OLD="komo-account-session";
 let session=null,user=null,data=null;
 const el=(tag,props,...kids)=>{const n=document.createElement(tag);for(const k in props||{}){if(k==="class")n.className=props[k];else if(k.startsWith("on"))n.addEventListener(k.slice(2),props[k]);else if(props[k]===true)n.setAttribute(k,"");else if(props[k]!==false&&props[k]!=null)n.setAttribute(k,props[k])}n.append(...kids.flat().filter((x)=>x!=null));return n};
 const live=(t)=>{$("#live").textContent="";setTimeout(()=>{$("#live").textContent=t},30)};
@@ -109,13 +109,13 @@ async function load(){
   try{data=await api("/account/tokens");list()}
   catch(e){if(e.status===403)view("guest");else if(e.status!==401){$("#list").replaceChildren(el("li",{class:"panel notice error"},e.message))}}}
 async function boot(){
-  session=sessionStorage.getItem(KEY);
+  session=sessionStorage.getItem(KEY)??sessionStorage.getItem(OLD);if(session)sessionStorage.setItem(KEY,session);sessionStorage.removeItem(OLD);
   if(!session){render();return}
   view("loading");
   try{user=(await api("/me")).user;render();await load()}catch(e){if(e.status!==401){view("signin");$("#signin-error").textContent=e.message}}}
 async function signIn(){
   const btn=$("#signin");btn.disabled=true;$("#signin-error").textContent="";
-  const popup=window.open("about:blank","komo-account-auth","width=500,height=700");
+  const popup=window.open("about:blank","palette-account-auth","width=500,height=700");
   try{
     const {url}=await api("/auth/google/start","POST");
     if(!popup){throw new Error("Allow pop-ups to sign in with Google.")}
@@ -183,13 +183,13 @@ export function accountPage(env: Env, url: URL) {
   const requested = url.searchParams.get("project");
   // Hosted sign-in uses the management project; self-hosted servers use one of their own.
   const project =
-    env.KOMO_HOSTED === "true"
+    env.PALETTE_HOSTED === "true"
       ? "_komo"
       : requested && configured.includes(requested)
         ? requested
         : (configured[0] ?? "_komo");
   const config = JSON.stringify({
-    base: env.KOMO_PUBLIC_PATH ?? "",
+    base: env.PALETTE_PUBLIC_PATH ?? "",
     project,
   }).replace(/</g, "\\u003c");
   return new Response(
@@ -201,7 +201,7 @@ export function accountPage(env: Env, url: URL) {
 <section id="v-signin" hidden><h1>Access tokens</h1><p class="lede">Sign in with Google to create tokens that let bots and CI use the palette CLI as you.</p><p><button class="btn primary" id="signin" type="button">Continue with Google</button></p><p class="error-text" id="signin-error" role="alert"></p></section>
 <section id="v-guest" hidden><h1>Access tokens</h1><div class="panel notice"><strong>Sign in with Google to manage tokens</strong><span>Guest sessions can’t create access tokens, because a token would carry an identity that can’t be verified.</span></div><p><button class="btn" id="guest-out" type="button">Sign out</button></p></section>
 <section id="v-tokens" hidden>
-<div class="bar"><div><h1>Access tokens</h1><p class="lede">Use a token as <code class="mono">KOMO_TOKEN</code> so bots and CI can read or write comments as you. Treat tokens like passwords.</p></div><button class="btn primary" id="new" type="button">New token</button></div>
+<div class="bar"><div><h1>Access tokens</h1><p class="lede">Use a token as <code class="mono">PALETTE_TOKEN</code> so bots and CI can read or write comments as you. Treat tokens like passwords.</p></div><button class="btn primary" id="new" type="button">New token</button></div>
 <ul class="tokens" id="list" aria-label="Your access tokens"></ul>
 <div class="panel notice" id="empty" hidden><strong>No tokens yet</strong>Create one for a bot, a script, or a CI job.</div>
 </section>

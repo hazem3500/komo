@@ -30,7 +30,7 @@ beforeAll(async () => {
         id: "thread-" + index, page: location.pathname, anchor, resolved: false, resolvedBy: null, createdAt: Date.now(), updatedAt: Date.now(),
         comments: [{ id: "comment-" + index, body: "Synthetic note " + index, author: user, createdAt: Date.now(), editedAt: null, reactions: {} }],
       }));
-      const key = "branch-comments:" + location.origin + ":lazy-chunks";
+      const key = "palette:" + location.origin + ":lazy-chunks";
       localStorage.setItem(key, "synthetic-session");
       localStorage.setItem(key + ":user", JSON.stringify({ token: "synthetic-session", user }));
       window.fetch = async () => Response.json({ user, threads, guests: true });

@@ -15,7 +15,7 @@ export interface ShellOptions {
  * skip mounting the app, and start Palette with `frame: { mode: "iframe", shell: true }`.
  *
  * Only Palette makes a shell: it sets a random nonce in this tab's sessionStorage and
- * in the URL. A link with `?komo-shell=…` alone, or a flag left by another project
+ * in the URL. A link with `?palette-shell=…` (or the older `?komo-shell=…`) alone, or a flag left by another project
  * or origin, returns false. If Palette doesn't start within `timeout`, the shell is
  * cleared and the normal page loads, so a shell is never left blank.
  */

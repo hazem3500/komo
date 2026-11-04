@@ -27,7 +27,7 @@ main{min-height:100vh;box-sizing:border-box;padding:40px}
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-color-picker-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-color-picker-"));
   await build({
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
@@ -105,16 +105,16 @@ async function picker(tab: Page, property: string) {
   await field.scrollIntoViewIfNeeded();
   await settle(tab);
   await field.locator('input[type="color"]').click();
-  await tab.locator(".komo-color__area").waitFor();
+  await tab.locator(".palette-color__area").waitFor();
   await settle(tab);
-  return tab.locator(".komo-tokens");
+  return tab.locator(".palette-tokens");
 }
 
 const style = (tab: Page) => tab.locator("#card").evaluate(node => node.getAttribute("style"));
 const undo = (tab: Page) => tab.locator('.design-inspector__actions [aria-label="Undo"]');
 const closeFrom = async (tab: Page, property: string) => {
   await tab.locator(`[data-field-property="${property}"] select[data-picker]`).click();
-  await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
+  await expect.poll(() => tab.locator(".palette-tokens").count()).toBe(0);
 };
 /** Undo presses until Undo is disabled: how many entries the history held. */
 async function entries(tab: Page) {
@@ -128,7 +128,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("the color picke
     const { tab, errors } = await open(mode);
     const original = await style(tab);
     await picker(tab, "background-color");
-    const area = (await tab.locator(".komo-color__area").boundingBox())!;
+    const area = (await tab.locator(".palette-color__area").boundingBox())!;
     await tab.mouse.move(area.x + area.width * .2, area.y + area.height * .2);
     await tab.mouse.down();
     for (const step of [.3, .45, .6, .75]) await tab.mouse.move(area.x + area.width * step, area.y + area.height * (1 - step));
@@ -161,17 +161,17 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("the color picke
     await opacity.press("Enter");
     expect(await style(tab)).toContain("rgba(43, 96, 97, 0.5)");
     // The popup offers the token whose value the color now matches only when it does.
-    await expect.poll(() => tab.locator(".komo-color__match").isHidden()).toBe(true);
+    await expect.poll(() => tab.locator(".palette-color__match").isHidden()).toBe(true);
     await closeFrom(tab, "background-color");
     expect(await entries(tab)).toBe(1);
     expect(await style(tab)).toBe(original);
 
     await picker(tab, "background-color");
-    const area = (await tab.locator(".komo-color__area").boundingBox())!;
+    const area = (await tab.locator(".palette-color__area").boundingBox())!;
     await tab.mouse.click(area.x + area.width * .8, area.y + area.height * .3);
     await tab.getByRole("textbox", { name: "Hex", exact: true }).fill("C2410C");
     await tab.keyboard.press("Escape");
-    await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
+    await expect.poll(() => tab.locator(".palette-tokens").count()).toBe(0);
     expect(await style(tab)).toBe(original);
     expect(await undo(tab).isDisabled()).toBe(true);
     expect(await tab.locator('[data-field-property="background-color"] select[data-picker]').evaluate(node => (node.getRootNode() as ShadowRoot).activeElement === node)).toBe(true);
@@ -202,12 +202,12 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("the color picke
     expect(await opacity.getAttribute("aria-valuetext")).toBe("Opacity 90%");
     expect(await tab.getByRole("textbox", { name: "Opacity", exact: true }).inputValue()).toBe("90");
     // From the popup's last control, Tab wraps to its first and Shift+Tab back.
-    const last = tab.locator(".komo-color__swatches button").last();
+    const last = tab.locator(".palette-color__swatches button").last();
     await last.focus();
     await tab.keyboard.press("Tab");
     const active = () => tab.evaluate(() => {
-      const root = [...document.querySelectorAll("*")].find(node => node.shadowRoot?.querySelector(".komo-tokens"))!.shadowRoot!;
-      return [!!root.activeElement?.closest(".komo-tokens"), root.activeElement?.getAttribute("aria-label") || root.activeElement?.textContent];
+      const root = [...document.querySelectorAll("*")].find(node => node.shadowRoot?.querySelector(".palette-tokens"))!.shadowRoot!;
+      return [!!root.activeElement?.closest(".palette-tokens"), root.activeElement?.getAttribute("aria-label") || root.activeElement?.textContent];
     });
     // The Custom view's first control is its way back to the tokens.
     expect(await active()).toEqual([true, "Back to tokens"]);
@@ -226,11 +226,11 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("the color picke
     await teal.waitFor();
     await teal.click();
     expect(await style(tab)).toContain("rgb(43, 96, 97)");
-    const use = tab.locator(".komo-color__match").getByRole("button", { name: "Use token Teal surface", exact: true });
+    const use = tab.locator(".palette-color__match").getByRole("button", { name: "Use token Teal surface", exact: true });
     await use.waitFor();
-    expect(await tab.locator(".komo-color__match").textContent()).toContain("Matches Teal surface");
+    expect(await tab.locator(".palette-color__match").textContent()).toContain("Matches Teal surface");
     await use.click();
-    await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
+    await expect.poll(() => tab.locator(".palette-tokens").count()).toBe(0);
     await expect.poll(() => tab.locator('[data-field-property="background-color"]').getAttribute("data-token-mode")).toBe("token");
     expect(await entries(tab)).toBe(1);
     await picker(tab, "background-color");
@@ -255,11 +255,11 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("the color picke
     expect(box.y + box.height <= field.y || box.y >= field.y + field.height).toBe(true);
     expect(await popup.evaluate(node => node.matches(":popover-open"))).toBe(true);
     // Each part answers hit-tests over the panel beneath it.
-    expect(await popup.evaluate(node => [".komo-color__area", ".komo-color__hue", ".komo-color__alpha", ".komo-color__value", ".komo-tokens__head"].every(selector => {
+    expect(await popup.evaluate(node => [".palette-color__area", ".palette-color__hue", ".palette-color__alpha", ".palette-color__value", ".palette-tokens__head"].every(selector => {
       const rect = node.querySelector(selector)!.getBoundingClientRect(), root = node.getRootNode() as ShadowRoot;
       return node.contains(root.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
     }))).toBe(true);
-    await tab.screenshot({ path: join(tmpdir(), `komo-color-picker-after-${mode}-${theme}.png`) });
+    await tab.screenshot({ path: join(tmpdir(), `palette-color-picker-after-${mode}-${theme}.png`) });
     await tab.keyboard.press("Escape");
     expect(errors).toEqual([]);
     await tab.close();

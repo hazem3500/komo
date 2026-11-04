@@ -145,7 +145,7 @@ describe("token proposals", () => {
 
   it("reads back as a page-level DesignEdit and a Token changes card", () => {
     expect(designEditFromComment(`Warmer text in dark mode.\n\n${body}`, "body")).toEqual({
-      komo: "design-edit", version: 1, target: { selector: ":root" }, tokens: "css-variables", changes: tokenValueChanges(edits),
+      palette: "design-edit", version: 1, target: { selector: ":root" }, tokens: "css-variables", changes: tokenValueChanges(edits),
     });
     const [note, section] = parseDesignComment(`Warmer text in dark mode.\n\n${body}`);
     expect(note).toEqual({ text: "Warmer text in dark mode." });
@@ -260,13 +260,13 @@ describe("Tokens view in Design mode", () => {
     button($(".design-inspector__empty"), "Edit tokens").click();
     await vi.waitFor(() => expect(shadow.querySelectorAll(".design-token-row").length).toBeGreaterThan(0));
   }
-  const exact = '.komo-custom input[aria-label="CSS value"], .komo-color input[aria-label="Hex"]';
+  const exact = '.palette-custom input[aria-label="CSS value"], .palette-color input[aria-label="Hex"]';
   // Every Custom editor applies live: typing previews and the popup keeps the value when it closes.
   async function custom(label: string, value: string) {
     rowFor(label).querySelector<HTMLButtonElement>("button")!.click();
     await vi.waitFor(() => expect(shadow.querySelector(exact)).not.toBeNull());
     const input = $<HTMLInputElement>(exact);
-    input.value = input.closest(".komo-color") ? value.replace("#", "") : value;
+    input.value = input.closest(".palette-color") ? value.replace("#", "") : value;
     input.dispatchEvent(new Event("input"));
     return () => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true, composed: true }));
   }
@@ -299,7 +299,7 @@ describe("Tokens view in Design mode", () => {
     expect($(".design-inspector__target").textContent).toBe("Tokens");
     expect([...shadow.querySelectorAll(".design-token-page__list small")].map((heading) => heading.textContent)).toEqual(["Gray", "Text", "Space"]);
     expect(rowFor("Primary").querySelector("i")?.textContent).toBe("Gray 900");
-    expect(rowFor("md").querySelector(".komo-tokens__pv .komo-tokens__dim")).not.toBeNull();
+    expect(rowFor("md").querySelector(".palette-tokens__pv .palette-tokens__dim")).not.toBeNull();
     const search = $<HTMLInputElement>('.design-token-page input[aria-label="Search tokens"]');
     search.value = "gray 7";
     search.dispatchEvent(new Event("input"));
@@ -309,7 +309,7 @@ describe("Tokens view in Design mode", () => {
   it("edits a raw value in Custom with a live preview, a dot, Reset, Undo and Reset all", async () => {
     await openView();
     const apply = await custom("md", "12px");
-    expect(shadow.querySelector(".komo-tokens__tabs button")).toBeNull();
+    expect(shadow.querySelector(".palette-tokens__tabs button")).toBeNull();
     expect(active).toEqual([{ path: "space.md", value: "12px" }]);
     apply();
     expect(active).toEqual([{ path: "space.md", value: "12px" }]);
@@ -335,13 +335,13 @@ describe("Tokens view in Design mode", () => {
   it("repoints an alias to another token", async () => {
     await openView();
     rowFor("Primary").querySelector<HTMLButtonElement>("button")!.click();
-    await vi.waitFor(() => expect(shadow.querySelector('.komo-tokens [role="option"]')).not.toBeNull());
+    await vi.waitFor(() => expect(shadow.querySelector('.palette-tokens [role="option"]')).not.toBeNull());
     // One popup: the alias targets first, with Custom… under them; no tabs.
-    expect(shadow.querySelector(".komo-tokens__tabs")).toBeNull();
-    expect($(".komo-tokens__head").textContent).toBe("Primary");
-    expect($<HTMLElement>(".komo-tokens__more").hidden).toBe(false);
-    expect($<HTMLElement>(".komo-tokens__custom").hidden).toBe(true);
-    const options = [...shadow.querySelectorAll<HTMLElement>('.komo-tokens [role="option"]')];
+    expect(shadow.querySelector(".palette-tokens__tabs")).toBeNull();
+    expect($(".palette-tokens__head").textContent).toBe("Primary");
+    expect($<HTMLElement>(".palette-tokens__more").hidden).toBe(false);
+    expect($<HTMLElement>(".palette-tokens__custom").hidden).toBe(true);
+    const options = [...shadow.querySelectorAll<HTMLElement>('.palette-tokens [role="option"]')];
     expect(options.map((option) => option.getAttribute("aria-selected"))).toEqual(["true", "false"]);
     options[1].click();
     expect(active).toEqual([{ path: "color.text.primary", value: "#444444", alias: "color.gray.700" }]);

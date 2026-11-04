@@ -170,7 +170,7 @@ export function projectManagement(
     const webhookUrl = el("input");
     webhookUrl.type = "url";
     webhookUrl.autocomplete = "off";
-    webhookUrl.placeholder = "https://example.com/komo-webhook";
+    webhookUrl.placeholder = "https://example.com/palette-webhook";
     webhookUrl.value = webhook.url;
     webhookUrlLabel.append(webhookUrl);
     webhookPanel.append(webhookUrlLabel);

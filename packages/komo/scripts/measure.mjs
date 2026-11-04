@@ -222,7 +222,12 @@ await writeFile(
 // chunk above (4,046) and its hooks; 248,610 measured on main 3aeee4d (0.9.101) with this branch, plus ~190 for CI.
 // 248,800 -> 249,100: Design mode asks a realm's build-time instrumented components (@hazem3500/palette/vite)
 // before the app's adapter, combining the two in the on-demand design chunks; 248,897 measured, plus CI margin.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 249_100)
+// 249,100 -> 249,850: the compatibility rename. Palette's own branch-comments:/komo: storage keys are copied to
+// palette: at mount and kept, and a cleared key is cleared under both names (an owned-key pattern, ~460 gzip
+// standalone); the frame bridge and shell claim are published and read under both names; Palette's own classes,
+// custom properties and events say palette (+757: 248,940 -> 249,697 measured on main 756ac1d, initial +629),
+// plus CI margin.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 249_850)
   throw new Error("Palette exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
@@ -373,7 +378,9 @@ if (report.adapterClassTheme.gzip > 1_000)
   throw new Error("Palette's class theme adapter exceeds its gzip budget.");
 // The single-copy Viewport guard (@hazem3500/palette/shell) runs before the app mounts, and a
 // build-time guard drops it from production; 434 measured.
-if (report.shell.gzip > 500)
+// 525: it also accepts the komo-shell link, the komo:shell flag and the komo.shell claim from before the rename
+// (427 -> 490 measured locally), plus CI margin.
+if (report.shell.gzip > 525)
   throw new Error("Palette's shell guard exceeds its gzip budget.");
 // Build-time component instrumentation's runtime (@hazem3500/palette/react-instrument): only preview
 // builds with the Vite plugin enabled load it. The wrapper, its state-backed editor and the fiber

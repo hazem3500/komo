@@ -69,7 +69,7 @@ const panelFields = (page: Page) =>
       empty: group.hasAttribute("data-empty"),
       heading: group.querySelector(".design-react-name")?.textContent,
       status: group.querySelector(".design-react-status")?.textContent,
-      note: group.querySelector(".komo-source__button")?.getAttribute("title"),
+      note: group.querySelector(".palette-source__button")?.getAttribute("title"),
       fields: Object.fromEntries([...group.querySelectorAll("label")].map((label) => [label.querySelector("span")!.textContent, label.querySelector("input, select") as HTMLInputElement])
         .map(([name, input]) => [name, { value: (input as HTMLInputElement).title || (input as HTMLInputElement).value, disabled: (input as HTMLInputElement).disabled }])),
       editable: group.querySelectorAll("input:not(:disabled):not([readonly]), select").length,

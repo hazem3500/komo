@@ -31,12 +31,12 @@ beforeAll(async () => {
     stdin: { contents: `
       import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':frame-keys';
+      const key='palette:'+location.origin+':frame-keys';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       const params=new URLSearchParams(location.search);
       // A Custom 1600 x 1200 frame at 100%: larger than its stage, so it pans.
-      if(params.has('pan')&&window===top)localStorage.setItem('branch-comments:frame-size:frame-keys:example/review',JSON.stringify({v:2,size:[1600,1200],actual:true}));
+      if(params.has('pan')&&window===top)localStorage.setItem('palette:frame-size:frame-keys:example/review',JSON.stringify({v:2,size:[1600,1200],actual:true}));
       // The app's own key handler: the keys Palette handles never reach it.
       window.qa={keys:[],loaded:performance.timeOrigin};
       addEventListener('keydown',event=>qa.keys.push(event.key));
@@ -80,7 +80,7 @@ type Review = Page & { errors: string[]; frame: Frame | null; inPlace: boolean }
 async function viewportFrame(page: Page, after = 0): Promise<Frame> {
   await page.waitForFunction((after) => {
     const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;
-    const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+    const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
     const view = frame?.contentWindow as (Window & { qa?: { loaded: number } }) | null | undefined;
     return !!frame?.contentDocument?.getElementById("card") && (view?.qa?.loaded ?? 0) > after && !root!.querySelector(".frame-stage[data-loading]");
   }, after);
@@ -88,7 +88,7 @@ async function viewportFrame(page: Page, after = 0): Promise<Frame> {
 }
 /** Where an element of the reviewed page sits on screen, through the frame's offset and scale. */
 const box = (page: Review, id: string) => page.evaluate(([id, framed]) => {
-  const frame = framed ? [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]")! : null;
+  const frame = framed ? [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]")! : null;
   const outer = frame ? frame.getBoundingClientRect() : new DOMRect(), scale = frame ? outer.width / frame.offsetWidth : 1;
   const inner = (frame ? frame.contentDocument! : document).getElementById(id)!.getBoundingClientRect();
   return { x: outer.left + inner.left * scale, y: outer.top + inner.top * scale, width: inner.width * scale, height: inner.height * scale };
@@ -214,9 +214,9 @@ describe.skipIf(!chrome)("Viewport keys with focus inside the framed document", 
     await clickCanvas(page);
     await page.locator(".design-inspector__empty").waitFor();
     await press(page, "?");
-    await page.locator("dialog.komo-shortcuts").waitFor();
+    await page.locator("dialog.palette-shortcuts").waitFor();
     await page.keyboard.press("Escape");
-    await page.locator("dialog.komo-shortcuts").waitFor({ state: "detached" });
+    await page.locator("dialog.palette-shortcuts").waitFor({ state: "detached" });
     await clickCanvas(page);
     await press(page, UNDO);
     expect(await width(page)).toBe("");
@@ -229,7 +229,7 @@ describe.skipIf(!chrome)("Viewport keys with focus inside the framed document", 
   it("taps and holds the visibility key, and the toolbar shortcuts work from the frame", async () => {
     const page = await open();
     await designInside(page);
-    const hidden = () => host(page).evaluate((node) => node.hasAttribute("data-komo-overlays-hidden"));
+    const hidden = () => host(page).evaluate((node) => node.hasAttribute("data-palette-overlays-hidden"));
     await press(page, "h");
     expect(await hidden()).toBe(true);
     await press(page, "h");

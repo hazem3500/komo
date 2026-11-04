@@ -195,8 +195,8 @@ describe("select menu", () => {
       const element = document.body.appendChild(document.createElement("button"));
       attach(container, element);
       const previews: Array<[string | null, boolean]> = [];
-      // A component prop hears komo-preview; the hold is already on when it renders.
-      select.addEventListener("komo-preview", (event) => previews.push([(event as CustomEvent<string | null>).detail, element.hasAttribute(STILL)]));
+      // A component prop hears palette-preview; the hold is already on when it renders.
+      select.addEventListener("palette-preview", (event) => previews.push([(event as CustomEvent<string | null>).detail, element.hasAttribute(STILL)]));
       const frames = () => { vi.advanceTimersToNextFrame(); vi.advanceTimersToNextFrame(); };
       down(select);
       const options = () => list()!.querySelectorAll("[role=option]");

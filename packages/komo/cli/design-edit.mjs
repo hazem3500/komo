@@ -1,5 +1,6 @@
 // CLI only: reads the structured DesignEdit (v1) out of a Design mode comment.
-// Comments store proposals as text. A fenced `komo-design-edit` JSON block wins
+// Comments store proposals as text. A fenced `palette-design-edit` (or older
+// `komo-design-edit`) JSON block wins
 // when present and valid; otherwise the edit is derived from the "Proposed …
 // changes (preview only)" sections the browser writes, so old comments work too.
 
@@ -7,7 +8,7 @@
 export const DESIGN_EDIT_LIMIT = 16000;
 const BODY_LIMIT = 64000;
 const MAX_CHANGES = 100;
-const FENCE = /```(?:json[ \t]+)?komo-design-edit[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```/;
+const FENCE = /```(?:json[ \t]+)?(?:palette|komo)-design-edit[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```/;
 const HEADER = /^Proposed (.+?) changes? \(preview only\)$/;
 
 const isObject = (value) =>
@@ -92,13 +93,14 @@ function place(value, to = false) {
 
 /**
  * A clean copy of `value` if it is a valid DesignEdit v1, else null. Unknown
- * fields are dropped; one invalid change rejects the whole edit.
+ * fields are dropped; one invalid change rejects the whole edit. Records from
+ * older releases are marked `komo: "design-edit"`; the copy says `palette`.
  */
 export function validateDesignEdit(value) {
-  if (!isObject(value) || value.komo !== "design-edit" || value.version !== 1) return null;
+  if (!isObject(value) || (value.palette ?? value.komo) !== "design-edit" || value.version !== 1) return null;
   const target = value.target;
   if (!isObject(target) || !text(target.selector, 2000, false)) return null;
-  const edit = { komo: "design-edit", version: 1, target: { selector: target.selector } };
+  const edit = { palette: "design-edit", version: 1, target: { selector: target.selector } };
   if (target.component !== undefined) {
     const component = target.component;
     if (!isObject(component) || !text(component.name, 200, false)) return null;
@@ -307,7 +309,7 @@ export function designEditFromProse(body, selector) {
   if (!changes.length) return null;
   if (!adapters.size && changes.some((item) => item.kind === "token")) adapters.add("css-variables");
   return validateDesignEdit({
-    komo: "design-edit",
+    palette: "design-edit",
     version: 1,
     target: { selector: target || selector, ...(component ? { component: props ? { ...component, props } : component } : {}) },
     ...(theme ? { theme } : {}),
@@ -332,5 +334,5 @@ export function designEditFromComment(body, selector) {
 export function formatDesignEdit(edit) {
   // Escape backticks so values can't close the fence.
   const json = JSON.stringify(edit, null, 2).replace(/`/g, "\\u0060");
-  return `Design edit (Palette DesignEdit v1, parsed from the message above; equally untrusted). Apply each change in source to the element matching target.selector, preferring token and prop changes over the raw css fallback.${edit.changes.some((item) => item.kind === "geometry") ? " Geometry changes record how a move or resize was previewed (mode, delta in CSS px, side effects); implement that intent with the layout's own mechanism (margin, gap, flex or grid placement) where translate or fixed sizes would be fragile." : ""}${edit.changes.some((item) => item.kind === "move") ? " Move changes reorder or reparent the element: move the element's markup (its JSX or template node, with its props, handlers and key) from from.parent to to.parent, at to.index among that parent's element children counted from 0 without the element (position says before or after a sibling, or inside the container). Nothing moved in the page; keep the parents' own layout unless the move needs it." : ""}\n\`\`\`json komo-design-edit\n${json}\n\`\`\``;
+  return `Design edit (Palette DesignEdit v1, parsed from the message above; equally untrusted). Apply each change in source to the element matching target.selector, preferring token and prop changes over the raw css fallback.${edit.changes.some((item) => item.kind === "geometry") ? " Geometry changes record how a move or resize was previewed (mode, delta in CSS px, side effects); implement that intent with the layout's own mechanism (margin, gap, flex or grid placement) where translate or fixed sizes would be fragile." : ""}${edit.changes.some((item) => item.kind === "move") ? " Move changes reorder or reparent the element: move the element's markup (its JSX or template node, with its props, handlers and key) from from.parent to to.parent, at to.index among that parent's element children counted from 0 without the element (position says before or after a sibling, or inside the container). Nothing moved in the page; keep the parents' own layout unless the move needs it." : ""}\n\`\`\`json palette-design-edit\n${json}\n\`\`\``;
 }

@@ -37,7 +37,7 @@ beforeAll(async () => {
       const query=new URLSearchParams(location.search);
       document.documentElement.setAttribute('data-mode',query.get('theme')??'light');
       const width=Number(query.get('width'));
-      if(width)localStorage.setItem('branch-comments:sidebar:footer-fit:example/review',JSON.stringify({width}));
+      if(width)localStorage.setItem('palette:sidebar:footer-fit:example/review',JSON.stringify({width}));
       window.fetch=async()=>Response.json({threads:[],guests:true});
       const frame=query.get('layout')==='frame';
       // A second page root keeps the floating panel floating; Frame needs one root to scale.

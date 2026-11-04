@@ -132,7 +132,12 @@ export interface UsePaletteInspectableOptions {
  */
 export function usePaletteInspectable(
   options: UsePaletteInspectableOptions,
-): { ref: RefCallback<HTMLElement>; "data-komo-inspectable": string } {
+): {
+  ref: RefCallback<HTMLElement>;
+  "data-palette-inspectable": string;
+  /** @deprecated Kept for hosts that select it; use `data-palette-inspectable`. */
+  "data-komo-inspectable": string;
+} {
   const root = useRef<HTMLElement | null>(null);
   const ref = useRef<RefCallback<HTMLElement> | null>(null);
   if (!ref.current) ref.current = (element) => { root.current = element; };
@@ -159,6 +164,7 @@ export function usePaletteInspectable(
 
   return {
     ref: ref.current,
+    "data-palette-inspectable": options.component.id,
     "data-komo-inspectable": options.component.id,
   };
 }

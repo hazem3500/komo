@@ -2,8 +2,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { agentWorkflow } from "../dist/agent-prompt.js";
 
-const start = "<!-- komo:workflow:start -->";
-const end = "<!-- komo:workflow:end -->";
+// The block's markers. A block from before the rename has komo markers; it is
+// found the same way and rewritten with the palette ones.
+const markers = [
+  ["<!-- palette:workflow:start -->", "<!-- palette:workflow:end -->"],
+  ["<!-- komo:workflow:start -->", "<!-- komo:workflow:end -->"],
+];
+const [start, end] = markers[0];
 
 export async function installAgentWorkflow(cwd) {
   const path = join(cwd, "AGENTS.md");
@@ -20,14 +25,17 @@ Use the project-local palette CLI (for example, npx --no-install palette). Run p
 
 ${agentWorkflow}
 ${end}`;
-  const first = existing.indexOf(start);
-  const last = existing.indexOf(end);
+  const found = markers.filter((pair) => pair.some((marker) => existing.includes(marker)));
+  const [from, to] = found[0] ?? markers[0];
+  const first = existing.indexOf(from);
+  const last = existing.indexOf(to);
   if (
+    found.length > 1 ||
     (first === -1) !== (last === -1) ||
     (first !== -1 &&
       (last < first ||
-        existing.indexOf(start, first + start.length) !== -1 ||
-        existing.indexOf(end, last + end.length) !== -1))
+        existing.indexOf(from, first + from.length) !== -1 ||
+        existing.indexOf(to, last + to.length) !== -1))
   )
     throw Error(
       "AGENTS.md has an incomplete or duplicate Palette workflow block. Repair its markers before retrying."
@@ -36,7 +44,7 @@ ${end}`;
     first === -1
       ? `${existing}${existing && !existing.endsWith("\n") ? "\n" : ""}${existing ? "\n" : ""}${block}
 `
-      : existing.slice(0, first) + block + existing.slice(last + end.length);
+      : existing.slice(0, first) + block + existing.slice(last + to.length);
   if (content !== existing) await writeFile(path, content);
   return { path, changed: content !== existing };
 }

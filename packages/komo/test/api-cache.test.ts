@@ -200,11 +200,11 @@ it("remembers the signed-in account for the same token", () => {
   new CommentsApi(options).save({ token: "t1", user } as never);
   expect(new CommentsApi(options).user).toEqual(user);
   store.set(
-    "branch-comments:https://example.com/api/:test:user",
+    "palette:https://example.com/api/:test:user",
     JSON.stringify({ token: "t1", user: { name: null } }),
   );
   expect(new CommentsApi(options).user).toBeNull();
-  store.set("branch-comments:https://example.com/api/:test:user", "{broken");
+  store.set("palette:https://example.com/api/:test:user", "{broken");
   expect(new CommentsApi(options).token).toBe("t1");
   new CommentsApi(options).clear();
   expect(new CommentsApi(options).user).toBeNull();

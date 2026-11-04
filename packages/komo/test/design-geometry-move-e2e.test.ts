@@ -76,7 +76,7 @@ beforeAll(async () => {
         }
         createRoot(document.getElementById('react-root')).render(h(App));
         const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
-        const key='branch-comments:'+location.origin+':move';
+        const key='palette:'+location.origin+':move';
         localStorage.setItem(key,'synthetic-session');
         localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
         window.fetch=async input=>{const path=new URL(input instanceof Request?input.url:String(input),location.origin).pathname;return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads:[]}:{});};
@@ -139,8 +139,8 @@ async function pick(page: Page, id: string) {
 /** Visible children in order (by text), with preview clones marked. */
 const order = (page: Page, id: string) => page.locator(`#${id}`).evaluate(node => [...node.children]
   .filter(child => getComputedStyle(child).display !== "none")
-  .map(child => `${child.textContent!.trim()}${child.hasAttribute("data-komo-move-clone") ? "*" : ""}`));
-const clones = (page: Page) => page.locator("[data-komo-move-clone]").count();
+  .map(child => `${child.textContent!.trim()}${child.hasAttribute("data-palette-move-clone") ? "*" : ""}`));
+const clones = (page: Page) => page.locator("[data-palette-move-clone]").count();
 /** Press inside the selected element, drag to a point inside `to` (fractions of its box), inspect, then drop or cancel. */
 async function drag(page: Page, from: string, to: string, fx: number, fy: number, during?: () => Promise<void>, cancel = false) {
   const start = (await page.locator(`#${from}`).boundingBox())!;
@@ -172,7 +172,7 @@ describe.skipIf(!chrome)("structural move", () => {
       });
       expect(await order(page, "list")).toEqual(["Two", "Three", "One*"]);
       await expect.poll(() => live(page).textContent()).toBe("Moved after List item “Three”");
-      const stand = page.locator("#list [data-komo-move-clone]");
+      const stand = page.locator("#list [data-palette-move-clone]");
       expect(await stand.evaluate(node => [node.getAttribute("aria-hidden"), (node as HTMLElement).inert, node.id, node.querySelectorAll("[id]").length])).toEqual(["true", true, "", 0]);
       // The selection outline follows the stand-in.
       const clone = (await stand.boundingBox())!;
@@ -275,7 +275,7 @@ describe.skipIf(!chrome)("structural move", () => {
       await page.keyboard.press("m");
       await page.keyboard.press("Alt+Shift+ArrowDown");
       await expect.poll(() => live(page).textContent()).toBe("Moved into div#s1");
-      expect(await page.locator("#s1 [data-komo-move-clone]").textContent()).toBe("Second");
+      expect(await page.locator("#s1 [data-palette-move-clone]").textContent()).toBe("Second");
       await page.keyboard.press("Alt+Shift+ArrowUp");
       await expect.poll(() => live(page).textContent()).toMatch(/^Moved after “First/);
       expect(await order(page, "stack")).toEqual(["First", "Second*", "Third"]);
@@ -383,14 +383,14 @@ describe.skipIf(!chrome)("structural move", () => {
       const width = page.locator('.design-inspector [data-property="width"]').first();
       await width.fill("120");
       await width.press("Enter");
-      await expect.poll(() => page.locator("#list [data-komo-move-clone]").evaluate(node => (node as HTMLElement).style.width)).toBe("120px");
+      await expect.poll(() => page.locator("#list [data-palette-move-clone]").evaluate(node => (node as HTMLElement).style.width)).toBe("120px");
       // Leave the text field, which keeps its own ⌘Z.
       await page.locator(".design-inspector__target").click();
       for (const expected of [["One", "Three", "Two*"], ["One", "Two*", "Three"], ["Two*", "One", "Three"]]) {
         await page.keyboard.press("ControlOrMeta+z");
         await expect.poll(() => order(page, "list")).toEqual(expected);
       }
-      expect(await page.locator("#list [data-komo-move-clone]").evaluate(node => (node as HTMLElement).style.width)).not.toBe("120px");
+      expect(await page.locator("#list [data-palette-move-clone]").evaluate(node => (node as HTMLElement).style.width)).not.toBe("120px");
       // Before/After still work after an undo, and the proposal follows the remaining move.
       await inspector(page, "Before").click();
       await expect.poll(() => order(page, "list")).toEqual(["One", "Two", "Three"]);

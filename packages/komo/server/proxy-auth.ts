@@ -1,8 +1,9 @@
 // Sign-in and session options shared by the Worker and Node runtimes. Each one
-// is off by default. A trusted identity proxy (KOMO_PROXY_AUTH) forces the
+// is off by default. A trusted identity proxy (PALETTE_PROXY_AUTH) forces the
 // strict settings: reads need a session and guests are refused.
 import { gcpIap } from "./iap";
 import { ConfigError } from "./validation";
+import { paletteEnv } from "./public-env";
 
 /** The account a sign-in proxy vouches for. */
 export type ProxyIdentity = { id: string; email: string };
@@ -63,35 +64,35 @@ export function authPrefix(value: string | undefined): string {
     !/^(\/[A-Za-z0-9._~-]+)+$/.test(prefix) ||
     prefix.split("/").some((segment) => segment === "." || segment === "..")
   )
-    throw new ConfigError("KOMO_AUTH_PATH_PREFIX must be a path such as /backoffice.");
+    throw new ConfigError("PALETTE_AUTH_PATH_PREFIX must be a path such as /backoffice.");
   return prefix;
 }
 
 function resolve(env: OptionEnv): AuthOptions {
-  const name = option(env, ["KOMO_PROXY_AUTH"]);
-  const audience = option(env, ["KOMO_PROXY_AUDIENCE", "KOMO_IAP_AUDIENCE"]);
-  if (!name && option(env, ["KOMO_PROXY_AUDIENCE"]))
-    throw new ConfigError("KOMO_PROXY_AUDIENCE needs KOMO_PROXY_AUTH, such as gcp-iap.");
+  const name = option(env, ["PALETTE_PROXY_AUTH"]);
+  const audience = option(env, ["PALETTE_PROXY_AUDIENCE", "PALETTE_IAP_AUDIENCE"]);
+  if (!name && option(env, ["PALETTE_PROXY_AUDIENCE"]))
+    throw new ConfigError("PALETTE_PROXY_AUDIENCE needs PALETTE_PROXY_AUTH, such as gcp-iap.");
   const provider = name ?? (audience ? "gcp-iap" : undefined);
   if (provider && !Object.hasOwn(PROVIDERS, provider))
     throw new ConfigError(
-      `KOMO_PROXY_AUTH "${provider}" is not supported. Use one of: ${Object.keys(PROVIDERS).join(", ")}.`,
+      `PALETTE_PROXY_AUTH "${provider}" is not supported. Use one of: ${Object.keys(PROVIDERS).join(", ")}.`,
     );
   if (provider && !audience)
-    throw new ConfigError(`KOMO_PROXY_AUTH=${provider} needs KOMO_PROXY_AUDIENCE.`);
+    throw new ConfigError(`PALETTE_PROXY_AUTH=${provider} needs PALETTE_PROXY_AUDIENCE.`);
   const proxy = provider ? PROVIDERS[provider](audience!) : undefined;
 
-  const signInPrefix = authPrefix(option(env, ["KOMO_AUTH_PATH_PREFIX", "KOMO_AUTH_PREFIX"]));
+  const signInPrefix = authPrefix(option(env, ["PALETTE_AUTH_PATH_PREFIX", "PALETTE_AUTH_PREFIX"]));
   if (signInPrefix && !proxy)
-    throw new ConfigError("KOMO_AUTH_PATH_PREFIX only applies with KOMO_PROXY_AUTH.");
+    throw new ConfigError("PALETTE_AUTH_PATH_PREFIX only applies with PALETTE_PROXY_AUTH.");
 
-  const days = option(env, ["KOMO_SESSION_MAX_AGE_DAYS"]);
+  const days = option(env, ["PALETTE_SESSION_MAX_AGE_DAYS"]);
   if (days !== undefined && !(/^\d{1,5}$/.test(days) && +days >= 1 && +days <= 36500))
-    throw new ConfigError("KOMO_SESSION_MAX_AGE_DAYS must be a whole number of days from 1 to 36500.");
+    throw new ConfigError("PALETTE_SESSION_MAX_AGE_DAYS must be a whole number of days from 1 to 36500.");
 
   // Parse both flags even when a proxy overrides them, so typos still fail.
-  const requireSessionForReads = flag(env, "KOMO_REQUIRE_SESSION_FOR_READS", false);
-  const allowGuests = flag(env, "KOMO_ALLOW_GUESTS", true);
+  const requireSessionForReads = flag(env, "PALETTE_REQUIRE_SESSION_FOR_READS", false);
+  const allowGuests = flag(env, "PALETTE_ALLOW_GUESTS", true);
   return {
     proxy,
     signInPrefix,
@@ -105,7 +106,7 @@ const resolved = new WeakMap<object, AuthOptions>();
 /** The server's sign-in options. Throws ConfigError on an invalid value. */
 export function authOptions(env: object): AuthOptions {
   let options = resolved.get(env);
-  if (!options) resolved.set(env, (options = resolve(env as OptionEnv)));
+  if (!options) resolved.set(env, (options = resolve(paletteEnv(env) as OptionEnv)));
   return options;
 }
 
@@ -124,7 +125,7 @@ export function publicLocation(value: string): { origin: string; path: string } 
       !["localhost", "127.0.0.1"].includes(url.hostname))
   )
     throw new ConfigError(
-      "PUBLIC_URL must be an HTTPS origin, optionally with a path such as https://example.com/komo (localhost allowed for development)",
+      "PUBLIC_URL must be an HTTPS origin, optionally with a path such as https://example.com/palette (localhost allowed for development)",
     );
   return { origin: url.origin, path };
 }

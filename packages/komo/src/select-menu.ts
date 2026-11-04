@@ -7,7 +7,7 @@ import { stillPreview } from "./host-motion.js";
 // select in a container, including ones added later (props, tokens, theme).
 // The trigger's chevron ships here too, so a select only looks custom once it is.
 // Comments stay out of the CSS string: they would ship in the bundle.
-const css = `.design-field>select{appearance:none;padding-right:20px;cursor:pointer;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 7px center/8px no-repeat}.komo-select{width:max-content;max-height:240px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px;line-height:1.2}.komo-select[popover]{position:fixed;inset:auto;margin:0;border:0}.komo-select [role=option]{display:flex;align-items:center;gap:8px;box-sizing:border-box;min-height:28px;padding:0 8px;border-radius:6px;white-space:nowrap;cursor:pointer}.komo-select [role=option] span{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}.komo-select [role=option]::after{content:'';flex:none;width:7px;height:3.5px;margin:-3px 1px 0 0;border:solid transparent;border-width:0 0 1.5px 1.5px;rotate:-45deg}.komo-select [data-active]{background:#ffffff14;color:#f1efeb}.komo-select [aria-selected=true]{color:#f1efeb}.komo-select [aria-selected=true]::after{border-color:#bda6ef}.komo-select [aria-disabled=true]{opacity:.4;cursor:default}.komo-select small{display:block;padding:8px 8px 4px;color:#77736f;font-size:10px;font-weight:500}.komo-select [role=group]+[role=group],.komo-select [role=option]+[role=group]{margin-top:4px;border-top:1px solid #ffffff0d}@media (pointer:coarse){.komo-select{font-size:13px}.komo-select [role=option]{min-height:40px}}`;
+const css = `.design-field>select{appearance:none;padding-right:20px;cursor:pointer;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 7px center/8px no-repeat}.palette-select{width:max-content;max-height:240px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px;line-height:1.2}.palette-select[popover]{position:fixed;inset:auto;margin:0;border:0}.palette-select [role=option]{display:flex;align-items:center;gap:8px;box-sizing:border-box;min-height:28px;padding:0 8px;border-radius:6px;white-space:nowrap;cursor:pointer}.palette-select [role=option] span{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}.palette-select [role=option]::after{content:'';flex:none;width:7px;height:3.5px;margin:-3px 1px 0 0;border:solid transparent;border-width:0 0 1.5px 1.5px;rotate:-45deg}.palette-select [data-active]{background:#ffffff14;color:#f1efeb}.palette-select [aria-selected=true]{color:#f1efeb}.palette-select [aria-selected=true]::after{border-color:#bda6ef}.palette-select [aria-disabled=true]{opacity:.4;cursor:default}.palette-select small{display:block;padding:8px 8px 4px;color:#77736f;font-size:10px;font-weight:500}.palette-select [role=group]+[role=group],.palette-select [role=option]+[role=group]{margin-top:4px;border-top:1px solid #ffffff0d}@media (pointer:coarse){.palette-select{font-size:13px}.palette-select [role=option]{min-height:40px}}`;
 
 const containers = new WeakSet<HTMLElement>();
 const targets = new WeakMap<HTMLElement, HTMLElement | SVGElement>();
@@ -93,9 +93,9 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement, let
   current?.close();
   // Only presses made on the open list count as drags, so an assistive click is never one.
   press = undefined;
-  const id = `komo-select-${++count}`;
+  const id = `palette-select-${++count}`;
   const list = document.createElement("div");
-  list.className = "komo-select";
+  list.className = "palette-select";
   list.id = id;
   list.setAttribute("role", "listbox");
   list.setAttribute("aria-label", select.getAttribute("aria-label") ?? select.title);
@@ -143,11 +143,11 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement, let
     if (index !== active && preview) {
       restorePreview();
       const { value, selected } = items[index].option;
-      // A style select previews on the element; any other (a component prop) hears komo-preview,
+      // A style select previews on the element; any other (a component prop) hears palette-preview,
       // its value while an option is active and null once it is not. Palette drives each step, so
       // the element's own transitions hold still until the host has rendered it.
       if (!selected) {
-        const preview = (detail: string | null) => select.dispatchEvent(new CustomEvent("komo-preview", { detail }));
+        const preview = (detail: string | null) => select.dispatchEvent(new CustomEvent("palette-preview", { detail }));
         undoPreview = stillPreview(element, () => element && property ? previewStyle(element, property, value) : (preview(value), () => preview(null)));
       }
     }
@@ -256,7 +256,7 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement, let
   // In the top layer, like the token popup: a select inside that popup opens above it, and the
   // list stays inside the popup's DOM so the popup still counts its clicks as its own.
   list.popover = "manual";
-  (select.closest<HTMLElement>(".komo-tokens") ?? host).append(list);
+  (select.closest<HTMLElement>(".palette-tokens") ?? host).append(list);
   list.showPopover?.();
   select.setAttribute("aria-haspopup", "listbox");
   select.setAttribute("aria-expanded", "true");

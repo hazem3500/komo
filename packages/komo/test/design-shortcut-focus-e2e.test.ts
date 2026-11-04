@@ -27,7 +27,7 @@ beforeAll(async () => {
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':focus';
+      const key='palette:'+location.origin+':focus';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       window.fetch=async input=>{
@@ -75,7 +75,7 @@ async function design(page: Page) {
   await weight.waitFor();
   // A real choice from the shared listbox: the select keeps focus once it commits.
   await weight.click();
-  await page.locator('.komo-select [role="option"]', { hasText: /700|Bold/ }).first().click();
+  await page.locator('.palette-select [role="option"]', { hasText: /700|Bold/ }).first().click();
   await expect.poll(() => page.locator("#target").evaluate(node => getComputedStyle(node).fontWeight)).toBe("700");
   expect(await weight.evaluate(node => (node.getRootNode() as ShadowRoot).activeElement === node)).toBe(true);
   await page.locator(".design-inspector__compare").waitFor({ state: "visible" });
@@ -102,7 +102,7 @@ async function outcomes(page: Page, focus: () => Promise<void>): Promise<Outcome
   if (b) await page.keyboard.press("b");
   await page.keyboard.press("?");
   // Help loads on demand, so give it a moment to open.
-  const help = await page.locator("dialog.komo-shortcuts").waitFor({ timeout: 700 }).then(() => true, () => false);
+  const help = await page.locator("dialog.palette-shortcuts").waitFor({ timeout: 700 }).then(() => true, () => false);
   if (help) {
     await page.keyboard.press("Escape");
     expect(await focused(page), "help returns focus").toBe(target);
@@ -137,7 +137,7 @@ const cases: [string, (page: Page) => Promise<void>, Outcome][] = [
   ["panel button", page => panel(page, '.design-inspector button[aria-label="Copy CSS"], .design-inspector button:not([disabled])[title="Copy CSS"]'), fire],
   ["switch", page => inject(page, '<button type="button" role="switch" aria-checked="false">Wrap</button>'), fire],
   ["closed select", page => panel(page, '[data-field-property="font-weight"] select'), fire],
-  ["open listbox", async page => { await panel(page, '[data-field-property="font-weight"] select'); await page.keyboard.press("ArrowDown"); await page.locator(".komo-select").waitFor(); }, pause],
+  ["open listbox", async page => { await panel(page, '[data-field-property="font-weight"] select'); await page.keyboard.press("ArrowDown"); await page.locator(".palette-select").waitFor(); }, pause],
   ["text input", page => panel(page, '[data-field-property="width"] input'), pause],
   // Escape in a text field lets go of focus first; the next one leaves.
   ["textarea", page => page.locator("#notes").focus(), pause],

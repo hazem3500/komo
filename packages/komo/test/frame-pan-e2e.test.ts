@@ -46,11 +46,11 @@ beforeAll(async () => {
         knob.addEventListener('pointerup',()=>{knob.removeEventListener('pointermove',move);qa.drags.push([knob.offsetLeft,knob.offsetTop]);},{once:true});
       });
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':frame-pan';
+      const key='palette:'+location.origin+':frame-pan';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       // A Custom 1600 x 1200 frame at 100%: larger than its stage on both axes.
-      localStorage.setItem('branch-comments:frame-size:frame-pan:example/review',JSON.stringify({v:2,size:[1600,1200],actual:true}));
+      localStorage.setItem('palette:frame-size:frame-pan:example/review',JSON.stringify({v:2,size:[1600,1200],actual:true}));
       const target=document.getElementById('target'),box=target.getBoundingClientRect(),point={x:box.left+20,y:box.top+20};
       const threads=[{id:'pan-thread',page:'/',anchor:captureAnchor(target,point,point),resolved:false,resolvedBy:null,createdAt:1,updatedAt:1,tags:[],comments:[{id:'pan-comment',author:user,body:'On the target',createdAt:1,editedAt:null,reactions:{}}]}];
       window.fetch=async input=>{

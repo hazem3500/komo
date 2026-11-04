@@ -43,7 +43,7 @@ describe("live color fields", () => {
   it("keeps the text of a field being typed in and tells an open popup when a value settles", async () => {
     liveColors(boxes, element, valueFor);
     const synced: string[] = [];
-    for (const box of boxes) box.addEventListener("komo-field-sync", () => synced.push(box.dataset.fieldProperty!));
+    for (const box of boxes) box.addEventListener("palette-field-sync", () => synced.push(box.dataset.fieldProperty!));
     const typing = field("background-color").querySelector<HTMLInputElement>("[data-property]")!;
     typing.focus();
     typing.value = "#ab";

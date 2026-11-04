@@ -7,7 +7,7 @@
 // once the host has rendered the value it was handed, so restoring starts no transition either.
 
 /** Present on an element, and so its subtree, while Palette previews it. */
-export const STILL = "data-komo-still";
+export const STILL = "data-palette-still";
 
 const css = `:is([${STILL}],[${STILL}] *),:is([${STILL}],[${STILL}] *)::before,:is([${STILL}],[${STILL}] *)::after{transition:none!important}`;
 type Hold = { count: number; root: Node; seen: Set<Animation>; frame?: number };

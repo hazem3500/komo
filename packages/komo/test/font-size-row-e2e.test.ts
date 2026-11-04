@@ -125,18 +125,18 @@ describe.skipIf(!chrome).each([1280, 390])("the font size row at %ipx", width =>
   it("opens the token list from the chip, with only Edit as CSS, collapsed, under Custom…", async () => {
     const { tab, row, errors } = await open(width);
     await row.locator("select[data-picker]").click();
-    const popup = tab.locator(".komo-tokens");
+    const popup = tab.locator(".palette-tokens");
     await popup.waitFor();
     await popup.getByRole("option").first().waitFor();
     expect(await popup.getByRole("option").allTextContents()).toEqual([expect.stringContaining("Body"), expect.stringContaining("Large")]);
     // No second heading, label or value field: the row already holds them.
-    expect(await popup.locator(".komo-tokens__head").isVisible()).toBe(false);
-    expect(await popup.locator(".komo-custom").count()).toBe(0);
+    expect(await popup.locator(".palette-tokens__head").isVisible()).toBe(false);
+    expect(await popup.locator(".palette-custom").count()).toBe(0);
     // Custom… holds only Edit as CSS, collapsed, with a way back.
-    await popup.locator(".komo-tokens__more").click();
-    const advanced = popup.locator("details.komo-typed__advanced");
+    await popup.locator(".palette-tokens__more").click();
+    const advanced = popup.locator("details.palette-typed__advanced");
     await advanced.waitFor();
-    expect(await popup.locator(".komo-custom input:visible").count()).toBe(0);
+    expect(await popup.locator(".palette-custom input:visible").count()).toBe(0);
     expect(await advanced.locator("summary").textContent()).toBe("Edit as CSS");
     expect(await advanced.evaluate(node => (node as HTMLDetailsElement).open)).toBe(false);
     await popup.getByRole("button", { name: "Back to tokens", exact: true }).click();
@@ -157,9 +157,9 @@ describe.skipIf(!chrome).each([1280, 390])("the font size row at %ipx", width =>
     for (let index = 0; index < count; index++) {
       await selects.nth(index).scrollIntoViewIfNeeded();
       await selects.nth(index).click();
-      await expect.poll(() => tab.locator(".komo-select[role=listbox]").count()).toBe(1);
+      await expect.poll(() => tab.locator(".palette-select[role=listbox]").count()).toBe(1);
       await tab.keyboard.press("Escape");
-      await expect.poll(() => tab.locator(".komo-select").count()).toBe(0);
+      await expect.poll(() => tab.locator(".palette-select").count()).toBe(0);
     }
     // A letter on a closed select opens the list on its first match; Enter keeps it. The select
     // starts out of view, so focusing it scrolls the panel just before the list opens.
@@ -167,10 +167,10 @@ describe.skipIf(!chrome).each([1280, 390])("the font size row at %ipx", width =>
     await layout.evaluate(node => { const scroller = node.closest(".design-inspector__controls")!; scroller.scrollTop = scroller.scrollHeight; });
     await layout.focus();
     await tab.keyboard.press("g");
-    await expect.poll(() => tab.locator(".komo-select [data-active]").textContent()).toBe("grid");
+    await expect.poll(() => tab.locator(".palette-select [data-active]").textContent()).toBe("grid");
     expect(await tab.locator("#card").evaluate(node => (node as HTMLElement).style.display)).toBe("grid");
     await tab.keyboard.press("Enter");
-    expect(await tab.locator(".komo-select").count()).toBe(0);
+    expect(await tab.locator(".palette-select").count()).toBe(0);
     expect(await tab.locator("#card").evaluate(node => (node as HTMLElement).style.display)).toBe("grid");
     expect(errors).toEqual([]);
     await tab.close();
@@ -184,14 +184,14 @@ describe.skipIf(!chrome).each([1280, 390])("the font size row at %ipx", width =>
     await layout.scrollIntoViewIfNeeded();
     await layout.focus();
     await tab.keyboard.press("f");
-    await expect.poll(() => tab.locator(".komo-select [data-active]").textContent()).toBe("flex");
+    await expect.poll(() => tab.locator(".palette-select [data-active]").textContent()).toBe("flex");
     await tab.keyboard.press("Escape");
-    await expect.poll(() => tab.locator(".komo-select").count()).toBe(0);
+    await expect.poll(() => tab.locator(".palette-select").count()).toBe(0);
     expect(await tab.locator("#card").evaluate(node => (node as HTMLElement).style.display)).toBe("");
     await layout.focus();
     await tab.keyboard.press("g");
     await tab.waitForTimeout(200);
-    expect(await tab.locator(".komo-select").count()).toBe(0);
+    expect(await tab.locator(".palette-select").count()).toBe(0);
     expect(await layout.inputValue()).toBe("block");
     expect(await tab.locator("#card").evaluate(node => (node as HTMLElement).style.display)).toBe("");
     expect(errors).toEqual([]);

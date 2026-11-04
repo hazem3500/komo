@@ -100,47 +100,47 @@ async function open(zoom: string, viewport = { width: 1280, height: 760 }) {
 }
 
 /** The popup's one scroll area: the token list, or the Custom editor. */
-const scroller = (popup: Locator) => popup.locator(".komo-tokens__custom:not([hidden]), .komo-tokens__list:not([hidden])").first();
+const scroller = (popup: Locator) => popup.locator(".palette-tokens__custom:not([hidden]), .palette-tokens__list:not([hidden])").first();
 
 describe.skipIf(!chrome).each(["Fit", "100%"])("the token popup at Frame %s", mode => {
   it("opens on the tokens, swaps to Custom and back, with the keyboard too", async () => {
     const { tab, errors } = await open(mode);
     const field = tab.locator('[data-field-property="color"]');
     await field.locator("select[data-picker]").click();
-    const popup = tab.locator(".komo-tokens");
+    const popup = tab.locator(".palette-tokens");
     await popup.locator('[role="option"]').first().waitFor();
     // Tokens first: no picker under the list, no row tooltip, and a Custom… row with the value.
-    expect(await popup.locator(".komo-color").count()).toBe(0);
+    expect(await popup.locator(".palette-color").count()).toBe(0);
     expect(await popup.locator('[role="option"][title]').count()).toBe(0);
-    const more = popup.locator(".komo-tokens__more");
+    const more = popup.locator(".palette-tokens__more");
     expect(await more.textContent()).toMatch(/^Custom…[0-9A-F]{6}/);
     // Only the active row shows its path and value.
     const first = popup.locator('[role="option"]').first();
     await first.hover();
-    expect(await first.locator(".komo-tokens__sub").isVisible()).toBe(true);
-    expect(await popup.locator(".komo-tokens__sub:visible").count()).toBe(1);
+    expect(await first.locator(".palette-tokens__sub").isVisible()).toBe(true);
+    expect(await popup.locator(".palette-tokens__sub:visible").count()).toBe(1);
     // End, then ArrowDown, reaches Custom…; Enter opens it.
-    const list = popup.locator(".komo-tokens__list");
+    const list = popup.locator(".palette-tokens__list");
     await list.focus();
     await tab.keyboard.press("End");
     await tab.keyboard.press("ArrowDown");
     expect(await more.evaluate(node => node === (node.getRootNode() as ShadowRoot).activeElement)).toBe(true);
     await tab.keyboard.press("Enter");
-    await popup.locator(".komo-color__area").waitFor();
-    expect(await popup.locator(".komo-tokens__head").textContent()).toBe("Custom colour");
+    await popup.locator(".palette-color__area").waitFor();
+    expect(await popup.locator(".palette-tokens__head").textContent()).toBe("Custom colour");
     expect(await list.isVisible()).toBe(false);
     // Back returns to the tokens with focus on Custom….
     await popup.getByRole("button", { name: "Back to tokens", exact: true }).focus();
     await tab.keyboard.press("Enter");
     await first.waitFor();
-    expect(await popup.locator(".komo-color").isVisible()).toBe(false);
+    expect(await popup.locator(".palette-color").isVisible()).toBe(false);
     expect(await more.evaluate(node => node === (node.getRootNode() as ShadowRoot).activeElement)).toBe(true);
     // A field's swatch opens straight on the picker.
     await tab.keyboard.press("Escape");
     await field.locator('input[type="color"]').click();
-    await popup.locator(".komo-color__area").waitFor();
+    await popup.locator(".palette-color__area").waitFor();
     // A pointer focuses the area without the keyboard's ring.
-    const area = popup.locator(".komo-color__area");
+    const area = popup.locator(".palette-color__area");
     const box = (await area.boundingBox())!;
     await tab.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     expect(await area.evaluate(node => node.matches(":focus") && !node.matches(":focus-visible"))).toBe(true);
@@ -153,15 +153,15 @@ describe.skipIf(!chrome).each(["Fit", "100%"])("the token popup at Frame %s", mo
     const { tab, errors } = await open(mode, { width: 1280, height: 420 });
     const field = tab.locator('[data-field-property="color"]');
     await field.locator('input[type="color"]').click();
-    const popup = tab.locator(".komo-tokens");
-    await popup.locator(".komo-color__area").waitFor();
+    const popup = tab.locator(".palette-tokens");
+    await popup.locator(".palette-color__area").waitFor();
     await settle(tab);
     const rect = (await popup.boundingBox())!;
     expect(rect.y).toBeGreaterThanOrEqual(0);
     expect(rect.y + rect.height).toBeLessThanOrEqual(420);
     const area = scroller(popup);
     expect(await area.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
-    for (const selector of [".komo-color__area", ".komo-color__hue", ".komo-color__alpha", ".komo-color__channels input", ".komo-color__swatches button"]) {
+    for (const selector of [".palette-color__area", ".palette-color__hue", ".palette-color__alpha", ".palette-color__channels input", ".palette-color__swatches button"]) {
       await area.evaluate(node => { node.scrollTop = 0; });
       const part = popup.locator(selector).first();
       await part.evaluate(node => node.scrollIntoView({ block: "nearest" }));
@@ -196,10 +196,10 @@ describe.skipIf(!chrome).each(["Fit", "100%"])("the token popup at Frame %s", mo
     const shadow = tab.locator('[data-field-property="box-shadow"]');
     await shadow.scrollIntoViewIfNeeded();
     await shadow.locator("select[data-picker]").click();
-    const popup = tab.locator(".komo-tokens");
+    const popup = tab.locator(".palette-tokens");
     const color = popup.getByRole("button", { name: "Layer 1 color", exact: true });
     await color.waitFor();
-    expect(await color.locator(".komo-typed__alpha").textContent()).toBe("12%");
+    expect(await color.locator(".palette-typed__alpha").textContent()).toBe("12%");
     expect(await color.locator("span").first().textContent()).toBe("D12F2F");
     await color.click();
     const opacity = popup.getByRole("textbox", { name: "Opacity", exact: true });
@@ -207,9 +207,9 @@ describe.skipIf(!chrome).each(["Fit", "100%"])("the token popup at Frame %s", mo
     expect(await opacity.inputValue()).toBe("12");
     await opacity.fill("40");
     await opacity.press("Enter");
-    await expect.poll(() => color.locator(".komo-typed__alpha").textContent()).toBe("40%");
+    await expect.poll(() => color.locator(".palette-typed__alpha").textContent()).toBe("40%");
     // Swatches paint their colors inside the shadow editor too.
-    const swatch = popup.locator(".komo-color__swatches button").first();
+    const swatch = popup.locator(".palette-color__swatches button").first();
     await swatch.waitFor();
     expect(await swatch.evaluate(node => getComputedStyle(node).backgroundImage)).toContain("gradient");
     await tab.keyboard.press("Escape");

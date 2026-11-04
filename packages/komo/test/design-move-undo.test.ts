@@ -36,7 +36,7 @@ function fixture() {
   const undo = () => { history.pop()?.undo?.(); move.sync(); };
   const order = () => [...document.querySelector("#list")!.children]
     .filter(child => (child as HTMLElement).style.display !== "none")
-    .map(child => `${child.textContent}${child.hasAttribute("data-komo-move-clone") ? "*" : ""}`);
+    .map(child => `${child.textContent}${child.hasAttribute("data-palette-move-clone") ? "*" : ""}`);
   return { history, move, undo, order, announced, element: (id: string) => document.getElementById(id) as DesignTarget, select: (id: string) => { selected = document.getElementById(id) as DesignTarget; } };
 }
 const proposal = (history: Entry[]) => geometryProposal(history.flatMap(entry => entry.geometry ?? []));
@@ -52,7 +52,7 @@ describe("structural move undo", () => {
     expect(proposal(f.history)).toContain("- Move List item “Two”: from ul#list (2nd) → ul#list (3rd)");
     f.undo();
     expect(f.order()).toEqual(["One", "Two", "Three"]);
-    expect(document.querySelectorAll("[data-komo-move-clone]")).toHaveLength(0);
+    expect(document.querySelectorAll("[data-palette-move-clone]")).toHaveLength(0);
     expect(two.getAttribute("style")).toBeNull();
     expect(proposal(f.history)).toBeUndefined();
   });
@@ -106,7 +106,7 @@ describe("structural move undo", () => {
     const entry = f.history.pop()!;
     entry.undo!();
     f.move.sync();
-    expect(document.querySelectorAll("[data-komo-move-clone]")).toHaveLength(0);
+    expect(document.querySelectorAll("[data-palette-move-clone]")).toHaveLength(0);
     expect(one.getAttribute("style")).toBe("color: red; display: list-item !important");
   });
 });
@@ -125,7 +125,7 @@ describe("overlay peek with the configured visibility key", () => {
       options: { root, host, targetAt: () => null, visibility: shortcuts.visibility },
     });
     const key = (type: "keydown" | "keyup", init: KeyboardEventInit) => document.body.dispatchEvent(new KeyboardEvent(type, { bubbles: true, composed: true, cancelable: true, ...init }));
-    return { host, root, key, hidden: () => host.hasAttribute("data-komo-overlays-hidden") };
+    return { host, root, key, hidden: () => host.hasAttribute("data-palette-overlays-hidden") };
   }
   const hold = () => new Promise(resolve => setTimeout(resolve, 400));
 

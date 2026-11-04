@@ -147,18 +147,18 @@ export function registerInspectableRoot(
     },
   };
   registered.set(element, record);
-  element.dataset.komoInspectable = definition.id;
-  if (textProp) element.dataset.komoTextProp = textProp;
-  else delete element.dataset.komoTextProp;
+  element.dataset.paletteInspectable = definition.id;
+  if (textProp) element.dataset.paletteTextProp = textProp;
+  else delete element.dataset.paletteTextProp;
   registeredListeners.set(record, listeners);
   return () => {
     if (registered.get(element) !== record) return;
     registered.delete(element);
     listeners.clear();
-    if (element.dataset.komoInspectable === definition.id)
-      delete element.dataset.komoInspectable;
-    if (element.dataset.komoTextProp === textProp)
-      delete element.dataset.komoTextProp;
+    if (element.dataset.paletteInspectable === definition.id)
+      delete element.dataset.paletteInspectable;
+    if (element.dataset.paletteTextProp === textProp)
+      delete element.dataset.paletteTextProp;
   };
 }
 
@@ -178,8 +178,8 @@ export function updateInspectableRoot(
   const textProp = definition.textProp && definition.props.some(
     (prop) => prop.name === definition.textProp && prop.kind === "string",
   ) ? definition.textProp : undefined;
-  if (textProp) element.dataset.komoTextProp = textProp;
-  else delete element.dataset.komoTextProp;
+  if (textProp) element.dataset.paletteTextProp = textProp;
+  else delete element.dataset.paletteTextProp;
   registeredListeners.get(record)?.forEach(listener => listener());
 }
 
@@ -195,7 +195,7 @@ export function inspectableFor(
   if (framed) return framed;
   const registeredComponent = target && registered.get(target);
   if (registeredComponent &&
-    target.getAttribute("data-komo-inspectable") === registeredComponent.definition.id
+    target.getAttribute("data-palette-inspectable") === registeredComponent.definition.id
   ) return registeredComponent;
   const adapter = target && adapted.get(target);
   return adapter && adapter.editor.available?.() !== false ? adapter.component : null;

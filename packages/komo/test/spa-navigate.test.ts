@@ -262,7 +262,7 @@ it("accepts canonical redirects without changing hash or router state", async ()
 });
 
 it.each([false, true])("opens a deep link on load with restored sidebar %s and clears the comment param", async (restored) => {
-  if (restored) sessionStorage.setItem("branch-comments:open:fixture:fixture", "1");
+  if (restored) sessionStorage.setItem("palette:open:fixture:fixture", "1");
   history.replaceState({ keep: 1 }, "", "/other?comment=away&tab=2");
   const target = document.createElement("section");
   target.id = "target";

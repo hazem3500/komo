@@ -4,20 +4,20 @@ import { loadPostgres, postgresDatabase } from "./postgres";
 import worker from "./index";
 import { sendWebhookPinned } from "./node-webhooks";
 import { authOptions, publicLocation } from "./proxy-auth";
-import { checkProjects, clientAddress, trustedProxyHops } from "./node-config";
+import { checkProjects, clientAddress, nodeSetting, trustedProxyHops } from "./node-config";
 
 const databaseUrl = process.env.DATABASE_URL;
 const projects = process.env.PROJECTS;
 const publicUrl = process.env.PUBLIC_URL;
 if (!databaseUrl || !projects || !publicUrl)
   throw Error("DATABASE_URL, PUBLIC_URL, and PROJECTS are required");
-// PUBLIC_URL may include a path (https://example.com/komo) when a proxy serves
+// PUBLIC_URL may include a path (https://example.com/palette) when a proxy serves
 // the app under it; requests are accepted with or without that path.
 const { origin: publicOrigin, path: publicPath } = publicLocation(publicUrl);
 checkProjects(projects);
 const proxyHops = trustedProxyHops(process.env);
 const db = postgresDatabase(databaseUrl, await loadPostgres());
-const option = (name: string) => process.env[name] || undefined;
+const option = (name: string) => nodeSetting(process.env, name);
 const env = {
   DB: db,
   PROJECTS: projects,
@@ -25,18 +25,18 @@ const env = {
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ?? "",
   GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID ?? "",
   GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET ?? "",
-  KOMO_WEBHOOK_KEYS: process.env.KOMO_WEBHOOK_KEYS,
-  KOMO_TOKEN_PEPPER: option("KOMO_TOKEN_PEPPER"),
-  KOMO_WEBHOOK_SEND: sendWebhookPinned,
-  KOMO_PROXY_AUTH: option("KOMO_PROXY_AUTH"),
-  KOMO_PROXY_AUDIENCE: option("KOMO_PROXY_AUDIENCE"),
-  KOMO_IAP_AUDIENCE: option("KOMO_IAP_AUDIENCE"),
-  KOMO_AUTH_PATH_PREFIX: option("KOMO_AUTH_PATH_PREFIX"),
-  KOMO_AUTH_PREFIX: option("KOMO_AUTH_PREFIX"),
-  KOMO_REQUIRE_SESSION_FOR_READS: option("KOMO_REQUIRE_SESSION_FOR_READS"),
-  KOMO_ALLOW_GUESTS: option("KOMO_ALLOW_GUESTS"),
-  KOMO_SESSION_MAX_AGE_DAYS: option("KOMO_SESSION_MAX_AGE_DAYS"),
-  KOMO_PUBLIC_PATH: publicPath || undefined,
+  PALETTE_WEBHOOK_KEYS: option("WEBHOOK_KEYS"),
+  PALETTE_TOKEN_PEPPER: option("TOKEN_PEPPER"),
+  PALETTE_WEBHOOK_SEND: sendWebhookPinned,
+  PALETTE_PROXY_AUTH: option("PROXY_AUTH"),
+  PALETTE_PROXY_AUDIENCE: option("PROXY_AUDIENCE"),
+  PALETTE_IAP_AUDIENCE: option("IAP_AUDIENCE"),
+  PALETTE_AUTH_PATH_PREFIX: option("AUTH_PATH_PREFIX"),
+  PALETTE_AUTH_PREFIX: option("AUTH_PREFIX"),
+  PALETTE_REQUIRE_SESSION_FOR_READS: option("REQUIRE_SESSION_FOR_READS"),
+  PALETTE_ALLOW_GUESTS: option("ALLOW_GUESTS"),
+  PALETTE_SESSION_MAX_AGE_DAYS: option("SESSION_MAX_AGE_DAYS"),
+  PALETTE_PUBLIC_PATH: publicPath || undefined,
 } as unknown as Env;
 // Fail at startup, before touching the database, on an invalid sign-in option.
 authOptions(env);

@@ -44,7 +44,7 @@ beforeAll(async () => {
       const thread=(id,selector,body)=>({id,page:'/',anchor:{selector,text:'',x:.5,y:.5,width:0,height:0,pageX:0,pageY:0,viewportWidth:1280},resolved:false,resolvedBy:null,createdAt:1,updatedAt:1,tags:[],
         comments:[{id:id+'-comment',body,author:user,createdAt:1,editedAt:null,reactions:{}}]});
       const threads=[thread('move','#approvals','${bodies.move}'),thread('resize','#card','${bodies.resize}'),thread('missing','#gone','${bodies.missing}')];
-      const key='branch-comments:'+location.origin+':preview';
+      const key='palette:'+location.origin+':preview';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       window.fetch=async input=>{
@@ -169,7 +169,7 @@ describe.skipIf(!chrome)("Before/After on posted design proposals", () => {
     expect(shown[1].outline).toContain("solid");
     expect(shown[1].outline).toContain("rgb(229, 72, 77)");
     // The new spot sits on the stand-in, second in the list.
-    const clone = await page.locator("[data-komo-move-clone]").boundingBox();
+    const clone = await page.locator("[data-palette-move-clone]").boundingBox();
     expect(Math.abs(shown[1].box.top - clone!.y)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: join(shots, "move-after.png") });
     // B flips the open thread while focus is anywhere but a text field.
@@ -183,7 +183,7 @@ describe.skipIf(!chrome)("Before/After on posted design proposals", () => {
     await page.keyboard.press("Escape");
     await expect.poll(() => page.locator(".design-card").count()).toBe(0);
     expect(await snapshot(page)).toBe(before);
-    expect(await page.locator(".design-mark, [data-komo-move-clone]").count()).toBe(0);
+    expect(await page.locator(".design-mark, [data-palette-move-clone]").count()).toBe(0);
     expect(page.errors).toEqual([]);
     await page.close();
   }, 30000);
@@ -244,11 +244,11 @@ describe.skipIf(!chrome)("Before/After on posted design proposals", () => {
     const page = await open("move");
     const before = await snapshot(page);
     await toggle(page, "After").click();
-    expect(await page.locator("[data-komo-move-clone]").count()).toBe(1);
+    expect(await page.locator("[data-palette-move-clone]").count()).toBe(1);
     // A deep link to another thread, without reloading the page.
     await page.evaluate(() => { history.pushState({}, "", "/?comment=resize"); dispatchEvent(new PopStateEvent("popstate")); });
     await page.locator(".design-card-title", { hasText: "Style changes" }).waitFor();
-    expect(await page.locator("[data-komo-move-clone]").count()).toBe(0);
+    expect(await page.locator("[data-palette-move-clone]").count()).toBe(0);
     expect(await snapshot(page)).toBe(before);
     await page.close();
   }, 30000);

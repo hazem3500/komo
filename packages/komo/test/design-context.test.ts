@@ -103,7 +103,7 @@ describe("design comment context", () => {
     const props = "Proposed React prop changes (preview only)\nComponent: PromoCard\nSource: examples/react-props/src/card.tsx:19\n- brandColor: \"var(--color-muted)\" → \"var(--color-brand)\" [color.brand]";
     const body = designProposal(root, new Map([["padding", "24px"]]), () => "16px", undefined, [props], designContext(root, { themes }));
     expect(designEditFromComment(body, "article")).toEqual({
-      komo: "design-edit",
+      palette: "design-edit",
       version: 1,
       target: {
         selector: "#promo",

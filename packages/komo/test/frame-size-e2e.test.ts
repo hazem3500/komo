@@ -57,7 +57,7 @@ beforeAll(async () => {
       qa.styles=()=>['main','body','html','#app'].map(selector=>document.querySelector(selector).getAttribute('style'));
       qa.rules=()=>[...document.styleSheets].flatMap(sheet=>[...sheet.cssRules].map(rule=>rule.cssText));
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':frame-size';
+      const key='palette:'+location.origin+':frame-size';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       const cell=document.getElementById('cell-4-11'),box=cell.getBoundingClientRect();
@@ -276,7 +276,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
   it("ignores a size saved by an older version and remembers only explicit choices", async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     const page = await context.newPage();
-    const key = "branch-comments:frame-size:frame-size:example/review";
+    const key = "palette:frame-size:frame-size:example/review";
     const stored = () => page.evaluate((key) => localStorage.getItem(key), key);
     await page.goto(`${origin}/`);
     await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({ size: [879, 848], actual: false })), key);

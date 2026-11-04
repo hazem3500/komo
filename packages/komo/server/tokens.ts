@@ -2,12 +2,14 @@ import { timingSafeEqual } from "node:crypto";
 import { check, string } from "./validation";
 
 // Personal access tokens let a bot act as its owner with a narrower grant.
-// Format: komo_pat_<12-char lookup id>_<43-char secret>. Only a salted SHA-256
+// Format: palette_pat_<12-char lookup id>_<43-char secret>. Only a salted SHA-256
 // of the secret is stored (plus an optional server pepper), never the token.
-export const PAT_PREFIX = "komo_pat_";
+// Tokens issued before the rename start komo_pat_ and keep working: the prefix
+// isn't part of the hash.
+export const PAT_PREFIX = "palette_pat_";
 export const PAT_SCOPES = ["comments:read", "comments:write"] as const;
 export type PatAccess = "read" | "write" | "any";
-const PAT_PATTERN = /^komo_pat_([a-z0-9]{12})_([A-Za-z0-9_-]{43})$/;
+const PAT_PATTERN = /^(?:palette|komo)_pat_([a-z0-9]{12})_([A-Za-z0-9_-]{43})$/;
 const MAX_ACTIVE_TOKENS = 25;
 const MAX_LIFETIME_DAYS = 365;
 const USE_LOG_INTERVAL = 60000;
@@ -44,7 +46,7 @@ async function sha256(value: string) {
   ).join("");
 }
 const digest = (env: Env, salt: string, secret: string) =>
-  sha256(`${env.KOMO_TOKEN_PEPPER ?? ""}\0${salt}\0${secret}`);
+  sha256(`${env.PALETTE_TOKEN_PEPPER ?? ""}\0${salt}\0${secret}`);
 function randomId(length: number) {
   const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
   let result = "";
@@ -71,7 +73,7 @@ const list = (value: string | null): string[] | null => {
 };
 
 export const isPersonalToken = (bearer: string) =>
-  bearer.startsWith(PAT_PREFIX);
+  /^(?:palette|komo)_pat_/.test(bearer);
 
 export function auditStatement(
   env: Env,
@@ -108,7 +110,8 @@ export async function accountProjects(env: Env, userId: string) {
 const publicToken = (row: TokenRow, now: number) => ({
   id: row.id,
   name: row.name,
-  prefix: `${PAT_PREFIX}${row.id}`,
+  // Issuance-neutral: tokens issued before the rename start komo_pat_, newer ones palette_pat_.
+  prefix: `…_pat_${row.id}`,
   last4: row.last4,
   scopes: list(row.scopes) ?? [],
   projects: list(row.projects),

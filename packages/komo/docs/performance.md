@@ -43,6 +43,6 @@ pnpm --filter @hazem3500/palette size
 pnpm --filter @hazem3500/palette bench
 ```
 
-Open the benchmark URL printed by the final command. Use `?mode=none` for the host-only control and `?mode=after&comments=0` for an empty project. To compare an older production ESM bundle, set `KOMO_BENCH_BASELINE` to its directory containing `index.js` and use `?mode=before`. Keep viewport, browser, hardware, and foreground state identical.
+Open the benchmark URL printed by the final command. Use `?mode=none` for the host-only control and `?mode=after&comments=0` for an empty project. To compare an older production ESM bundle, set `PALETTE_BENCH_BASELINE` to its directory containing `index.js` and use `?mode=before`. Keep viewport, browser, hardware, and foreground state identical.
 
 The size command fails above 170,000 gzip bytes initially or 195,000 across all feature chunks. These budgets make future growth explicit. Benchmark files and build tooling do not ship in the npm archive.

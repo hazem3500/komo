@@ -34,7 +34,7 @@ beforeAll(async () => {
       const anchor={selector:'#target',text:'',x:.5,y:.5,width:0,height:0,pageX:0,pageY:0,viewportWidth:1280};
       const thread=(id,page,body)=>({id,page,anchor,resolved:false,resolvedBy:null,createdAt:Date.now(),updatedAt:Date.now(),comments:[{id:id+'-comment',body,author:user,createdAt:Date.now(),editedAt:null,reactions:{}}]});
       const threads=[thread('away','/destination','Destination conversation'),thread('second','/second','Second conversation'),thread('design-away','/destination','Proposed style changes (preview only)\\nTarget: #target\\n- color: rgb(68, 85, 102) → #ef3340')];
-      const key='branch-comments:'+location.origin+':router-preview';
+      const key='palette:'+location.origin+':router-preview';
       localStorage.setItem(key,'synthetic-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
       localStorage.setItem(key+':'+JSON.stringify(['example/review','local'])+':threads',JSON.stringify({token:'synthetic-session',threads}));

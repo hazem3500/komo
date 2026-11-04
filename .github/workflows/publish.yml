@@ -79,12 +79,9 @@ jobs:
             echo "bumped=false" >> "$GITHUB_OUTPUT"
           fi
           echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-      # Trusted publishing (OIDC) when configured on npmjs.com; otherwise the
-      # NPM_TOKEN repository secret, if set.
+      # Trusted publishing (OIDC), configured on npmjs.com for this workflow.
       - run: npm publish --access public --provenance
         working-directory: packages/komo
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Commit the version bump
         if: steps.version.outputs.bumped == 'true'
         env:

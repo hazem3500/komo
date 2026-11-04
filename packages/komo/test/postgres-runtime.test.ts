@@ -224,7 +224,7 @@ run(
     });
     expect(made.status).toBe(201);
     const token = made.data.token as string;
-    expect(token).toMatch(/^komo_pat_[a-z0-9]{12}_[A-Za-z0-9_-]{43}$/);
+    expect(token).toMatch(/^palette_pat_[a-z0-9]{12}_[A-Za-z0-9_-]{43}$/);
     const rows = await db
       .prepare("SELECT * FROM personal_access_tokens")
       .all<Record<string, unknown>>();

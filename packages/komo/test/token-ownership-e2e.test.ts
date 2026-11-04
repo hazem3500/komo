@@ -15,7 +15,7 @@ let server: Server, browser: Browser;
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-token-ownership-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-token-ownership-"));
   await build({
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
@@ -44,7 +44,7 @@ beforeAll(async () => {
       const anchor={selector:'#target',text:'',x:.5,y:.5,width:0,height:0,pageX:0,pageY:0,viewportWidth:1280};
       const thread={id:'radius-thread',page:location.pathname,anchor,resolved:false,resolvedBy:null,createdAt:Date.now(),updatedAt:Date.now(),comments:[{id:'radius-comment',body:'Synthetic radius conversation',author:{id:'synthetic-reviewer',name:'Example reviewer',verified:true},createdAt:Date.now(),editedAt:null,reactions:{}}]};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
-      if(radius){const key='branch-comments:'+location.origin+':ownership';localStorage.setItem(key,'synthetic-session');localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));localStorage.setItem(key+':'+JSON.stringify(['example/review','local'])+':threads',JSON.stringify({token:'synthetic-session',threads:[thread]}))}
+      if(radius){const key='palette:'+location.origin+':ownership';localStorage.setItem(key,'synthetic-session');localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));localStorage.setItem(key+':'+JSON.stringify(['example/review','local'])+':threads',JSON.stringify({token:'synthetic-session',threads:[thread]}))}
       window.fetch=async(input,init)=>{const method=init?.method??(input instanceof Request?input.method:'GET');if(method!=='GET'){qa.writes.push(method);throw Error('Unexpected fixture write')}return Response.json({...(radius?{user}:{}),threads:radius?[thread]:[],guests:true})};
       const mode=new URLSearchParams(location.search).get('mode');
       if(mode==='floating')document.body.append(document.createElement('aside'));
@@ -102,7 +102,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const trigger = page.locator('[data-field-property="color"] select[data-picker]');
     const choose = async () => {
       await trigger.click();
-      await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Accent" }).click();
+      await page.locator('.palette-tokens [role="option"]').filter({ hasText: "Accent" }).click();
     };
     const dark = baseline.startsWith("named") ? "rgb(255, 0, 0)" : "rgb(204, 204, 204)";
     const expected = baseline.endsWith("custom") ? dark : "rgb(85, 85, 85)";
@@ -186,10 +186,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const trigger = field.locator("select[data-picker]");
     await trigger.waitFor();
     await trigger.click();
-    await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Primary" }).click();
+    await page.locator('.palette-tokens [role="option"]').filter({ hasText: "Primary" }).click();
     expect(await value()).toBe("rgb(193, 168, 255)");
     await trigger.click();
-    const popup = await page.locator(".komo-tokens").elementHandle();
+    const popup = await page.locator(".palette-tokens").elementHandle();
     const search = page.getByRole("combobox", { name: "Search tokens for color" });
     const searchNode = await search.elementHandle();
     await search.fill("base");
@@ -197,10 +197,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await theme("light");
     await expect.poll(value).toBe("rgb(87, 84, 86)");
     expect(await popup!.evaluate(node => node.isConnected)).toBe(true);
-    expect(await searchNode!.evaluate(node => node === node.getRootNode().querySelector('.komo-tokens input'))).toBe(true);
+    expect(await searchNode!.evaluate(node => node === node.getRootNode().querySelector('.palette-tokens input'))).toBe(true);
     expect(await search.inputValue()).toBe("base");
     expect(await search.evaluate(node => (node as HTMLInputElement).selectionStart)).toBe(4);
-    await expect.poll(() => page.locator('.komo-tokens [data-active]').getAttribute("aria-label")).toContain("#575456");
+    await expect.poll(() => page.locator('.palette-tokens [data-active]').getAttribute("aria-label")).toContain("#575456");
     await page.keyboard.press("Escape");
     expect(await value()).toBe("rgb(105, 65, 198)");
     expect(await field.locator('input[type="color"]').inputValue()).toBe("#6941c6");
@@ -303,7 +303,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
       await field.locator("select[data-picker]").click();
       expect((await shape()).hidden).toBe(true);
     };
-    const full = page.locator('.komo-tokens [role="option"]').filter({ hasText: "Full" });
+    const full = page.locator('.palette-tokens [role="option"]').filter({ hasText: "Full" });
     await aligned();
     await open();
     await full.hover();
@@ -327,7 +327,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     await aligned();
     await open();
-    await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Elliptical" }).click();
+    await page.locator('.palette-tokens [role="option"]').filter({ hasText: "Elliptical" }).click();
     await aligned();
     await page.getByRole("button", { name: "Reset", exact: true }).click();
     await aligned();
@@ -414,9 +414,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     };
     const open = async () => {
       await field.locator("select[data-picker]").click();
-      await page.locator(".komo-tokens").waitFor();
+      await page.locator(".palette-tokens").waitFor();
     };
-    const primary = page.locator('.komo-tokens [role="option"]').filter({ hasText: "Primary" });
+    const primary = page.locator('.palette-tokens [role="option"]').filter({ hasText: "Primary" });
     await field.locator("select[data-picker]").waitFor();
     await raw("#ef3340");
     expect(await value()).toBe("rgb(239, 51, 64)");

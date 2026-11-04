@@ -1,4 +1,20 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
+/** The PALETTE_ setting `name`, or its older KOMO_ name. */
+export const setting = (env, name) => env[`PALETTE_${name}`] || env[`KOMO_${name}`] || undefined;
+
+/**
+ * Where a project keeps its settings and generated client module. New projects
+ * use .palette/ and palette.config.js. A project set up before the rename keeps
+ * .komo/ and komo.config.js, so its imports and ignored files stay valid.
+ */
+export function projectLayout(root) {
+  return !existsSync(join(root, ".palette")) && existsSync(join(root, ".komo"))
+    ? { dir: ".komo", module: "komo.config.js" }
+    : { dir: ".palette", module: "palette.config.js" };
+}
 
 export function gitValue(args, cwd) {
   try {
@@ -19,7 +35,7 @@ export function repository(remote) {
 }
 export function branchName(env, cwd) {
   return (
-    env.KOMO_BRANCH ||
+    setting(env, "BRANCH") ||
     env.CF_PAGES_BRANCH ||
     env.WORKERS_CI_BRANCH ||
     env.VERCEL_GIT_COMMIT_REF ||

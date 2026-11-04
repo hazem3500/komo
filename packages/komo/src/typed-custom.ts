@@ -73,7 +73,7 @@ export function nudged(value: string, steps: number): string {
   return `${next}${match[2]}`;
 }
 
-export const css = `.komo-custom{display:flex;flex:1;flex-direction:column;min-height:0}.komo-custom__body{display:grid;gap:8px;padding:8px;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}.komo-typed{display:grid;gap:6px;min-width:0}.komo-typed__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.komo-typed__field,.komo-typed__color,.komo-typed__menu{display:flex;align-items:center;box-sizing:border-box;width:100%;min-width:0;height:28px;border-radius:6px;background:#ffffff0a;box-shadow:none;color:#f1efeb;font:inherit;font-size:11px}.komo-typed__field:hover,.komo-typed__color:hover,.komo-typed__menu:hover{box-shadow:inset 0 0 0 1px #ffffff1c}.komo-typed__field:focus-within,.komo-typed__color:focus-visible,.komo-typed__menu:focus-visible{outline:0;box-shadow:inset 0 0 0 1px #bda6ef}.komo-typed__field>span{flex:none;display:grid;place-items:center;min-width:24px;height:100%;padding:0 2px 0 6px;color:#77736f;font-size:10px;font-weight:500;cursor:ew-resize;user-select:none;touch-action:none}.komo-typed__field>span:hover{color:#e9e6e1}.komo-typed__field>span svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.1}.komo-typed__field input{flex:1;width:100%;min-width:0;height:100%;margin:0;padding:0 2px;border:0;border-radius:0;outline:0;box-shadow:none;background:none;color:inherit;font:inherit;font-variant-numeric:tabular-nums}.komo-typed__field input:focus,.komo-typed__field input:focus-visible,.komo-typed__field select:focus,.komo-typed__field select:focus-visible{outline:0;box-shadow:none}.komo-typed__field select{flex:none;width:auto;max-width:44px;height:100%;margin:0;padding:0 8px 0 2px;border:0;border-radius:0 6px 6px 0;box-shadow:none;appearance:none;background:none;color:#77736f;font:inherit;font-size:10px;text-align:right;cursor:pointer}.komo-typed__field select:hover{color:#f1efeb}.komo-typed__menu{padding:0 20px 0 8px;border:0;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 7px center/8px no-repeat;cursor:pointer}.komo-typed [aria-invalid=true]{color:#f8a898}.komo-typed__layer{display:grid;gap:6px}.komo-typed__layer[data-hidden] .komo-typed__grid{opacity:.45}.komo-typed__row{display:flex;align-items:center;gap:4px;min-width:0}.komo-typed__row>.komo-typed__menu{flex:none;width:64px}.komo-typed__row>.komo-typed__color{flex:1;gap:6px;padding:0 6px}.komo-typed__color .komo-typed__alpha{flex:none;margin-left:auto;color:#898680;font-size:10px}.komo-typed button.komo-typed__icon{display:grid;place-items:center;flex:none;width:24px;padding:0}.komo-typed__icon svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}.komo-typed__tile{display:grid;place-items:center;height:56px;border-radius:6px;background:repeating-conic-gradient(#ffffff0a 0 25%,#ffffff04 0 50%) 0 0/12px 12px}.komo-typed__tile i{display:grid;place-items:center;width:32px;height:32px;border-radius:6px;background:#f1efeb;color:#f1efeb;font-style:normal;font-size:20px;font-weight:600}.komo-typed__tile i:not(:empty){width:auto;height:auto;background:none}.komo-typed__layer+.komo-typed__layer{padding-top:8px;border-top:1px solid #ffffff0d}.komo-typed__head{display:flex;align-items:center;gap:2px;min-height:24px}.komo-typed__head b{flex:1;color:#b5b1ab;font-size:10px;font-weight:500}.komo-typed button:not(.komo-typed__color,.komo-color *){height:24px;padding:0 8px;border:0;border-radius:5px;background:none;color:#898680;font:inherit;font-size:10px;cursor:pointer}.komo-typed button:not(.komo-typed__color,.komo-color *):hover{background:#ffffff14;color:#f1efeb}.komo-typed button[aria-pressed=true]{background:#bda6ef24;color:#e6dcfb}.komo-typed button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.komo-typed__color{gap:8px;padding:0 8px;border:0;justify-content:flex-start;text-align:left;font-variant-numeric:tabular-nums;cursor:pointer}.komo-typed__color i{flex:none;width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1px #ffffff26;background:linear-gradient(var(--c),var(--c)),repeating-conic-gradient(#ffffff40 0 25%,#ffffff12 0 50%) 0 0/8px 8px}.komo-typed__color span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.komo-typed .komo-color{padding:0}.komo-typed__sample{display:flex;align-items:center;gap:8px;min-width:0;height:36px;padding:0 8px;border-radius:6px;background:#ffffff08}.komo-typed__sample b{flex:none;font-size:20px;font-weight:400}.komo-typed__sample span{overflow:hidden;color:#b5b1ab;text-overflow:ellipsis;white-space:nowrap}.komo-typed__hint{color:#898680;font-size:10px;line-height:1.5}.komo-custom .komo-typed__advanced>summary{display:flex;align-items:center;height:auto;min-height:24px;color:#77736f;font-size:10px;font-weight:500;list-style:none;cursor:pointer}.komo-typed__advanced>summary::-webkit-details-marker{display:none}.komo-custom .komo-typed__advanced>summary:hover{color:#e9e6e1}.komo-typed__advanced>summary:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px;border-radius:4px}@media (max-width:520px){.komo-typed__font{grid-template-columns:minmax(0,1fr)}}@media (pointer:coarse){.komo-typed__field,.komo-typed__color,.komo-typed__menu{height:36px}.komo-typed button:not(.komo-typed__color,.komo-color *){height:32px}}`;
+export const css = `.palette-custom{display:flex;flex:1;flex-direction:column;min-height:0}.palette-custom__body{display:grid;gap:8px;padding:8px;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}.palette-typed{display:grid;gap:6px;min-width:0}.palette-typed__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.palette-typed__field,.palette-typed__color,.palette-typed__menu{display:flex;align-items:center;box-sizing:border-box;width:100%;min-width:0;height:28px;border-radius:6px;background:#ffffff0a;box-shadow:none;color:#f1efeb;font:inherit;font-size:11px}.palette-typed__field:hover,.palette-typed__color:hover,.palette-typed__menu:hover{box-shadow:inset 0 0 0 1px #ffffff1c}.palette-typed__field:focus-within,.palette-typed__color:focus-visible,.palette-typed__menu:focus-visible{outline:0;box-shadow:inset 0 0 0 1px #bda6ef}.palette-typed__field>span{flex:none;display:grid;place-items:center;min-width:24px;height:100%;padding:0 2px 0 6px;color:#77736f;font-size:10px;font-weight:500;cursor:ew-resize;user-select:none;touch-action:none}.palette-typed__field>span:hover{color:#e9e6e1}.palette-typed__field>span svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.1}.palette-typed__field input{flex:1;width:100%;min-width:0;height:100%;margin:0;padding:0 2px;border:0;border-radius:0;outline:0;box-shadow:none;background:none;color:inherit;font:inherit;font-variant-numeric:tabular-nums}.palette-typed__field input:focus,.palette-typed__field input:focus-visible,.palette-typed__field select:focus,.palette-typed__field select:focus-visible{outline:0;box-shadow:none}.palette-typed__field select{flex:none;width:auto;max-width:44px;height:100%;margin:0;padding:0 8px 0 2px;border:0;border-radius:0 6px 6px 0;box-shadow:none;appearance:none;background:none;color:#77736f;font:inherit;font-size:10px;text-align:right;cursor:pointer}.palette-typed__field select:hover{color:#f1efeb}.palette-typed__menu{padding:0 20px 0 8px;border:0;appearance:none;background:#ffffff0a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3 4 5.5 6.5 3' fill='none' stroke='%23898680' stroke-width='1.2'/%3E%3C/svg%3E") right 7px center/8px no-repeat;cursor:pointer}.palette-typed [aria-invalid=true]{color:#f8a898}.palette-typed__layer{display:grid;gap:6px}.palette-typed__layer[data-hidden] .palette-typed__grid{opacity:.45}.palette-typed__row{display:flex;align-items:center;gap:4px;min-width:0}.palette-typed__row>.palette-typed__menu{flex:none;width:64px}.palette-typed__row>.palette-typed__color{flex:1;gap:6px;padding:0 6px}.palette-typed__color .palette-typed__alpha{flex:none;margin-left:auto;color:#898680;font-size:10px}.palette-typed button.palette-typed__icon{display:grid;place-items:center;flex:none;width:24px;padding:0}.palette-typed__icon svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}.palette-typed__tile{display:grid;place-items:center;height:56px;border-radius:6px;background:repeating-conic-gradient(#ffffff0a 0 25%,#ffffff04 0 50%) 0 0/12px 12px}.palette-typed__tile i{display:grid;place-items:center;width:32px;height:32px;border-radius:6px;background:#f1efeb;color:#f1efeb;font-style:normal;font-size:20px;font-weight:600}.palette-typed__tile i:not(:empty){width:auto;height:auto;background:none}.palette-typed__layer+.palette-typed__layer{padding-top:8px;border-top:1px solid #ffffff0d}.palette-typed__head{display:flex;align-items:center;gap:2px;min-height:24px}.palette-typed__head b{flex:1;color:#b5b1ab;font-size:10px;font-weight:500}.palette-typed button:not(.palette-typed__color,.palette-color *){height:24px;padding:0 8px;border:0;border-radius:5px;background:none;color:#898680;font:inherit;font-size:10px;cursor:pointer}.palette-typed button:not(.palette-typed__color,.palette-color *):hover{background:#ffffff14;color:#f1efeb}.palette-typed button[aria-pressed=true]{background:#bda6ef24;color:#e6dcfb}.palette-typed button:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px}.palette-typed__color{gap:8px;padding:0 8px;border:0;justify-content:flex-start;text-align:left;font-variant-numeric:tabular-nums;cursor:pointer}.palette-typed__color i{flex:none;width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1px #ffffff26;background:linear-gradient(var(--c),var(--c)),repeating-conic-gradient(#ffffff40 0 25%,#ffffff12 0 50%) 0 0/8px 8px}.palette-typed__color span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.palette-typed .palette-color{padding:0}.palette-typed__sample{display:flex;align-items:center;gap:8px;min-width:0;height:36px;padding:0 8px;border-radius:6px;background:#ffffff08}.palette-typed__sample b{flex:none;font-size:20px;font-weight:400}.palette-typed__sample span{overflow:hidden;color:#b5b1ab;text-overflow:ellipsis;white-space:nowrap}.palette-typed__hint{color:#898680;font-size:10px;line-height:1.5}.palette-custom .palette-typed__advanced>summary{display:flex;align-items:center;height:auto;min-height:24px;color:#77736f;font-size:10px;font-weight:500;list-style:none;cursor:pointer}.palette-typed__advanced>summary::-webkit-details-marker{display:none}.palette-custom .palette-typed__advanced>summary:hover{color:#e9e6e1}.palette-typed__advanced>summary:focus-visible{outline:1px solid #bda6ef;outline-offset:-1px;border-radius:4px}@media (max-width:520px){.palette-typed__font{grid-template-columns:minmax(0,1fr)}}@media (pointer:coarse){.palette-typed__field,.palette-typed__color,.palette-typed__menu{height:36px}.palette-typed button:not(.palette-typed__color,.palette-color *){height:32px}}`;
 
 const units = ["px", "%", "rem", "em", "vw", "vh", "ch", "vmin", "vmax", "dvh"];
 const EYE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="2"/></svg>';
@@ -81,7 +81,7 @@ const MINUS = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9"/><
 const PLUS = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>';
 /** A quiet icon button; `pressed` makes it a toggle. */
 function iconButton(label: string, icon: string, onclick: () => void, pressed?: boolean): HTMLButtonElement {
-  const button = el("button", "komo-typed__icon");
+  const button = el("button", "palette-typed__icon");
   button.type = "button";
   button.innerHTML = icon;
   button.title = label;
@@ -98,7 +98,7 @@ const SCRUB = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6h10M3 4 
  * and the unit menu keeps at once.
  */
 function lengthField(name: string, short: string, value: string, change: (next: string, keep: boolean) => boolean, incomplete: Set<HTMLElement>, { unitless = false, optional = false } = {}): HTMLElement {
-  const box = el("div", "komo-typed__field");
+  const box = el("div", "palette-typed__field");
   const handle = el("span");
   if (short) handle.textContent = short;
   else handle.innerHTML = SCRUB;
@@ -173,12 +173,12 @@ function lengthField(name: string, short: string, value: string, change: (next: 
 export function typedCustom(body: HTMLElement, property: string, initial: string, exact: HTMLInputElement,
   send: (value: string, keep: boolean) => boolean, field?: Field, tokens: readonly DesignToken[] = [],
   hover: (value?: string) => void = () => {}) {
-  const controls = el("div", "komo-typed");
-  const advanced = el("details", "komo-typed komo-typed__advanced");
+  const controls = el("div", "palette-typed");
+  const advanced = el("details", "palette-typed palette-typed__advanced");
   const summary = el("summary", "", "Edit as CSS");
   // The popup cancels default clicks inside it (it sits in the field's <label>), so the summary toggles itself.
   summary.onclick = event => { event.preventDefault(); event.stopPropagation(); advanced.open = !advanced.open; };
-  const exactField = el("div", "komo-typed__field");
+  const exactField = el("div", "palette-typed__field");
   exact.title = property;
   exact.autocomplete = "off";
   exact.spellcheck = false;
@@ -193,12 +193,12 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
 
   /** A menu; with `whole`, a hovered or arrowed option previews the value it would make, and `sample` shows options in their own face or weight. */
   const menu = (label: string, values: Array<[string, string]>, current: string, pick: (value: string) => void, whole?: (value: string) => string, sample?: "fontFamily" | "fontWeight") => {
-    const select = el("select", "komo-typed__menu");
+    const select = el("select", "palette-typed__menu");
     select.setAttribute("aria-label", label);
     for (const [value, text] of values) { const option = el("option", "", text); option.value = value; option.title = value; if (sample && value) option.style[sample] = value; select.append(option); }
     select.value = current;
     select.onchange = () => pick(select.value);
-    if (whole) select.addEventListener("komo-preview", event => { const value = (event as CustomEvent<string | null>).detail; hover(value === null ? undefined : whole(value)); });
+    if (whole) select.addEventListener("palette-preview", event => { const value = (event as CustomEvent<string | null>).detail; hover(value === null ? undefined : whole(value)); });
     return select;
   };
 
@@ -208,7 +208,7 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
     incomplete.clear();
     controls.replaceChildren();
     if (property === "font-family") {
-      const sample = el("div", "komo-typed__sample"), aa = el("b", "", "Aa"), name = el("span", "", primaryFamily(next));
+      const sample = el("div", "palette-typed__sample"), aa = el("b", "", "Aa"), name = el("span", "", primaryFamily(next));
       sample.title = next;
       aa.style.fontFamily = next;
       sample.append(aa, name);
@@ -220,10 +220,10 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
       else advanced.open = true;
     } else if (/^(box|text)-shadow$/.test(property)) {
       const layers = shadowLayers(next, property);
-      if (!layers) { controls.append(el("span", "komo-typed__hint", "Complex shadow · edit it as CSS below.")); advanced.open = true; return; }
+      if (!layers) { controls.append(el("span", "palette-typed__hint", "Complex shadow · edit it as CSS below.")); advanced.open = true; return; }
       const boxShadow = property === "box-shadow";
       // A small tile shows the shadow as it is now.
-      const tile = el("div", "komo-typed__tile"), sample = el("i", "", boxShadow ? "" : "Ag");
+      const tile = el("div", "palette-typed__tile"), sample = el("i", "", boxShadow ? "" : "Ag");
       tile.setAttribute("aria-hidden", "true");
       tile.append(sample);
       const update = (keep: boolean) => {
@@ -231,7 +231,7 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
         return send(shadowValue(layers), keep);
       };
       sample.style.setProperty(property, shadowValue(layers));
-      const top = el("div", "komo-typed__head");
+      const top = el("div", "palette-typed__head");
       top.append(el("b", "", "Layers"), iconButton("Add shadow layer", PLUS, () => {
         layers.push({ lengths: ["0px", "2px", "4px", "0px"].slice(0, boxShadow ? 4 : 3), color: "#00000040", inset: false });
         if (update(true)) draw(shadowValue(layers));
@@ -239,18 +239,18 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
       controls.append(tile, top);
       layers.forEach((layer, index) => {
         const name = `Layer ${index + 1}`;
-        const group = el("div", "komo-typed__layer");
+        const group = el("div", "palette-typed__layer");
         group.setAttribute("role", "group");
         group.setAttribute("aria-label", `Shadow layer ${index + 1}`);
         group.toggleAttribute("data-hidden", !!layer.hidden);
-        const row = el("div", "komo-typed__row");
+        const row = el("div", "palette-typed__row");
         if (boxShadow) row.append(menu(`${name} type`, [["drop", "Drop"], ["inner", "Inner"]], layer.inset ? "inner" : "drop", value => { layer.inset = value === "inner"; update(true); }));
         // The color shows as a swatch, its hex and its opacity; it opens the color picker in place.
-        const color = el("button", "komo-typed__color");
+        const color = el("button", "palette-typed__color");
         color.type = "button";
         color.setAttribute("aria-label", `${name} color`);
         color.setAttribute("aria-expanded", "false");
-        const chip = el("i"), text = el("span"), alpha = el("span", "komo-typed__alpha");
+        const chip = el("i"), text = el("span"), alpha = el("span", "palette-typed__alpha");
         color.append(chip, text, alpha);
         const paint = () => {
           const [hex, opacity = "100%"] = readableColor(layer.color).split(" · ");
@@ -280,7 +280,7 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
           update(true);
         }, !layer.hidden);
         row.append(color, eye, iconButton(`Remove layer ${index + 1}`, MINUS, () => { layers.splice(index, 1); if (update(true)) draw(shadowValue(layers)); }));
-        const grid = el("div", "komo-typed__grid");
+        const grid = el("div", "palette-typed__grid");
         const names = [["X offset", "X"], ["Y offset", "Y"], ["Blur", "Blur"], ["Spread", "Spread"]].slice(0, boxShadow ? 4 : 3);
         names.forEach(([field, short], i) => grid.append(lengthField(`${name} ${field.toLowerCase()}`, short, layer.lengths[i] || "0px", (value, keep) => {
           while (layer.lengths.length <= i) layer.lengths.push("0px");
@@ -293,8 +293,8 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
     } else if (property === "font") {
       // A typography token: family, weight, size and line height, with the CSS below.
       const font = fontParts(next);
-      if (!font) { controls.append(el("span", "komo-typed__hint", "Custom expression · edit it as CSS below.")); advanced.open = true; return; }
-      const sample = el("div", "komo-typed__sample"), aa = el("b", "", "Aa"), label = el("span");
+      if (!font) { controls.append(el("span", "palette-typed__hint", "Custom expression · edit it as CSS below.")); advanced.open = true; return; }
+      const sample = el("div", "palette-typed__sample"), aa = el("b", "", "Aa"), label = el("span");
       sample.setAttribute("aria-hidden", "true");
       sample.append(aa, label);
       const paint = () => {
@@ -305,7 +305,7 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
       paint();
       const families = tokens.filter(token => token.type === "fontFamily" && token.value && CSS.supports("font-family", token.value) && token.value !== font.family);
       // Font sizes carry longer values ("0.875rem"), so on a narrow sheet these fields stack.
-      const grid = el("div", "komo-typed__grid komo-typed__font");
+      const grid = el("div", "palette-typed__grid palette-typed__font");
       grid.append(
         menu("Font weight", [...new Set([font.weight || "400", "100", "200", "300", "400", "500", "600", "700", "800", "900"])].map(value => [value, value]), font.weight || "400", value => { font.weight = value; keep(true); }, weight => fontValue({ ...font, weight }), "fontWeight"),
         lengthField("Font size", "Size", font.size, (value, live) => { font.size = value; return !incomplete.size && keep(live); }, incomplete),
@@ -328,10 +328,10 @@ export function typedCustom(body: HTMLElement, property: string, initial: string
           parts.splice(0, parts.length, a, b, c, d);
         }
         const fields = parts.map((part, i) => lengthField(names[i][0], names[i][1], part, (value, keep) => { parts[i] = value; return !incomplete.size && send(parts.join(" "), keep); }, incomplete));
-        if (fields.length > 1) { const grid = el("div", "komo-typed__grid"); grid.append(...fields); controls.append(grid); }
+        if (fields.length > 1) { const grid = el("div", "palette-typed__grid"); grid.append(...fields); controls.append(grid); }
         else controls.append(...fields);
       } else {
-        controls.append(el("span", "komo-typed__hint", "Custom expression · preserved exactly below."));
+        controls.append(el("span", "palette-typed__hint", "Custom expression · preserved exactly below."));
         advanced.open = true;
       }
     }

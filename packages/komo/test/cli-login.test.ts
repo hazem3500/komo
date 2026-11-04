@@ -1,9 +1,10 @@
 import { runInNewContext } from "node:vm";
 import { createServer } from "node:http";
 import { spawn, execFile } from "node:child_process";
-import { mkdtemp, readdir, readFile, writeFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, writeFile, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { expect, it } from "vitest";
@@ -45,10 +46,11 @@ it("keeps login credentials private and rejects a foreign callback origin", asyn
   const entry = fileURLToPath(new URL("../cli/index.mjs", import.meta.url));
   const env = {
     ...process.env,
-    KOMO_CONFIG_HOME: directory,
-    KOMO_PROJECT: "fixture",
-    KOMO_ENDPOINT: endpoint,
-    KOMO_ORIGIN: "http://localhost:3000",
+    PALETTE_CONFIG_HOME: directory,
+    PALETTE_PROJECT: "fixture",
+    PALETTE_ENDPOINT: endpoint,
+    PALETTE_ORIGIN: "http://localhost:3000",
+    PALETTE_TOKEN: "",
     KOMO_TOKEN: "",
   };
   const child = spawn(process.execPath, [entry, "login", "--no-open"], {
@@ -172,5 +174,55 @@ it("keeps login credentials private and rejects a foreign callback origin", asyn
     api.close();
     api.closeAllConnections();
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("reads a session saved under ~/.config/komo before the rename, and logout revokes and removes every saved session", async () => {
+  const home = await mkdtemp(join(tmpdir(), "palette-legacy-home-"));
+  const user = { id: "google:test", name: "CLI reviewer", verified: true };
+  const revoked: string[] = [];
+  const api = createServer((req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    if (req.url?.startsWith("/config")) res.end(JSON.stringify({ repo: "owner/site" }));
+    else if (["Bearer legacy-session", "Bearer current-session"].includes(req.headers.authorization ?? "")) {
+      if (req.method === "DELETE") revoked.push(req.headers.authorization!.slice(7));
+      res.end(JSON.stringify({ user }));
+    } else {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "Invalid token" }));
+    }
+  });
+  await new Promise<void>((resolve) => api.listen(0, "127.0.0.1", resolve));
+  const endpoint = `http://127.0.0.1:${(api.address() as { port: number }).port}`;
+  const entry = fileURLToPath(new URL("../cli/index.mjs", import.meta.url));
+  const env = {
+    ...process.env,
+    HOME: home,
+    PALETTE_CONFIG_HOME: "",
+    KOMO_CONFIG_HOME: "",
+    PALETTE_TOKEN: "",
+    KOMO_TOKEN: "",
+    PALETTE_PROJECT: "fixture",
+    PALETTE_ENDPOINT: endpoint,
+  };
+  const key = createHash("sha256").update(`${endpoint}\nfixture`).digest("hex");
+  const legacy = join(home, ".config", "komo", `${key}.json`);
+  try {
+    await mkdir(dirname(legacy), { recursive: true });
+    await writeFile(legacy, JSON.stringify({ token: "legacy-session" }));
+    const whoami = await promisify(execFile)(process.execPath, [entry, "whoami"], { env, cwd: home });
+    expect(JSON.parse(whoami.stdout).data).toMatchObject({ user, auth: "session" });
+    // Signed in again after the upgrade: a second session, saved under ~/.config/palette.
+    const current = join(home, ".config", "palette", `${key}.json`);
+    await mkdir(dirname(current), { recursive: true });
+    await writeFile(current, JSON.stringify({ token: "current-session" }));
+    await promisify(execFile)(process.execPath, [entry, "logout"], { env, cwd: home });
+    expect(revoked.sort()).toEqual(["current-session", "legacy-session"]);
+    await expect(stat(legacy)).rejects.toThrow();
+    await expect(stat(current)).rejects.toThrow();
+  } finally {
+    api.close();
+    api.closeAllConnections();
+    await rm(home, { recursive: true, force: true });
   }
 });

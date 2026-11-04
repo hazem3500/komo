@@ -9,7 +9,7 @@ type ColorValue = (field: Field, element: DesignTarget, resolved?: string) => st
  * renders restyle the element later, so the panel's color fields read again once
  * its color transitions settle: a token-bound field shows its token's value for
  * the current theme, any other field the computed value. A field being typed in
- * keeps its text; an open popup hears `komo-field-sync` and refreshes its own value.
+ * keeps its text; an open popup hears `palette-field-sync` and refreshes its own value.
  * Loaded with the panel as its own chunk.
  */
 export function liveColors(boxes: HTMLElement[], element: DesignTarget, valueFor: ColorValue): void {
@@ -32,7 +32,7 @@ export function liveColors(boxes: HTMLElement[], element: DesignTarget, valueFor
       if (value === control.value || control.matches(":focus") || control.getAttribute("aria-invalid") === "true") continue;
       control.value = value;
       if (swatch) swatch.value = toHex(value);
-      box.dispatchEvent(new Event("komo-field-sync"));
+      box.dispatchEvent(new Event("palette-field-sync"));
     }
     // Color transitions on the element or an ancestor are awaited, a second at a time.
     const running = element.ownerDocument.getAnimations?.().filter((animation) =>

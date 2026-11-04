@@ -44,7 +44,7 @@ beforeAll(async () => {
         if(params.has('guard'))addEventListener('beforeunload',event=>{event.preventDefault();event.returnValue='';});
       }
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':'+project;
+      const key='palette:'+location.origin+':'+project;
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       window.fetch=async(input)=>{
@@ -85,8 +85,8 @@ const state = (page: Page) => page.evaluate(() => ({
   shell: (window as any).qa?.shell as boolean,
   mounts: [...(window as any).qa?.mounts ?? []] as string[],
   url: location.href,
-  flag: sessionStorage.getItem("komo:shell"),
-  off: sessionStorage.getItem("komo:shell-off"),
+  flag: sessionStorage.getItem("palette:shell"),
+  off: sessionStorage.getItem("palette:shell-off"),
   appOnTop: !!document.getElementById("title"),
 }));
 async function load(page: Page, query = "") {
@@ -97,7 +97,7 @@ async function load(page: Page, query = "") {
 async function viewportFrame(page: Page): Promise<Frame> {
   await page.waitForFunction(() => {
     const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;
-    const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+    const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
     return !!frame?.contentDocument?.getElementById("title") && !root!.querySelector(".frame-stage[data-loading]");
   });
   return page.frames().find((item) => item.name() === "komo-viewport")!;
@@ -112,7 +112,7 @@ async function enter(page: Page, query = "") {
   }));
   await page.keyboard.press("l");
   const message = await asked;
-  await page.waitForURL(/komo-shell=[0-9a-f]{32}/);
+  await page.waitForURL(/palette-shell=[0-9a-f]{32}/);
   await page.waitForFunction(() => !!(window as any).palette);
   return { message, frame: await viewportFrame(page) };
 }
@@ -120,15 +120,15 @@ async function enter(page: Page, query = "") {
 describe.skipIf(!chrome)("Frame single-copy shell", () => {
   it("is never a shell from a link alone, or from another project's or origin's flag", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-    await load(page, "?komo-shell=1&nopalette");
+    await load(page, "?palette-shell=1&nopalette");
     expect(await state(page)).toMatchObject({ shell: false, mounts: ["top"], appOnTop: true });
     // A flag left by another project, by another origin, or with another nonce.
     for (const [stored, query] of [
-      [{ v: 1, project: "other-project", nonce: "a".repeat(32), origin }, `?komo-shell=${"a".repeat(32)}&nopalette`],
-      [{ v: 1, project: "frame-shell", nonce: "b".repeat(32), origin: "http://elsewhere.test" }, `?komo-shell=${"b".repeat(32)}&nopalette`],
-      [{ v: 1, project: "frame-shell", nonce: "c".repeat(32), origin }, `?komo-shell=${"d".repeat(32)}&nopalette`],
+      [{ v: 1, project: "other-project", nonce: "a".repeat(32), origin }, `?palette-shell=${"a".repeat(32)}&nopalette`],
+      [{ v: 1, project: "frame-shell", nonce: "b".repeat(32), origin: "http://elsewhere.test" }, `?palette-shell=${"b".repeat(32)}&nopalette`],
+      [{ v: 1, project: "frame-shell", nonce: "c".repeat(32), origin }, `?palette-shell=${"d".repeat(32)}&nopalette`],
     ] as const) {
-      await page.evaluate((value) => sessionStorage.setItem("komo:shell", JSON.stringify(value)), stored);
+      await page.evaluate((value) => sessionStorage.setItem("palette:shell", JSON.stringify(value)), stored);
       await load(page, query);
       expect(await state(page), JSON.stringify(stored)).toMatchObject({ shell: false, mounts: ["top"], appOnTop: true });
     }
@@ -144,7 +144,7 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
     expect(message).toContain("Unsaved changes in the app are lost");
     const now = await state(page);
     expect(now).toMatchObject({ shell: true, mounts: ["frame"], appOnTop: false });
-    const nonce = new URL(now.url).searchParams.get("komo-shell");
+    const nonce = new URL(now.url).searchParams.get("palette-shell");
     expect(JSON.parse(now.flag!)).toEqual({ v: 1, project: "frame-shell", nonce, origin });
     // The frame's document has no nonce, and its Palette stays inert.
     expect(await frame.evaluate(() => [location.search, [...document.body.children].filter((node) => node.shadowRoot).length])).toEqual(["", 0]);
@@ -156,10 +156,10 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
   it("keeps the shell's URL on the frame's route, so a reload stays in the shell on the same page", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     const { frame } = await enter(page);
-    const nonce = new URL(page.url()).searchParams.get("komo-shell");
+    const nonce = new URL(page.url()).searchParams.get("palette-shell");
     await frame.click("#next");
     await expect.poll(() => new URL(page.url()).pathname).toBe("/other");
-    expect(new URL(page.url()).searchParams.get("komo-shell")).toBe(nonce);
+    expect(new URL(page.url()).searchParams.get("palette-shell")).toBe(nonce);
     await page.reload();
     await page.waitForFunction(() => !!(window as any).palette);
     const again = await viewportFrame(page);
@@ -177,7 +177,7 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
     // The app runs once here, so the row doesn't warn about a second copy.
     expect(await page.locator("#frame-sim-hint").textContent()).toBe("Reloads this page inside a frame so breakpoints and popovers match this size.");
     await page.getByRole("menuitemcheckbox", { name: "Simulate real viewport" }).click();
-    await page.waitForURL((url) => !url.searchParams.has("komo-shell"));
+    await page.waitForURL((url) => !url.searchParams.has("palette-shell"));
     await page.waitForFunction(() => !!(window as any).qa?.mounts.length);
     const now = await state(page);
     expect(now).toMatchObject({ shell: false, mounts: ["top"], appOnTop: true, flag: null, off: null });
@@ -189,7 +189,7 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await enter(page);
     await page.evaluate(() => (window as any).palette.close());
-    await page.waitForURL((url) => !url.searchParams.has("komo-shell"));
+    await page.waitForURL((url) => !url.searchParams.has("palette-shell"));
     await page.waitForFunction(() => !!(window as any).qa?.mounts.length);
     expect(await state(page)).toMatchObject({ shell: false, mounts: ["top"], appOnTop: true, flag: null });
     await page.close();
@@ -212,9 +212,9 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
     let asked = 0;
     page.on("dialog", (dialog) => (asked++, void dialog.dismiss()));
     await load(page, "?restore");
-    await page.evaluate(() => sessionStorage.setItem("branch-comments:open:frame-shell:example/review", "1"));
+    await page.evaluate(() => sessionStorage.setItem("palette:open:frame-shell:example/review", "1"));
     await page.reload();
-    await page.waitForURL(/komo-shell=[0-9a-f]{32}/);
+    await page.waitForURL(/palette-shell=[0-9a-f]{32}/);
     await page.waitForFunction(() => !!(window as any).palette);
     await viewportFrame(page);
     expect(asked).toBe(0);
@@ -225,12 +225,12 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
   it("clears the flag and reloads the normal page when Palette doesn't start in the shell, then keeps two copies", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await enter(page);
-    const nonce = new URL(page.url()).searchParams.get("komo-shell");
+    const nonce = new URL(page.url()).searchParams.get("palette-shell");
     // The same shell, but Palette never starts: the app mounts nowhere until the guard's timeout.
-    await page.goto(`${origin}/?nopalette&timeout=1000&komo-shell=${nonce}`);
+    await page.goto(`${origin}/?nopalette&timeout=1000&palette-shell=${nonce}`);
     await page.waitForFunction(() => !!(window as any).qa);
     expect(await state(page)).toMatchObject({ shell: true, mounts: [] });
-    await page.waitForURL((url) => !url.searchParams.has("komo-shell"), { timeout: 5000 });
+    await page.waitForURL((url) => !url.searchParams.has("palette-shell"), { timeout: 5000 });
     await page.waitForFunction(() => !!(window as any).qa?.mounts.length);
     const after = await state(page);
     expect(after).toMatchObject({ shell: false, mounts: ["top"], appOnTop: true, flag: null });
@@ -253,8 +253,8 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
     await page.waitForFunction(() => !!(window as any).palette);
     page.once("dialog", (dialog) => void dialog.accept());
     await page.keyboard.press("l");
-    await page.waitForURL(/komo-shell=/);
-    await page.waitForURL((url) => !url.searchParams.has("komo-shell"));
+    await page.waitForURL(/palette-shell=/);
+    await page.waitForURL((url) => !url.searchParams.has("palette-shell"));
     await page.waitForFunction(() => !!(window as any).qa?.mounts.length);
     const now = await state(page);
     expect(now).toMatchObject({ shell: false, mounts: ["top"], flag: null });

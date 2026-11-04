@@ -83,7 +83,7 @@ try {
       define: { "import.meta.env.DEV": String(dev) },
       write: false,
     })).outputFiles;
-    if (dev) assert.match(output.text, /komo-shell/, "the shell guard runs in development");
+    if (dev) assert.match(output.text, /palette-shell/, "the shell guard runs in development");
     else assert.equal(output.text.trim(), 'console.log("app-branch");', "the shell guard must drop out of production builds");
   }
   await writeFile(
@@ -252,8 +252,8 @@ try {
   const migrations = await readdir(
     join(root, "node_modules/@hazem3500/palette/server/migrations"),
   );
-  assert.deepEqual(await readdir(join(root, ".komo/migrations")), migrations);
-  const generated = await readFile(join(root, "komo.config.js"), "utf8");
+  assert.deepEqual(await readdir(join(root, ".palette/migrations")), migrations);
+  const generated = await readFile(join(root, "palette.config.js"), "utf8");
   assert.match(generated, /packed-test.workers.dev/);
   // Apps that import initKomo from the generated module keep working after sync.
   assert.match(generated, /export const initPalette = definePalette\(/);
@@ -261,7 +261,7 @@ try {
   for (const conditions of [[], ["workerd"]]) {
     await build({
       conditions,
-      entryPoints: [join(root, ".komo/index.ts")],
+      entryPoints: [join(root, ".palette/index.ts")],
       bundle: true,
       platform: "node",
       format: "esm",
@@ -273,7 +273,7 @@ try {
     "deploy",
     "--dry-run",
     "--config",
-    join(root, ".komo/wrangler.json"),
+    join(root, ".palette/wrangler.json"),
   ]);
   console.log(
     `Packed consumer passed: palette and komo bins, deprecated komo aliases, SSR/types, shell guard tree-shaking, Vite instrumentation entries, Node server/metadata exports, workerd source, self-host init/resume, migrations, server bundles (${packed.entryCount} files).`,

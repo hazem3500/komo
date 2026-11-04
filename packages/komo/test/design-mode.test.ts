@@ -478,7 +478,7 @@ describe("design mode preview inspector", () => {
     button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
     // Text inside a registered React component is editable even without a mapped textProp.
     const card = document.createElement("article");
-    card.dataset.komoInspectable = "promo-card";
+    card.dataset.paletteInspectable = "promo-card";
     card.innerHTML = "<p>Preview interactions: <span>3</span></p>";
     page.append(card);
     const body = card.querySelector("p")!;
@@ -486,6 +486,16 @@ describe("design mode preview inspector", () => {
     edit().click();
     await vi.waitFor(() => expect(body.getAttribute("contenteditable")).toBe("true"));
     body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
+    // A host still marking components with the attribute's name from before the rename.
+    const older = document.createElement("article");
+    older.dataset.komoInspectable = "promo-card";
+    older.innerHTML = "<p>Older marker</p>";
+    page.append(older);
+    const olderBody = older.querySelector("p")!;
+    pointer("pointerdown", olderBody);
+    edit().click();
+    await vi.waitFor(() => expect(olderBody.getAttribute("contenteditable")).toBe("true"));
+    olderBody.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
     const secret = document.createElement("span");
     secret.dataset.private = "true";
     secret.innerHTML = "do <b>not</b> edit";

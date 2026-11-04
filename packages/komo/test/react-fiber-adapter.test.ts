@@ -151,7 +151,7 @@ describe.each(versions)("discoverReactComponents with $label", (version) => {
     const design: DesignSystem = { components: discoverReactComponents() };
     const panel = createReactPropsPanel(heading, () => {}, undefined, undefined, design)!;
     expect(panel.querySelector(".design-react-name")?.textContent).toBe("Card");
-    expect(panel.querySelector(".komo-source__button")?.getAttribute("title")).toMatch(/\.tsx?:\d+$/);
+    expect(panel.querySelector(".palette-source__button")?.getAttribute("title")).toMatch(/\.tsx?:\d+$/);
     expect(panel.hasAttribute("data-empty")).toBe(true);
     expect(panel.querySelector(".design-react-status, .design-react-advanced, label, input, select")).toBeNull();
     expect(designContext(heading, design).join("\n")).toContain("title");

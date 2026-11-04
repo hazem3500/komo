@@ -44,7 +44,7 @@ const entry = (src: (path: string) => string) => `
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-typed-compact-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-typed-compact-"));
   await build({
     stdin: { contents: entry(path => resolve("src", path)), resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -101,16 +101,16 @@ async function custom(tab: Page, property: string) {
   await field.scrollIntoViewIfNeeded();
   await settle(tab);
   await trigger(tab, property).click();
-  await tab.locator(".komo-tokens").waitFor(); if (await tab.locator(".komo-tokens__more").isVisible()) await tab.locator(".komo-tokens__more").click();
-  await tab.locator(".komo-custom .komo-typed").first().waitFor();
+  await tab.locator(".palette-tokens").waitFor(); if (await tab.locator(".palette-tokens__more").isVisible()) await tab.locator(".palette-tokens__more").click();
+  await tab.locator(".palette-custom .palette-typed").first().waitFor();
   await settle(tab);
-  return tab.locator(".komo-tokens");
+  return tab.locator(".palette-tokens");
 }
 const close = async (tab: Page, property: string) => {
   // The first change adds the footer's second row in a narrow panel, which can scroll a bottom field out of view.
   await trigger(tab, property).scrollIntoViewIfNeeded();
   await trigger(tab, property).click();
-  await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
+  await expect.poll(() => tab.locator(".palette-tokens").count()).toBe(0);
 };
 const card = (tab: Page) => tab.locator("#card");
 const style = (tab: Page) => card(tab).evaluate(node => node.getAttribute("style"));
@@ -124,7 +124,7 @@ async function entries(tab: Page) {
 /** Each visible control of the popup, scrolled to inside the popup's one scroll area, is on screen and hit-testable. */
 const unreachable = (popup: ReturnType<Page["locator"]>) => popup.evaluate(node => {
   const root = node.getRootNode() as ShadowRoot, frame = node.getBoundingClientRect();
-  const body = node.querySelector<HTMLElement>(".komo-tokens__custom")!;
+  const body = node.querySelector<HTMLElement>(".palette-tokens__custom")!;
   return [...node.querySelectorAll<HTMLElement>("input,select,button,summary")]
     .filter(control => control.getClientRects().length && !control.matches("details:not([open]) :not(summary)"))
     .filter(control => {
@@ -148,8 +148,8 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("compact typed C
     const popup = await custom(tab, "width");
     expect(await tab.getByRole("button", { name: "Apply custom", exact: true }).count()).toBe(0);
     // The popup's own field: the inspector's field has the same name.
-    const value = tab.locator(".komo-tokens").getByRole("textbox", { name: "Width", exact: true });
-    const label = popup.locator(".komo-typed__field > span").first();
+    const value = tab.locator(".palette-tokens").getByRole("textbox", { name: "Width", exact: true });
+    const label = popup.locator(".palette-typed__field > span").first();
     const at = (await label.boundingBox())!;
     await tab.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
     await tab.mouse.down();
@@ -173,7 +173,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("compact typed C
     await value.press("ArrowDown");
     expect(await card(tab).evaluate(node => node.style.width)).toBe("3px");
     await tab.keyboard.press("Escape");
-    await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
+    await expect.poll(() => tab.locator(".palette-tokens").count()).toBe(0);
     expect(await style(tab)).toBe(original);
     expect(await undo(tab).isDisabled()).toBe(true);
     // Typing a value equal to a token keeps the literal: the field stays custom.
@@ -192,9 +192,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("compact typed C
     const { tab, errors } = await open(mode);
     const original = await style(tab);
     const popup = await custom(tab, "box-shadow");
-    expect(await popup.locator(".komo-typed__layer").count()).toBe(2);
-    const grid = (await popup.locator(".komo-typed__layer").first().locator(".komo-typed__grid").boundingBox())!;
-    const fields = await popup.locator(".komo-typed__layer").first().locator(".komo-typed__field").evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
+    expect(await popup.locator(".palette-typed__layer").count()).toBe(2);
+    const grid = (await popup.locator(".palette-typed__layer").first().locator(".palette-typed__grid").boundingBox())!;
+    const fields = await popup.locator(".palette-typed__layer").first().locator(".palette-typed__field").evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
     expect(new Set(fields.map(Math.round)).size).toBe(2);
     expect(grid.width).toBeLessThan(270);
     const blur = tab.getByRole("textbox", { name: "Layer 1 blur", exact: true });
@@ -210,16 +210,16 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("compact typed C
     expect(await card(tab).evaluate(node => node.style.boxShadow.match(/inset/g)?.length)).toBe(1);
     await eye.click();
     expect(await card(tab).evaluate(node => node.style.boxShadow.match(/inset/g)?.length)).toBe(2);
-    expect(await popup.locator(".komo-typed__tile i").evaluate(node => (node as HTMLElement).style.boxShadow)).toContain("inset");
+    expect(await popup.locator(".palette-typed__tile i").evaluate(node => (node as HTMLElement).style.boxShadow)).toContain("inset");
     await popup.getByRole("button", { name: "Layer 1 color", exact: true }).click();
-    const hex = popup.locator(".komo-color").getByRole("textbox", { name: "Hex", exact: true });
+    const hex = popup.locator(".palette-color").getByRole("textbox", { name: "Hex", exact: true });
     await hex.fill("C2410C");
     await hex.press("Enter");
     expect(await card(tab).evaluate(node => node.style.boxShadow)).toContain("rgba(194, 65, 12, 0.25)");
     await popup.getByRole("button", { name: "Remove layer 2", exact: true }).click();
-    expect(await popup.locator(".komo-typed__layer").count()).toBe(1);
+    expect(await popup.locator(".palette-typed__layer").count()).toBe(1);
     await popup.getByRole("button", { name: "Add shadow layer", exact: true }).click();
-    expect(await popup.locator(".komo-typed__layer").count()).toBe(2);
+    expect(await popup.locator(".palette-typed__layer").count()).toBe(2);
     expect(await unreachable(popup)).toEqual([]);
     await close(tab, "box-shadow");
     expect(await entries(tab)).toBe(1);
@@ -240,7 +240,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("compact typed C
       expect(box.y).toBeGreaterThanOrEqual(0);
       expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
       expect(box.y >= field.y + field.height || box.y + box.height <= field.y).toBe(true);
-      const body = await popup.locator(".komo-tokens__custom").evaluate(node => ({ client: node.clientHeight, scroll: node.scrollHeight, overflow: getComputedStyle(node).overflowY }));
+      const body = await popup.locator(".palette-tokens__custom").evaluate(node => ({ client: node.clientHeight, scroll: node.scrollHeight, overflow: getComputedStyle(node).overflowY }));
       expect(body.overflow).toBe("auto");
       expect(body.client).toBeLessThanOrEqual(460);
       expect(await unreachable(popup)).toEqual([]);
@@ -252,7 +252,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("compact typed C
       await tab.keyboard.press("Shift+Tab");
       expect(await popup.evaluate(node => node.contains((node.getRootNode() as ShadowRoot).activeElement))).toBe(true);
       await tab.keyboard.press("Escape");
-      await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
+      await expect.poll(() => tab.locator(".palette-tokens").count()).toBe(0);
     }
     expect(await undo(tab).isDisabled()).toBe(true);
     expect(errors).toEqual([]);

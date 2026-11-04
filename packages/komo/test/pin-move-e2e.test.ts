@@ -21,7 +21,7 @@ beforeAll(async () => {
       import { captureAnchor } from ${JSON.stringify(resolve("src/anchors.ts"))};
       const user={id:location.search.includes('guest')?'other':'reviewer',name:'Example reviewer',verified:!location.search.includes('guest')};
       const author={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':pin-move';
+      const key='palette:'+location.origin+':pin-move';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       const card=document.querySelector('#card-a'),box=card.getBoundingClientRect();

@@ -69,19 +69,29 @@ describe("snapshot HTML", () => {
   });
 
   it("leaves out Palette's own UI and markers, and empties host no-snapshot regions inside the target", () => {
+    const root = fixture(`<div data-palette-inspectable="1" data-palette-still=""><p>Page</p>
+      <div data-branch-comments="project">Palette toolbar</div><div data-palette-move-clone>stand-in</div>
+      <div data-palette-no-snapshot><p>Private notes</p></div></div>`);
+    const html = snapshotHtml(root);
+    expect(html).not.toMatch(/komo toolbar|stand-in|Private notes|data-palette-inspectable|data-palette-still|data-branch-comments/);
+    expect(html).toContain("<p>Page</p>");
+    expect(html).toContain("<div data-palette-no-snapshot=\"\"></div>");
+  });
+
+  it("honors the opt-out and strips the markers under their names from before the rename", () => {
     const root = fixture(`<div data-komo-inspectable="1" data-komo-still=""><p>Page</p>
-      <div data-branch-comments="project">Palette toolbar</div><div data-komo-move-clone>stand-in</div>
       <div data-komo-no-snapshot><p>Private notes</p></div></div>`);
     const html = snapshotHtml(root);
-    expect(html).not.toMatch(/komo toolbar|stand-in|Private notes|data-komo-inspectable|data-komo-still|data-branch-comments/);
-    expect(html).toContain("<p>Page</p>");
+    expect(html).not.toMatch(/Private notes|data-komo-inspectable|data-komo-still/);
     expect(html).toContain("<div data-komo-no-snapshot=\"\"></div>");
+    const hidden = fixture(`<div data-komo-no-snapshot><p id="old-private">Account</p></div>`).querySelector("#old-private")!;
+    expect(skipped(hidden)).toBe(true);
   });
 });
 
 describe("snapshot capture", () => {
-  it("skips targets inside a data-komo-no-snapshot ancestor and Palette's own UI", async () => {
-    const root = fixture(`<div data-komo-no-snapshot><article><p id="private">Account</p></article></div><p id="public">Public</p>`);
+  it("skips targets inside a data-palette-no-snapshot ancestor and Palette's own UI", async () => {
+    const root = fixture(`<div data-palette-no-snapshot><article><p id="private">Account</p></article></div><p id="public">Public</p>`);
     const host = document.createElement("div");
     host.dataset.branchComments = "fixture";
     host.innerHTML = "<button>Comment</button>";
@@ -96,13 +106,13 @@ describe("snapshot capture", () => {
   });
 
   it("captures pages whose root carries the registered design tokens marker", async () => {
-    document.documentElement.setAttribute("data-komo-design-tokens", "3");
+    document.documentElement.setAttribute("data-palette-design-tokens", "3");
     try {
       const root = fixture(`<p id="tokens">Themed</p>`);
       expect(skipped(root.querySelector("#tokens")!)).toBe(false);
       expect(await captureSnapshot(root.querySelector("#tokens"), { html: true })).toEqual({ html: '<p id="tokens">Themed</p>' });
     } finally {
-      document.documentElement.removeAttribute("data-komo-design-tokens");
+      document.documentElement.removeAttribute("data-palette-design-tokens");
     }
   });
 
@@ -126,7 +136,7 @@ describe("snapshot capture", () => {
   });
 
   it("says why the image is missing at the top of the HTML", () => {
-    expect(noteComment("cross-origin")).toBe("<!-- komo: no image snapshot, the element shows images from another origin. -->");
+    expect(noteComment("cross-origin")).toBe("<!-- palette: no image snapshot, the element shows images from another origin. -->");
   });
 
   it("uploads each kind as its raw file after capture, and logs a failed upload quietly", async () => {
@@ -243,8 +253,8 @@ describe("posting with snapshots", () => {
     expect((await post({ html: true }, false)).map((request) => request.path)).toEqual(["/threads/thread-1/snapshot?kind=html"]);
   });
 
-  it("skips a target inside data-komo-no-snapshot", async () => {
-    expect(await post({ html: true }, true, `<div data-komo-no-snapshot><div data-slot></div></div>`)).toEqual([]);
+  it("skips a target inside data-palette-no-snapshot", async () => {
+    expect(await post({ html: true }, true, `<div data-palette-no-snapshot><div data-slot></div></div>`)).toEqual([]);
   });
 
   it("still posts the comment when the upload fails", async () => {

@@ -25,7 +25,7 @@ const comment=(id,body,name='Alex Morgan')=>({id,body,author:{...user,name},crea
 const thread=(id,page,body,replies=[],tags=[])=>({id,page,anchor,resolved:false,resolvedBy:null,createdAt:Date.now(),updatedAt:Date.now(),tags,comments:[comment(id,body),...replies]});
 const threads=[thread('one','/reports/123/summary','The summary needs a little more context. Could we show which period these figures cover?',[comment('reply','Agreed. A date range beside the heading would help.','Sam Lee')],['content','review']),thread('many','/','@Alex the longer explanation should wrap naturally.\\nKeep the description together with the relevant actions.',[comment('r2','This is a second point with a longer explanation that wraps across several lines.','Sam Lee'),comment('r3','Thanks, that makes sense.','Taylor Reed')],['accessibility','a-long-tag-that-still-needs-to-wrap-without-overflow']),thread('zero','/','The empty state is clear and easy to read.')];
 window.qa={writes:[],navigation:[],threads};
-const key='branch-comments:'+location.origin+':neutral-conversation';
+const key='palette:'+location.origin+':neutral-conversation';
 localStorage.setItem(key,'synthetic-session');
 localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
 Object.defineProperty(navigator,'clipboard',{value:{writeText:async value=>window.qa.copied=value}});

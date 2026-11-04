@@ -94,12 +94,12 @@ export function registerDesignTokenSource(
     themeEdits: new Map(),
     elementOriginals: new Map(),
     elementBindings: new Map(),
-    previousMarker: root.getAttribute("data-komo-design-tokens"),
+    previousMarker: root.getAttribute("data-palette-design-tokens"),
   };
   byRoot.set(root, source);
   sources.add(source);
   history.set(source, []);
-  root.setAttribute("data-komo-design-tokens", String(tokens.length));
+  root.setAttribute("data-palette-design-tokens", String(tokens.length));
   return () => {
     if (byRoot.get(root) !== source) return;
     for (const [path, edit] of source.themeEdits) {
@@ -117,8 +117,8 @@ export function registerDesignTokenSource(
     source.elementBindings.clear();
     sources.delete(source);
     byRoot.delete(root);
-    if (source.previousMarker === null) root.removeAttribute("data-komo-design-tokens");
-    else root.setAttribute("data-komo-design-tokens", source.previousMarker);
+    if (source.previousMarker === null) root.removeAttribute("data-palette-design-tokens");
+    else root.setAttribute("data-palette-design-tokens", source.previousMarker);
   };
 }
 

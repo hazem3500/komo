@@ -46,7 +46,7 @@ beforeAll(async () => {
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':polish';
+      const key='palette:'+location.origin+':polish';
       localStorage.setItem(key,'synthetic-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
       window.fetch=async input=>{const path=new URL(input instanceof Request?input.url:String(input),location.origin).pathname;return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads:[]}:{});};
@@ -211,7 +211,7 @@ describe.skipIf(!chrome)("geometry polish", () => {
       await page.locator('.design-inspector [data-property="width"]').first().blur();
       // A select's hover preview drops the outline.
       await page.locator('.design-inspector [data-property="display"]').first().click();
-      const option = page.locator(".komo-select [role=option]").nth(1);
+      const option = page.locator(".palette-select [role=option]").nth(1);
       await option.waitFor();
       await option.hover();
       await expect.poll(async () => (await overlay(page)).opacity).toBe("0");
@@ -253,7 +253,7 @@ describe.skipIf(!chrome)("geometry polish", () => {
       await pick(page, "card");
       await page.locator("#medium").hover();
       const host = page.locator("[data-branch-comments]");
-      const hiddenNow = () => host.evaluate(node => node.hasAttribute("data-komo-overlays-hidden") && getComputedStyle(node.shadowRoot!.querySelector(".design-geometry")!).visibility === "hidden"
+      const hiddenNow = () => host.evaluate(node => node.hasAttribute("data-palette-overlays-hidden") && getComputedStyle(node.shadowRoot!.querySelector(".design-geometry")!).visibility === "hidden"
         && getComputedStyle(node.shadowRoot!.querySelector(".design-outline--prospective")!).visibility === "hidden");
       await page.keyboard.press("h");
       expect(await hiddenNow()).toBe(true);
@@ -273,7 +273,7 @@ describe.skipIf(!chrome)("geometry polish", () => {
       // Shortcut help lists the key with the Design keys.
       await page.locator("#card").click({ position: { x: 20, y: 20 } });
       await page.keyboard.press("?");
-      await expect.poll(() => page.locator(".komo-shortcuts").textContent()).toContain("Hide or show selection · hold to peek");
+      await expect.poll(() => page.locator(".palette-shortcuts").textContent()).toContain("Hide or show selection · hold to peek");
       await page.keyboard.press("Escape");
       // Before shows the page without the selection overlays.
       await page.locator("#card").hover();
@@ -286,7 +286,7 @@ describe.skipIf(!chrome)("geometry polish", () => {
       // Outside Design mode, the key is the comments toggle again.
       await page.keyboard.press("d");
       await page.keyboard.press("h");
-      expect(await host.evaluate(node => node.hasAttribute("data-komo-overlays-hidden"))).toBe(false);
+      expect(await host.evaluate(node => node.hasAttribute("data-palette-overlays-hidden"))).toBe(false);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
   });
@@ -296,7 +296,7 @@ describe.skipIf(!chrome)("geometry polish", () => {
     try {
       await pick(page, "card");
       const host = page.locator("[data-branch-comments]");
-      const hidden = () => host.evaluate(node => node.hasAttribute("data-komo-overlays-hidden"));
+      const hidden = () => host.evaluate(node => node.hasAttribute("data-palette-overlays-hidden"));
       await page.keyboard.press("h");
       expect(await hidden()).toBe(false);
       await page.keyboard.press("Shift+H");
@@ -328,7 +328,7 @@ describe.skipIf(!chrome)("geometry polish", () => {
   it("shows the move cursor and a first-use hint until the first move, and keeps the size chip clear of the squares", async () => {
     const { page, errors } = await open();
     try {
-      await page.evaluate(() => localStorage.removeItem("komo:geometry-moved"));
+      await page.evaluate(() => localStorage.removeItem("palette:geometry-moved"));
       await pick(page, "medium");
       expect(await page.locator("#medium").evaluate(node => getComputedStyle(node).cursor)).toBe("move");
       const note = page.locator(".design-inspector .design-geometry-note p");

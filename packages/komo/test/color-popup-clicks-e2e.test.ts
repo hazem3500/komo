@@ -18,7 +18,7 @@ let server: Server, browser: Browser;
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-color-clicks-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-color-clicks-"));
   await build({
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
@@ -81,23 +81,23 @@ const regions = (popup: Locator) => popup.evaluate(node => {
     const rect = part.getBoundingClientRect();
     points.push([name, rect.left + rect.width / 2, rect.top + rect.height / 2]);
   };
-  center("area", ".komo-color__area");
-  center("hue", ".komo-color__hue");
-  center("opacity", ".komo-color__alpha");
-  center("eyedropper", ".komo-color__drop");
-  center("chip", ".komo-color__chip");
-  center("hex", ".komo-color__channels input");
-  center("channel label", ".komo-color__channels span");
-  center("document colors heading", ".komo-color__swatches small");
-  center("swatch", ".komo-color__swatches button");
-  const head = node.querySelector(".komo-tokens__head")?.getBoundingClientRect();
+  center("area", ".palette-color__area");
+  center("hue", ".palette-color__hue");
+  center("opacity", ".palette-color__alpha");
+  center("eyedropper", ".palette-color__drop");
+  center("chip", ".palette-color__chip");
+  center("hex", ".palette-color__channels input");
+  center("channel label", ".palette-color__channels span");
+  center("document colors heading", ".palette-color__swatches small");
+  center("swatch", ".palette-color__swatches button");
+  const head = node.querySelector(".palette-tokens__head")?.getBoundingClientRect();
   if (head) points.push(["header padding", head.left + 1, head.top + head.height / 2]);
-  const label = node.querySelector(".komo-tokens__label:not([hidden])")?.getBoundingClientRect();
+  const label = node.querySelector(".palette-tokens__label:not([hidden])")?.getBoundingClientRect();
   if (label) points.push(["Custom value heading", label.left + label.width / 2, label.top + label.height / 2]);
   points.push(["top left padding", box.left + 7, box.top + 7], ["bottom right padding", box.right - 7, box.bottom - 7], ["left edge", box.left + 3, box.top + box.height / 2]);
-  const row = node.querySelector(".komo-color__row")?.getBoundingClientRect(), value = node.querySelector(".komo-color__value")?.getBoundingClientRect();
+  const row = node.querySelector(".palette-color__row")?.getBoundingClientRect(), value = node.querySelector(".palette-color__value")?.getBoundingClientRect();
   if (row && value) points.push(["gap between sliders and value row", box.left + box.width / 2, (row.bottom + value.top) / 2]);
-  const area = node.querySelector(".komo-color__area")?.getBoundingClientRect();
+  const area = node.querySelector(".palette-color__area")?.getBoundingClientRect();
   if (area && row) points.push(["gap between area and sliders", box.left + box.width / 2, (area.bottom + row.top) / 2]);
   return points;
 });
@@ -129,11 +129,11 @@ describe.skipIf(!chrome).each(["Fit", "100%"].flatMap(zoom => ["css-variables", 
       await field.locator(".design-token-binding").waitFor();
       toggle = field.locator("select[data-picker]");
       await toggle.click();
-      await tab.locator(".komo-tokens").waitFor();
-      await tab.locator(".komo-tokens__more").click();
+      await tab.locator(".palette-tokens").waitFor();
+      await tab.locator(".palette-tokens__more").click();
     }
-    const popup = tab.locator(".komo-tokens");
-    await popup.locator(".komo-color__swatches button").first().waitFor();
+    const popup = tab.locator(".palette-tokens");
+    await popup.locator(".palette-color__swatches button").first().waitFor();
     await settle(tab);
     const node = await popup.elementHandle();
     const stillOpen = async () => (await popup.count()) === 1 && await popup.evaluate((current, original) => current === original, node);
@@ -147,14 +147,14 @@ describe.skipIf(!chrome).each(["Fit", "100%"].flatMap(zoom => ["css-variables", 
     // The format menu opens and picks inside the popup.
     const format = popup.getByRole("combobox", { name: "Color format", exact: true });
     await format.click();
-    const list = tab.locator(".komo-select");
+    const list = tab.locator(".palette-select");
     if (await list.count()) await list.locator("[role=option]").filter({ hasText: /^RGB$/ }).click();
     else await format.selectOption("RGB");
     await settle(tab);
     expect(await stillOpen(), `${where}: the format menu closed the popup`).toBe(true);
     expect(await popup.getByRole("textbox", { name: "Red", exact: true }).count()).toBe(1);
     // Scrubbing a channel label and releasing outside the popup keeps it open and keeps once.
-    const label = (await popup.locator(".komo-color__channels span").first().boundingBox())!;
+    const label = (await popup.locator(".palette-color__channels span").first().boundingBox())!;
     const box = (await popup.boundingBox())!;
     await tab.mouse.move(label.x + label.width / 2, label.y + label.height / 2);
     await tab.mouse.down();
@@ -168,8 +168,8 @@ describe.skipIf(!chrome).each(["Fit", "100%"].flatMap(zoom => ["css-variables", 
     await expect.poll(() => popup.count()).toBe(0);
     await toggle.click();
     await popup.waitFor();
-    if (where !== "Tokens view row") await popup.locator(".komo-tokens__more").click();
-    await popup.locator(".komo-color__area").waitFor();
+    if (where !== "Tokens view row") await popup.locator(".palette-tokens__more").click();
+    await popup.locator(".palette-color__area").waitFor();
     await toggle.click();
     await expect.poll(() => popup.count()).toBe(0);
     await toggle.click();
@@ -178,7 +178,7 @@ describe.skipIf(!chrome).each(["Fit", "100%"].flatMap(zoom => ["css-variables", 
     const outside = (await popup.boundingBox())!;
     await tab.mouse.click(outside.x - 120 > 0 ? outside.x - 120 : outside.x + outside.width + 40, outside.y + 10);
     await expect.poll(() => popup.count()).toBe(0);
-    await tab.screenshot({ path: join(tmpdir(), `komo-color-popup-clicks-${adapter}-${where.replace(/\s/g, "-")}-${zoom === "Fit" ? "fit" : "100"}.png`) });
+    await tab.screenshot({ path: join(tmpdir(), `palette-color-popup-clicks-${adapter}-${where.replace(/\s/g, "-")}-${zoom === "Fit" ? "fit" : "100"}.png`) });
     expect(errors).toEqual([]);
     await tab.close();
   });

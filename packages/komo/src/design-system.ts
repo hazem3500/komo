@@ -227,8 +227,8 @@ export interface DesignSystem {
   /**
    * Canvas selection color for Design mode's hover and selection outlines, resize handles and move
    * feedback, e.g. "#0c93f5" (the default) or "rebeccapurple". The panel keeps Palette's accent. It
-   * applies with `experimentalGeometry`; the `--komo-selection` custom property on Palette's host
-   * element sets it from CSS either way.
+   * applies with `experimentalGeometry`; the `--palette-selection` custom property (or the older
+   * `--komo-selection`) on Palette's host element sets it from CSS either way.
    */
   selectionColor?: string;
   tokens?: TokenAdapter;
@@ -242,10 +242,11 @@ export interface DesignSystem {
  * changes, the first proposal section names its context in lines such as
  * "Theme: mode=dark, density=compact", "Component: PromoCard (src/card.tsx:19)"
  * and 'Props: tone="calm", compact=false', which fill `theme` and
- * `target.component`. Comments without those lines still parse.
+ * `target.component`. Comments without those lines still parse. Records from
+ * older releases carry `komo: "design-edit"` instead; the CLI reads both.
  */
 export interface DesignEdit {
-  komo: "design-edit";
+  palette: "design-edit";
   version: 1;
   target: {
     /**
