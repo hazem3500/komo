@@ -142,9 +142,15 @@ export function initComments(options: CommentsOptions): CommentsController {
     async refresh() {},
   };
   if (typeof document === "undefined" || options.enabled === false || framedByPalette()) return noop;
+  if (!options.endpoint) {
+    console.error(
+      "Palette: set `endpoint` to your Palette server (see the self-hosting guide).",
+    );
+    return noop;
+  }
   migrateStorage();
-  if (!options.endpoint || !options.repo || !options.branch || !options.project)
-    throw new Error("Comments require endpoint, repo, branch, and project.");
+  if (!options.repo || !options.branch || !options.project)
+    throw new Error("Comments require repo, branch, and project.");
   if (
     options.pageRoot &&
     (options.pageRoot === document.body ||

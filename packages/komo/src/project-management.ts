@@ -298,7 +298,7 @@ export function projectManagement(
       button("Download comments", () => void action(download), "secondary")
     );
     const migration = el("a", "project-help", "Move to self-hosting");
-    migration.href = "https://komo.offbr.co/hosting/#migration";
+    migration.href = "https://github.com/hazem3500/palette#quota-recovery-and-migration";
     migration.target = "_blank";
     migration.rel = "noopener noreferrer";
     content.append(migration);

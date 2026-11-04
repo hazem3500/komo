@@ -4,7 +4,7 @@ export type PaletteConfig = Omit<
   CommentsOptions,
   "repo" | "branch" | "endpoint"
 > & {
-  /** Defaults to the hosted Palette service. */
+  /** Your Palette server. Without it, Palette logs an error and does not mount. */
   endpoint?: string;
   repo?: string;
   /** Shared feedback across deployments by default. */
@@ -24,7 +24,7 @@ export function resolveConfig(config: PaletteConfig): CommentsOptions {
     );
   return {
     ...options,
-    endpoint: options.endpoint || "https://komo.offbr.co",
+    endpoint: options.endpoint || "",
     repo: config.repo || config.project,
     branch: scope === "branch" ? config.branch! : "shared",
   };

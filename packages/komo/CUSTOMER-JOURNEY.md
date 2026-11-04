@@ -1,5 +1,7 @@
 # Customer journey acceptance
 
+> This file records upstream komo's own hosted service at `komo.offbr.co`, which a different operator runs. It is kept as history. Palette has no hosted default; to run your own server, see [Self-host](./README.md#self-host) or the [Node self-hosting guide](./NODE.md).
+
 September 16, 2026 · `@hazem3500/palette` 0.1.0 published release
 
 ## Environment

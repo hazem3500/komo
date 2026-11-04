@@ -164,12 +164,13 @@ async function configuration(flags, cwd, env) {
   const project = flags.project || setting(env, "PROJECT") || settings.project;
   if (!project)
     throw Error("Run palette init in this repository, or pass --project KEY.");
-  const endpoint = safeUrl(
-    flags.endpoint ||
-      setting(env, "ENDPOINT") ||
-      settings.endpoint ||
-      "https://komo.offbr.co"
-  );
+  const configured =
+    flags.endpoint || setting(env, "ENDPOINT") || settings.endpoint;
+  if (!configured)
+    throw Error(
+      "No Palette server configured. Pass --endpoint URL, set PALETTE_ENDPOINT, or add endpoint to .palette/project.json."
+    );
+  const endpoint = safeUrl(configured);
   const origin = safeUrl(
     flags.origin ||
       setting(env, "ORIGIN") ||
