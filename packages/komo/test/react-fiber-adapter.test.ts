@@ -145,18 +145,25 @@ describe.each(versions)("discoverReactComponents with $label", (version) => {
     expect(find(container.querySelector("div"))).toBeNull();
   });
 
-  it("renders a labelled read-only panel with props and source", () => {
+  it("renders the name and source but no undeclared props", () => {
     const { container } = react.render(card({ title: "Panel", tags: ["a", "b"], onSelect: () => {} }, withSource));
     const heading = container.querySelector("h2")!;
     const design: DesignSystem = { components: discoverReactComponents() };
     const panel = createReactPropsPanel(heading, () => {}, undefined, undefined, design)!;
     expect(panel.querySelector(".design-react-name")?.textContent).toBe("Card");
-    expect(panel.querySelector(".design-react-status")?.textContent).toBe("Read-only");
     expect(panel.querySelector(".komo-source__button")?.getAttribute("title")).toMatch(/\.tsx?:\d+$/);
-    const fields = Object.fromEntries([...panel.querySelectorAll<HTMLElement>("label")].map((label) => [label.querySelector("span")!.textContent, label.querySelector("input")!]));
-    expect(Object.keys(fields)).toEqual(["title"]);
-    for (const input of Object.values(fields)) expect(input.readOnly).toBe(true);
-    expect(panel.querySelector("select, input:not([readonly])")).toBeNull();
+    expect(panel.hasAttribute("data-empty")).toBe(true);
+    expect(panel.querySelector(".design-react-status, .design-react-advanced, label, input, select")).toBeNull();
+    expect(designContext(heading, design).join("\n")).toContain("title");
+  });
+
+  it("offers no editor unless the app declares a schema", () => {
+    const { container } = react.render(card({ title: "Panel" }));
+    const heading = container.querySelector("h2")!;
+    const editing = discoverReactComponents({ edit: true });
+    expect(editing.editor!(editing.identify(heading)!)).toBeNull();
+    const undeclared = discoverReactComponents({ edit: true, schema: () => undefined });
+    expect(undeclared.editor!(undeclared.identify(heading)!)).toBeNull();
   });
 
   describe("precedence", () => {
@@ -201,7 +208,7 @@ describe.each(versions)("discoverReactComponents with $label", (version) => {
       const { container, design } = setup();
       const note = container.querySelector("em")!;
       const panel = createReactPropsPanel(note, () => {}, undefined, undefined, design)!;
-      expect(panel.querySelector(".design-react-status")?.textContent).toBe("Read-only");
+      expect(panel.querySelector(".design-react-status")).toBeNull();
       expect(panel.querySelector(".design-react-name")?.textContent).toBe("Inner");
       expect(designContext(note, design).join("\n")).toContain("Component: Inner");
     });
@@ -223,11 +230,9 @@ describe("serialization", () => {
     const element = fakeComponent("Thing", value);
     const identity = panelAdapter.identify(element)!;
     const panel = panelAdapter.panel!(identity)!;
-    return {
-      identity,
-      shown: Object.fromEntries([...panel.querySelectorAll<HTMLElement>("label")].map((label) => [label.querySelector("span")!.textContent, label.querySelector("input")!.value])),
-      panel,
-    };
+    // The panel lists no undeclared props; what discovery keeps goes to comment context only.
+    expect(panel.querySelector("label, input, select")).toBeNull();
+    return { identity, context: identity.props!, panel };
   };
 
   it("hides functions, refs, opaque children and internal plumbing without invoking getters", () => {
@@ -236,7 +241,7 @@ describe("serialization", () => {
     cycle.self = cycle;
     const getter = Object.defineProperty({}, "danger", { enumerable: true, get() { calls++; return "run"; } });
     const element = { $$typeof: Symbol.for("react.transitional.element"), type: "button", props: { onClick() { calls++; } } };
-    const { shown } = props({
+    const { context } = props({
       label: "Continue", disabled: false, variant: "primary",
       ref: { current: null }, children: element, __scopeDialog: "internal", _owner: "internal", missing: undefined,
       fn: function save() { calls++; },
@@ -251,12 +256,12 @@ describe("serialization", () => {
       map: new Map([[1, 2]]),
       instance: new (class Widget {})(),
     });
-    expect(shown).toEqual({ label: '"Continue"', disabled: "false", variant: '"primary"' });
+    expect(context).toEqual({ label: "Continue", disabled: false, variant: "primary" });
     expect(calls).toBe(0);
   });
 
-  it("bounds long primitive values and omits opaque collections", () => {
-    const { shown } = props(
+  it("omits opaque collections", () => {
+    const { context } = props(
       {
         long: "x".repeat(500),
         list: [1, 2, 3, 4, 5, 6, 7, 8],
@@ -266,29 +271,28 @@ describe("serialization", () => {
       },
       { maxString: 20, maxItems: 3, maxDepth: 2, maxValue: 60 },
     );
-    expect(shown.long).toBe(`"${"x".repeat(20)}…"`);
-    expect(Object.keys(shown)).toEqual(["long"]);
+    expect(Object.keys(context)).toEqual(["long"]);
   });
 
-  it("limits the number of props and reports how many were left out", () => {
+  it("limits the number of props kept and lists none of them", () => {
     const many = Object.fromEntries(Array.from({ length: 40 }, (_, index) => [`p${index}`, index]));
-    const { shown, panel } = props(many, { maxProps: 5 });
-    expect(Object.keys(shown)).toHaveLength(5);
-    expect(panel.textContent).toContain("+35 more props not shown");
+    const { context, panel } = props(many, { maxProps: 5 });
+    expect(Object.keys(context)).toHaveLength(5);
+    expect(panel.textContent).toBe("Thing");
   });
 
   it("never exposes secret-looking props to the panel or the proposal context", () => {
-    const { shown, identity } = props({ apiKey: "sk-live-123", accessToken: "t0k", label: "ok", custom: "private-ish" }, { redact: (name: string) => name === "custom" });
-    expect(shown).toEqual({ label: '"ok"' });
+    const { panel, identity } = props({ apiKey: "sk-live-123", accessToken: "t0k", label: "ok", custom: "private-ish" }, { redact: (name: string) => name === "custom" });
+    expect(panel.textContent).not.toContain("sk-live-123");
     expect(JSON.stringify({ ...identity, element: undefined })).not.toContain("sk-live-123");
     expect(identity.props).toEqual({ label: "ok" });
   });
 
   it("tolerates props that throw when read", () => {
     const hostile = new Proxy({}, { ownKeys() { throw new Error("no"); }, getPrototypeOf() { throw new Error("no"); } });
-    const { shown } = props({ hostile, fine: 1 });
-    expect(shown.hostile).toBeUndefined();
-    expect(shown.fine).toBe("1");
+    const { context } = props({ hostile, fine: 1 });
+    expect(context.hostile).toBeUndefined();
+    expect(context.fine).toBe(1);
   });
 });
 

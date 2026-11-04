@@ -33,10 +33,10 @@ page between light and dark; the token chips follow, and leaving Design mode
 puts the original theme back.
 
 Add `?components=react` to try the opt-in `@hazem3500/komo/adapters/react-fiber` adapter:
-pick the "Design systems" badge and Design mode shows a **Read-only** group headed by
-the component's name (its props, and where it was rendered behind ⓘ) for a component that
-is not registered. The
-registered card keeps its editable props. `?components=badge` renders the same badge with
+pick the "Design systems" badge and Design mode shows a group headed by the component's
+name (where it was rendered is behind ⓘ) for a component that is not registered. It lists
+no props: add `&edit` to edit the ones the demo declares through `schema`. The registered
+card keeps its editable props. `?components=badge` renders the same badge with
 no adapter, so nothing is discovered. `?react=18` loads the React 18 build of the demo
 (`.generated/react-props-18.js`, bundled against the `komo-react18-fixture` workspace
 package); the default build uses React 19. `source-map.ts` is demo-only: it maps React 19's

@@ -123,6 +123,12 @@ const cssAdapter = query.get("tokens") === "css" ? discoverCssTokens() : null;
 const fiberAdapter = query.get("components") === "react"
   ? discoverReactComponents({
       edit: query.has("edit"),
+      // Only declared props are editable; undeclared ones are not shown.
+      schema: identity => identity.name === "TeamBadge" ? [
+        { name: "team", kind: "string", required: true, typeLabel: "string" },
+        { name: "seats", kind: "number", required: true, typeLabel: "number" },
+        { name: "active", kind: "boolean", required: true, typeLabel: "boolean" },
+      ] : undefined,
       resolveSource: query.get("react") === "18"
         ? (file, line) => `${file.replace(/^.*?(examples\/)/, "$1").replace(/^\//, "")}:${line}`
         : await sourceResolver(document.querySelector<HTMLScriptElement>("script[data-bundle]")?.dataset.bundle ?? "./.generated/react-props.js"),
