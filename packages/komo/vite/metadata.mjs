@@ -1,4 +1,4 @@
-// Build-time component metadata for @hazem3500/komo/vite: which exports are React components,
+// Build-time component metadata for @hazem3500/palette/vite: which exports are React components,
 // and which of their props Design mode can edit, read from the TypeScript types the app
 // already compiles against. Node-only; never part of a browser bundle.
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";

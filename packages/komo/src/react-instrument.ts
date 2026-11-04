@@ -1,5 +1,5 @@
 "use client";
-// Runtime for build-time component instrumentation (`@hazem3500/komo/vite`). Only preview
+// Runtime for build-time component instrumentation (`@hazem3500/palette/vite`). Only preview
 // builds that enable the plugin import it: the plugin's generated module proxies wrap each
 // eligible component export with `instrument()`, and this module publishes one
 // ComponentAdapter for the realm, which Design mode asks before the app's own adapter.

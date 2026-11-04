@@ -104,7 +104,7 @@ const result = await build({
   ],
   external: ["react", "react-dom", "emoji-regex", "./design-mode.js"],
 });
-// Optional design-system adapters (@hazem3500/komo/adapters/*): self-contained entry
+// Optional design-system adapters (@hazem3500/palette/adapters/*): self-contained entry
 // points built separately, so core's chunks and their names stay exactly as they were.
 const adapters = await build({
   entryPoints: ["src/adapters/tailwind.ts", "src/adapters/class-theme.ts", "src/adapters/css-variables.ts", "src/adapters/react-fiber.ts", "src/adapters/react-preview.ts"],
@@ -116,7 +116,7 @@ const adapters = await build({
   minify: true,
   metafile: true,
 });
-// Build-time component instrumentation's runtime (@hazem3500/komo/react-instrument): only
+// Build-time component instrumentation's runtime (@hazem3500/palette/react-instrument): only
 // preview builds with the Vite plugin enabled import it, through the plugin's proxies.
 const instrument = await build({
   entryPoints: ["src/react-instrument.ts"],
@@ -129,7 +129,7 @@ const instrument = await build({
   metafile: true,
   external: ["react"],
 });
-// The single-copy Viewport guard (@hazem3500/komo/shell): self-contained, with no
+// The single-copy Viewport guard (@hazem3500/palette/shell): self-contained, with no
 // top-level side effects, so a build-time guard around isShell() drops it.
 const shell = await build({
   entryPoints: ["src/shell.ts"],

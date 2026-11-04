@@ -2,7 +2,7 @@ import { build } from "esbuild";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// `@hazem3500/komo/shell` must vanish from a production build behind a build-time guard.
+// `@hazem3500/palette/shell` must vanish from a production build behind a build-time guard.
 // A host entry, bundled and minified the way an app's production build would be.
 async function bundle(dev: boolean, entry = resolve("src/shell.ts")) {
   const result = await build({

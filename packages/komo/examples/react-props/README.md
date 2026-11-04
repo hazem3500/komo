@@ -32,7 +32,7 @@ light/dark theme axis. With `?theme`, the top of the Design panel switches the
 page between light and dark; the token chips follow, and leaving Design mode
 puts the original theme back.
 
-Add `?components=react` to try the opt-in `@hazem3500/komo/adapters/react-fiber` adapter:
+Add `?components=react` to try the opt-in `@hazem3500/palette/adapters/react-fiber` adapter:
 pick the "Design systems" badge and Design mode shows a group headed by the component's
 name (where it was rendered is behind ⓘ) for a component that is not registered. It lists
 no props: add `&edit` to edit the ones the demo declares through `schema`. The registered

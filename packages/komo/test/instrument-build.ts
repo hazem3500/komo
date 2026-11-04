@@ -39,7 +39,7 @@ export async function buildApp(app: string, outDir: string, plugin: boolean | nu
     resolve: {
       // The app's React for every import, including the fixture package's.
       alias: [
-        { find: "@hazem3500/komo/react-instrument", replacement: resolve("src/react-instrument.ts") },
+        { find: "@hazem3500/palette/react-instrument", replacement: resolve("src/react-instrument.ts") },
         { find: /^@hazem3500\/komo$/, replacement: resolve("src/index.ts") },
         // An app alias to a dotted file name, as a tsconfig path would map it.
         { find: "@views/summary", replacement: join(app, "src/Summary.view.tsx") },

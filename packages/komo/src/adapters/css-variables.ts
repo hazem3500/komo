@@ -1,6 +1,6 @@
 // Token adapter that discovers a page's CSS custom properties.
 //
-//   import { discoverCssTokens } from "@hazem3500/komo/adapters/css-variables";
+//   import { discoverCssTokens } from "@hazem3500/palette/adapters/css-variables";
 //   initPalette({ design: { tokens: discoverCssTokens() } });
 //
 // Reads `--*` declarations on :root / html from same-origin stylesheets, which

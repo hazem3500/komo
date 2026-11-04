@@ -96,7 +96,7 @@ importers:
 
   packages/komo-site:
     dependencies:
-      '@hazem3500/komo':
+      '@hazem3500/palette':
         specifier: workspace:*
         version: link:../komo
       react:

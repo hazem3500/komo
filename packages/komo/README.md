@@ -1,9 +1,9 @@
 # Palette
 
-[![npm version](https://img.shields.io/npm/v/@hazem3500/komo)](https://www.npmjs.com/package/@hazem3500/komo)
-[![downloads](https://img.shields.io/npm/dm/@hazem3500/komo)](https://www.npmjs.com/package/@hazem3500/komo)
+[![npm version](https://img.shields.io/npm/v/@hazem3500/palette)](https://www.npmjs.com/package/@hazem3500/palette)
+[![downloads](https://img.shields.io/npm/dm/@hazem3500/palette)](https://www.npmjs.com/package/@hazem3500/palette)
 
-> Palette is a maintained fork of [tjcages/komo](https://github.com/tjcages/komo). It is published as `@hazem3500/komo`. Install it with `npm install @hazem3500/komo`.
+> Palette is a maintained fork of [tjcages/komo](https://github.com/tjcages/komo). It is published as `@hazem3500/palette`. Install it with `npm install @hazem3500/palette`.
 
 Comments for your website. Point at an element, mark an area, and leave feedback your team can reply to, resolve, or copy into a coding agent.
 
@@ -16,11 +16,11 @@ Review actions update immediately while saving in the background. Failed writes 
 ## Install
 
 ```sh
-npm install @hazem3500/komo
-npx @hazem3500/komo init
+npm install @hazem3500/palette
+npx @hazem3500/palette init
 ```
 
-Requires Node.js 22 or newer. The unscoped `komo` package on npm is unrelated; use `@hazem3500/komo`.
+Requires Node.js 22 or newer. The unscoped `komo` package on npm is unrelated; use `@hazem3500/palette`.
 
 The setup command detects your Git repository and generates `komo.config.js` before sign-in. Mount that helper in your app:
 
@@ -38,7 +38,7 @@ Hosted onboarding is available through the dedicated Palette service. Self-hosti
 Mount after the page has loaded:
 
 ```js
-import { initPalette } from '@hazem3500/komo';
+import { initPalette } from '@hazem3500/palette';
 initPalette({ project: 'YOUR_PROJECT_KEY' });
 ```
 
@@ -58,7 +58,7 @@ With React 18.2 or 19, call the hook once near your app root:
 
 ```tsx
 'use client'; // Required for Next.js App Router client components.
-import { usePalette } from '@hazem3500/komo/react';
+import { usePalette } from '@hazem3500/palette/react';
 
 export function Palette() {
   usePalette({ project: 'YOUR_PROJECT_KEY' });
@@ -78,7 +78,7 @@ Palette was called komo. Existing installs keep working without changes.
 
 - **API names.** `initPalette`, `definePalette`, `usePalette`, `usePaletteInspectable`, `usePaletteDesignTokens` and the `Palette*` types are the main names. `initKomo`, `defineKomo`, `useKomo`, `useKomoInspectable`, `useKomoDesignTokens` and the `Komo*` types still work and are marked deprecated.
 - **CLI.** The command is `palette`. `komo` still works as an alias.
-- **Package.** Install and import from `@hazem3500/komo` for now. The package is moving to `@hazem3500/palette`.
+- **Package.** The package is now `@hazem3500/palette`. Replace `@hazem3500/komo` in your dependencies and imports (including subpaths such as `/react` and `/vite`); `@hazem3500/komo` is deprecated and gets no new releases.
 - **Unchanged for now.** Stored data and storage keys, `data-komo-*` attributes, `--komo-*` CSS custom properties, `KOMO_*` environment variables, the `komo_pat_` token prefix, the `.komo/` directory and `komo.config.js` keep their names.
 
 ## Features
@@ -145,7 +145,7 @@ Each Design mode comment starts with its context, for example `Theme: mode=dark`
 The Design panel and Tokens view headers show one theme control. A single axis with exactly two options is a one-click switch: a sun or moon when the options are light and dark (by id or label), otherwise both labels as two segments; its tooltip names the next state. More options or more axes open a compact menu with a row per axis: a segmented control for two or three options, a select for more. With no axis to choose from, there is no control; Palette never adds a System option. Switching calls `apply(id)`, then the panel re-reads `current()`, lists tokens for the new theme state, and refreshes the picked element's values, chips and outline. Closing Design mode restores each axis's original option.
 
 ```ts
-import { classTheme } from "@hazem3500/komo/adapters/class-theme";
+import { classTheme } from "@hazem3500/palette/adapters/class-theme";
 
 const mode = classTheme({ id: "mode", options: [{ id: "light" }, { id: "dark", class: "dark" }], colorScheme: true });
 initPalette({ project: "your-project", design: { themes: [mode] } });
@@ -155,7 +155,7 @@ Theme is context, not an edit. Switching isn't counted as a change, and Undo, Re
 
 #### Token adapters
 
-Without `design.tokens`, Design mode uses the built-in `cssVariableTokens()` adapter (id `"css-variables"`, from `@hazem3500/komo/react`) over the CSS custom properties registered with `usePaletteDesignTokens`. Passing `design.tokens` replaces it on every style field: the chips, the suggestions and the off-token markers all come from your adapter, so an element never shows two answers. The **Shared theme** section for registered CSS variables stays available, since it edits variable values rather than an element. To keep CSS-variable chips too, fall back to `cssVariableTokens()` inside your own `resolve()`.
+Without `design.tokens`, Design mode uses the built-in `cssVariableTokens()` adapter (id `"css-variables"`, from `@hazem3500/palette/react`) over the CSS custom properties registered with `usePaletteDesignTokens`. Passing `design.tokens` replaces it on every style field: the chips, the suggestions and the off-token markers all come from your adapter, so an element never shows two answers. The **Shared theme** section for registered CSS variables stays available, since it edits variable values rather than an element. To keep CSS-variable chips too, fall back to `cssVariableTokens()` inside your own `resolve()`.
 
 In Design mode, each style field of the picked element:
 
@@ -171,7 +171,7 @@ Returning `{ path: "tone.base" }` declares a semantic binding, including when th
 Writing an adapter for utility classes:
 
 ```ts
-import type { DesignToken, TokenAdapter, TokenUsage } from "@hazem3500/komo";
+import type { DesignToken, TokenAdapter, TokenUsage } from "@hazem3500/palette";
 
 const tokens: DesignToken[] = [
   { path: "color.text.primary", type: "color", value: "#1f1f1f", properties: ["color"], group: "Text", ref: "text-primary" },
@@ -230,10 +230,10 @@ The theme in parentheses is the theme key: the current option of each switchable
 
 #### Discovering CSS variables
 
-`discoverCssTokens()` from `@hazem3500/komo/adapters/css-variables` is the no-table option for sites whose tokens are CSS custom properties, including the variables Tailwind v4 emits for `@theme`. It is opt-in, reads `--*` declarations on `:root`/`html` from same-origin stylesheets (cross-origin sheets are skipped), and is meant for development builds.
+`discoverCssTokens()` from `@hazem3500/palette/adapters/css-variables` is the no-table option for sites whose tokens are CSS custom properties, including the variables Tailwind v4 emits for `@theme`. It is opt-in, reads `--*` declarations on `:root`/`html` from same-origin stylesheets (cross-origin sheets are skipped), and is meant for development builds.
 
 ```ts
-import { discoverCssTokens } from "@hazem3500/komo/adapters/css-variables";
+import { discoverCssTokens } from "@hazem3500/palette/adapters/css-variables";
 
 initPalette({ project, design: { tokens: discoverCssTokens() } });
 ```
@@ -246,11 +246,11 @@ initPalette({ project, design: { tokens: discoverCssTokens() } });
 
 #### Instrumenting components at build time
 
-`paletteComponents()` from `@hazem3500/komo/vite` makes a design system's components, and the app components you list, editable in Design mode with no code at their call sites. It is a Vite plugin (Vite 5 or later) for **preview builds only**: pass `enabled: true` only for builds that never reach customers.
+`paletteComponents()` from `@hazem3500/palette/vite` makes a design system's components, and the app components you list, editable in Design mode with no code at their call sites. It is a Vite plugin (Vite 5 or later) for **preview builds only**: pass `enabled: true` only for builds that never reach customers.
 
 ```ts
 // vite.config.ts
-import { paletteComponents } from "@hazem3500/komo/vite";
+import { paletteComponents } from "@hazem3500/palette/vite";
 
 export default defineConfig({
   plugins: [
@@ -292,10 +292,10 @@ export default defineConfig({
 
 #### Discovering React components
 
-`discoverReactComponents()` from `@hazem3500/komo/adapters/react-fiber` finds the React component behind a picked element, so Design mode can show its name and where it was rendered without registering each component by hand. It is **opt-in and off by default**, and it is the one place Palette reads React's private fields. Use it in development builds.
+`discoverReactComponents()` from `@hazem3500/palette/adapters/react-fiber` finds the React component behind a picked element, so Design mode can show its name and where it was rendered without registering each component by hand. It is **opt-in and off by default**, and it is the one place Palette reads React's private fields. Use it in development builds.
 
 ```ts
-import { discoverReactComponents } from "@hazem3500/komo/adapters/react-fiber";
+import { discoverReactComponents } from "@hazem3500/palette/adapters/react-fiber";
 
 initPalette({ project, design: { components: discoverReactComponents() } });
 // Keep your own adapter first: discoverReactComponents({ adapter: myAdapter })
@@ -304,11 +304,11 @@ initPalette({ project, design: { components: discoverReactComponents() } });
 - **What it reads.** The `__reactFiber$*` key React puts on DOM nodes (or, when present, the renderers of `window.__REACT_DEVTOOLS_GLOBAL_HOOK__`), then `return`/`child` links, `memoizedProps`, `_debugSource` (React 18) and `_debugStack` (React 19 dev). It climbs from the picked element, through shadow hosts, to the nearest function, class, `forwardRef` or `memo` component, and picks that fiber's current copy so props are not stale after updates. Several React roots and renderers on a page are fine.
 - **Only declared props.** The panel shows the component's name, and lists only the props you declare through `schema`. Undeclared props are not shown. Comments still get up to `maxProps` (24) of its strings, finite numbers and booleans as context, read without invoking getters. Callbacks, refs, React children, opaque objects, technical attributes, secret-looking names and `redact(name)` matches are always left out.
 - **Location and precedence.** The ⓘ beside the component name holds the JSX call site (`file:line`) with Copy, and Open when `sourceUrl` can link a repository-relative path. Use `resolveSource(file, line, column)` to map bundled locations. Explicit `usePaletteInspectable` registrations and your own `adapter` win. A descendant points to its component root; props edit that instance only.
-- **Runtime editing is optional.** Import `@hazem3500/komo/adapters/react-preview` before the first `react-dom/client` import, then use `discoverReactComponents({ edit: true })`. The separate bootstrap captures React 18/19 development renderer capabilities, preserves an existing DevTools hook, and calls the renderer's own prop override method. It never assigns Fiber fields. Production and unsupported renderers, or renderers whose capabilities were not captured, stay read-only. Discovered class components need an explicit editor/registration. Import order matters: calling the installer after React has loaded cannot recover missing renderer capabilities. In Viewport, Palette edits through the framed app's own React and bootstrap, so keep the import in the app entry that the frame loads.
+- **Runtime editing is optional.** Import `@hazem3500/palette/adapters/react-preview` before the first `react-dom/client` import, then use `discoverReactComponents({ edit: true })`. The separate bootstrap captures React 18/19 development renderer capabilities, preserves an existing DevTools hook, and calls the renderer's own prop override method. It never assigns Fiber fields. Production and unsupported renderers, or renderers whose capabilities were not captured, stay read-only. Discovered class components need an explicit editor/registration. Import order matters: calling the installer after React has loaded cannot recover missing renderer capabilities. In Viewport, Palette edits through the framed app's own React and bootstrap, so keep the import in the app entry that the frame loads.
 
 ```ts
 // First import in the app's development entry, before its React/router graph.
-import "@hazem3500/komo/adapters/react-preview";
+import "@hazem3500/palette/adapters/react-preview";
 // In the lazily enabled feedback configuration:
 const components = discoverReactComponents({
   edit: true,
@@ -330,8 +330,8 @@ For a framework-independent integration, a `ComponentAdapter` may supply `editor
 Two optional adapters ship as their own entry points, outside the core bundle. For utility-class design systems, a token is a class: Palette previews by swapping classes, not by setting CSS variables.
 
 ```ts
-import { tailwindTokens, tailwindSpacing, type TailwindToken } from "@hazem3500/komo/adapters/tailwind";
-import { classTheme } from "@hazem3500/komo/adapters/class-theme";
+import { tailwindTokens, tailwindSpacing, type TailwindToken } from "@hazem3500/palette/adapters/tailwind";
+import { classTheme } from "@hazem3500/palette/adapters/class-theme";
 
 const mode = classTheme({
   id: "mode",
@@ -375,15 +375,15 @@ initPalette({ project, design: { tokens: tailwindTokens({ tokens }, { themes: [m
 
 Before editing, agents read open comments, export the relevant prompt, and read replies. After verifying a simple fix, an agent can reply with evidence and resolve it at **90%+ confidence**. Complex or uncertain work stays open with a question or progress reply. This is guidance for your coding agent; the CLI does not run an agent or measure its confidence.
 
-Requires `@hazem3500/komo` 0.2.0 or later. Connect your coding agent to the same comments your team sees in the browser:
+Requires `@hazem3500/palette` 0.2.0 or later. Connect your coding agent to the same comments your team sees in the browser:
 
 ```sh
-npm install @hazem3500/komo@latest
-npx @hazem3500/komo login
-npx @hazem3500/komo comments list
-npx @hazem3500/komo comments get THREAD_ID
-npx @hazem3500/komo comments reply THREAD_ID --body "Fixed and verified on mobile."
-npx @hazem3500/komo comments resolve THREAD_ID
+npm install @hazem3500/palette@latest
+npx @hazem3500/palette login
+npx @hazem3500/palette comments list
+npx @hazem3500/palette comments get THREAD_ID
+npx @hazem3500/palette comments reply THREAD_ID --body "Fixed and verified on mobile."
+npx @hazem3500/palette comments resolve THREAD_ID
 ```
 
 Run these from a project configured with `palette init`. The CLI searches parent directories for `.komo/project.json`. Google sign-in opens a local browser handoff; `--no-open` prints the local sign-in link instead. Credentials are stored outside your repository in `~/.config/komo`, with a private file per API/project. Sessions stay valid until you sign out. `palette logout` revokes the session and removes its file.
@@ -448,19 +448,19 @@ Frame opens on your browser window's own size at **Fit**, and one compact contro
 By default the simulated viewport runs a second copy of your app in the frame, while your page keeps running beneath it. `frame: { mode: "iframe", shell: true }` avoids the second copy: turning on **Simulate real viewport** reloads the page as a **shell** for Palette, and the app runs once, in the frame. Your app's entry skips mounting in the shell:
 
 ```ts
-import { isShell } from "@hazem3500/komo/shell";
+import { isShell } from "@hazem3500/palette/shell";
 
 const palette = { project: "YOUR_PROJECT_KEY", frame: { mode: "iframe", shell: true } } as const;
 if (import.meta.env.DEV && isShell(palette.project)) {
   // Palette's shell: start Palette only. It loads the app in the frame.
-  const { initPalette } = await import("@hazem3500/komo");
+  const { initPalette } = await import("@hazem3500/palette");
   initPalette(palette);
 } else {
   mountApp(); // Your app, which starts Palette as usual.
 }
 ```
 
-- **Free in production.** `@hazem3500/komo/shell` is side-effect free and reads nothing until `isShell()` is called, so a build-time guard such as `import.meta.env.DEV && isShell(…)` drops it, and the shell branch, from production builds. Palette's package checks verify this on a minified build.
+- **Free in production.** `@hazem3500/palette/shell` is side-effect free and reads nothing until `isShell()` is called, so a build-time guard such as `import.meta.env.DEV && isShell(…)` drops it, and the shell branch, from production builds. Palette's package checks verify this on a minified build.
 - **Only Palette makes a shell.** `isShell(project)` is true only when Palette set a random nonce in this tab's sessionStorage and the URL carries the same one, for the same project and origin. A link with `?komo-shell=…` alone, or a flag left by another project, returns false, so a crafted link can't blank your app. If Palette doesn't start within 4 seconds (`isShell(project, { timeout })`), the shell clears itself and loads the normal page.
 - **Reloads.** Turning it on asks first, because the reload drops unsaved state in the app and Design previews you haven't posted. Your app's own `beforeunload` guard can also refuse the reload. Cancel or a refused reload keeps the second copy instead. A remembered Frame reopens in the shell on load without asking. Turning it off, Floating, closing Frame or a frame that can't load all reload the normal page on the frame's route.
 - **URL.** The shell's URL follows the frame's route, so reloading or sharing it stays on the same page. The frame's own URL never carries the nonce.
@@ -577,7 +577,7 @@ For a Node container with PostgreSQL (including Cloud Run), use the [Node self-h
 
 ### Client options
 
-Pass these to `initPalette(config)` from `@hazem3500/komo` or `usePalette(config)` from `@hazem3500/komo/react`.
+Pass these to `initPalette(config)` from `@hazem3500/palette` or `usePalette(config)` from `@hazem3500/palette/react`.
 
 `YOUR_PROJECT_KEY` is a placeholder for a string. Hosted Palette generates the key during `palette init`; copy that value. For self-hosting, use the project identifier configured on your server. Reuse the same key across sites that should share feedback.
 
@@ -594,7 +594,7 @@ Pass these to `initPalette(config)` from `@hazem3500/komo` or `usePalette(config
 | `frame.scale` | `boolean` | `false` | Reflow at the available width without scaling. Set `true` only for hosts whose interactive controls account for transformed coordinates; keeps the original viewport layout and scales its contents. |
 | `frame.mode` | `"iframe" \| "transform"` | `"transform"` | `"iframe"` offers a simulated viewport (**Simulate real viewport** in the Frame size menu): the page in a same-origin iframe sized to the chosen viewport, with real media queries. `"transform"` shows the page itself. Falls back to the page itself with the reason when the page can't be framed. |
 | `frame.defaultMode` | `"iframe" \| "transform"` | `"iframe"` | With `mode: "iframe"`, where Frame starts until the reviewer chooses: `"iframe"` the simulated viewport, `"transform"` the page itself, so the second copy of the app loads only when asked for. A remembered choice wins. |
-| `frame.shell` | `boolean` | `false` | With `mode: "iframe"`, the simulated viewport reloads the page as Palette's shell, so the app runs once, in the frame. Requires the entry guard `isShell(project)` from `@hazem3500/komo/shell`. See Single-copy simulated viewport. |
+| `frame.shell` | `boolean` | `false` | With `mode: "iframe"`, the simulated viewport reloads the page as Palette's shell, so the app runs once, in the frame. Requires the entry guard `isShell(project)` from `@hazem3500/palette/shell`. See Single-copy simulated viewport. |
 | `frame.iframeUrl(location)` | `(location: Location) => string` | The current URL | Same-origin URL to load in the simulated viewport (needs `mode: "iframe"`), e.g. a preview route. Pair it with `page(location)`. Pass a stable function. |
 | `frame.include(element)` | `(element: HTMLElement) => boolean` | Fixed portals, including fixed descendants of static wrappers | Keep body-level dialogs, overlays and toasts inside Frame. Host transforms, animations and focus are preserved without moving portal DOM. Return `true` to map a whole body child through Frame or `false` to exclude its subtree; Palette's own host is never framed. |
 | `isolateEvents` | `boolean` | `true` | Keep Palette's events out of the host page. See [Host events](#host-events). |
@@ -782,9 +782,9 @@ Choose **Copy all comments for agent** to copy open feedback across the configur
 Requires Node.js 22+, a modern browser, and Cloudflare access for deployment.
 
 ```sh
-pnpm --filter @hazem3500/komo typecheck
-pnpm --filter @hazem3500/komo test
-pnpm --filter @hazem3500/komo build
+pnpm --filter @hazem3500/palette typecheck
+pnpm --filter @hazem3500/palette test
+pnpm --filter @hazem3500/palette build
 ```
 
 Tests use real workerd and isolated SQLite databases. To publish this repository’s package artifact and website review preview, run `pnpm run comments:preview` from a feature branch. It does not deploy the marketing Worker or replace the existing review database.
@@ -817,17 +817,17 @@ Palette is a fork of [tjcages/komo](https://github.com/tjcages/komo), which was 
 
 ## Project management
 
-Sign in as the Google owner with `npx @hazem3500/komo login`. In the widget, open **Account → Project settings** to manage access, download feedback, clear resolved threads, or delete a hosted project.
+Sign in as the Google owner with `npx @hazem3500/palette login`. In the widget, open **Account → Project settings** to manage access, download feedback, clear resolved threads, or delete a hosted project.
 
 Self-hosted Node deployments can also send signed webhooks for new comments, replies, and resolved threads. In **Project settings → Comment webhooks**, enter an HTTPS endpoint and a signing secret of at least 32 characters. Palette encrypts the secret at rest using the `KOMO_WEBHOOK_KEYS` environment variable; generate a 32-byte key with `openssl rand -base64 32` and configure a JSON keyring such as `{"current":"2026-10","keys":{"2026-10":"BASE64_KEY"}}`. Keep the keyring in your secret manager. Cloudflare Worker deployments currently disable webhook delivery because they do not yet have the DNS-pinning egress transport used by the Node adapter.
 
 Each request includes `X-Komo-Event`, `X-Komo-Delivery`, and `X-Komo-Signature: t=<unix-seconds>,v1=<hex-hmac-sha256>`. Verify the HMAC over `<timestamp>.<raw-request-body>` and reject timestamps outside your replay window. Treat `X-Komo-Delivery` as the idempotency key. Palette sends once without retries, does not follow redirects, and never logs secrets or response bodies. Master-key rotation requires replacing each project's signing secret and updating its receiver before removing the old key from the keyring.
 
 ```sh
-npx @hazem3500/komo project info
-npx @hazem3500/komo project access --access private
-npx @hazem3500/komo project invite --email teammate@example.com
-npx @hazem3500/komo project export --out comments.json
+npx @hazem3500/palette project info
+npx @hazem3500/palette project access --access private
+npx @hazem3500/palette project invite --email teammate@example.com
+npx @hazem3500/palette project export --out comments.json
 ```
 
 On localhost, the widget defaults to a separate `local` channel in the **configured API’s database**. It is not a browser-only database or a private workspace per developer. Project permissions still apply; use a separate project/API for isolated development data. Switching to Shared selects the configured shared branch. `pnpm dev:api` is different: it starts a local API with its own local database.
@@ -836,21 +836,21 @@ Projects default to link access. Private projects require Google sign-in and own
 
 ### Quota recovery and migration
 
-Export first, then permanently clear resolved threads with `npx @hazem3500/komo project clear-resolved --confirm PROJECT_KEY`. This reclaims stored-comment quota. In the sidebar’s Resolved view, owners can also use the trash button to permanently delete only the currently filtered threads and their replies after confirmation. `project delete --confirm PROJECT_KEY` permanently deletes a hosted project and frees its project slot. Both are owner-only. The account panel also offers these actions with typed confirmation.
+Export first, then permanently clear resolved threads with `npx @hazem3500/palette project clear-resolved --confirm PROJECT_KEY`. This reclaims stored-comment quota. In the sidebar’s Resolved view, owners can also use the trash button to permanently delete only the currently filtered threads and their replies after confirmation. `project delete --confirm PROJECT_KEY` permanently deletes a hosted project and frees its project slot. Both are owner-only. The account panel also offers these actions with typed confirmation.
 
-To migrate, export from your source, set up a destination using `npx @hazem3500/komo init --self-host` in another directory, then sign in there and run:
+To migrate, export from your source, set up a destination using `npx @hazem3500/palette init --self-host` in another directory, then sign in there and run:
 
 ```sh
-npx @hazem3500/komo project import --file /path/to/comments.json
+npx @hazem3500/palette project import --file /path/to/comments.json
 ```
 
 Exports include threads, replies, reactions, element snapshots, anchors, and historical profiles across all pages and branches, including resolved feedback. They exclude sessions, credentials, verified emails, and membership. Imports use the destination repository and keep imported authors unverified. Retrying the same export is safe; existing imported records are not overwritten. Destination quotas still apply. Export retries are required if feedback changes while downloading. Keep export files private.
 
-Upgrade self-hosted deployments with `npm install @hazem3500/komo@latest` then `npx @hazem3500/komo deploy`; the CLI applies bundled database migrations before redeploying. Self-hosted project removal is controlled by your Worker configuration. Account-wide data requests remain available at ty@offbr.co.
+Upgrade self-hosted deployments with `npm install @hazem3500/palette@latest` then `npx @hazem3500/palette deploy`; the CLI applies bundled database migrations before redeploying. Self-hosted project removal is controlled by your Worker configuration. Account-wide data requests remain available at ty@offbr.co.
 
 Without `pageRoot`, a sole existing content element with a layout box enables Frame. Script and style elements do not count as content roots. Multiple roots or `display: contents` use Floating; pass a suitable existing app container for Frame.
 
-The `@hazem3500/komo/server` export loads built ESM in Node and includes Worker handler types. Wrangler selects the original TypeScript through the `workerd` condition; keep `nodejs_compat` enabled. Package metadata is available at `@hazem3500/komo/package.json`.
+The `@hazem3500/palette/server` export loads built ESM in Node and includes Worker handler types. Wrangler selects the original TypeScript through the `workerd` condition; keep `nodejs_compat` enabled. Package metadata is available at `@hazem3500/palette/package.json`.
 
 ### Experimental page-element resize and move
 

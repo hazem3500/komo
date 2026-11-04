@@ -1,7 +1,7 @@
 // Design-system adapters: how a site tells Design mode about its tokens,
 // themes, and components. Palette never guesses from computed styles or reads
 // framework internals; the app answers through these adapters. The one
-// exception is opt-in: `@hazem3500/komo/adapters/react-fiber` is an adapter an app
+// exception is opt-in: `@hazem3500/palette/adapters/react-fiber` is an adapter an app
 // can install to read React's private fields.
 //
 //   initPalette({ design: { tokens, themes, components } })

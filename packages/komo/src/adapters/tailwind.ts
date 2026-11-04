@@ -1,6 +1,6 @@
 // Token adapter for utility-class design systems such as Tailwind.
 //
-//   import { tailwindTokens, tailwindSpacing } from "@hazem3500/komo/adapters/tailwind";
+//   import { tailwindTokens, tailwindSpacing } from "@hazem3500/palette/adapters/tailwind";
 //   initPalette({ design: { tokens: tailwindTokens({ tokens: [...table, ...tailwindSpacing()] }) } });
 //
 // A token is a utility class. The app supplies the table (usually generated from

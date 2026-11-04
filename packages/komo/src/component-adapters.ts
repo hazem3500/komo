@@ -1,6 +1,6 @@
 import type { ComponentAdapter, ComponentIdentity, DesignSystem } from "./design-system.js";
 
-// Components instrumented at build time (@hazem3500/komo/vite) publish an adapter on their own
+// Components instrumented at build time (@hazem3500/palette/vite) publish an adapter on their own
 // window, so Frame's viewport iframe answers for its realm.
 const INSTRUMENTED = Symbol.for("palette.instrumented-components");
 const combined = new WeakMap<ComponentAdapter, WeakMap<ComponentAdapter, ComponentAdapter>>();
