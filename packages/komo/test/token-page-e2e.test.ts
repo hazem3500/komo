@@ -18,14 +18,14 @@ let server: Server, browser: Browser;
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-token-page-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-token-page-"));
   await build({
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { discoverCssTokens } from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       import { classTheme } from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':tokens';
+      const key='palette:'+location.origin+':tokens';
       localStorage.setItem(key,'synthetic-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
       const qa=window.tokenQA={posts:[]};
@@ -83,11 +83,11 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     const custom = async (name: string, value: string) => {
       await row(name).locator("button").first().click();
       const length = /^([\d.]+)px$/.exec(value);
-      const input = length ? page.locator(".komo-custom .komo-typed__field input").first() : page.locator('.komo-color input[aria-label="Hex"]');
+      const input = length ? page.locator(".palette-custom .palette-typed__field input").first() : page.locator('.palette-color input[aria-label="Hex"]');
       await input.fill(length ? length[1] : value.replace("#", ""));
       await input.press("Enter");
       await row(name).locator("button").first().click();
-      await page.locator(".komo-tokens").waitFor({ state: "detached" });
+      await page.locator(".palette-tokens").waitFor({ state: "detached" });
     };
     // The Tokens header shows one light/dark switch: one click flips it.
     const theme = async (label: string) => {
@@ -99,7 +99,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     await openDesign(page);
     const open = page.getByRole("button", { name: "Edit tokens", exact: true });
     await open.waitFor();
-    await page.screenshot({ path: join(tmpdir(), `komo-token-page-${mode}-empty.png`) });
+    await page.screenshot({ path: join(tmpdir(), `palette-token-page-${mode}-empty.png`) });
     await open.click();
     await row("surface").waitFor();
     expect(await page.locator(".design-inspector__target").textContent()).toBe("Tokens");
@@ -117,9 +117,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
 
     // An alias is repointed from the token list, with Custom… under it; there are no tabs.
     await row("text").locator("button").first().click();
-    expect(await page.locator(".komo-tokens__tabs").count()).toBe(0);
-    expect(await page.locator(".komo-tokens__more").isVisible()).toBe(true);
-    await page.locator('.komo-tokens [role="option"]').filter({ hasText: "gray-700" }).click();
+    expect(await page.locator(".palette-tokens__tabs").count()).toBe(0);
+    expect(await page.locator(".palette-tokens__more").isVisible()).toBe(true);
+    await page.locator('.palette-tokens [role="option"]').filter({ hasText: "gray-700" }).click();
     expect((await look()).color).toBe("rgb(68, 68, 68)");
     expect(await row("text").locator("i").textContent()).toBe("gray-700");
 
@@ -130,7 +130,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     expect(await row("surface").getAttribute("data-changed")).toBeNull();
     await custom("text", "#f5f5f5");
     expect((await look()).color).toBe("rgb(245, 245, 245)");
-    await page.screenshot({ path: join(tmpdir(), `komo-token-page-${mode}-dark.png`) });
+    await page.screenshot({ path: join(tmpdir(), `palette-token-page-${mode}-dark.png`) });
     await theme("Light");
     await expect.poll(look).toEqual({ background: "rgb(255, 128, 0)", color: "rgb(68, 68, 68)" });
     expect(await count.textContent()).toBe("3 changes");
@@ -138,7 +138,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     // Before/After and B flip the whole preview.
     await bar.getByRole("button", { name: "Before", exact: true }).click();
     expect(await look()).toEqual(light);
-    expect(await page.locator("style[data-komo-token-preview]").count()).toBe(0);
+    expect(await page.locator("style[data-palette-token-preview]").count()).toBe(0);
     await bar.getByRole("button", { name: "After", exact: true }).click();
     expect((await look()).background).toBe("rgb(255, 128, 0)");
     await page.locator(".design-inspector__target").click();
@@ -146,7 +146,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     expect(await look()).toEqual(light);
     await page.keyboard.press("b");
     expect((await look()).background).toBe("rgb(255, 128, 0)");
-    await page.screenshot({ path: join(tmpdir(), `komo-token-page-${mode}.png`) });
+    await page.screenshot({ path: join(tmpdir(), `palette-token-page-${mode}.png`) });
 
     // Undo is chronological; a row's reset leaves no undo step.
     await bar.getByRole("button", { name: "Undo", exact: true }).click();
@@ -165,7 +165,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     expect(await page.locator("#card").evaluate(node => getComputedStyle(node).borderTopLeftRadius)).toBe("12px");
     await bar.getByRole("button", { name: "Reset all", exact: true }).click();
     expect(await look()).toEqual(light);
-    expect(await page.locator("style[data-komo-token-preview]").count()).toBe(0);
+    expect(await page.locator("style[data-palette-token-preview]").count()).toBe(0);
 
     // The comment is about the page: no element target, pinned in view.
     await custom("surface", "#ff8000");
@@ -183,17 +183,17 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     expect((await look()).background).toBe("rgb(255, 128, 0)");
     await toggle.getByRole("button", { name: "Before", exact: true }).click();
     expect(await look()).toEqual(light);
-    expect(await page.locator("style[data-komo-token-preview]").count()).toBe(0);
+    expect(await page.locator("style[data-palette-token-preview]").count()).toBe(0);
     await toggle.getByRole("button", { name: "After", exact: true }).click();
     await expect.poll(async () => (await look()).background).toBe("rgb(255, 128, 0)");
     expect(await page.locator("#card").evaluate(node => getComputedStyle(node).borderTopLeftRadius)).toBe("12px");
     // Palette's tooltip names the full path.
     await label.hover();
     await expect.poll(() => page.locator(".sidebar-tooltip[data-open]").textContent()).toBe("color.surface (light)");
-    await page.screenshot({ path: join(tmpdir(), `komo-token-page-${mode}-card.png`) });
+    await page.screenshot({ path: join(tmpdir(), `palette-token-page-${mode}-card.png`) });
     await page.getByRole("button", { name: "Post comment", exact: true }).click();
     await expect.poll(look).toEqual(light);
-    expect(await page.locator("style[data-komo-token-preview]").count()).toBe(0);
+    expect(await page.locator("style[data-palette-token-preview]").count()).toBe(0);
     await page.waitForFunction(() => (window as any).tokenQA.posts.length === 1);
     const posted = await page.evaluate(() => (window as any).tokenQA.posts[0]);
     expect(posted.anchor.selector).toBe("body");
@@ -232,7 +232,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     // The first row has every other row after it, under where its popup opens.
     const row = rows.first();
     await row.locator("button").first().click();
-    const popup = page.locator(".komo-tokens");
+    const popup = page.locator(".palette-tokens");
     await popup.waitFor();
     await popup.evaluate(node => Promise.all(node.getAnimations().map(animation => animation.finished)));
     const result = await popup.evaluate((node, anchor) => {
@@ -246,7 +246,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
         clear: rect.top >= anchor.bottom || rect.bottom <= anchor.top,
       };
     }, (await row.boundingBox().then(box => ({ top: box!.y, bottom: box!.y + box!.height }))));
-    await page.screenshot({ path: join(tmpdir(), `komo-token-page-popup-${mode}-${viewport.width}x${viewport.height}.png`) });
+    await page.screenshot({ path: join(tmpdir(), `palette-token-page-popup-${mode}-${viewport.width}x${viewport.height}.png`) });
     expect(result).toEqual({ open: true, misses: [], visible: true, clear: true });
     await page.keyboard.press("Escape");
     await expect.poll(() => popup.count()).toBe(0);

@@ -15,7 +15,7 @@ describe("single-copy shell", () => {
     enterShell("example-project", true, true, fallback);
     expect(ask.mock.calls[0][0]).toContain("Unsaved changes in the app are lost, and so are design changes you haven't posted.");
     expect(fallback).toHaveBeenCalledOnce();
-    expect(sessionStorage.getItem("komo:shell")).toBeNull();
+    expect(sessionStorage.getItem("palette:shell")).toBeNull();
     enterShell("example-project", true, false, fallback);
     expect(ask.mock.calls[1][0]).not.toContain("design changes");
   });
@@ -36,12 +36,12 @@ describe("single-copy shell", () => {
     const nonce = "f".repeat(32);
     history.replaceState(null, "", shellUrl(location.href, nonce));
     expect(shellNonce("example-project")).toBe("");
-    sessionStorage.setItem("komo:shell", JSON.stringify({ v: 1, project: "example-project", nonce, origin: location.origin }));
+    sessionStorage.setItem("palette:shell", JSON.stringify({ v: 1, project: "example-project", nonce, origin: location.origin }));
     expect(shellNonce("example-project")).toBe(nonce);
     expect(shellNonce("other-project")).toBe("");
-    sessionStorage.setItem("komo:shell", JSON.stringify({ v: 1, project: "example-project", nonce, origin: "https://elsewhere.test" }));
+    sessionStorage.setItem("palette:shell", JSON.stringify({ v: 1, project: "example-project", nonce, origin: "https://elsewhere.test" }));
     expect(shellNonce("example-project")).toBe("");
     history.replaceState(null, "", shellUrl(location.href, ""));
-    expect(new URL(location.href).searchParams.has("komo-shell")).toBe(false);
+    expect(new URL(location.href).searchParams.has("palette-shell")).toBe(false);
   });
 });

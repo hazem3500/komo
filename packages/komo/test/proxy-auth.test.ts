@@ -18,34 +18,34 @@ describe("sign-in options", () => {
   });
 
   it("turns each option on by itself", () => {
-    expect(authOptions({ KOMO_REQUIRE_SESSION_FOR_READS: "true" })).toMatchObject({
+    expect(authOptions({ PALETTE_REQUIRE_SESSION_FOR_READS: "true" })).toMatchObject({
       requireSessionForReads: true,
       allowGuests: true,
     });
-    expect(authOptions({ KOMO_ALLOW_GUESTS: "false" })).toMatchObject({
+    expect(authOptions({ PALETTE_ALLOW_GUESTS: "false" })).toMatchObject({
       requireSessionForReads: false,
       allowGuests: false,
     });
-    expect(authOptions({ KOMO_ALLOW_GUESTS: false })).toMatchObject({ allowGuests: false });
-    expect(authOptions({ KOMO_SESSION_MAX_AGE_DAYS: "30" }).sessionMaxAge).toBe(30 * 86400000);
+    expect(authOptions({ PALETTE_ALLOW_GUESTS: false })).toMatchObject({ allowGuests: false });
+    expect(authOptions({ PALETTE_SESSION_MAX_AGE_DAYS: "30" }).sessionMaxAge).toBe(30 * 86400000);
     for (const bad of ["0", "-1", "1.5", "30d", "36501"])
-      expect(() => authOptions({ KOMO_SESSION_MAX_AGE_DAYS: bad })).toThrow("KOMO_SESSION_MAX_AGE_DAYS");
+      expect(() => authOptions({ PALETTE_SESSION_MAX_AGE_DAYS: bad })).toThrow("PALETTE_SESSION_MAX_AGE_DAYS");
     for (const bad of ["yes", "1", "TRUE"]) {
-      expect(() => authOptions({ KOMO_ALLOW_GUESTS: bad })).toThrow("KOMO_ALLOW_GUESTS must be true or false.");
-      expect(() => authOptions({ KOMO_REQUIRE_SESSION_FOR_READS: bad })).toThrow("KOMO_REQUIRE_SESSION_FOR_READS");
+      expect(() => authOptions({ PALETTE_ALLOW_GUESTS: bad })).toThrow("PALETTE_ALLOW_GUESTS must be true or false.");
+      expect(() => authOptions({ PALETTE_REQUIRE_SESSION_FOR_READS: bad })).toThrow("PALETTE_REQUIRE_SESSION_FOR_READS");
     }
   });
 
   it("forces session reads on and guests off under a proxy", () => {
     for (const env of [
-      { KOMO_PROXY_AUTH: "gcp-iap", KOMO_PROXY_AUDIENCE: audience },
-      { KOMO_IAP_AUDIENCE: audience },
-      { KOMO_PROXY_AUTH: "gcp-iap", KOMO_IAP_AUDIENCE: audience },
+      { PALETTE_PROXY_AUTH: "gcp-iap", PALETTE_PROXY_AUDIENCE: audience },
+      { PALETTE_IAP_AUDIENCE: audience },
+      { PALETTE_PROXY_AUTH: "gcp-iap", PALETTE_IAP_AUDIENCE: audience },
     ]) {
       const options = authOptions({
         ...env,
-        KOMO_ALLOW_GUESTS: "true",
-        KOMO_REQUIRE_SESSION_FOR_READS: "false",
+        PALETTE_ALLOW_GUESTS: "true",
+        PALETTE_REQUIRE_SESSION_FOR_READS: "false",
       });
       expect(options.proxy).toMatchObject({ name: "gcp-iap", signIn: "google" });
       expect(options).toMatchObject({ requireSessionForReads: true, allowGuests: false });
@@ -53,28 +53,28 @@ describe("sign-in options", () => {
   });
 
   it("fails clearly on an unknown or incomplete proxy setup", () => {
-    expect(() => authOptions({ KOMO_PROXY_AUTH: "cloudflare-access", KOMO_PROXY_AUDIENCE: "x" })).toThrow(
-      'KOMO_PROXY_AUTH "cloudflare-access" is not supported. Use one of: gcp-iap.',
+    expect(() => authOptions({ PALETTE_PROXY_AUTH: "cloudflare-access", PALETTE_PROXY_AUDIENCE: "x" })).toThrow(
+      'PALETTE_PROXY_AUTH "cloudflare-access" is not supported. Use one of: gcp-iap.',
     );
-    expect(() => authOptions({ KOMO_PROXY_AUTH: "gcp-iap" })).toThrow("KOMO_PROXY_AUTH=gcp-iap needs KOMO_PROXY_AUDIENCE.");
-    expect(() => authOptions({ KOMO_PROXY_AUDIENCE: audience })).toThrow("KOMO_PROXY_AUDIENCE needs KOMO_PROXY_AUTH");
-    expect(() => authOptions({ KOMO_PROXY_AUTH: "gcp-iap", KOMO_PROXY_AUDIENCE: "456" })).toThrow(
-      "KOMO_PROXY_AUDIENCE must be the IAP audience",
+    expect(() => authOptions({ PALETTE_PROXY_AUTH: "gcp-iap" })).toThrow("PALETTE_PROXY_AUTH=gcp-iap needs PALETTE_PROXY_AUDIENCE.");
+    expect(() => authOptions({ PALETTE_PROXY_AUDIENCE: audience })).toThrow("PALETTE_PROXY_AUDIENCE needs PALETTE_PROXY_AUTH");
+    expect(() => authOptions({ PALETTE_PROXY_AUTH: "gcp-iap", PALETTE_PROXY_AUDIENCE: "456" })).toThrow(
+      "PALETTE_PROXY_AUDIENCE must be the IAP audience",
     );
     expect(() =>
-      authOptions({ KOMO_PROXY_AUDIENCE: audience, KOMO_IAP_AUDIENCE: "/projects/1/global/backendServices/2", KOMO_PROXY_AUTH: "gcp-iap" }),
-    ).toThrow("KOMO_PROXY_AUDIENCE and KOMO_IAP_AUDIENCE are set to different values.");
+      authOptions({ PALETTE_PROXY_AUDIENCE: audience, PALETTE_IAP_AUDIENCE: "/projects/1/global/backendServices/2", PALETTE_PROXY_AUTH: "gcp-iap" }),
+    ).toThrow("PALETTE_PROXY_AUDIENCE and PALETTE_IAP_AUDIENCE are set to different values.");
   });
 
   it("accepts both names for the sign-in prefix, only with a proxy", () => {
-    const proxy = { KOMO_IAP_AUDIENCE: audience };
-    expect(authOptions({ ...proxy, KOMO_AUTH_PATH_PREFIX: "/backoffice/" }).signInPrefix).toBe("/backoffice");
-    expect(authOptions({ ...proxy, KOMO_AUTH_PREFIX: "/backoffice" }).signInPrefix).toBe("/backoffice");
-    expect(() => authOptions({ ...proxy, KOMO_AUTH_PATH_PREFIX: "/a", KOMO_AUTH_PREFIX: "/b" })).toThrow("different values");
-    expect(() => authOptions({ KOMO_AUTH_PATH_PREFIX: "/backoffice" })).toThrow("only applies with KOMO_PROXY_AUTH");
+    const proxy = { PALETTE_IAP_AUDIENCE: audience };
+    expect(authOptions({ ...proxy, PALETTE_AUTH_PATH_PREFIX: "/backoffice/" }).signInPrefix).toBe("/backoffice");
+    expect(authOptions({ ...proxy, PALETTE_AUTH_PREFIX: "/backoffice" }).signInPrefix).toBe("/backoffice");
+    expect(() => authOptions({ ...proxy, PALETTE_AUTH_PATH_PREFIX: "/a", PALETTE_AUTH_PREFIX: "/b" })).toThrow("different values");
+    expect(() => authOptions({ PALETTE_AUTH_PATH_PREFIX: "/backoffice" })).toThrow("only applies with PALETTE_PROXY_AUTH");
     expect(authPrefix(undefined)).toBe("");
     for (const bad of ["backoffice", "/back office", "/../x?", "/.", "/..", "/a/../b", "/a/./b", "//x", "/a//b"])
-      expect(() => authPrefix(bad), bad).toThrow("KOMO_AUTH_PATH_PREFIX");
+      expect(() => authPrefix(bad), bad).toThrow("PALETTE_AUTH_PATH_PREFIX");
   });
 
   it("parses PUBLIC_URL with an optional path", () => {
@@ -302,12 +302,40 @@ describe("forwarded client address", () => {
   });
 
   it("reads both option names and rejects bad values", () => {
+    expect(trustedProxyHops({ PALETTE_TRUSTED_PROXY_HOPS: "3" })).toBe(3);
+    expect(trustedProxyHops({ PALETTE_PROXY_HOPS: "2" })).toBe(2);
+    expect(trustedProxyHops({ PALETTE_PROXY_HOPS: "2", PALETTE_TRUSTED_PROXY_HOPS: "2" })).toBe(2);
+    expect(() => trustedProxyHops({ PALETTE_PROXY_HOPS: "2", PALETTE_TRUSTED_PROXY_HOPS: "3" })).toThrow("different values");
+    for (const bad of ["-1", "9", "1.5", "two"])
+      expect(() => trustedProxyHops({ PALETTE_TRUSTED_PROXY_HOPS: bad })).toThrow("PALETTE_TRUSTED_PROXY_HOPS");
+  });
+});
+
+describe("settings named before the rename", () => {
+  // Deployments configured with KOMO_ names keep working unchanged.
+  it("reads each KOMO_ name when its PALETTE_ name is unset", () => {
+    expect(authOptions({
+      KOMO_REQUIRE_SESSION_FOR_READS: "true",
+      KOMO_ALLOW_GUESTS: "false",
+      KOMO_SESSION_MAX_AGE_DAYS: "30",
+    })).toEqual({ proxy: undefined, signInPrefix: "", requireSessionForReads: true, allowGuests: false, sessionMaxAge: 30 * 86400000 });
+    const proxied = authOptions({ KOMO_PROXY_AUTH: "gcp-iap", KOMO_PROXY_AUDIENCE: audience, KOMO_AUTH_PATH_PREFIX: "/backoffice" });
+    expect(proxied).toMatchObject({ signInPrefix: "/backoffice", requireSessionForReads: true, allowGuests: false });
+    expect(proxied.proxy?.name).toBe("gcp-iap");
+    expect(authOptions({ KOMO_PROXY_AUTH: "gcp-iap", KOMO_PROXY_AUDIENCE: audience, KOMO_AUTH_PREFIX: "/backoffice" }).signInPrefix).toBe("/backoffice");
     expect(trustedProxyHops({ KOMO_TRUSTED_PROXY_HOPS: "3" })).toBe(3);
     expect(trustedProxyHops({ KOMO_PROXY_HOPS: "2" })).toBe(2);
-    expect(trustedProxyHops({ KOMO_PROXY_HOPS: "2", KOMO_TRUSTED_PROXY_HOPS: "2" })).toBe(2);
+  });
+
+  it("prefers the PALETTE_ name when both are set", () => {
+    expect(authOptions({ PALETTE_ALLOW_GUESTS: "false", KOMO_ALLOW_GUESTS: "true" }).allowGuests).toBe(false);
+    expect(authOptions({ PALETTE_SESSION_MAX_AGE_DAYS: "7", KOMO_SESSION_MAX_AGE_DAYS: "30" }).sessionMaxAge).toBe(7 * 86400000);
+    expect(trustedProxyHops({ PALETTE_TRUSTED_PROXY_HOPS: "1", KOMO_TRUSTED_PROXY_HOPS: "3" })).toBe(1);
+  });
+
+  it("still rejects bad values under the old names", () => {
+    expect(() => authOptions({ KOMO_ALLOW_GUESTS: "yes" })).toThrow("PALETTE_ALLOW_GUESTS must be true or false.");
     expect(() => trustedProxyHops({ KOMO_PROXY_HOPS: "2", KOMO_TRUSTED_PROXY_HOPS: "3" })).toThrow("different values");
-    for (const bad of ["-1", "9", "1.5", "two"])
-      expect(() => trustedProxyHops({ KOMO_TRUSTED_PROXY_HOPS: bad })).toThrow("KOMO_TRUSTED_PROXY_HOPS");
   });
 });
 

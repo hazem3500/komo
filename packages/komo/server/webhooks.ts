@@ -29,8 +29,8 @@ type WebhookEnv = {
       };
     };
   };
-  KOMO_WEBHOOK_KEYS?: string;
-  KOMO_WEBHOOK_SEND?: (
+  PALETTE_WEBHOOK_KEYS?: string;
+  PALETTE_WEBHOOK_SEND?: (
     url: string,
     body: string,
     headers: Record<string, string>
@@ -178,17 +178,21 @@ export async function dispatchWebhook(
   if (!row?.webhook_enabled || !row.webhook_url || !row.webhook_secret) return;
   const events = JSON.parse(row.webhook_events ?? "[]") as unknown;
   if (!Array.isArray(events) || !events.includes(event.event)) return;
-  if (!env.KOMO_WEBHOOK_SEND) return;
+  if (!env.PALETTE_WEBHOOK_SEND) return;
   const body = JSON.stringify(event);
   if (encoder.encode(body).length > 16 * 1024) return;
   const timestamp = Math.floor(Date.now() / 1000);
   const secret = await decryptWebhookSecret(
-    env.KOMO_WEBHOOK_KEYS,
+    env.PALETTE_WEBHOOK_KEYS,
     project,
     row.webhook_secret
   );
   const signature = await signWebhook(secret, timestamp, body);
-  await env.KOMO_WEBHOOK_SEND(row.webhook_url, body, {
+  await env.PALETTE_WEBHOOK_SEND(row.webhook_url, body, {
+    "X-Palette-Delivery": event.id,
+    "X-Palette-Event": event.event,
+    "X-Palette-Signature": signature,
+    // The same values under the names receivers checked before the rename.
     "X-Komo-Delivery": event.id,
     "X-Komo-Event": event.event,
     "X-Komo-Signature": signature,

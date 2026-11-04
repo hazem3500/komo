@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   decryptWebhookSecret,
+  dispatchWebhook,
   encryptWebhookSecret,
   signWebhook,
   validateWebhookUrl,
@@ -53,6 +54,27 @@ describe("webhook security", () => {
       .update(`${timestamp}.${body}`)
       .digest("hex");
     expect(signature).toBe(`t=${timestamp},v1=${expected}`);
+  });
+
+  it("sends each header under its Palette name and the name receivers checked before the rename", async () => {
+    const secret = await encryptWebhookSecret(ring, "project-a", "s".repeat(40));
+    const row = { webhook_url: "https://hooks.example.com/events", webhook_secret: secret, webhook_events: '["comment.created"]', webhook_enabled: 1 };
+    const sent: Record<string, string>[] = [];
+    const DB = { prepare: () => ({ bind: () => ({ first: async <T>() => row as T }) }) };
+    const event = {
+      id: "delivery-1", event: "comment.created" as const, occurredAt: "2026-01-01T00:00:00Z", projectKey: "project-a",
+      repo: "owner/site", branch: "main", threadId: "t1", pageUrl: "https://example.com/", selector: "h1", author: "Reviewer", body: "Hi",
+    };
+    await dispatchWebhook(
+      { DB, PALETTE_WEBHOOK_KEYS: ring, PALETTE_WEBHOOK_SEND: async (_url, _body, headers) => void sent.push(headers) },
+      "project-a",
+      event,
+    );
+    const [headers] = sent;
+    expect(headers["X-Palette-Delivery"]).toBe("delivery-1");
+    expect(headers["X-Palette-Event"]).toBe("comment.created");
+    expect(headers["X-Palette-Signature"]).toMatch(/^t=\d+,v1=[0-9a-f]{64}$/);
+    for (const name of ["Delivery", "Event", "Signature"]) expect(headers[`X-Komo-${name}`]).toBe(headers[`X-Palette-${name}`]);
   });
 
   it("rejects DNS answers that include any non-public address", () => {

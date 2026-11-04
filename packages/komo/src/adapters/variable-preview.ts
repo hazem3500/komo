@@ -44,7 +44,7 @@ export function previewVariables(
   }
   if (!rules.length) return () => {};
   const style = page.createElement("style");
-  style.dataset.komoTokenPreview = "";
+  style.dataset.paletteTokenPreview = "";
   style.textContent = rules.join("");
   (page.head ?? page.documentElement).append(style);
   return () => style.remove();

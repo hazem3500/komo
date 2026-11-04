@@ -88,7 +88,7 @@ beforeAll(async () => {
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
       const anchor={selector:'#target',text:'Plan',x:.5,y:.5,width:0,height:0,pageX:0,pageY:0,viewportWidth:1280};
       const thread={id:'card-thread',page:location.pathname,anchor,resolved:false,resolvedBy:null,createdAt:Date.now(),updatedAt:Date.now(),comments:[{id:'card-comment',body,author:user,createdAt:Date.now(),editedAt:null,reactions:{}}]};
-      const key='branch-comments:'+location.origin+':cards';
+      const key='palette:'+location.origin+':cards';
       localStorage.setItem(key,'synthetic-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
       qa.body=body;qa.text=text;
@@ -179,7 +179,7 @@ function overflow(page: Page, selector: string) {
     const box = root.getBoundingClientRect(), bad: string[] = [];
     if (root.scrollWidth > root.clientWidth) bad.push(`root ${root.scrollWidth}>${root.clientWidth}`);
     for (const node of root.querySelectorAll<HTMLElement>("*")) {
-      if (node.closest("[hidden],style,.komo-source > span")) continue;
+      if (node.closest("[hidden],style,.palette-source > span")) continue;
       const rect = node.getBoundingClientRect(), style = getComputedStyle(node);
       if (style.overflowX === "visible" && node.clientWidth && node.scrollWidth > node.clientWidth) bad.push(`${node.className || node.localName} scroll ${node.scrollWidth}>${node.clientWidth}`);
       if (rect.width && (rect.right > box.right + 1 || rect.left < box.left - 1)) bad.push(`${node.className || node.localName} rect ${rect.left}-${rect.right} outside ${box.left}-${box.right}`);
@@ -287,8 +287,8 @@ describe.skipIf(!chrome).each(modes)("inspector hierarchy in %s", mode => {
     const page = await open(mode, `case=registered&font=${font}`);
     const field = page.locator('[data-field-property="font-family"]');
     await field.scrollIntoViewIfNeeded();
-    expect(await field.locator(".komo-font-name span").textContent()).toBe(label);
-    expect(await field.locator(".komo-font-name small").textContent()).toBe(note);
+    expect(await field.locator(".palette-font-name span").textContent()).toBe(label);
+    expect(await field.locator(".palette-font-name small").textContent()).toBe(note);
     expect(await field.locator("input[data-property]").getAttribute("title")).toContain(title);
     await page.close();
   });
@@ -298,7 +298,7 @@ describe.skipIf(!chrome).each(modes)("inspector hierarchy in %s", mode => {
     const button = page.locator("#app button");
     const field = page.locator('[data-field-property="font-family"]');
     const input = field.locator("input[data-property]");
-    const label = () => field.locator(".komo-font-name span").textContent();
+    const label = () => field.locator(".palette-font-name span").textContent();
     const inline = () => button.evaluate(node => node.style.fontFamily);
     const exact = '"Other, Face", "Fallback Sans", monospace';
     await field.scrollIntoViewIfNeeded();
@@ -374,14 +374,14 @@ describe.skipIf(!chrome || !shots)("inspector screenshots", () => {
     for (const theme of ["light", "dark"]) {
       for (const [name, query, mode = "floating"] of [["composer", "component"], ["composer-plain", ""], ["composer-long", "component&long"], ["composer-source", "component&long", "reflow"]]) {
         const page = await composer(mode, `${query}&theme=${theme}`);
-        if (name.endsWith("source")) await page.locator(".draft-proposal .komo-source__button").click();
+        if (name.endsWith("source")) await page.locator(".draft-proposal .palette-source__button").click();
         await page.waitForTimeout(300);
         await page.screenshot({ path: join(shots!, `${name}-${theme}.png`) });
         await page.close();
       }
       for (const [name, query] of [["posted", "component"], ["posted-plain", ""], ["posted-long", "component&long"], ["posted-source", "component&long"]]) {
         const page = await posted("floating", `${query}&theme=${theme}`);
-        if (name.endsWith("source")) await page.locator(".message-text .komo-source__button").first().click();
+        if (name.endsWith("source")) await page.locator(".message-text .palette-source__button").first().click();
         await page.waitForTimeout(300);
         await page.screenshot({ path: join(shots!, `${name}-${theme}.png`) });
         await page.close();
@@ -389,14 +389,14 @@ describe.skipIf(!chrome || !shots)("inspector screenshots", () => {
       for (const [name, query] of cases) {
         const page = await open("floating", `${query}&theme=${theme}`);
         if (name.startsWith("font")) await page.locator('[data-field-property="font-family"]').scrollIntoViewIfNeeded();
-        if (name === "source") await page.locator(".komo-source__button").click().catch(() => {});
+        if (name === "source") await page.locator(".palette-source__button").click().catch(() => {});
         await page.waitForTimeout(300);
         await page.screenshot({ path: join(shots!, `${name}-${theme}.png`) });
         await page.close();
       }
       for (const name of ["registered", "source", "font-quoted"]) {
         const narrow = await open("reflow", `case=registered&font=quoted&theme=${theme}`, { width: 390, height: 844 });
-        if (name === "source") await narrow.locator(".komo-source__button").click().catch(() => {});
+        if (name === "source") await narrow.locator(".palette-source__button").click().catch(() => {});
         if (name.startsWith("font")) await narrow.locator('[data-field-property="font-family"]').scrollIntoViewIfNeeded();
         await narrow.waitForTimeout(300);
         await narrow.screenshot({ path: join(shots!, `${name}-${theme}-390.png`) });

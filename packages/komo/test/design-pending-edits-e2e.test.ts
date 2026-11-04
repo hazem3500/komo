@@ -25,7 +25,7 @@ beforeAll(async () => {
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { discoverCssTokens } from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':pending';
+      const key='palette:'+location.origin+':pending';
       localStorage.setItem(key,'synthetic-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
       const qa=window.pendingQA={posts:[]};
@@ -101,11 +101,11 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
       await page.getByRole("button", { name: /^Edit tokens/ }).click();
       // The colour editor keeps each value as it is typed; clicking the row again closes it.
       await row("surface").locator("button").first().click();
-      const input = page.locator('.komo-color input[aria-label="Hex"]');
+      const input = page.locator('.palette-color input[aria-label="Hex"]');
       await input.fill("ff8000");
       await input.press("Enter");
       await row("surface").locator("button").first().click();
-      await page.locator(".komo-color").waitFor({ state: "detached" });
+      await page.locator(".palette-color").waitFor({ state: "detached" });
       expect(await background()).toBe(orange);
     };
     // Ctrl+Shift+Left on the focused selection steps ten local CSS pixels, so the resize is exact in

@@ -14,7 +14,8 @@ import type { PinUnit } from "./pin-groups.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
 import { createFramePortals, preserveFrameStyles } from "./frame-portals.js";
 import { createFrameViewport } from "./frame-viewport.js";
-import { SHELL_OFF_KEY, claimShell, shellNonce } from "./shell-session.js";
+import { SHELL_OFF_KEY, SHELL_PARAM, LEGACY_SHELL_PARAM, claimShell, shellNonce } from "./shell-session.js";
+import { migrateStorage } from "./storage-keys.js";
 import {
   clientPoint,
   counterpart,
@@ -141,6 +142,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     async refresh() {},
   };
   if (typeof document === "undefined" || options.enabled === false || framedByPalette()) return noop;
+  migrateStorage();
   if (!options.endpoint || !options.repo || !options.branch || !options.project)
     throw new Error("Comments require endpoint, repo, branch, and project.");
   if (
@@ -205,7 +207,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   // set in this tab, and the app runs only in the frame.
   const shellWanted = options.frame?.mode === "iframe" && options.frame.scale !== true && options.frame.shell === true;
   const shell = shellWanted ? shellNonce(options.project) : "";
-  const sidebarModeKey = `branch-comments:sidebar-mode:${options.project}:${options.repo}`;
+  const sidebarModeKey = `palette:sidebar-mode:${options.project}:${options.repo}`;
   let sidebarMode: "background" | "edge" = (() => {
     if (!canFrame) return "edge";
     if (shell) return "background";
@@ -218,7 +220,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     return options.sidebar === "background" ? "background" : "edge";
   })();
   // A reviewer's pin size wins over the host default, like the sidebar mode.
-  const pinSizeKey = `branch-comments:pin-size:${options.project}:${options.repo}`;
+  const pinSizeKey = `palette:pin-size:${options.project}:${options.repo}`;
   let pinSize = hostPinSize;
   try {
     const stored = localStorage.getItem(pinSizeKey) as PinSize | null;
@@ -227,7 +229,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     /* Use the host default when storage is blocked. */
   }
   // Dots are filled until this browser has opened the thread's latest comment.
-  const readKey = `branch-comments:read:${options.project}:${options.repo}`;
+  const readKey = `palette:read:${options.project}:${options.repo}`;
   let readAt: Record<string, number> = {};
   try {
     const stored = JSON.parse(localStorage.getItem(readKey) ?? "{}");
@@ -264,7 +266,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     location.hostname,
   );
   const sharedBranch = options.branch;
-  const channelKey = `branch-comments:channel:${options.project}:${options.repo}`;
+  const channelKey = `palette:channel:${options.project}:${options.repo}`;
   let channel: "local" | "shared" = "local";
   try {
     if (localStorage.getItem(channelKey) === "shared") channel = "shared";
@@ -505,7 +507,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   const cardFollow = cardMotion(() => positionNotice());
   let draggedPin: { id: string; x: number; y: number } | null = null;
   let toolbarPlacement: Placement | undefined;
-  const placementKey = `branch-comments:drawer:${options.project}:${options.repo}`;
+  const placementKey = `palette:drawer:${options.project}:${options.repo}`;
   let savedToolbarPlacement: Placement | undefined;
   try {
     const stored = JSON.parse(localStorage.getItem(placementKey) ?? "null");
@@ -525,7 +527,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   } catch {
     /* Storage may be unavailable on embedded previews. */
   }
-  const sidebarPlacementKey = `branch-comments:sidebar:${options.project}:${options.repo}`;
+  const sidebarPlacementKey = `palette:sidebar:${options.project}:${options.repo}`;
   let savedSidebarPlacement: Placement | undefined;
   let sidebarPlacement: Placement | undefined;
   let sidebarPeek = false;
@@ -785,7 +787,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   // The visual frame in page CSS pixels, before any panning scroll.
   let frameBox = { left: 0, top: 0, width: 0, height: 0, logical: [0, 0], pan: false };
   // Size controls own a chosen logical viewport; until they load, it is the window at Fit.
-  const frameSizeKey = `branch-comments:frame-size:${options.project}:${options.repo}`;
+  const frameSizeKey = `palette:frame-size:${options.project}:${options.repo}`;
   let frameControls: FrameSizeControls | undefined;
   let frameControlsLoading = false;
   let frameArea: { left: number; top: number; width: number; height: number } | null = null;
@@ -914,7 +916,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   // The frame's document: the host's URL for it, without the shell's nonce.
   function framedUrl() {
     const url = new URL(options.frame?.iframeUrl?.(location) ?? location.href, location.href);
-    if (shell) url.searchParams.delete("komo-shell");
+    if (shell) for (const name of [SHELL_PARAM, LEGACY_SHELL_PARAM]) url.searchParams.delete(name);
     return url.href;
   }
   /** The visible frame: the viewport iframe's port, else the page root. */
@@ -1077,10 +1079,10 @@ export function initComments(options: CommentsOptions): CommentsController {
   // True while reopening a remembered sidebar on load: skip the open motion.
   let restoring = false;
   const openStore = openState(
-    `branch-comments:open:${options.project}:${options.repo}`,
+    `palette:open:${options.project}:${options.repo}`,
     options.restoreOpen,
   );
-  const toolbarDismissKey = `branch-comments:toolbar-dismissed:${options.project}:${options.repo}`;
+  const toolbarDismissKey = `palette:toolbar-dismissed:${options.project}:${options.repo}`;
   try {
     if (sessionStorage.getItem(toolbarDismissKey) === "1") {
       toolbarDismissed = true;
@@ -1091,7 +1093,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   }
   // Hide comments keeps review running for this tab: pins, cards and the open
   // layout step aside while drafts, selection and list state wait in memory.
-  const visibilityKey = `branch-comments:comments-hidden:${options.project}:${options.repo}`;
+  const visibilityKey = `palette:comments-hidden:${options.project}:${options.repo}`;
   let commentsHidden = false,
     revealExpanded = false,
     revealScroll = 0;
@@ -3605,7 +3607,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       node.addEventListener(type, () => sidebarTip?.hide());
   };
   const dismissedTips = new Set<string>();
-  const dismissedTipsKey = "branch-comments:dismissed-tips";
+  const dismissedTipsKey = "palette:dismissed-tips";
   const tips: [string, string][] = [
     ["copy", "Copy comments for your agent."],
   ];
@@ -4174,7 +4176,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         updateCardPage(cached, thread);
         const input = cached.querySelector("textarea");
         if (input && shadow.activeElement !== input)
-          requestAnimationFrame(() => input.dispatchEvent(new Event("komo-sync-reply")));
+          requestAnimationFrame(() => input.dispatchEvent(new Event("palette-sync-reply")));
         list.append(cached === retained ? retainedMarker : cached);
         continue;
       }
@@ -4264,7 +4266,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           toggle.setAttribute("aria-expanded", String(open));
           toggle.setAttribute("aria-label", `${open ? "Hide" : "Show"} ${count}`);
           if (open) requestAnimationFrame(() =>
-            previews.querySelector("textarea")?.dispatchEvent(new Event("komo-sync-reply")),
+            previews.querySelector("textarea")?.dispatchEvent(new Event("palette-sync-reply")),
           );
         };
         syncReplies();
@@ -4394,7 +4396,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     requestAnimationFrame(pointTips);
     list.scrollTop = scroll;
     // Cards outdent past the list's scrollbar gutter so their content keeps the panel's grid.
-    list.style.setProperty("--komo-scrollbar", `${list.offsetWidth - list.clientWidth}px`);
+    list.style.setProperty("--palette-scrollbar", `${list.offsetWidth - list.clientWidth}px`);
     if (animateRows) {
       let entered = 0;
       const bounds = list.getBoundingClientRect();
@@ -4626,7 +4628,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             Object.entries(comment.reactions).find(
               ([, users]) => api.user && users.includes(api.user.id),
             )?.[0],
-            `branch-comments:emoji:${options.project}:${api.user?.id ?? "guest"}`,
+            `palette:emoji:${options.project}:${api.user?.id ?? "guest"}`,
             options.emojiDataSource,
           );
         },
@@ -4710,7 +4712,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       );
       if (active)
         recordEmoji(
-          `branch-comments:emoji:${options.project}:${user.id}`,
+          `palette:emoji:${options.project}:${user.id}`,
           emoji,
         );
     });
@@ -4896,7 +4898,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       send.disabled = pending || (!input.value.trim() && !proposal);
     });
     send.disabled ||= !input.value.trim() && !proposal;
-    input.addEventListener("komo-sync-reply", () => {
+    input.addEventListener("palette-sync-reply", () => {
       if (!thread || !input.isConnected || (shadow.activeElement === input && replies.has(thread.id))) return;
       input.value = replies.get(thread.id) ?? "";
       const selection = replySelections.get(thread.id);

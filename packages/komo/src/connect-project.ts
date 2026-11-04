@@ -7,7 +7,7 @@ type SetupResult = {
   user: Identity;
 };
 const key = (options: CommentsOptions) =>
-  `komo:setup:${options.endpoint}:${options.onboarding?.code}`;
+  `palette:setup:${options.endpoint}:${options.onboarding?.code}`;
 
 /** Retain only public settings so a reload before CLI sync can resume commenting. */
 export function rememberProject(options: CommentsOptions, result: SetupResult) {
@@ -78,7 +78,7 @@ export function connectProject(
   url.searchParams.set("sites", JSON.stringify(sites));
   const popup = window.open(
     "about:blank",
-    "komo-connect",
+    "palette-connect",
     "popup,width=600,height=720"
   );
   if (!popup) return Promise.reject(new Error("Allow popups to set up inline feedback."));

@@ -33,7 +33,7 @@ main{min-height:100vh;box-sizing:border-box;padding:40px}
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-color-field-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-color-field-"));
   await build({
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
@@ -115,7 +115,7 @@ const read = (tab: Page, selector: string, property: string) => tab.evaluate(([s
   return {
     text: color(field.querySelector<HTMLInputElement>("input[data-property]")!.value),
     swatch: color(field.querySelector<HTMLInputElement>('input[type="color"]')!.value),
-    popup: color(root.querySelector(".komo-tokens .komo-color") ? getComputedStyle(root.querySelector(".komo-color")!).getPropertyValue("--color") : undefined),
+    popup: color(root.querySelector(".palette-tokens .palette-color") ? getComputedStyle(root.querySelector(".palette-color")!).getPropertyValue("--color") : undefined),
     computed: color(getComputedStyle(document.querySelector(selector)!).getPropertyValue(property)),
   };
 }, [selector, property] as const);
@@ -128,11 +128,11 @@ async function openCustom(tab: Page, property: string) {
   await frames(tab);
   await trigger.focus();
   await tab.keyboard.press("Enter");
-  await tab.locator(".komo-tokens").waitFor();
+  await tab.locator(".palette-tokens").waitFor();
   // Custom… from the keyboard, so the pointer stays where the test put it.
-  await tab.locator(".komo-tokens__more").focus();
+  await tab.locator(".palette-tokens__more").focus();
   await tab.keyboard.press("Enter");
-  await tab.locator(".komo-tokens .komo-color").waitFor();
+  await tab.locator(".palette-tokens .palette-color").waitFor();
 }
 
 async function agrees(tab: Page, selector: string, property: string, popup: boolean) {
@@ -144,7 +144,7 @@ async function agrees(tab: Page, selector: string, property: string, popup: bool
   }).toEqual(Array(3).fill((await read(tab, selector, property)).computed));
   if (popup) {
     await tab.keyboard.press("Escape");
-    await tab.locator(".komo-tokens").waitFor({ state: "detached" });
+    await tab.locator(".palette-tokens").waitFor({ state: "detached" });
   }
 }
 
@@ -205,12 +205,12 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("color fields in
       await field.scrollIntoViewIfNeeded();
       await frames(tab);
       await field.locator('input[type="color"]').click();
-      await tab.locator(".komo-tokens .komo-color__area").waitFor();
-      await tab.locator(".komo-tokens").evaluate(node => Promise.all(node.getAnimations().map(animation => animation.finished)));
+      await tab.locator(".palette-tokens .palette-color__area").waitFor();
+      await tab.locator(".palette-tokens").evaluate(node => Promise.all(node.getAnimations().map(animation => animation.finished)));
       const result = await tab.evaluate(property => {
         const host = [...document.querySelectorAll("*")].find(node => node.shadowRoot?.querySelector(".design-inspector"))!;
         const root = host.shadowRoot!;
-        const popup = root.querySelector<HTMLElement>(".komo-tokens")!;
+        const popup = root.querySelector<HTMLElement>(".palette-tokens")!;
         const anchor = root.querySelector(`[data-field-property="${property}"]`)!.getBoundingClientRect();
         const rect = popup.getBoundingClientRect();
         const center = (node: Element | null) => {
@@ -218,9 +218,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("color fields in
           return [box.left + box.width / 2, box.top + box.height / 2];
         };
         const points = [
-          center(popup.querySelector(".komo-color__area")),
-          center(popup.querySelector(".komo-color__hue")),
-          center(popup.querySelector(".komo-color__value")),
+          center(popup.querySelector(".palette-color__area")),
+          center(popup.querySelector(".palette-color__hue")),
+          center(popup.querySelector(".palette-color__value")),
         ];
         for (const y of [.15, .5, .85]) for (const x of [.1, .5, .9]) points.push([rect.left + rect.width * x, rect.top + rect.height * y]);
         const misses = points.filter(([x, y]) => {
@@ -234,10 +234,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("color fields in
           roomBelow: innerHeight - anchor.bottom,
         };
       }, property);
-      await tab.screenshot({ path: join(tmpdir(), `komo-color-field-${mode}-${name}-${shot}.png`) });
+      await tab.screenshot({ path: join(tmpdir(), `palette-color-field-${mode}-${name}-${shot}.png`) });
       expect(result).toMatchObject({ misses: [], open: true, visible: true, attached: true });
       await tab.keyboard.press("Escape");
-      await tab.locator(".komo-tokens").waitFor({ state: "detached" });
+      await tab.locator(".palette-tokens").waitFor({ state: "detached" });
       return result;
     };
     await tab.mouse.move(2, 2);

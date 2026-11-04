@@ -12,7 +12,7 @@ let directory: string, origin: string, server: Server, browser: Browser;
 const evidence = process.env.KOMO_TYPED_EVIDENCE;
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-typed-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-typed-"));
   if (evidence) await mkdir(evidence, { recursive: true });
   await build({ stdin: { contents: `
     import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
@@ -21,7 +21,7 @@ beforeAll(async () => {
     const qa=window.qa={writes:[],actions:0,theme:()=>axis.apply()};
     document.querySelector('#target').onclick=()=>qa.actions++;
     const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
-    const key='branch-comments:'+location.origin+':typed';
+    const key='palette:'+location.origin+':typed';
     localStorage.setItem(key,'synthetic-session');localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
     window.fetch=async(input,init)=>{const method=init?.method??'GET';if(method!=='GET'){qa.writes.push(method);throw Error('Unexpected write')}return Response.json({user,threads:[],guests:true})};
     const tokens=tailwindTokens({tokens:[
@@ -62,29 +62,29 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
       opened = property;
       const trigger = page.locator(`[data-field-property="${property}"] select[data-picker]`);
       await trigger.click();
-      await page.locator(".komo-tokens").waitFor(); if (await page.locator(".komo-tokens__more").isVisible()) await page.locator(".komo-tokens__more").click();
-      await page.locator(".komo-custom").waitFor();
+      await page.locator(".palette-tokens").waitFor(); if (await page.locator(".palette-tokens__more").isVisible()) await page.locator(".palette-tokens__more").click();
+      await page.locator(".palette-custom").waitFor();
     };
     // No Apply button: Enter keeps the value, and closing the popup makes the visit one history entry.
     const keep = async (field: ReturnType<typeof page.locator>) => {
       await field.press("Enter");
       await page.locator(`[data-field-property="${opened}"] select[data-picker]`).click();
-      await page.locator(".komo-tokens").waitFor({ state: "detached" });
+      await page.locator(".palette-tokens").waitFor({ state: "detached" });
     };
     const close = async () => {
       await page.locator(`[data-field-property="${opened}"] select[data-picker]`).click();
-      await page.locator(".komo-tokens").waitFor({ state: "detached" });
+      await page.locator(".palette-tokens").waitFor({ state: "detached" });
     };
     const exact = page.getByRole("textbox", { name: "CSS value", exact: true });
-    const advanced = async () => { const details = page.locator(".komo-typed__advanced"); if (!await details.evaluate(node => (node as HTMLDetailsElement).open)) await details.locator("summary").click(); };
+    const advanced = async () => { const details = page.locator(".palette-typed__advanced"); if (!await details.evaluate(node => (node as HTMLDetailsElement).open)) await details.locator("summary").click(); };
     expect(await page.getByRole("button", { name: "Apply custom", exact: true }).count()).toBe(0);
     const radiusTrigger = page.locator('[data-field-property="border-radius"] select[data-picker]');
     await radiusTrigger.click();
-    await page.locator('.komo-tokens [role="listbox"]').waitFor();
+    await page.locator('.palette-tokens [role="listbox"]').waitFor();
     if (evidence) await page.screenshot({ path: join(evidence, `tokens-${mode}-${width}.png`) });
     const search = page.getByRole("combobox", { name: "Search tokens for border-radius" });
     await search.fill("Large");
-    await page.locator('.komo-tokens [role="option"]').hover();
+    await page.locator('.palette-tokens [role="option"]').hover();
     expect(await target.evaluate(node => getComputedStyle(node).borderRadius)).toBe("24px");
     expect(await undo.isDisabled()).toBe(true);
     await page.evaluate(() => (window as any).qa.theme());
@@ -96,7 +96,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await search.press("Enter"); await undo.click();
     expect(await target.getAttribute("class")).toBe("radius-small");
     await open("width");
-    const number = page.locator(".komo-tokens").getByRole("textbox", { name: "Width", exact: true });
+    const number = page.locator(".palette-tokens").getByRole("textbox", { name: "Width", exact: true });
     await number.fill(""); await page.evaluate(() => (window as any).qa.theme());
     expect(await number.inputValue()).toBe(""); expect(await number.getAttribute("aria-invalid")).toBe("true");
     await number.fill("120");
@@ -105,7 +105,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await open("width"); await number.fill("8"); await keep(number);
     expect(await page.locator('[data-field-property="width"]').getAttribute("data-token-mode")).toBe("custom");
     // Tokens come first: the chip opens on them.
-    await page.locator('[data-field-property="width"] select[data-picker]').click(); await page.locator('.komo-tokens [role="option"]').filter({ hasText: "Small" }).click();
+    await page.locator('[data-field-property="width"] select[data-picker]').click(); await page.locator('.palette-tokens [role="option"]').filter({ hasText: "Small" }).click();
     expect(await page.locator('[data-field-property="width"]').getAttribute("data-token-mode")).not.toBe("custom");
     await undo.click();
     expect(await page.locator('[data-field-property="width"]').getAttribute("data-token-mode")).toBe("custom");
@@ -125,11 +125,11 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
     // Layout is a keyword field: its own listbox applies; its token chip lists tokens only.
     await page.locator('[data-field-property="display"] > select').click();
-    await page.locator('.komo-select [role="option"]').filter({ hasText: /^grid$/ }).click();
+    await page.locator('.palette-select [role="option"]').filter({ hasText: /^grid$/ }).click();
     expect(await target.evaluate(node => node.style.display)).toBe("grid");
     await undo.click(); expect(await target.evaluate(node => node.style.padding)).toBe("calc(2px + 1rem)");
     await undo.click(); expect(await target.getAttribute("style")).toBe(original);
-    await open("font-family"); expect(await page.locator(".komo-typed__sample span").textContent()).toBe("Acme, Display");
+    await open("font-family"); expect(await page.locator(".palette-typed__sample span").textContent()).toBe("Acme, Display");
     await advanced(); const stack = '"Other, Face", "Fallback Sans", serif'; await exact.fill(stack);
     if (evidence) await page.screenshot({ path: join(evidence, `font-${mode}-${width}.png`) });
     await page.keyboard.press("Escape"); expect(await target.getAttribute("style")).toBe(original);
@@ -141,8 +141,8 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await x.fill("12");
     if (evidence) await page.screenshot({ path: join(evidence, `shadow-${mode}-${width}.png`) });
     // Every control is inside the popup's visible area: nothing sits under a footer or past the viewport.
-    const reach = await page.locator(".komo-custom").evaluate(box => {
-      const popup = box.closest(".komo-tokens")!.getBoundingClientRect(), body = box.closest(".komo-tokens")!.querySelector<HTMLElement>(".komo-tokens__custom")!;
+    const reach = await page.locator(".palette-custom").evaluate(box => {
+      const popup = box.closest(".palette-tokens")!.getBoundingClientRect(), body = box.closest(".palette-tokens")!.querySelector<HTMLElement>(".palette-tokens__custom")!;
       const root = box.getRootNode() as ShadowRoot;
       // Scrolls only the popup's one scroll area to each control, then hit-tests its center.
       return [...box.querySelectorAll<HTMLElement>("input,select,button,summary")].filter(node => node.getClientRects().length && !node.matches("details:not([open]) :not(summary)")).filter(node => {
@@ -170,7 +170,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await openDesign(page);
     await open("width");
     await number.fill("1");
-    await page.locator('.komo-custom select[aria-label="Width unit"]').selectOption("rem");
+    await page.locator('.palette-custom select[aria-label="Width unit"]').selectOption("rem");
     await close(); expect(await target.evaluate(node => node.style.width)).toBe("1rem");
     await page.getByRole("button", { name: "Reset", exact: true }).click();
     expect(await target.getAttribute("style")).toBe(original);
@@ -185,9 +185,9 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await openDesign(page); await target.click();
     const open = async () => {
       await page.locator('[data-field-property="width"] select[data-picker]').click();
-      await page.locator(".komo-tokens").waitFor(); if (await page.locator(".komo-tokens__more").isVisible()) await page.locator(".komo-tokens__more").click();
+      await page.locator(".palette-tokens").waitFor(); if (await page.locator(".palette-tokens__more").isVisible()) await page.locator(".palette-tokens__more").click();
     };
-    const number = page.locator(".komo-tokens").getByRole("textbox", { name: "Width", exact: true });
+    const number = page.locator(".palette-tokens").getByRole("textbox", { name: "Width", exact: true });
     await open(); await number.fill("140");
     await page.keyboard.press("Escape"); expect(await target.getAttribute("style")).toBe(original);
     await open(); await number.fill("150"); await number.press("Enter");
@@ -203,10 +203,10 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).palette);
     await openDesign(page); await page.locator("#target").click();
     await page.locator('[data-field-property="width"] select[data-picker]').click();
-    await page.locator(".komo-tokens").waitFor(); if (await page.locator(".komo-tokens__more").isVisible()) await page.locator(".komo-tokens__more").click();
-    const unit = page.locator('.komo-custom select[aria-label="Width unit"]');
+    await page.locator(".palette-tokens").waitFor(); if (await page.locator(".palette-tokens__more").isVisible()) await page.locator(".palette-tokens__more").click();
+    const unit = page.locator('.palette-custom select[aria-label="Width unit"]');
     await unit.click();
-    const menu = page.locator(".komo-select");
+    const menu = page.locator(".palette-select");
     await menu.waitFor();
     // Every option in view in the select's own listbox is hit-testable over the popup it opened from.
     const hits = await menu.evaluate(list => {
@@ -220,8 +220,8 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     expect(hits.every(Boolean)).toBe(true);
     await menu.locator("[role=option]").filter({ hasText: /^rem$/ }).click();
     await expect.poll(() => unit.inputValue()).toBe("rem");
-    expect(await page.locator(".komo-tokens").count()).toBe(1);
-    expect(await page.locator(".komo-tokens .komo-custom").count()).toBe(1);
+    expect(await page.locator(".palette-tokens").count()).toBe(1);
+    expect(await page.locator(".palette-tokens .palette-custom").count()).toBe(1);
     await page.close();
   });
 

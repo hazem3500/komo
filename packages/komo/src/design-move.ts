@@ -39,7 +39,7 @@ export type MoveHooks = {
 };
 export type Drop = { parent: Element; before: Element | null; position: 'before' | 'after' | 'inside'; ref: Element | null };
 
-const CLONE = 'data-komo-move-clone';
+const CLONE = 'data-palette-move-clone';
 // Phrasing-only, replaced, form and table-structure elements never take a dropped box.
 const LEAF = 'p,h1,h2,h3,h4,h5,h6,a,button,label,select,option,textarea,input,img,video,audio,canvas,iframe,embed,object,svg,br,hr,pre,picture,table,thead,tbody,tfoot,tr,colgroup,col,caption,script,style,template,slot';
 const RUN = 'p,h1,h2,h3,h4,h5,h6,a,label,button,span,em,strong,b,i,small,code';
@@ -210,7 +210,7 @@ export function bindMove(hooks: MoveHooks) {
     hooks.track(element, 'display');
     sync();
     hooks.update();
-    try { localStorage.setItem('komo:geometry-moved', '1'); } catch { /* The first-use hint shows again. */ }
+    try { localStorage.setItem('palette:geometry-moved', '1'); } catch { /* The first-use hint shows again. */ }
     return `Moved ${target.position === 'inside' ? `into ${where(target.parent)}` : `${target.position} ${label(target.ref!)}`}`;
   }
 

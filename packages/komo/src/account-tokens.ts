@@ -483,7 +483,7 @@ export function accountTokens(api: CommentsApi, project: string, back: () => voi
     list.setAttribute("aria-label", "Your API tokens");
     list.append(...data.tokens.map(renderToken));
     const note = el("p", "api-tokens-note");
-    note.append(document.createTextNode("Use a token as "), el("code", "", "KOMO_TOKEN"), document.createTextNode(" with the palette CLI."));
+    note.append(document.createTextNode("Use a token as "), el("code", "", "PALETTE_TOKEN"), document.createTextNode(" with the palette CLI."));
     body.replaceChildren(list, note);
   }
 

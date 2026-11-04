@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { expect, it } from "vitest";
 
 const image = Buffer.from([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 1, 2, 3]);
-const markup = "<!-- komo: no image snapshot, the element shows images from another origin. --><p>Hi</p>";
+const markup = "<!-- palette: no image snapshot, the element shows images from another origin. --><p>Hi</p>";
 const user = { id: "u1", name: "Sam", verified: true };
 const anchor = { selector: "#cta", text: "Start", x: 0.5, y: 0.5, width: 0, height: 0, pageX: 1, pageY: 1, viewportWidth: 1280 };
 const thread = (id: string, snapshot?: object) => ({

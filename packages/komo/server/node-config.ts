@@ -1,6 +1,7 @@
 // Startup checks and the client address for the Node runtime.
 import { isIP } from "node:net";
 import { ConfigError, HttpError, sitePattern } from "./validation";
+import { paletteEnv } from "./public-env";
 
 /** Checks PROJECTS, naming the project and origin that are wrong. */
 export function checkProjects(value: string): void {
@@ -38,23 +39,24 @@ export function checkProjects(value: string): void {
 // places from the right. Entries further left are whatever the client sent and
 // are never trusted.
 
-/** KOMO_TRUSTED_PROXY_HOPS, or its older name KOMO_PROXY_HOPS; 0 when unset. */
-export function trustedProxyHops(env: Record<string, string | undefined>): number {
+/** PALETTE_TRUSTED_PROXY_HOPS, or its older name PALETTE_PROXY_HOPS (each also read as KOMO_); 0 when unset. */
+export function trustedProxyHops(settings: Record<string, string | undefined>): number {
+  const env = paletteEnv(settings);
   const values = [
     ...new Set(
-      [env.KOMO_TRUSTED_PROXY_HOPS, env.KOMO_PROXY_HOPS].filter(
+      [env.PALETTE_TRUSTED_PROXY_HOPS, env.PALETTE_PROXY_HOPS].filter(
         (value) => value !== undefined && value !== "",
       ),
     ),
   ];
   if (values.length > 1)
     throw new ConfigError(
-      "KOMO_TRUSTED_PROXY_HOPS and KOMO_PROXY_HOPS are set to different values. Set one.",
+      "PALETTE_TRUSTED_PROXY_HOPS and PALETTE_PROXY_HOPS are set to different values. Set one.",
     );
   if (values.length === 0) return 0;
   const hops = Number(values[0]);
   if (!/^\d$/.test(values[0]!) || hops > 8)
-    throw new ConfigError("KOMO_TRUSTED_PROXY_HOPS must be a whole number from 0 to 8.");
+    throw new ConfigError("PALETTE_TRUSTED_PROXY_HOPS must be a whole number from 0 to 8.");
   return hops;
 }
 

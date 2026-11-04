@@ -49,7 +49,7 @@ beforeAll(async () => {
         if(!frame&&!reflow)document.body.append(document.createElement('aside'));
         const tokens=tailwindTokens({tokens:[{path:'color.primary',label:'Primary',type:'color',class:'text-primary',properties:['color'],value:'#b42318'},{path:'color.secondary',label:'Secondary',type:'color',class:'text-secondary',properties:['color'],value:'#2468ff'},...Array.from({length:8},(_,index)=>({path:'color.fixture'+index,label:'Supplemental '+index,type:'color',class:'text-fixture-'+index,properties:['color'],value:'#123456'}))]});
         // The reflow cases cover the unscaled in-place frame: the space beside the comments.
-        if(reflow)localStorage.setItem('branch-comments:frame-size:nested-props:example/review',JSON.stringify({v:2,size:'available'}));
+        if(reflow)localStorage.setItem('palette:frame-size:nested-props:example/review',JSON.stringify({v:2,size:'available'}));
         window.palette=initPalette({endpoint:location.origin,project:'nested-props',repo:'example/review',branch:'fixture',pageRoot:frame||reflow?document.querySelector('main'):undefined,sidebar:frame||reflow?'background':'edge',frame:{scale:frame},restoreOpen:false,design:{components:adapter,tokens}});
       `, resolveDir: process.cwd(), loader: "ts" },
       alias: { react: dirname(require.resolve("react/package.json")), "react-dom": dirname(require.resolve("react-dom/package.json")) },
@@ -92,7 +92,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     await openDesign(page);
     await target.click();
     await page.locator('[data-property="display"]').click();
-    const layout = page.locator(".komo-select");
+    const layout = page.locator(".palette-select");
     await layout.waitFor();
     await layout.evaluate(node => (window as any).popupQA = { layout: node });
     const grid = layout.getByRole("option", { name: "grid", exact: true });
@@ -105,7 +105,7 @@ describe.skipIf(!chrome).each([18, 19])("nested renderer previews in React %s", 
     expect(await target.evaluate(node => getComputedStyle(node).display)).toBe(baseline.display);
     const field = page.locator('[data-field-property="color"]');
     await field.locator("select[data-picker]").click();
-    const popup = page.locator(".komo-tokens");
+    const popup = page.locator(".palette-tokens");
     await popup.waitFor();
     const search = popup.getByRole("combobox", { name: "Search tokens for color", exact: true });
     await search.fill("Primary");

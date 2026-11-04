@@ -31,9 +31,9 @@ const press = (target: EventTarget, key: string, init: KeyboardEventInit = {}) =
   target.dispatchEvent(event);
   return event;
 };
-const dialog = () => root.querySelector<HTMLDialogElement>("dialog.komo-shortcuts");
+const dialog = () => root.querySelector<HTMLDialogElement>("dialog.palette-shortcuts");
 const headings = () => [...root.querySelectorAll("h3")].map(node => node.textContent);
-const visibleRows = () => [...root.querySelectorAll<HTMLElement>(".komo-shortcuts__row")].filter(row => !row.hidden).map(row => row.firstChild!.textContent);
+const visibleRows = () => [...root.querySelectorAll<HTMLElement>(".palette-shortcuts__row")].filter(row => !row.hidden).map(row => row.firstChild!.textContent);
 
 it("labels the dialog by its pinned title and lists only bound commands, with gestures as text", () => {
   const shortcuts = resolveShortcuts({ design: "Meta+Alt+Shift+D", comment: false });
@@ -51,21 +51,21 @@ it("labels the dialog by its pinned title and lists only bound commands, with ge
   expect(close.getAttribute("aria-label")).toBe("Close");
   expect(close.hasAttribute("title")).toBe(false);
   expect(close.querySelector("svg")).not.toBeNull();
-  expect(help.querySelector(".komo-shortcuts__tip")?.getAttribute("aria-hidden")).toBe("true");
+  expect(help.querySelector(".palette-shortcuts__tip")?.getAttribute("aria-hidden")).toBe("true");
   expect([...help.querySelectorAll("button")].map(node => node.textContent)).not.toContain("Close help");
   expect(headings()).toEqual(["General", "Comments", "Design canvas", "Experimental geometry", "Text editing", "Compare"]);
-  expect(help.querySelector(".komo-shortcuts__row")?.getAttribute("aria-keyshortcuts")).toBe("Alt+Shift+Meta+D");
+  expect(help.querySelector(".palette-shortcuts__row")?.getAttribute("aria-keyshortcuts")).toBe("Alt+Shift+Meta+D");
   expect(help.textContent).not.toMatch(/Disabled comment|No binding|No gesture|·/);
-  const row = (label: string) => [...help.querySelectorAll(".komo-shortcuts__row")].find(node => node.firstChild?.textContent === label)!;
+  const row = (label: string) => [...help.querySelectorAll(".palette-shortcuts__row")].find(node => node.firstChild?.textContent === label)!;
   const click = row("Inspect element");
   expect(click.querySelectorAll("kbd")).toHaveLength(0);
-  expect(click.querySelector(".komo-kbd")?.getAttribute("aria-label")).toBe("Click");
-  expect(click.querySelector(".komo-kbd span")?.textContent).toBe("Click");
+  expect(click.querySelector(".palette-kbd")?.getAttribute("aria-label")).toBe("Click");
+  expect(click.querySelector(".palette-kbd span")?.textContent).toBe("Click");
   expect([...row("Select inner element").querySelectorAll("kbd")].map(node => node.textContent)).toHaveLength(1);
-  expect(row("Select inner element").querySelector(".komo-kbd span")?.textContent).toBe("Click");
+  expect(row("Select inner element").querySelector(".palette-kbd span")?.textContent).toBe("Click");
   expect(row("Edit text").querySelectorAll("kbd")).toHaveLength(0);
-  expect(help.querySelector(".komo-shortcuts__body")?.lastElementChild?.textContent).toBe("Shortcuts pause while typing in a text field.");
-  expect(root.activeElement).toBe(help.querySelector(".komo-shortcuts__body"));
+  expect(help.querySelector(".palette-shortcuts__body")?.lastElementChild?.textContent).toBe("Shortcuts pause while typing in a text field.");
+  expect(root.activeElement).toBe(help.querySelector(".palette-shortcuts__body"));
 });
 
 it("puts the current mode's groups first", () => {
@@ -91,7 +91,7 @@ it("shows configured keys with platform glyphs", () => {
     { label: "Restore feedback", shortcut: shortcuts.restore, group: "General" },
     { label: "Design mode", shortcut: shortcuts.design, group: "General" },
   ];
-  const keys = (label: string) => [...root.querySelectorAll(".komo-shortcuts__row")].find(node => node.firstChild?.textContent === label)!.querySelector(".komo-kbd")!;
+  const keys = (label: string) => [...root.querySelectorAll(".palette-shortcuts__row")].find(node => node.firstChild?.textContent === label)!.querySelector(".palette-kbd")!;
   showShortcutHelp(root, commands, true);
   expect(keys("Restore feedback").textContent).toBe("⇧J");
   expect(keys("Design mode").textContent).toBe("⌥D");
@@ -167,7 +167,7 @@ it("types ? into the filter instead of closing, and traps Tab inside the dialog"
   const help = dialog()!;
   const close = help.querySelector<HTMLButtonElement>("header button")!;
   const filter = help.querySelector("input")!;
-  const body = help.querySelector<HTMLElement>(".komo-shortcuts__body")!;
+  const body = help.querySelector<HTMLElement>(".palette-shortcuts__body")!;
   filter.focus();
   expect(press(filter, "?", { shiftKey: true }).defaultPrevented).toBe(false);
   expect(dialog()).toBe(help);
@@ -213,7 +213,7 @@ it("leaves a nearer dialog's Escape to that dialog", () => {
 it("does not mutate the caller's commands or duplicate rows on reopening", () => {
   const commands = [{ label: "Design mode", shortcut: resolveShortcuts().design, group: "General" }];
   showShortcutHelp(root, commands, true);
-  const count = root.querySelectorAll(".komo-shortcuts__row").length;
+  const count = root.querySelectorAll(".palette-shortcuts__row").length;
   dialog()!.close();
   showShortcutHelp(root, commands, true);
   const help = dialog()!;
@@ -222,5 +222,5 @@ it("does not mutate the caller's commands or duplicate rows on reopening", () =>
   expect(help.open).toBe(true);
   expect(commands).toHaveLength(1);
   expect(root.querySelectorAll("dialog")).toHaveLength(1);
-  expect(root.querySelectorAll(".komo-shortcuts__row")).toHaveLength(count);
+  expect(root.querySelectorAll(".palette-shortcuts__row")).toHaveLength(count);
 });

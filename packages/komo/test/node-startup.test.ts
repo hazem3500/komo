@@ -78,7 +78,7 @@ it("refuses an unknown sign-in proxy before touching the database", async () => 
     KOMO_PROXY_AUDIENCE: "/projects/1/global/backendServices/2",
   });
   expect(await server.exited).not.toBe(0);
-  expect(server.output()).toContain('KOMO_PROXY_AUTH "other-proxy" is not supported. Use one of: gcp-iap.');
+  expect(server.output()).toContain('PALETTE_PROXY_AUTH "other-proxy" is not supported. Use one of: gcp-iap.');
 });
 
 it("refuses conflicting proxy hop counts", async () => {
@@ -89,7 +89,7 @@ it("refuses conflicting proxy hop counts", async () => {
     KOMO_TRUSTED_PROXY_HOPS: "3",
   });
   expect(await server.exited).not.toBe(0);
-  expect(server.output()).toContain("KOMO_TRUSTED_PROXY_HOPS and KOMO_PROXY_HOPS are set to different values.");
+  expect(server.output()).toContain("PALETTE_TRUSTED_PROXY_HOPS and PALETTE_PROXY_HOPS are set to different values.");
 });
 
 (connection ? it : it.skip)("boots with a wildcard-port origin and allows it", async () => {

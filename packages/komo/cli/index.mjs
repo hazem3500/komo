@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
-import { branchName, clientModule, gitValue, repository } from "./config.mjs";
+import { branchName, clientModule, gitValue, projectLayout, repository } from "./config.mjs";
 
 import { installAgentWorkflow } from "./workflow.mjs";
 import { agentCommands, agentHelp, runAgent } from "./agent.mjs";
@@ -26,8 +26,10 @@ const exists = async (path) => {
     return false;
   }
 };
-const settingsPath = resolve(cwd, ".komo/project.json");
-const generatedPath = resolve(cwd, "komo.config.js");
+const layout = projectLayout(cwd);
+const settingsDir = resolve(cwd, layout.dir);
+const settingsPath = join(settingsDir, "project.json");
+const generatedPath = resolve(cwd, layout.module);
 const run = (program, argv, options = {}) =>
   new Promise((resolveRun, reject) => {
     const child = spawn(program, argv, {
@@ -67,27 +69,23 @@ async function sync() {
   if (config.scope === "branch") {
     config.branch = branchName(process.env, cwd);
     if (!config.branch)
-      throw Error("Cannot detect the branch. Set KOMO_BRANCH for this build.");
+      throw Error("Cannot detect the branch. Set PALETTE_BRANCH for this build.");
   }
   await writeFile(generatedPath, clientModule(config));
-  console.log("Updated komo.config.js");
+  console.log(`Updated ${layout.module}`);
 }
 async function protectLocalFiles() {
   const path = resolve(cwd, ".gitignore");
   const existing = (await exists(path)) ? await readFile(path, "utf8") : "";
   const additions = [
-    ".komo/owner-key",
-    ".komo/setup.json",
-    ".komo/.dev.vars",
-    ".komo/node.env",
-    ".komo/.wrangler/",
-    "komo.config.js",
+    ...["owner-key", "setup.json", ".dev.vars", "node.env", ".wrangler/"].map((file) => `${layout.dir}/${file}`),
+    layout.module,
   ].filter((line) => !existing.split("\n").includes(line));
   if (additions.length)
     await writeFile(path, `${existing}\n# Palette\n${additions.join("\n")}\n`);
 }
 async function deploy() {
-  const dir = resolve(cwd, ".komo"),
+  const dir = settingsDir,
     path = join(dir, "wrangler.json");
   const statePath = join(dir, "deployment.json");
   const state = JSON.parse(await readFile(statePath, "utf8"));
@@ -139,7 +137,7 @@ async function deploy() {
   );
 }
 async function init() {
-  if (await exists(resolve(cwd, ".komo/deployment.json")))
+  if (await exists(join(settingsDir, "deployment.json")))
     throw Error("Self-host setup exists. Run palette deploy to resume.");
   const previous = (await exists(settingsPath))
     ? JSON.parse(await readFile(settingsPath, "utf8"))
@@ -150,7 +148,7 @@ async function init() {
     ((await exists(settingsPath)) || (await exists(generatedPath)))
   )
     throw Error(
-      "Palette is already configured. Edit .komo/project.json, then run palette sync."
+      `Palette is already configured. Edit ${layout.dir}/project.json, then run palette sync.`
     );
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const ask = async (text, fallback = "") => {
@@ -218,7 +216,7 @@ async function init() {
         !["localhost", "127.0.0.1"].includes(api.hostname)
       )
         throw Error("The API endpoint must use HTTPS.");
-      const setupPath = resolve(cwd, ".komo/setup.json");
+      const setupPath = join(settingsDir, "setup.json");
       let setup =
         resuming && (await exists(setupPath))
           ? JSON.parse(await readFile(setupPath, "utf8"))
@@ -245,7 +243,7 @@ async function init() {
       await sync();
       await installAgentWorkflow(cwd);
       console.log(
-        `\nMount Palette in your app:\n\nimport { initPalette } from './komo.config.js';\ninitPalette();\n\nOpen ${origin} and choose Connect in the sidebar.\nKeep this terminal open while you start your app in another terminal.\nHosted recovery: ${setup.url}\n`
+        `\nMount Palette in your app:\n\nimport { initPalette } from './${layout.module}';\ninitPalette();\n\nOpen ${origin} and choose Connect in the sidebar.\nKeep this terminal open while you start your app in another terminal.\nHosted recovery: ${setup.url}\n`
       );
       console.log("Waiting for your project to connect…");
       const end = setup.expiresAt;
@@ -284,7 +282,7 @@ async function init() {
       const googleClient =
         flag("--google-client-id") || (await ask("Google OAuth client ID"));
       const key = randomBytes(32).toString("hex");
-      const dir = resolve(cwd, ".komo");
+      const dir = settingsDir;
       await mkdir(dir, { recursive: true });
       await protectLocalFiles();
       const projectConfig = {
@@ -308,7 +306,7 @@ async function init() {
       await sync();
       await installAgentWorkflow(cwd);
       console.log(
-        `Edit .komo/node.env with your PostgreSQL URL and Google secret.\nDeploy the Node container with those variables.\nRegister ${endpoint}/auth/google/callback in Google Console.\nOpen ${endpoint}/setup?project=${project}#${key} to claim ownership after the API is live.\n`
+        `Edit ${layout.dir}/node.env with your PostgreSQL URL and Google secret.\nDeploy the Node container with those variables.\nRegister ${endpoint}/auth/google/callback in Google Console.\nOpen ${endpoint}/setup?project=${project}#${key} to claim ownership after the API is live.\n`
       );
       return;
     } else {
@@ -326,7 +324,7 @@ async function init() {
       const googleClient =
         flag("--google-client-id") || (await ask("Google OAuth client ID"));
       const key = randomBytes(32).toString("hex");
-      const dir = resolve(cwd, ".komo");
+      const dir = settingsDir;
       await mkdir(dir, { recursive: true });
       await cp(
         join(packageRoot, "server/migrations"),
@@ -374,7 +372,7 @@ async function init() {
     await installAgentWorkflow(cwd);
     console.log("Added the Palette comment workflow to AGENTS.md");
     console.log(
-      `\nMount after the page loads:\n\nimport { initPalette } from '@hazem3500/palette';\ninitPalette(${JSON.stringify({ ...config, origin: undefined, ...(config.scope === "branch" ? { branch: branchName(process.env, cwd) } : {}) }, null, 2)});\n\nFor automatic branch detection, use the generated komo.config.js helper and run palette sync before your build.\n`
+      `\nMount after the page loads:\n\nimport { initPalette } from '@hazem3500/palette';\ninitPalette(${JSON.stringify({ ...config, origin: undefined, ...(config.scope === "branch" ? { branch: branchName(process.env, cwd) } : {}) }, null, 2)});\n\nFor automatic branch detection, use the generated ${layout.module} helper and run palette sync before your build.\n`
     );
   } finally {
     rl.close();

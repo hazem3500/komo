@@ -28,10 +28,10 @@ beforeAll(async () => {
       import { discoverCssTokens } from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       const query=new URLSearchParams(location.search),layout=query.get('layout')??'floating';
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':dots';
+      const key='palette:'+location.origin+':dots';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
-      localStorage.setItem('branch-comments:read:dots:example/review',JSON.stringify({'thread-1':99}));
+      localStorage.setItem('palette:read:dots:example/review',JSON.stringify({'thread-1':99}));
       const authors=[{id:'author-a',name:'Avery Example',verified:true,accentColor:'#7f56d9'},{id:'author-b',name:'Blake Sample',verified:true,accentColor:'#f79009'},{id:'author-c',name:'Casey Demo',verified:true,accentColor:'#12b76a'}];
       const thread=(id,node,dx,dy,author,at)=>{const box=node.getBoundingClientRect(),point={x:box.left+dx,y:box.top+dy};
         return {id,page:'/',anchor:captureAnchor(node,point,point),resolved:false,resolvedBy:null,createdAt:at,updatedAt:at,tags:[],
@@ -95,7 +95,7 @@ const box = (page: Page, index = 0) => page.locator(".pin").nth(index).evaluate(
 });
 const layers = (shadow: string) => shadow.split(/,(?![^(]*\))/).map(layer => layer.trim());
 const halos = (page: Page) => page.evaluate(() => document.querySelector("[data-branch-comments]")!.shadowRoot!.getAnimations()
-  .filter(animation => (animation as CSSAnimation).animationName === "komo-pin-breathe")
+  .filter(animation => (animation as CSSAnimation).animationName === "palette-pin-breathe")
   .map(animation => {
     const effect = animation.effect as KeyframeEffect;
     return { thread: (effect.target as HTMLElement).dataset.thread, pseudo: effect.pseudoElement, duration: Number(effect.getTiming().duration), from: Number(effect.getKeyframes()[0]!.opacity) };
@@ -246,7 +246,7 @@ describe.skipIf(!chrome)("Design mode empty state", () => {
     expect(await link.getAttribute("aria-keyshortcuts")).toBe("?");
     // The only keycap is the quiet filled chip.
     expect(await empty.locator("kbd").allTextContents()).toEqual(["?"]);
-    expect(await empty.locator(".komo-kbd").getAttribute("data-variant")).toBe("surface");
+    expect(await empty.locator(".palette-kbd").getAttribute("data-variant")).toBe("surface");
     const cap = await empty.locator("kbd").evaluate(node => ({ shadow: getComputedStyle(node).boxShadow, border: getComputedStyle(node).borderTopStyle, fill: getComputedStyle(node).backgroundColor }));
     expect(cap).toMatchObject({ shadow: "none", border: "none" });
     expect(cap.fill).not.toBe("rgba(0, 0, 0, 0)");
@@ -254,8 +254,8 @@ describe.skipIf(!chrome)("Design mode empty state", () => {
     await link.click();
     const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
     await help.waitFor();
-    const keys = (label: string) => help.evaluate((dialog, label) => [...dialog.querySelectorAll(".komo-shortcuts__row")]
-      .find(line => line.firstChild?.textContent === label)?.querySelector(".komo-kbd")?.getAttribute("aria-label"), label);
+    const keys = (label: string) => help.evaluate((dialog, label) => [...dialog.querySelectorAll(".palette-shortcuts__row")]
+      .find(line => line.firstChild?.textContent === label)?.querySelector(".palette-kbd")?.getAttribute("aria-label"), label);
     const mac = await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform));
     // Every hint that left the empty state, with the configured bindings.
     expect(await keys("Inspect element")).toBe("Click");

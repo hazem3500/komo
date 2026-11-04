@@ -60,8 +60,8 @@ async function pick(page: Page, selector: string) {
 }
 async function choose(page: Page, label: string, value: string) {
   await page.getByRole("combobox", { name: label, exact: true }).click();
-  await page.locator(".komo-select").getByRole("option", { name: value, exact: true }).click();
-  await page.locator(".komo-select").waitFor({ state: "detached" });
+  await page.locator(".palette-select").getByRole("option", { name: value, exact: true }).click();
+  await page.locator(".palette-select").waitFor({ state: "detached" });
 }
 
 describe.skipIf(!chrome).each([19, 18])("build-time instrumented components, React %s production", (react) => {
@@ -185,14 +185,14 @@ describe.skipIf(!chrome).each([19, 18])("build-time instrumented components, Rea
     await page.keyboard.press("l");
     await page.waitForFunction(() => {
       const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;
-      const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+      const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
       return !!frame?.contentDocument?.querySelector("#primary") && !root!.querySelector(".frame-stage[data-loading]");
     });
-    const frame = page.frames().find((item) => item.name() === "komo-viewport")!;
+    const frame = page.frames().find((item) => item.name() === "palette-viewport")!;
     await openDesign(page);
     const point = await page.evaluate(() => {
       const root = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
-      const frame = root.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]")!;
+      const frame = root.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]")!;
       const outer = frame.getBoundingClientRect(), scale = outer.width / frame.offsetWidth;
       const inner = frame.contentDocument!.querySelector("#primary")!.getBoundingClientRect();
       return { x: outer.left + (inner.left + inner.width / 2) * scale, y: outer.top + (inner.top + inner.height / 2) * scale };

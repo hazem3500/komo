@@ -17,7 +17,7 @@ let server: Server, browser: Browser;
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-token-editors-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-token-editors-"));
   await build({
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
@@ -89,14 +89,14 @@ async function open(tab: Page, name: string) {
   await row(tab, name).scrollIntoViewIfNeeded();
   await settle(tab);
   await row(tab, name).locator("button").first().click();
-  const popup = tab.locator(".komo-tokens");
-  await popup.locator(".komo-custom, .komo-color").first().waitFor();
+  const popup = tab.locator(".palette-tokens");
+  await popup.locator(".palette-custom, .palette-color").first().waitFor();
   await settle(tab);
   return popup;
 }
 const close = async (tab: Page, name: string) => {
   await row(tab, name).locator("button").first().click();
-  await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
+  await expect.poll(() => tab.locator(".palette-tokens").count()).toBe(0);
 };
 
 describe.skipIf(!chrome).each(["Fit", "100%"])("Tokens view Custom editors at Frame %s", zoom => {
@@ -119,7 +119,7 @@ describe.skipIf(!chrome).each(["Fit", "100%"])("Tokens view Custom editors at Fr
     await open(tab, "p2");
     await popup.getByRole("textbox", { name: "Line height", exact: true }).fill("2");
     await tab.keyboard.press("Escape");
-    await expect.poll(() => tab.locator(".komo-tokens").count()).toBe(0);
+    await expect.poll(() => tab.locator(".palette-tokens").count()).toBe(0);
     expect(await row(tab, "p2").locator("i").textContent()).toBe("700 0.975rem/1.43");
     expect(errors).toEqual([]);
     await tab.close();
@@ -132,12 +132,12 @@ describe.skipIf(!chrome).each(["Fit", "100%"])("Tokens view Custom editors at Fr
     const units = await popup.locator('select[aria-label="Layer 1 x offset unit"] option').evaluateAll(nodes => nodes.map(node => (node as HTMLOptionElement).value));
     expect(units[0]).toBe("px");
     expect(units).not.toContain("");
-    const label = (await popup.locator(".komo-typed__field > span").first().boundingBox())!;
+    const label = (await popup.locator(".palette-typed__field > span").first().boundingBox())!;
     await tab.mouse.move(label.x + label.width / 2, label.y + label.height / 2);
     await tab.mouse.down();
     await tab.mouse.move(label.x + label.width / 2 + 8, label.y + label.height / 2, { steps: 4 });
     await tab.mouse.up();
-    expect(await popup.locator(".komo-typed__tile i").evaluate(node => (node as HTMLElement).style.boxShadow)).toContain("4px 1px 3px");
+    expect(await popup.locator(".palette-typed__tile i").evaluate(node => (node as HTMLElement).style.boxShadow)).toContain("4px 1px 3px");
     await close(tab, "raised");
     expect(await row(tab, "raised").locator("i").textContent()).toContain("4px 1px 3px");
     popup = await open(tab, "card");

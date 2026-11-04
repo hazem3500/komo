@@ -48,7 +48,7 @@ describe("geometry eligibility reasons", () => {
 
   it("waits only for running motion that moves or sizes the box, and never for a Palette preview", () => {
     layout();
-    html(`<button id="button">Example</button><div data-komo-still><span id="held" style="display:block">x</span></div>`);
+    html(`<button id="button">Example</button><div data-palette-still><span id="held" style="display:block">x</span></div>`);
     const running = (...keys: string[]) => ({ playState: "running", effect: { getKeyframes: () => [Object.fromEntries([["offset", 0], ["easing", "ease"], ...keys.map(key => [key, "1px"])])] } });
     const animate = (element: Element, ...animations: unknown[]) => { element.getAnimations = (() => animations) as unknown as Element["getAnimations"]; };
     // A color, fill or border-color transition leaves every edge where it is.
@@ -136,7 +136,7 @@ Layout: flex item, row
   });
 
   it("validates geometry changes in fenced edits", () => {
-    const edit = (change: object) => JSON.stringify({ komo: "design-edit", version: 1, target: { selector: "a" }, changes: [{ kind: "geometry", ...change }] });
+    const edit = (change: object) => JSON.stringify({ palette: "design-edit", version: 1, target: { selector: "a" }, changes: [{ kind: "geometry", ...change }] });
     expect(parseDesignEdit(edit({ mode: "offset", dx: 1, dy: 2, extra: true })).changes[0]).toEqual({ kind: "geometry", mode: "offset", dx: 1, dy: 2 });
     expect(parseDesignEdit(edit({ mode: "rotate", dx: 1, dy: 2 }))).toBeNull();
     expect(parseDesignEdit(edit({ mode: "translate", dx: "1", dy: 2 }))).toBeNull();
@@ -191,7 +191,7 @@ To: #side > nav · index 10 · inside · component SideNav`;
   });
 
   it("validates move changes in fenced edits", () => {
-    const edit = (change: object) => JSON.stringify({ komo: "design-edit", version: 1, target: { selector: "a" }, changes: [{ kind: "move", ...change }] });
+    const edit = (change: object) => JSON.stringify({ palette: "design-edit", version: 1, target: { selector: "a" }, changes: [{ kind: "move", ...change }] });
     const from = { parent: "#a", index: 0 }, to = { parent: "#b", index: 1, position: "after" };
     expect(parseDesignEdit(edit({ from, to, extra: 1 })).changes[0]).toEqual({ kind: "move", from, to });
     expect(parseDesignEdit(edit({ from, to: { ...to, position: "over" } }))).toBeNull();

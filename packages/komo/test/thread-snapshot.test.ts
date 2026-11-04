@@ -126,11 +126,16 @@ describe("snapshot UI", () => {
   });
 
   it("splits the missing-image note from the markup", () => {
-    expect(splitNote("<!-- komo: no image snapshot, the element shows images from another origin. --><p>Hi</p>")).toEqual({
+    expect(splitNote("<!-- palette: no image snapshot, the element shows images from another origin. --><p>Hi</p>")).toEqual({
       note: "No image snapshot, the element shows images from another origin.",
       code: "<p>Hi</p>",
     });
     expect(splitNote("<p>Hi</p>")).toEqual({ note: "", code: "<p>Hi</p>" });
+    // Snapshots saved before the rename say komo.
+    expect(splitNote("<!-- komo: no image snapshot, it couldn't be drawn. --><p>Hi</p>")).toEqual({
+      note: "No image snapshot, it couldn't be drawn.",
+      code: "<p>Hi</p>",
+    });
   });
 
   it("mounts a thumbnail through a blob URL and revokes it once unmounted", async () => {
@@ -138,7 +143,7 @@ describe("snapshot UI", () => {
     const slot = document.createElement("div");
     root.append(slot);
     mountSnapshot(slot, context(), 1, thread({ image: url("image") }));
-    const image = root.querySelector<HTMLImageElement>(".komo-snapshot img")!;
+    const image = root.querySelector<HTMLImageElement>(".palette-snapshot img")!;
     expect(image.alt).toBe("Snapshot of “Start building” when the comment was left");
     await vi.waitFor(() => expect(found(image.getAttribute("src"))).toMatch(/^blob:/));
     const src = image.src;
@@ -152,7 +157,7 @@ describe("snapshot UI", () => {
     const slot = document.createElement("div");
     root.append(slot);
     mountSnapshot(slot, context(), 0, thread({ image: url("image") }));
-    const image = root.querySelector<HTMLImageElement>(".komo-snapshot img")!;
+    const image = root.querySelector<HTMLImageElement>(".palette-snapshot img")!;
     await vi.waitFor(() => expect(found(image.getAttribute("src"))).toMatch(/^blob:/));
     const src = image.src;
     disposeSnapshots(root);
@@ -171,13 +176,13 @@ describe("snapshot UI", () => {
   });
 
   it("shows HTML only as text, with its note, in the not-found fallback", async () => {
-    const markup = `<!-- komo: no image snapshot, the element shows images from another origin. --><b id="bold">Bold</b><img src="x" onerror="window.hit=1">`;
+    const markup = `<!-- palette: no image snapshot, the element shows images from another origin. --><b id="bold">Bold</b><img src="x" onerror="window.hit=1">`;
     vi.stubGlobal("fetch", vi.fn(async () => new Response(markup, { headers: { "Content-Type": "text/plain" } })));
     const slot = document.createElement("div");
     root.append(slot);
     const go = vi.fn();
     mountSnapshot(slot, context({ go }), 4, thread({ html: url("html") }));
-    const code = await vi.waitFor(() => found(root.querySelector("pre.komo-snapshot-code")));
+    const code = await vi.waitFor(() => found(root.querySelector("pre.palette-snapshot-code")));
     expect(code.textContent).toBe(`<b id="bold">Bold</b><img src="x" onerror="window.hit=1">`);
     expect(root.querySelector("#bold, pre img")).toBeNull();
     expect(root.textContent).toContain("No image snapshot, the element shows images from another origin.");
@@ -197,7 +202,7 @@ describe("snapshot UI", () => {
     root.append(form);
     const anchor = thread().anchor;
     mountSnapshot(slot, context({ dropped }), 3, { anchor, page: "", id: "" }, Promise.resolve({ image: "data:image/webp;base64,AAAA", html: "<p>x</p>" }));
-    const row = await vi.waitFor(() => found(root.querySelector(".komo-snapshot-draft")));
+    const row = await vi.waitFor(() => found(root.querySelector(".palette-snapshot-draft")));
     expect(row.textContent).toContain("Snapshot and HTML attached");
     row.querySelector<HTMLButtonElement>('[aria-label="Remove snapshot"]')!.click();
     expect(dropped.has(anchor)).toBe(true);

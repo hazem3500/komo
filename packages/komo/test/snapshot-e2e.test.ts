@@ -12,7 +12,7 @@ const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin
 let directory: string, origin: string, elsewhere: string;
 let server: Server, browser: Browser;
 // Captured images are kept here for review.
-const shots = join(tmpdir(), "komo-snapshot-shots");
+const shots = join(tmpdir(), "palette-snapshot-shots");
 const keep = (name: string, dataUrl: string) => writeFile(join(shots, `${name}.webp`), decoded(dataUrl));
 
 const green = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="rgb(0,200,0)"/></svg>`;
@@ -25,21 +25,21 @@ body{margin:0;font:16px system-ui;background:rgb(248,250,252);color:#0f172a}main
 .grid{display:grid;grid-template-columns:repeat(40,24px);width:960px}.grid span{height:24px;font:9px monospace;overflow:hidden}
 </style></head><body><main id="root">
 <article class="card" id="plain"><h2>Plain card</h2><img class="logo" src="/green.svg" alt=""><input id="email" value="ada@example.test">
-<div data-komo-move-clone style="height:20px;background:rgb(255,0,255)">stand-in</div><p data-komo-no-snapshot style="height:20px">Private notes</p></article>
+<div data-palette-move-clone style="height:20px;background:rgb(255,0,255)">stand-in</div><p data-palette-no-snapshot style="height:20px">Private notes</p></article>
 <article class="card" id="foreign"><h2>Foreign image</h2><img class="logo" src="${other}/green.svg" alt=""></article>
 <section class="grid" id="busy">${Array.from({ length: 1200 }, (_, i) => `<span style="background:hsl(${(i * 47) % 360} ${40 + ((i * 13) % 60)}% ${30 + ((i * 7) % 50)}%)">${(i * 7919).toString(36)}</span>`).join("")}</section>
 </main><script type="module" src="/entry.js"></script></body></html>`;
 
 beforeAll(async () => {
   if (!chrome) return;
-  directory = await mkdtemp(join(tmpdir(), "komo-snapshot-"));
+  directory = await mkdtemp(join(tmpdir(), "palette-snapshot-"));
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
       import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       const params=new URLSearchParams(location.search);
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+'/api:snapshots';
+      const key='palette:'+location.origin+'/api:snapshots';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       window.palette=initPalette({endpoint:location.origin+'/api',project:'snapshots',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),
@@ -200,9 +200,9 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     expect(pixels.counts.magenta).toBe(0);
     const html = api.uploads.find((upload) => upload.kind === "html")!.data;
     expect(html).toContain("Plain card");
-    expect(html).not.toMatch(/ada@example\.test|stand-in|Private notes|data-komo-move-clone/);
+    expect(html).not.toMatch(/ada@example\.test|stand-in|Private notes|data-palette-move-clone/);
     // Nothing of Palette's own UI, its host or its sandbox is left on the page or in the snapshot.
-    expect(await page.evaluate(() => document.querySelectorAll("[data-komo-snapshot-sandbox]").length)).toBe(0);
+    expect(await page.evaluate(() => document.querySelectorAll("[data-palette-snapshot-sandbox]").length)).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, 60_000);
@@ -233,7 +233,7 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     await page.keyboard.type("Busy grid");
     await page.keyboard.press("Enter");
     await waitFor(() => api.uploads.length >= 1 && api.uploads.some((upload) => upload.kind === "html"));
-    await waitFor(() => api.uploads.length === 2 || api.uploads.some((upload) => upload.data.startsWith("<!-- komo:")));
+    await waitFor(() => api.uploads.length === 2 || api.uploads.some((upload) => upload.data.startsWith("<!-- palette:")));
     const image = api.uploads.find((upload) => upload.kind === "image");
     expect(image, JSON.stringify(api.uploads.map(({ kind, data }) => ({ kind, data: data.slice(0, 80) })))).toBeTruthy();
     expect(decoded(image!.data).length).toBeLessThanOrEqual(12_000);
@@ -254,7 +254,7 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     await page.waitForTimeout(300);
     expect(api.uploads).toEqual([{ thread: "thread-1", kind: "html", type: "text/html;charset=utf-8", data: expect.stringContaining("Foreign image") }]);
     // The HTML says why there is no image.
-    expect(api.uploads[0]!.data).toMatch(/^<!-- komo: no image snapshot, the element shows images from another origin\. -->/);
+    expect(api.uploads[0]!.data).toMatch(/^<!-- palette: no image snapshot, the element shows images from another origin\. -->/);
     await page.close();
   }, 60_000);
 
@@ -265,13 +265,13 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     await page.keyboard.press("l");
     await page.waitForFunction(() => {
       const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;
-      const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+      const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
       return !!frame?.contentDocument?.getElementById("plain") && !root!.querySelector(".frame-stage[data-loading]");
     });
-    const frame = page.frames().find((item) => item.name() === "komo-viewport") as Frame;
+    const frame = page.frames().find((item) => item.name() === "palette-viewport") as Frame;
     const box = await page.evaluate(() => {
       const root = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
-      const frame = root.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]")!;
+      const frame = root.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]")!;
       const outer = frame.getBoundingClientRect(), scale = outer.width / frame.offsetWidth;
       const inner = frame.contentDocument!.getElementById("plain")!.getBoundingClientRect();
       return { x: outer.left + inner.left * scale, y: outer.top + inner.top * scale, width: inner.width * scale, height: inner.height * scale };

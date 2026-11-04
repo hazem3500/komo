@@ -21,7 +21,7 @@ it("defers Enter and Escape until IME composition ends, including legacy 229", a
 });
 
 it("sends inserted newlines through the renderer text bridge, and restores exact focus attributes", async () => {
-  document.body.innerHTML = '<p data-komo-text-prop="label" role="heading" aria-label="Title" spellcheck="true">Hello</p>';
+  document.body.innerHTML = '<p data-palette-text-prop="label" role="heading" aria-label="Title" spellcheck="true">Hello</p>';
   const element = document.querySelector('p')!;
   const original = element.outerHTML;
   const bridge = { beginReactTextEdit: () => ({ propName: 'label', before: 'Hello' }), previewReactTextEdit: vi.fn(() => true), finishReactTextEdit: vi.fn(), cancelReactTextEdit: vi.fn() };

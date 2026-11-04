@@ -185,10 +185,10 @@ describe("tailwindTokens", () => {
       { path: "color.bg.raised", value: "#0f0f0f", alias: "color.bg.surface", theme: "light" },
       { path: "radius.md", value: "8px" },
     ]);
-    const sheet = document.querySelector("style[data-komo-token-preview]");
+    const sheet = document.querySelector("style[data-palette-token-preview]");
     expect(sheet?.textContent).toBe(":is(.dark){--color-surface:255 128 0!important}:root:not(.dark){--color-raised:var(--color-surface)!important}");
     cleanup();
-    expect(document.querySelector("style[data-komo-token-preview]")).toBeNull();
+    expect(document.querySelector("style[data-palette-token-preview]")).toBeNull();
   });
 });
 

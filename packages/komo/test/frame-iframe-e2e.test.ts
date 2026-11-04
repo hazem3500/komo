@@ -41,7 +41,7 @@ beforeAll(async () => {
       document.getElementById('next').addEventListener('click',event=>{event.preventDefault();history.pushState({},'',event.currentTarget.getAttribute('href'));render();});
       addEventListener('popstate',render);render();
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':frame-iframe';
+      const key='palette:'+location.origin+':frame-iframe';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       const stored=()=>JSON.parse(localStorage.getItem('qa-threads')||'[]');
@@ -103,10 +103,10 @@ const shadow = (page: Page) => page.evaluateHandle(() => [...document.body.child
 async function viewportFrame(page: Page): Promise<Frame> {
   await page.waitForFunction(() => {
     const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;
-    const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+    const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
     return !!frame?.contentDocument?.getElementById("title") && !root!.querySelector(".frame-stage[data-loading]");
   });
-  const frame = page.frames().find((item) => item.name() === "komo-viewport");
+  const frame = page.frames().find((item) => item.name() === "palette-viewport");
   expect(frame).toBeTruthy();
   return frame!;
 }
@@ -227,7 +227,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await page.locator(".frame-bar").waitFor();
     await pin.waitFor();
     await page.waitForTimeout(400);
-    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(await page.locator("iframe[data-palette-viewport]").count()).toBe(0);
     expectOn(await pin.boundingBox(), (await page.locator("#card-3").boundingBox())!, "in-place pin");
     // A comment made in place resolves in the viewport.
     await comment(page, "card-4", "From in place", false);
@@ -289,13 +289,13 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     const row = page.locator(".design-token-row").filter({ has: page.locator("b").getByText("brand", { exact: true }) });
     await row.waitFor();
     await row.locator("button").first().click();
-    const hex = page.locator('.komo-color input[aria-label="Hex"]');
+    const hex = page.locator('.palette-color input[aria-label="Hex"]');
     await hex.fill("ff8000");
     await hex.press("Enter");
     await row.locator("button").first().click();
     await expect.poll(() => frame.locator("#card-1").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(255, 128, 0)");
-    expect(await frame.locator("style[data-komo-token-preview]").count()).toBe(1);
-    expect(await page.locator("style[data-komo-token-preview]").count()).toBe(0);
+    expect(await frame.locator("style[data-palette-token-preview]").count()).toBe(1);
+    expect(await page.locator("style[data-palette-token-preview]").count()).toBe(0);
     await page.screenshot({ path: join(shots, "viewport-tokens.png") });
     const bar = page.locator(".design-token-bar");
     await bar.getByRole("button", { name: "Before", exact: true }).click();
@@ -349,7 +349,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     const frame = await viewportFrame(page);
     const height = () => frame.locator("#card-2").evaluate((node) => node.getBoundingClientRect().height);
     const scale = () => page.evaluate(() => {
-      const iframe = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]")!;
+      const iframe = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]")!;
       return iframe.getBoundingClientRect().width / iframe.offsetWidth;
     });
     for (const zoom of ["Fit", "100%"]) {
@@ -385,12 +385,12 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
       await page.keyboard.press("Alt+ArrowDown");
       await page.waitForTimeout(100);
       expect(await frame.evaluate(() => {
-        const moved = document.querySelector("[data-komo-move-clone]");
+        const moved = document.querySelector("[data-palette-move-clone]");
         return [moved?.previousElementSibling?.id, getComputedStyle(document.getElementById("card-2")!).display];
       }), `${zoom} move`).toEqual(["card-3", "none"]);
       await page.locator('.design-inspector__actions [aria-label="Undo"]').click();
       await page.waitForTimeout(100);
-      expect(await frame.locator("[data-komo-move-clone]").count()).toBe(0);
+      expect(await frame.locator("[data-palette-move-clone]").count()).toBe(0);
       // Escape leaves the selection's focus, then Design mode (and no further: Frame stays open).
       for (let tries = 0; tries < 3 && await page.locator('.design-inspector[aria-hidden="false"]').count(); tries++) {
         await page.keyboard.press("Escape");
@@ -408,7 +408,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await open(page, "?inplace");
     await page.waitForTimeout(400);
     // No second copy of the app until it's asked for, and no mode switch in the bar.
-    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(await page.locator("iframe[data-palette-viewport]").count()).toBe(0);
     expect(await page.locator(".frame-bar").getByRole("button", { name: /^(Viewport|In place)$/ }).count()).toBe(0);
     await page.locator(".frame-size-trigger").click();
     const row = page.getByRole("menuitemcheckbox", { name: "Simulate real viewport" });
@@ -433,14 +433,14 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await page.addInitScript(() => {
       if (sessionStorage.getItem("seeded")) return;
       sessionStorage.setItem("seeded", "1");
-      localStorage.setItem("branch-comments:frame-size:frame-iframe:example/review", JSON.stringify({ v: 2, size: [1600, 1200], actual: true }));
+      localStorage.setItem("palette:frame-size:frame-iframe:example/review", JSON.stringify({ v: 2, size: [1600, 1200], actual: true }));
       localStorage.setItem("qa-threads", JSON.stringify([{ id: "card", page: "/", anchor: { selector: "#card-3", text: "Three", x: 0.1, y: 0.5, width: 0, height: 0, pageX: 400, pageY: 300, viewportWidth: 1280 }, resolved: false, resolvedBy: null, createdAt: 1, updatedAt: 1, tags: [], comments: [{ id: "card-comment", author: { id: "reviewer", name: "Example reviewer", verified: true }, body: "Card", createdAt: 1, editedAt: null, reactions: {} }] }]));
     });
     const stage = { left: 24, top: 48, width: 852, height: 728 };
     const layout = () => page.evaluate(() => {
       const root = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
       const port = root.querySelector<HTMLElement>(".frame-port");
-      const iframe = root.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+      const iframe = root.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
       const box = (node: Element | null) => node && (({ left, top, width, height }) => ({ left, top, width, height }))(node.getBoundingClientRect());
       return {
         port: box(port), iframe: box(iframe), main: box(document.querySelector("main")),
@@ -539,7 +539,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     expect(await page.locator(".frame-tip").textContent()).toContain(reason);
     expect(await why.getAttribute("aria-description")).toBe(await page.locator(".frame-tip").textContent());
     expect(await page.locator(".frame-tip").textContent()).toContain("Showing the page itself.");
-    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(await page.locator("iframe[data-palette-viewport]").count()).toBe(0);
     // The page itself is framed and scaled to Fit.
     expect(await page.locator("main").evaluate((node) => getComputedStyle(node).transform)).not.toBe("none");
     await why.hover();
@@ -569,7 +569,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await page.keyboard.type("Keep me");
     await simulate(page, false);
     await page.waitForTimeout(300);
-    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(await page.locator("iframe[data-palette-viewport]").count()).toBe(0);
     expect(await page.locator(".new-comment-composer textarea").inputValue()).toBe("Keep me");
     await simulate(page, true);
     await viewportFrame(page);
@@ -577,7 +577,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Close sidebar", exact: true }).click();
     await page.waitForTimeout(400);
-    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(await page.locator("iframe[data-palette-viewport]").count()).toBe(0);
     expect(await page.locator(".frame-stage").count()).toBe(0);
     expect(await snapshot()).toEqual(original);
     await page.evaluate(() => (window as any).palette.destroy());
@@ -586,7 +586,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
   });
 });
 
-const frameSizeKey = "branch-comments:frame-size:frame-iframe:example/review";
+const frameSizeKey = "palette:frame-size:frame-iframe:example/review";
 /** A context whose first page load remembers the reviewer choosing the simulated viewport. */
 async function rememberingSimulation() {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -621,7 +621,7 @@ describe.skipIf(!chrome)("Frame's Simulate real viewport row", () => {
     page.on("request", (request) => void (request.resourceType() === "document" && documents.push(request.url())));
     await open(page, query);
     await page.waitForTimeout(600);
-    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(await page.locator("iframe[data-palette-viewport]").count()).toBe(0);
     expect(page.frames()).toHaveLength(1);
     expect(documents).toEqual([`${origin}/${query}`]);
     // The page itself is framed, scaled to Fit, with no loading or fallback note.
@@ -637,7 +637,7 @@ describe.skipIf(!chrome)("Frame's Simulate real viewport row", () => {
     // Another size still loads nothing, and the old choice is kept, unused.
     await choose(page, "Tablet");
     await page.waitForTimeout(300);
-    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(await page.locator("iframe[data-palette-viewport]").count()).toBe(0);
     expect(documents).toHaveLength(1);
     expect(JSON.parse((await page.evaluate((key) => localStorage.getItem(key), frameSizeKey))!)).toEqual({ v: 2, size: [768, 1024], actual: false, inPlace: false });
     await context.close();
@@ -648,7 +648,7 @@ describe.skipIf(!chrome)("Frame's Simulate real viewport row", () => {
     const page = await context.newPage();
     await open(page, "?nomode");
     await page.waitForTimeout(400);
-    expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
+    expect(await page.locator("iframe[data-palette-viewport]").count()).toBe(0);
     await open(page, "?inplace");
     await viewportFrame(page);
     await context.close();
@@ -661,7 +661,7 @@ describe.skipIf(!chrome)("Frame's Simulate real viewport row", () => {
     const trigger = page.locator(".frame-size-trigger");
     const menu = page.getByRole("menu", { name: "Frame size" });
     const row = page.getByRole("menuitemcheckbox", { name: "Simulate real viewport" });
-    const frames = () => page.locator("iframe[data-komo-viewport]").count();
+    const frames = () => page.locator("iframe[data-palette-viewport]").count();
     const focused = () => row.evaluate((node) => (node.getRootNode() as ShadowRoot).activeElement === node);
     await trigger.click();
     expect(await row.getAttribute("aria-checked")).toBe("false");
@@ -848,9 +848,9 @@ describe.skipIf(!chrome)("Frame's compact bar", () => {
     expect(await frameLabel(page)).toBe("Desktop 1280 × 800 · 100%");
     await page.locator('[data-menu-item="more"]').evaluate((node: HTMLElement) => { node.focus(); node.click(); });
     await page.locator('[data-menu-item="shortcuts"]').evaluate((node: HTMLElement) => { node.focus(); node.click(); });
-    const help = page.locator("dialog.komo-shortcuts");
+    const help = page.locator("dialog.palette-shortcuts");
     await help.waitFor();
-    const rows = await help.locator("section", { has: page.locator("h3", { hasText: /^Frame$/ }) }).locator(".komo-shortcuts__row").evaluateAll((items) =>
+    const rows = await help.locator("section", { has: page.locator("h3", { hasText: /^Frame$/ }) }).locator(".palette-shortcuts__row").evaluateAll((items) =>
       items.map((item) => [item.firstElementChild!.textContent, item.getAttribute("aria-keyshortcuts")]));
     expect(rows).toEqual([["Zoom to fit", "Shift+1"], ["Zoom to 100%", "Shift+0"]]);
     await page.keyboard.press("Escape");
@@ -862,7 +862,7 @@ describe.skipIf(!chrome)("Frame's compact bar", () => {
 function framed(page: Page, id: string) {
   return page.evaluate((id) => {
     const root = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
-    const frame = root.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]")!;
+    const frame = root.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]")!;
     const outer = frame.getBoundingClientRect(), scale = outer.width / frame.offsetWidth;
     const inner = frame.contentDocument!.getElementById(id)!.getBoundingClientRect();
     return { x: outer.left + inner.left * scale, y: outer.top + inner.top * scale, width: inner.width * scale, height: inner.height * scale };

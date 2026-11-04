@@ -114,7 +114,7 @@ export function createInlineTextTools(options: InlineTextToolsOptions): InlineTe
       else if (options.active() && options.selected() === element) {
         editor = next;
         if (point) caretAtPoint(element, point.clientX, point.clientY);
-        options.status.textContent = element.hasAttribute("data-komo-text-prop")
+        options.status.textContent = element.hasAttribute("data-palette-text-prop")
           ? "React state preview · resets on exit"
           : "Editing text · preview only";
       }
@@ -214,7 +214,7 @@ export async function startInlineTextEditor(
   if (!canEditText(element)) return null;
   let bridge: ReactTextBridge | null = null;
   let reactText: { propName: string; before: string } | null = null;
-  if (element.dataset.komoTextProp) {
+  if (element.dataset.paletteTextProp) {
     bridge = await options.loadReactBridge();
     reactText = bridge.beginReactTextEdit(element);
     if (!reactText) return null;
@@ -239,7 +239,7 @@ export async function startInlineTextEditor(
 
   function restoreAttributes() {
     element.removeAttribute("contenteditable");
-    element.removeAttribute("data-komo-inline-editing");
+    element.removeAttribute("data-palette-inline-editing");
     for (const [name, value] of [["role", original.role], ["aria-label", original.label], ["aria-multiline", original.multiline], ["spellcheck", original.spellcheck]] as const) {
       if (value === null) element.removeAttribute(name);
       else element.setAttribute(name, value);
@@ -325,7 +325,7 @@ export async function startInlineTextEditor(
   element.setAttribute("role", "textbox");
   element.setAttribute("aria-label", "Inline text preview");
   element.setAttribute("aria-multiline", "true");
-  element.dataset.komoInlineEditing = "true";
+  element.dataset.paletteInlineEditing = "true";
   element.spellcheck = false;
   element.style.setProperty("outline", `2px solid ${options.accent ?? "#bda6ef"}`, "important");
   element.style.setProperty("outline-offset", "2px", "important");

@@ -4,7 +4,7 @@ import { el } from "./dom.js";
 export type SourceHref = (path: string, line?: number) => string | undefined;
 
 /** One ⓘ for every place a source path appears: Properties headings and change cards. */
-export const sourceInfoStyles = `.komo-source{position:relative;flex:none;display:flex}.komo-source>button{width:24px;height:24px;padding:0;border:0;border-radius:6px;background:none;color:#898680;cursor:pointer}.komo-source>button::before{content:"i";display:inline-grid;place-items:center;width:12px;height:12px;border:1.2px solid;border-radius:50%;font:italic 600 9px/1 Georgia,serif}.komo-source>button:is(:hover,[aria-expanded=true]){background:#ffffff12;color:#f1efeb}.komo-source>span{position:absolute;z-index:12;top:calc(100% + 4px);right:0;width:max-content;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font:11px/1.45 ui-monospace,Menlo,monospace;overflow-wrap:anywhere}.komo-source span button{margin:8px 6px 0 0;padding:4px 10px;border:0;border-radius:6px;background:#ffffff12;color:#f1efeb;font:12px system-ui,sans-serif;cursor:pointer}@media (max-width:520px){.komo-source>button{width:32px;height:32px}.komo-source span button{padding:9px 12px}}`;
+export const sourceInfoStyles = `.palette-source{position:relative;flex:none;display:flex}.palette-source>button{width:24px;height:24px;padding:0;border:0;border-radius:6px;background:none;color:#898680;cursor:pointer}.palette-source>button::before{content:"i";display:inline-grid;place-items:center;width:12px;height:12px;border:1.2px solid;border-radius:50%;font:italic 600 9px/1 Georgia,serif}.palette-source>button:is(:hover,[aria-expanded=true]){background:#ffffff12;color:#f1efeb}.palette-source>span{position:absolute;z-index:12;top:calc(100% + 4px);right:0;width:max-content;padding:10px;border-radius:10px;background:#191819;box-shadow:0 0 0 1px #ffffff1a,0 12px 40px #0008;color:#e9e6e1;font:11px/1.45 ui-monospace,Menlo,monospace;overflow-wrap:anywhere}.palette-source span button{margin:8px 6px 0 0;padding:4px 10px;border:0;border-radius:6px;background:#ffffff12;color:#f1efeb;font:12px system-ui,sans-serif;cursor:pointer}@media (max-width:520px){.palette-source>button{width:32px;height:32px}.palette-source span button{padding:9px 12px}}`;
 
 /**
  * An ⓘ button whose popover holds the full source path with Copy and, when the
@@ -12,8 +12,8 @@ export const sourceInfoStyles = `.komo-source{position:relative;flex:none;displa
  * path, Open. Bundle paths such as `/chunk-ab12.js:7` only offer Copy.
  */
 export function sourceInfo(name: string, source: string, sourceHref?: SourceHref): HTMLElement {
-  const tray = el("span", "komo-source");
-  const info = el("button", "komo-source__button");
+  const tray = el("span", "palette-source");
+  const info = el("button", "palette-source__button");
   const popup = el("span", "", source);
   const label = `${name} source`;
   const button = (text: string, aria: string, run: () => void) => {

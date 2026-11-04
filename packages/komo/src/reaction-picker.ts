@@ -8,7 +8,7 @@ export function reactionPicker(
   trigger: HTMLButtonElement,
   onSelect: (emoji: string) => void,
   selected?: string,
-  historyKey = "branch-comments:emoji:guest",
+  historyKey = "palette:emoji:guest",
   emojiDataSource = "https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1.8.0/en/emojibase/data.json",
 ) {
   const menu = el("div", "emoji-menu t-dropdown");

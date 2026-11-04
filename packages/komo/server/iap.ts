@@ -1,4 +1,4 @@
-// Google Cloud Identity-Aware Proxy (KOMO_PROXY_AUTH=gcp-iap). IAP signs every
+// Google Cloud Identity-Aware Proxy (PALETTE_PROXY_AUTH=gcp-iap). IAP signs every
 // request it forwards with an ES256 JWT in x-goog-iap-jwt-assertion; its
 // subject is the numeric Google account id that Google OAuth also uses.
 import type { ProxyAuthProvider, ProxyIdentity } from "./proxy-auth";
@@ -155,7 +155,7 @@ export async function iapIdentity(
 export function gcpIap(audience: string): ProxyAuthProvider {
   if (!/^\/projects\/\d+\/[A-Za-z0-9/_-]+$/.test(audience))
     throw new ConfigError(
-      "KOMO_PROXY_AUDIENCE must be the IAP audience, such as /projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID.",
+      "PALETTE_PROXY_AUDIENCE must be the IAP audience, such as /projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID.",
     );
   return {
     name: "gcp-iap",

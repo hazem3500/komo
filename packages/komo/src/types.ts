@@ -350,7 +350,7 @@ export interface CommentsOptions {
   /**
    * Save an image and/or trimmed HTML of the commented element with each new
    * thread, e.g. { image: true, html: true }. Off by default. Palette's own UI is
-   * never captured, nor is anything inside an element with data-komo-no-snapshot.
+   * never captured, nor is anything inside an element with data-palette-no-snapshot (or the older data-komo-no-snapshot).
    */
   snapshots?: PaletteSnapshots;
 }

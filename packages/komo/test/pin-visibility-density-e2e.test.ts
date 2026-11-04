@@ -24,7 +24,7 @@ beforeAll(async () => {
       import { captureAnchor } from ${JSON.stringify(resolve("src/anchors.ts"))};
       const query=new URLSearchParams(location.search),layout=query.get('layout')??'reflow';
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':density';
+      const key='palette:'+location.origin+':density';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       const authors=[{id:'author-a',name:'Avery Example',verified:true,accentColor:'#7f56d9'},{id:'author-b',name:'Blake Sample',verified:true,accentColor:'#f79009'},{id:'author-c',name:'Casey Demo',verified:true,accentColor:'#12b76a'}];
@@ -121,7 +121,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Hide comments i
     // Escape and page clicks belong to the page while comments are hidden.
     await page.keyboard.press("Escape");
     await page.mouse.click(1200, 760);
-    expect(await page.evaluate(() => sessionStorage.getItem("branch-comments:comments-hidden:density:example/review"))).toBe("1");
+    expect(await page.evaluate(() => sessionStorage.getItem("palette:comments-hidden:density:example/review"))).toBe("1");
     await page.keyboard.press("h");
     await settle(page);
     state = await hiddenState(page);
@@ -177,8 +177,8 @@ it.skipIf(!chrome)("lists Hide comments in shortcut help with the configured key
   await openMore(page);
   await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
   const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
-  const line = help.locator(".komo-shortcuts__row", { hasText: "Hide comments" });
-  expect(await line.locator(".komo-kbd").getAttribute("aria-label")).toBe("Shift + H");
+  const line = help.locator(".palette-shortcuts__row", { hasText: "Hide comments" });
+  expect(await line.locator(".palette-kbd").getAttribute("aria-label")).toBe("Shift + H");
   expect((await line.locator("kbd").allTextContents()).at(-1)).toBe("H");
   await page.close();
   const disabled = await open("visibility=false");
@@ -261,11 +261,11 @@ it.skipIf(!chrome)("fills unread dots, quiets read ones, switches auto pins, and
   await page.getByRole("button", { name: "Pin size: Dot" }).click();
   expect(await page.getByRole("button", { name: "Dot", exact: true }).getAttribute("aria-pressed")).toBe("true");
   await page.getByRole("button", { name: "Compact", exact: true }).click();
-  expect(await page.evaluate(() => localStorage.getItem("branch-comments:pin-size:density:example/review"))).toBe("compact");
+  expect(await page.evaluate(() => localStorage.getItem("palette:pin-size:density:example/review"))).toBe("compact");
   await page.reload();
   await page.locator(".pin").first().waitFor();
   expect(await page.locator(".pins").getAttribute("data-size")).toBe("compact");
-  await page.evaluate(() => localStorage.setItem("branch-comments:pin-size:density:example/review", "auto"));
+  await page.evaluate(() => localStorage.setItem("palette:pin-size:density:example/review", "auto"));
   await page.reload();
   await page.locator(".pin").first().waitFor();
   expect(await page.locator(".pins").getAttribute("data-size")).toBe("dot");

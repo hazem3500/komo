@@ -32,7 +32,7 @@ beforeAll(async () => {
       render();
       for(const link of aside.querySelectorAll('a'))link.onclick=event=>{event.preventDefault();qa.route(link.getAttribute('href'))};
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':scope-e2e';
+      const key='palette:'+location.origin+':scope-e2e';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       const comment=(id,body)=>({id:id+'-comment',body,author:user,createdAt:1,editedAt:null,reactions:{}});

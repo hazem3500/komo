@@ -38,7 +38,7 @@ beforeAll(async () => {
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const query=new URLSearchParams(location.search);
       const user={id:'reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':help';
+      const key='palette:'+location.origin+':help';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
       window.fetch=async input=>{
@@ -103,18 +103,18 @@ const shot = (page: Page, name: string) => page.screenshot({ path: join(shots, `
 const linkFocused = (page: Page) => shortcutsLink(page).evaluate(node => (node.getRootNode() as ShadowRoot).activeElement === node);
 const designActive = (page: Page) => page.evaluate(() => document.querySelector("[data-branch-comments]")!.classList.contains("design-active"));
 const headings = (page: Page) => help(page).locator("section:not([hidden]) h3").allTextContents();
-const row = (page: Page, label: string) => help(page).locator(".komo-shortcuts__row").filter({ has: page.getByText(label, { exact: true }) });
+const row = (page: Page, label: string) => help(page).locator(".palette-shortcuts__row").filter({ has: page.getByText(label, { exact: true }) });
 // The dialog's box, its sections' columns, chip heights and where the pinned title sits.
 const layout = (page: Page) => help(page).evaluate(dialog => {
   const rect = (node: Element) => { const box = node.getBoundingClientRect(); return { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height }; };
-  const body = dialog.querySelector(".komo-shortcuts__body")!;
+  const body = dialog.querySelector(".palette-shortcuts__body")!;
   return {
     dialog: rect(dialog), title: rect(dialog.querySelector("h2")!),
     scrollable: body.scrollHeight > body.clientHeight,
     columns: new Set([...dialog.querySelectorAll("section")].map(section => Math.round(section.getBoundingClientRect().left))).size,
-    chips: [...new Set([...dialog.querySelectorAll(".komo-shortcuts__row kbd")].map(cap => cap.getBoundingClientRect().height))],
-    gestureChips: [...dialog.querySelectorAll(".komo-shortcuts__row kbd")].filter(cap => /click/i.test(cap.textContent!)).length,
-    note: rect(dialog.querySelector(".komo-shortcuts__body > p:last-child")!),
+    chips: [...new Set([...dialog.querySelectorAll(".palette-shortcuts__row kbd")].map(cap => cap.getBoundingClientRect().height))],
+    gestureChips: [...dialog.querySelectorAll(".palette-shortcuts__row kbd")].filter(cap => /click/i.test(cap.textContent!)).length,
+    note: rect(dialog.querySelector(".palette-shortcuts__body > p:last-child")!),
     sections: [...dialog.querySelectorAll("section")].map(rect),
   };
 });
@@ -140,7 +140,7 @@ describe.skipIf(!chrome)("keyboard shortcut help", () => {
       expect(await help(page).getAttribute("aria-modal"), name).toBe("true");
       await close();
       // Gone at once, not after the queued close event, so the next key reaches the page.
-      expect(await page.locator("dialog.komo-shortcuts").count(), name).toBe(0);
+      expect(await page.locator("dialog.palette-shortcuts").count(), name).toBe(0);
       expect(await designActive(page), name).toBe(true);
       expect(await page.locator(".design-inspector__empty").count(), name).toBe(1);
       expect(await linkFocused(page), name).toBe(true);
@@ -193,7 +193,7 @@ describe.skipIf(!chrome)("keyboard shortcut help", () => {
     expect(before.dialog.width).toBeLessThanOrEqual(390 - 24);
     expect(before.dialog.height).toBeLessThanOrEqual(844 - 24);
     expect(before.scrollable).toBe(true);
-    await help(narrow).locator(".komo-shortcuts__body").evaluate(body => { body.scrollTop = body.scrollHeight; });
+    await help(narrow).locator(".palette-shortcuts__body").evaluate(body => { body.scrollTop = body.scrollHeight; });
     const after = await layout(narrow);
     expect(after.title).toEqual(before.title);
     expect(after.title.top).toBeGreaterThanOrEqual(after.dialog.top);
@@ -228,14 +228,14 @@ describe.skipIf(!chrome)("keyboard shortcut help", () => {
       const page = await open(`theme=light&platform=${platform}&keys=${keys}`);
       await openFromMenu(page);
       const caps = (label: string) => row(page, label).locator("kbd").allTextContents();
-      const name = (label: string) => row(page, label).locator(".komo-kbd").getAttribute("aria-label");
+      const name = (label: string) => row(page, label).locator(".palette-kbd").getAttribute("aria-label");
       const mac = platform === "mac";
       expect(await caps("Restore feedback")).toEqual(mac ? ["⇧", "J"] : ["Shift", "J"]);
       expect(await caps("Design mode")).toEqual(mac ? ["⌥", "⇧", "D"] : ["Alt", "Shift", "D"]);
       expect(await name("Design mode")).toBe(mac ? "Option + Shift + D" : "Alt + Shift + D");
       expect(await caps("All comments")).toEqual(mac ? ["⌃", "L"] : ["Ctrl", "L"]);
       expect(await caps("Select inner element")).toEqual([mac ? "⌘" : "Ctrl"]);
-      expect(await row(page, "Select inner element").locator(".komo-kbd span").textContent()).toBe("Click");
+      expect(await row(page, "Select inner element").locator(".palette-kbd span").textContent()).toBe("Click");
       expect(await name("Select inner element")).toBe(mac ? "Command + Click" : "Control + Click");
       expect(await caps("Add comment")).toEqual(["C"]);
       await shot(page, `keys-${platform}`);
@@ -250,7 +250,7 @@ describe.skipIf(!chrome)("keyboard shortcut help", () => {
     const filter = help(page).getByRole("searchbox", { name: "Filter shortcuts" });
     await filter.click();
     await filter.pressSequentially("parent");
-    const visible = () => help(page).locator(".komo-shortcuts__row:visible > span:first-child").allTextContents();
+    const visible = () => help(page).locator(".palette-shortcuts__row:visible > span:first-child").allTextContents();
     expect(await visible()).toEqual(["Parent element", "Parent element (alternative)", "Move out, after its parent"]);
     await filter.fill("esc");
     expect(await visible()).toEqual(["Exit Design mode", "Back to the canvas", "Cancel text edit"]);

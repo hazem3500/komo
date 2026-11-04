@@ -27,38 +27,38 @@ export interface SnapshotContext {
 type Snapshotted = Pick<Thread, "anchor" | "snapshot" | "page" | "id">;
 type Pending = { image?: string; html?: string; note?: string };
 
-const css = `.komo-snapshot{display:block;width:fit-content;margin-top:8px;padding:0;border:0;border-radius:6px;background:none;color:inherit;font:inherit;cursor:zoom-in;line-height:0}
-.komo-snapshot img{display:block;width:72px;height:48px;border-radius:6px;object-fit:cover;object-position:left top;background:color-mix(in oklab,currentColor 8%,transparent);outline:1px solid color-mix(in oklab,currentColor 16%,transparent);outline-offset:-1px}
-.komo-snapshot:not([data-ready]){background:color-mix(in oklab,currentColor 8%,transparent)}
-.komo-snapshot:not([data-ready]) img{visibility:hidden}
-.komo-snapshot[hidden]{display:none}
-.komo-snapshot:focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:2px}
-.komo-snapshot[data-large]{width:auto;max-width:100%}
-.komo-snapshot[data-large] img{width:auto;height:auto;min-width:72px;min-height:48px;max-width:100%;max-height:180px;object-fit:contain}
-.thread-item>.komo-snapshot{margin:6px 12px 0 calc(12px + var(--komo-avatar,20px) + var(--komo-gutter,8px))}
-.dialog:has(.thread-navigation:not([hidden]) .komo-snapshot-view) .message .komo-snapshot{display:none}
-.komo-snapshot-view{margin-top:8px}
-.komo-snapshot-view p{margin:0 0 6px}
-.komo-snapshot-code{box-sizing:border-box;max-height:160px;margin:0;padding:8px;overflow:auto;border-radius:6px;background:color-mix(in oklab,currentColor 8%,transparent);font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:thin}
-.komo-snapshot-code:focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:2px}
-.komo-snapshot-text{justify-self:start;margin-top:8px;padding:4px 8px;border:0;border-radius:6px;background:color-mix(in oklab,currentColor 8%,transparent);color:inherit;font-family:inherit;font-size:11px;line-height:1.4;cursor:pointer}
-.komo-snapshot-draft{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:#999}
-.komo-snapshot-draft .komo-snapshot{margin:0}
-.komo-snapshot-draft span{flex:1;min-width:0}
-.komo-snapshot-draft .icon{width:28px;height:28px}
-.komo-snapshot-viewer{box-sizing:border-box;max-width:min(1200px,calc(100vw - 32px));max-height:calc(100dvh - 32px);margin:auto;padding:12px;overflow:hidden;border:0;border-radius:16px;background:#242424;color:#eee;box-shadow:inset 0 0 0 1px #ffffff1f,0 24px 64px -16px rgb(0 0 0/55%);font:12px/1.4 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;pointer-events:auto;color-scheme:dark}
-.komo-snapshot-viewer[open]{display:flex;flex-direction:column;gap:8px;animation:komo-snapshot-in var(--duration-fast,250ms) var(--ease-smooth-out,cubic-bezier(.22,1,.36,1))}
-.komo-snapshot-viewer::backdrop{background:rgb(0 0 0/40%);pointer-events:auto}
-.komo-snapshot-viewer header{display:flex;align-items:center;gap:8px}
-.komo-snapshot-viewer h2{flex:1;margin:0;padding-left:4px;font-size:13px;font-weight:600}
-.komo-snapshot-viewer .icon{width:28px;height:28px;border-radius:8px;color:#bbb}
-.komo-snapshot-viewer .icon:hover{background:#ffffff14;color:#eee}
-.komo-snapshot-viewer .icon:focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:-2px}
-.komo-snapshot-viewer img{display:block;min-height:0;max-width:100%;max-height:calc(100dvh - 104px);margin:auto;border-radius:8px;object-fit:contain}
-.komo-snapshot-viewer .komo-snapshot-code{max-height:calc(100dvh - 104px);width:min(720px,calc(100vw - 56px))}
-@keyframes komo-snapshot-in{from{opacity:0;scale:.98;translate:0 4px}}
-@media (prefers-reduced-motion:reduce){.komo-snapshot-viewer[open]{animation:none}}
-@media (pointer:coarse){.komo-snapshot-viewer .icon,.komo-snapshot-draft .icon{width:44px;height:44px}}`;
+const css = `.palette-snapshot{display:block;width:fit-content;margin-top:8px;padding:0;border:0;border-radius:6px;background:none;color:inherit;font:inherit;cursor:zoom-in;line-height:0}
+.palette-snapshot img{display:block;width:72px;height:48px;border-radius:6px;object-fit:cover;object-position:left top;background:color-mix(in oklab,currentColor 8%,transparent);outline:1px solid color-mix(in oklab,currentColor 16%,transparent);outline-offset:-1px}
+.palette-snapshot:not([data-ready]){background:color-mix(in oklab,currentColor 8%,transparent)}
+.palette-snapshot:not([data-ready]) img{visibility:hidden}
+.palette-snapshot[hidden]{display:none}
+.palette-snapshot:focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:2px}
+.palette-snapshot[data-large]{width:auto;max-width:100%}
+.palette-snapshot[data-large] img{width:auto;height:auto;min-width:72px;min-height:48px;max-width:100%;max-height:180px;object-fit:contain}
+.thread-item>.palette-snapshot{margin:6px 12px 0 calc(12px + var(--palette-avatar,20px) + var(--palette-gutter,8px))}
+.dialog:has(.thread-navigation:not([hidden]) .palette-snapshot-view) .message .palette-snapshot{display:none}
+.palette-snapshot-view{margin-top:8px}
+.palette-snapshot-view p{margin:0 0 6px}
+.palette-snapshot-code{box-sizing:border-box;max-height:160px;margin:0;padding:8px;overflow:auto;border-radius:6px;background:color-mix(in oklab,currentColor 8%,transparent);font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:thin}
+.palette-snapshot-code:focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:2px}
+.palette-snapshot-text{justify-self:start;margin-top:8px;padding:4px 8px;border:0;border-radius:6px;background:color-mix(in oklab,currentColor 8%,transparent);color:inherit;font-family:inherit;font-size:11px;line-height:1.4;cursor:pointer}
+.palette-snapshot-draft{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:#999}
+.palette-snapshot-draft .palette-snapshot{margin:0}
+.palette-snapshot-draft span{flex:1;min-width:0}
+.palette-snapshot-draft .icon{width:28px;height:28px}
+.palette-snapshot-viewer{box-sizing:border-box;max-width:min(1200px,calc(100vw - 32px));max-height:calc(100dvh - 32px);margin:auto;padding:12px;overflow:hidden;border:0;border-radius:16px;background:#242424;color:#eee;box-shadow:inset 0 0 0 1px #ffffff1f,0 24px 64px -16px rgb(0 0 0/55%);font:12px/1.4 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;pointer-events:auto;color-scheme:dark}
+.palette-snapshot-viewer[open]{display:flex;flex-direction:column;gap:8px;animation:palette-snapshot-in var(--duration-fast,250ms) var(--ease-smooth-out,cubic-bezier(.22,1,.36,1))}
+.palette-snapshot-viewer::backdrop{background:rgb(0 0 0/40%);pointer-events:auto}
+.palette-snapshot-viewer header{display:flex;align-items:center;gap:8px}
+.palette-snapshot-viewer h2{flex:1;margin:0;padding-left:4px;font-size:13px;font-weight:600}
+.palette-snapshot-viewer .icon{width:28px;height:28px;border-radius:8px;color:#bbb}
+.palette-snapshot-viewer .icon:hover{background:#ffffff14;color:#eee}
+.palette-snapshot-viewer .icon:focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:-2px}
+.palette-snapshot-viewer img{display:block;min-height:0;max-width:100%;max-height:calc(100dvh - 104px);margin:auto;border-radius:8px;object-fit:contain}
+.palette-snapshot-viewer .palette-snapshot-code{max-height:calc(100dvh - 104px);width:min(720px,calc(100vw - 56px))}
+@keyframes palette-snapshot-in{from{opacity:0;scale:.98;translate:0 4px}}
+@media (prefers-reduced-motion:reduce){.palette-snapshot-viewer[open]{animation:none}}
+@media (pointer:coarse){.palette-snapshot-viewer .icon,.palette-snapshot-draft .icon{width:44px;height:44px}}`;
 
 const styled = new WeakMap<ShadowRoot, HTMLStyleElement>();
 function style(root: ShadowRoot) {
@@ -136,7 +136,7 @@ const sources = new WeakMap<HTMLImageElement, { url: string; context: SnapshotCo
 const live = new Map<HTMLImageElement, string>();
 const watched = new WeakSet<ShadowRoot>();
 let visible: IntersectionObserver | undefined;
-const SELECTOR = "img[data-komo-snapshot]";
+const SELECTOR = "img[data-palette-snapshot]";
 
 function show(image: HTMLImageElement) {
   const source = sources.get(image);
@@ -212,8 +212,8 @@ export function snapshotAlt(thread: Pick<Thread, "anchor">) {
   return `Snapshot of ${subject} when the comment was left`;
 }
 
-/** The note an HTML snapshot starts with when its image couldn't be drawn. */
-const NOTE = /^<!-- komo: (no image snapshot, [^>]*?)\.? -->\s*/;
+/** The note an HTML snapshot starts with when its image couldn't be drawn; older ones say komo. */
+const NOTE = /^<!-- (?:palette|komo): (no image snapshot, [^>]*?)\.? -->\s*/;
 export function splitNote(html: string) {
   const match = NOTE.exec(html);
   return match
@@ -223,7 +223,7 @@ export function splitNote(html: string) {
 
 /** Markup as inert text in a scrollable, focusable region. */
 function code(html: string) {
-  const block = el("pre", "komo-snapshot-code");
+  const block = el("pre", "palette-snapshot-code");
   block.textContent = html;
   block.tabIndex = 0;
   block.setAttribute("role", "region");
@@ -241,7 +241,7 @@ const viewers = new Map<ShadowRoot, Set<() => void>>();
 export async function openSnapshotViewer(root: ShadowRoot, content: { src?: string; html?: string; alt: string }, release?: () => void) {
   style(root);
   const previous = root.activeElement as HTMLElement | null;
-  const dialog = el("dialog", "komo-snapshot-viewer");
+  const dialog = el("dialog", "palette-snapshot-viewer");
   dialog.setAttribute("aria-modal", "true");
   dialog.setAttribute("aria-label", content.alt);
   const header = el("header");
@@ -306,9 +306,9 @@ function thumbnail(url: string, thread: Pick<Thread, "anchor">, context: Snapsho
   const alt = snapshotAlt(thread);
   const image = el("img");
   image.alt = alt;
-  image.dataset.komoSnapshot = "";
+  image.dataset.paletteSnapshot = "";
   image.decoding = "async";
-  const open = el("button", "komo-snapshot");
+  const open = el("button", "palette-snapshot");
   open.type = "button";
   open.setAttribute("aria-haspopup", "dialog");
   if (large) open.dataset.large = "";
@@ -343,7 +343,7 @@ function textButton(url: string, thread: Pick<Thread, "anchor">, context: Snapsh
     void readSnapshot(url, context).then(async (blob) => {
       if (blob) void openSnapshotViewer(context.root, { html: await blob.text(), alt: snapshotAlt(thread) });
     });
-  }, "komo-snapshot-text");
+  }, "palette-snapshot-text");
   open.removeAttribute("title");
   open.setAttribute("aria-haspopup", "dialog");
   return open;
@@ -355,7 +355,7 @@ function textButton(url: string, thread: Pick<Thread, "anchor">, context: Snapsh
  */
 function fallback(thread: Snapshotted, context: SnapshotContext) {
   const { image, html } = thread.snapshot!;
-  const view = el("div", "komo-snapshot-view");
+  const view = el("div", "palette-snapshot-view");
   const showHtml = () => {
     if (!html) return view.remove();
     void readSnapshot(html, context).then(async (blob) => {
@@ -372,10 +372,10 @@ function fallback(thread: Snapshotted, context: SnapshotContext) {
 
 /** The composer's pending capture, with a button that drops it before posting. */
 function draft(shot: Pending, anchor: Thread["anchor"], context: SnapshotContext) {
-  const row = el("div", "komo-snapshot-draft");
+  const row = el("div", "palette-snapshot-draft");
   const alt = snapshotAlt({ anchor });
   if (shot.image) {
-    const open = el("button", "komo-snapshot");
+    const open = el("button", "palette-snapshot");
     open.type = "button";
     open.dataset.ready = "";
     open.setAttribute("aria-haspopup", "dialog");

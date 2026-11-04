@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mountFrameSize } from "../src/frame-size";
 import { frameView } from "../src/review-layout";
 
-const key = "branch-comments:frame-size:mode-test:example/review";
+const key = "palette:frame-size:mode-test:example/review";
 const box = { left: 24, top: 48, width: 852, height: 728 };
 const mounted: Array<{ destroy(): void }> = [];
 

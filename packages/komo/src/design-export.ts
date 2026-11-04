@@ -96,7 +96,7 @@ export function selectionViews(options: {
   const actions = el("div", "design-pending__actions");
   pending.append(head, list, actions);
   // Discard and its Undo are announced in Palette's one polite live region.
-  const say = (text: string) => options.mode?.root.dispatchEvent(new CustomEvent("komo-announce", { detail: text }));
+  const say = (text: string) => options.mode?.root.dispatchEvent(new CustomEvent("palette-announce", { detail: text }));
   let items: PendingItem[] = [];
   let drawn: unknown[] = [];
   let total = 0;
@@ -236,7 +236,7 @@ export function selectionViews(options: {
         drawn = next;
         render(edits);
       }
-      edit.hidden = !options.mode?.design?.tokens && !pageDocument().querySelector("[data-komo-design-tokens]");
+      edit.hidden = !options.mode?.design?.tokens && !pageDocument().querySelector("[data-palette-design-tokens],[data-komo-design-tokens]");
       edit.textContent = edits ? `Edit tokens · ${plural(edits)}` : "Edit tokens";
       chip.hidden = !selected || !edits;
       changeRow(chip, "token", "Token changes", edits);

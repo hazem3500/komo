@@ -93,7 +93,7 @@ export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
     slot.replaceChildren(...nodes);
     swapping = false;
   };
-  const listId = `komo-tags-${Math.random().toString(36).slice(2)}`;
+  const listId = `palette-tags-${Math.random().toString(36).slice(2)}`;
   // The open menu lives at Palette's root, outside the slot, and follows the input.
   let floating: HTMLElement | null = null;
   let follow = 0;
@@ -311,7 +311,7 @@ function headerTagEditor(slot: HTMLElement, options: TagEditorOptions, trigger: 
   let popover: HTMLElement | undefined;
   let follow = 0;
   let listeners: AbortController | undefined;
-  const id = `komo-tag-popover-${Math.random().toString(36).slice(2)}`;
+  const id = `palette-tag-popover-${Math.random().toString(36).slice(2)}`;
   const close = (focus = false) => {
     cancelAnimationFrame(follow);
     listeners?.abort();

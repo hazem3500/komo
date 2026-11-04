@@ -103,7 +103,7 @@ export async function manageProject(
       enabled: !!row?.webhook_enabled,
       secretConfigured: !!row?.webhook_secret,
       deliveryAvailable:
-        typeof env.KOMO_WEBHOOK_SEND === "function" && !!env.KOMO_WEBHOOK_KEYS,
+        typeof env.PALETTE_WEBHOOK_SEND === "function" && !!env.PALETTE_WEBHOOK_KEYS,
       supportedEvents: WEBHOOK_EVENTS,
     });
   }
@@ -136,9 +136,9 @@ export async function manageProject(
     let secret = current?.webhook_secret ?? null;
     if (data.secret !== undefined && data.secret !== "") {
       check(typeof data.secret === "string", 400, "Invalid signing secret.");
-      check(env.KOMO_WEBHOOK_KEYS, 503, "Webhook encryption is not configured on this server.");
+      check(env.PALETTE_WEBHOOK_KEYS, 503, "Webhook encryption is not configured on this server.");
       try {
-        secret = await encryptWebhookSecret(env.KOMO_WEBHOOK_KEYS, project, data.secret);
+        secret = await encryptWebhookSecret(env.PALETTE_WEBHOOK_KEYS, project, data.secret);
       } catch (error) {
         check(false, 400, error instanceof Error ? error.message : "Invalid signing secret.");
       }
@@ -147,7 +147,7 @@ export async function manageProject(
     }
     if (data.enabled) {
       check(
-        typeof env.KOMO_WEBHOOK_SEND === "function" && !!env.KOMO_WEBHOOK_KEYS,
+        typeof env.PALETTE_WEBHOOK_SEND === "function" && !!env.PALETTE_WEBHOOK_KEYS,
         503,
         "Secure webhook delivery is unavailable on this server."
       );
@@ -245,7 +245,7 @@ export async function manageProject(
     return Response.json(
       {
         invite,
-        url: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/setup?project=${encodeURIComponent(project)}#invite=${encodeURIComponent(invite)}`,
+        url: `${url.origin}${env.PALETTE_PUBLIC_PATH ?? ""}/setup?project=${encodeURIComponent(project)}#invite=${encodeURIComponent(invite)}`,
         expiresInDays: 7,
       },
       { status: 201 }

@@ -29,7 +29,7 @@ beforeAll(async () => {
       import { discoverCssTokens } from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       import { classTheme } from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':themes';
+      const key='palette:'+location.origin+':themes';
       localStorage.setItem(key,'synthetic-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
       window.fetch=async(input)=>{const path=new URL(String(input instanceof Request?input.url:input)).pathname;

@@ -29,7 +29,7 @@ export function renderKbd(shortcut: Shortcut, mac?: boolean, variant: KbdVariant
 /** Keycaps for any sequence, such as a pointer gesture, read aloud as `label`. */
 export function renderKeycaps(keys: string[], label: string, variant: KbdVariant = "surface"): HTMLElement {
   const group = document.createElement("span");
-  group.className = "komo-kbd";
+  group.className = "palette-kbd";
   group.dataset.variant = variant;
   group.setAttribute("role", "img");
   group.setAttribute("aria-label", label);

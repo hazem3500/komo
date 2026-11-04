@@ -5,32 +5,32 @@ import type { DesignKeys, Shortcut } from "./shortcuts.js";
 
 type HelpCommand = { label: string; shortcut?: Shortcut | null; group?: string; keys?: string[]; gesture?: string; aria?: string };
 
-const css = `.komo-shortcuts{box-sizing:border-box;width:min(720px,calc(100vw - 32px));max-width:none;max-height:min(680px,calc(100dvh - 32px));margin:auto;padding:0;overflow:hidden;border:0;border-radius:16px;background:var(--mm-surface);color:var(--mm-ink);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--mm-ink) 12%,transparent),0 24px 64px -16px rgb(0 0 0/55%);font:12px/1.4 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;pointer-events:auto;color-scheme:dark}
-.komo-shortcuts[open]{display:flex;flex-direction:column;animation:komo-help-in var(--duration-fast) var(--ease-smooth-out)}
-.komo-shortcuts::backdrop{background:rgb(0 0 0/40%);pointer-events:auto}
-@keyframes komo-help-in{from{opacity:0;scale:.98;translate:0 4px}}
-.komo-shortcuts header{flex:none;position:relative;display:flex;align-items:center;gap:8px;padding:10px 10px 4px 16px}
-.komo-shortcuts h2{flex:1;margin:0;font-size:14px;font-weight:600}
-.komo-shortcuts__close{width:28px;height:28px;border-radius:8px;color:color-mix(in oklab,var(--mm-ink) 60%,transparent)}
-.komo-shortcuts__close:hover{background:color-mix(in oklab,var(--mm-ink) 8%,transparent);color:var(--mm-ink)}
-.komo-shortcuts__close svg{width:16px;height:16px}
-.komo-shortcuts .komo-shortcuts__tip{top:50%;bottom:auto;right:44px;translate:0 -50%;opacity:0;transition:opacity var(--duration-quick) var(--ease-smooth-out)}
-.komo-shortcuts__close:hover+.komo-shortcuts__tip,.komo-shortcuts__close:focus-visible+.komo-shortcuts__tip{opacity:1;transition-delay:400ms}
-.komo-shortcuts input{flex:none;width:auto;height:30px;margin:6px 16px;padding:0 10px;border-radius:8px;background:color-mix(in oklab,var(--mm-ink) 7%,transparent);box-shadow:none}
-.komo-shortcuts input:focus{box-shadow:inset 0 0 0 1px var(--accent,#bda6ef)}
-.komo-shortcuts input::placeholder{color:color-mix(in oklab,var(--mm-ink) 50%,transparent)}
-.komo-shortcuts__close:focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:-2px}
-.komo-shortcuts__body{min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px 16px 14px;columns:2 240px;column-gap:28px;outline:0}
-.komo-shortcuts section{break-inside:avoid;padding-bottom:10px}
-.komo-shortcuts h3{margin:0;padding:6px 0 2px;font-size:11px;font-weight:600;color:color-mix(in oklab,var(--mm-ink) 62%,transparent)}
-.komo-shortcuts__row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:28px}
-.komo-shortcuts [hidden]{display:none}
-.komo-shortcuts .komo-kbd{align-items:center;gap:4px}
-.komo-shortcuts__row kbd{box-sizing:border-box;display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:5px;font-size:11px;line-height:1}
-.komo-shortcuts .komo-kbd span,.komo-shortcuts p{color:color-mix(in oklab,var(--mm-ink) 55%,transparent)}
-.komo-shortcuts p{column-span:all;margin:4px 0 0;font-size:11px}
-@media (prefers-reduced-motion:reduce){.komo-shortcuts[open]{animation:none}}
-@media (pointer:coarse){.komo-shortcuts__close{width:44px;height:44px}}`;
+const css = `.palette-shortcuts{box-sizing:border-box;width:min(720px,calc(100vw - 32px));max-width:none;max-height:min(680px,calc(100dvh - 32px));margin:auto;padding:0;overflow:hidden;border:0;border-radius:16px;background:var(--mm-surface);color:var(--mm-ink);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--mm-ink) 12%,transparent),0 24px 64px -16px rgb(0 0 0/55%);font:12px/1.4 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;pointer-events:auto;color-scheme:dark}
+.palette-shortcuts[open]{display:flex;flex-direction:column;animation:palette-help-in var(--duration-fast) var(--ease-smooth-out)}
+.palette-shortcuts::backdrop{background:rgb(0 0 0/40%);pointer-events:auto}
+@keyframes palette-help-in{from{opacity:0;scale:.98;translate:0 4px}}
+.palette-shortcuts header{flex:none;position:relative;display:flex;align-items:center;gap:8px;padding:10px 10px 4px 16px}
+.palette-shortcuts h2{flex:1;margin:0;font-size:14px;font-weight:600}
+.palette-shortcuts__close{width:28px;height:28px;border-radius:8px;color:color-mix(in oklab,var(--mm-ink) 60%,transparent)}
+.palette-shortcuts__close:hover{background:color-mix(in oklab,var(--mm-ink) 8%,transparent);color:var(--mm-ink)}
+.palette-shortcuts__close svg{width:16px;height:16px}
+.palette-shortcuts .palette-shortcuts__tip{top:50%;bottom:auto;right:44px;translate:0 -50%;opacity:0;transition:opacity var(--duration-quick) var(--ease-smooth-out)}
+.palette-shortcuts__close:hover+.palette-shortcuts__tip,.palette-shortcuts__close:focus-visible+.palette-shortcuts__tip{opacity:1;transition-delay:400ms}
+.palette-shortcuts input{flex:none;width:auto;height:30px;margin:6px 16px;padding:0 10px;border-radius:8px;background:color-mix(in oklab,var(--mm-ink) 7%,transparent);box-shadow:none}
+.palette-shortcuts input:focus{box-shadow:inset 0 0 0 1px var(--accent,#bda6ef)}
+.palette-shortcuts input::placeholder{color:color-mix(in oklab,var(--mm-ink) 50%,transparent)}
+.palette-shortcuts__close:focus-visible{outline:2px solid var(--accent,#bda6ef);outline-offset:-2px}
+.palette-shortcuts__body{min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px 16px 14px;columns:2 240px;column-gap:28px;outline:0}
+.palette-shortcuts section{break-inside:avoid;padding-bottom:10px}
+.palette-shortcuts h3{margin:0;padding:6px 0 2px;font-size:11px;font-weight:600;color:color-mix(in oklab,var(--mm-ink) 62%,transparent)}
+.palette-shortcuts__row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:28px}
+.palette-shortcuts [hidden]{display:none}
+.palette-shortcuts .palette-kbd{align-items:center;gap:4px}
+.palette-shortcuts__row kbd{box-sizing:border-box;display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:5px;font-size:11px;line-height:1}
+.palette-shortcuts .palette-kbd span,.palette-shortcuts p{color:color-mix(in oklab,var(--mm-ink) 55%,transparent)}
+.palette-shortcuts p{column-span:all;margin:4px 0 0;font-size:11px}
+@media (prefers-reduced-motion:reduce){.palette-shortcuts[open]{animation:none}}
+@media (pointer:coarse){.palette-shortcuts__close{width:44px;height:44px}}`;
 
 /**
  * Opens shortcut help, listing `mode`'s groups first. Help owns the keyboard while open;
@@ -38,18 +38,18 @@ const css = `.komo-shortcuts{box-sizing:border-box;width:min(720px,calc(100vw - 
  * the control that opened it. Opening it again while it is open keeps it open.
  */
 export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], design = false, mode?: "design" | "comment", keys?: DesignKeys, frame = false) {
-  const open = root.querySelector<HTMLDialogElement>("dialog.komo-shortcuts");
+  const open = root.querySelector<HTMLDialogElement>("dialog.palette-shortcuts");
   if (open) return open.querySelector<HTMLElement>("[autofocus]")?.focus();
   const active = root.activeElement ?? document.activeElement;
   const previous = (active?.closest(".morphing-menu__panel") ? root.querySelector('[data-menu-item="more"]') : active) as HTMLElement | null;
-  const dialog = el("dialog", "komo-shortcuts");
+  const dialog = el("dialog", "palette-shortcuts");
   dialog.setAttribute("aria-modal", "true");
-  dialog.setAttribute("aria-labelledby", "komo-shortcuts-title");
+  dialog.setAttribute("aria-labelledby", "palette-shortcuts-title");
   const title = el("h2", "", "Keyboard shortcuts");
-  title.id = "komo-shortcuts-title";
-  const close = button("Close", () => finish(), "icon komo-shortcuts__close", "close");
+  title.id = "palette-shortcuts-title";
+  const close = button("Close", () => finish(), "icon palette-shortcuts__close", "close");
   close.removeAttribute("title");
-  const tip = el("span", "morphing-menu__tooltip komo-shortcuts__tip", "Close");
+  const tip = el("span", "morphing-menu__tooltip palette-shortcuts__tip", "Close");
   tip.setAttribute("aria-hidden", "true");
   tip.append(renderKeycaps(["Esc"], "Escape"));
   const header = el("header");
@@ -60,7 +60,7 @@ export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], desi
   filter.setAttribute("aria-label", "Filter shortcuts");
   filter.autocomplete = "off";
   filter.spellcheck = false;
-  const body = el("div", "komo-shortcuts__body");
+  const body = el("div", "palette-shortcuts__body");
   body.tabIndex = 0;
   body.setAttribute("autofocus", "");
   body.setAttribute("role", "region");
@@ -77,7 +77,7 @@ export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], desi
     const section = el("section");
     section.append(el("h3", "", group));
     for (const command of listed.filter(item => (item.group ?? "General") === group)) {
-      const line = el("div", "komo-shortcuts__row");
+      const line = el("div", "palette-shortcuts__row");
       const spoken = command.shortcut ? shortcutKeys(command.shortcut) : undefined;
       if (spoken) line.setAttribute("aria-keyshortcuts", spoken.aria);
       const keys = command.shortcut ? renderKbd(command.shortcut) : renderKeycaps(command.keys!, command.aria ?? command.keys!.join(" + "));
@@ -95,7 +95,7 @@ export function showShortcutHelp(root: ShadowRoot, commands: HelpCommand[], desi
   filter.addEventListener("input", () => {
     const terms = filter.value.toLowerCase().split(/\s+/).filter(Boolean);
     for (const [line, text] of rows) line.hidden = !terms.every(term => text.includes(term));
-    for (const section of body.querySelectorAll("section")) section.hidden = !section.querySelector(".komo-shortcuts__row:not([hidden])");
+    for (const section of body.querySelectorAll("section")) section.hidden = !section.querySelector(".palette-shortcuts__row:not([hidden])");
     empty.hidden = rows.some(([line]) => !line.hidden);
   });
   dialog.append(Object.assign(el("style"), { textContent: css }), header, filter, body);

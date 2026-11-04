@@ -132,7 +132,7 @@ describe("React props inspector bridge", () => {
   it("previews an enum option outside history and puts the opening value back unless something else changed it", async () => {
     await vi.waitFor(() => expect(shadow.querySelector(".design-react-group")).not.toBeNull());
     const tone = shadow.querySelector<HTMLSelectElement>('[aria-label="PromoCard tone"]')!;
-    const preview = (detail: string | null) => tone.dispatchEvent(new CustomEvent("komo-preview", { detail }));
+    const preview = (detail: string | null) => tone.dispatchEvent(new CustomEvent("palette-preview", { detail }));
     const undo = shadow.querySelector<HTMLButtonElement>('.design-inspector__actions [aria-label="Undo"]')!;
     preview("bold");
     expect(changes.at(-1)).toMatchObject({ tone: "bold", title: "A preview title" });

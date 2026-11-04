@@ -36,7 +36,7 @@ beforeAll(async () => {
       function Button(initial){
         const[props,setProps]=React.useState(initial);
         const inspect=usePaletteInspectable({component:definition,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
-        return h('button',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],type:'button',className:'fixture-button','data-variant':props.variant},'Example button');
+        return h('button',{ref:inspect.ref,'data-palette-inspectable':inspect['data-palette-inspectable'],type:'button',className:'fixture-button','data-variant':props.variant},'Example button');
       }
       createRoot(document.querySelector('main')).render(h(Button,{variant:'primary',busy:false}));
       window.fetch=async()=>Response.json({threads:[],guests:true});

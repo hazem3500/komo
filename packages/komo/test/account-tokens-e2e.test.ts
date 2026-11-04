@@ -25,7 +25,7 @@ beforeAll(async () => {
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const fixture = JSON.parse(new URLSearchParams(location.search).get("user") || "null");
       const endpoint = location.origin + "/api/";
-      const key = "branch-comments:" + endpoint + ":tokens";
+      const key = "palette:" + endpoint + ":tokens";
       if (fixture) {
         localStorage.setItem(key, "synthetic-session");
         localStorage.setItem(key + ":user", JSON.stringify({ token: "synthetic-session", user: fixture }));

@@ -39,7 +39,7 @@ const key = (init: KeyboardEventInit) => {
   document.dispatchEvent(event);
   return event.defaultPrevented;
 };
-const visibilityKey = "branch-comments:comments-hidden:visibility:example/review";
+const visibilityKey = "palette:comments-hidden:visibility:example/review";
 
 it("hides and shows comments with H, for this tab only, without dismissing review", () => {
   let { host, root } = mount();
@@ -97,10 +97,10 @@ it("defaults pins to full, applies the host size, and prefers the reviewer's sto
   expect(root.querySelector<HTMLElement>(".pins")!.dataset.size).toBeUndefined();
   ({ root } = mount({ pins: { size: "compact" } }));
   expect(root.querySelector<HTMLElement>(".pins")!.dataset.size).toBe("compact");
-  localStorage.setItem("branch-comments:pin-size:visibility:example/review", "dot");
+  localStorage.setItem("palette:pin-size:visibility:example/review", "dot");
   ({ root } = mount({ pins: { size: "compact" } }));
   expect(root.querySelector<HTMLElement>(".pins")!.dataset.size).toBe("dot");
-  localStorage.setItem("branch-comments:pin-size:visibility:example/review", "nonsense");
+  localStorage.setItem("palette:pin-size:visibility:example/review", "nonsense");
   ({ root } = mount({ pins: { size: "compact" } }));
   expect(root.querySelector<HTMLElement>(".pins")!.dataset.size).toBe("compact");
   controller?.destroy();

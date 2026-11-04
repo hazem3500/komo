@@ -122,7 +122,7 @@ describe("discoverCssTokens previewValues", () => {
     document.head.append(style);
     document.documentElement.setAttribute("style", "--radius-md: 4px");
   }
-  const sheet = () => document.querySelector<HTMLStyleElement>("style[data-komo-token-preview]");
+  const sheet = () => document.querySelector<HTMLStyleElement>("style[data-palette-token-preview]");
   afterEach(() => {
     document.documentElement.removeAttribute("style");
     document.documentElement.className = "";

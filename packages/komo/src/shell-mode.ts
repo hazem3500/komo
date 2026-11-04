@@ -2,12 +2,14 @@
 // out of it, and the shell's URL following the frame's route. The keys repeat
 // shell-session.ts's, so this chunk shares no module with core.
 
-const PARAM = "komo-shell";
-const KEY = "komo:shell";
+const PARAM = "palette-shell";
+const KEY = "palette:shell";
 
 /** `href` with the shell's nonce, or without it for `""`. */
 export function shellUrl(href: string, nonce: string) {
   const url = new URL(href, location.href);
+  // An older link's komo-shell gives way to palette-shell.
+  url.searchParams.delete("komo-shell");
   if (nonce) url.searchParams.set(PARAM, nonce);
   else url.searchParams.delete(PARAM);
   return url.href;
@@ -17,7 +19,8 @@ export function shellUrl(href: string, nonce: string) {
 export function leaveShellPage(href: string, reason = "") {
   try {
     sessionStorage.removeItem(KEY);
-    if (reason) sessionStorage.setItem("komo:shell-off", reason);
+    sessionStorage.removeItem("komo:shell");
+    if (reason) sessionStorage.setItem("palette:shell-off", reason);
   } catch {
     /* The URL no longer carries the nonce, so the next page is normal anyway. */
   }

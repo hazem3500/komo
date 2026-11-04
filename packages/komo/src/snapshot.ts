@@ -18,10 +18,13 @@ export interface CapturedSnapshot {
 }
 
 /** Hosts mark private regions with this attribute: a target inside one is never captured. */
-export const OPT_OUT = "data-komo-no-snapshot";
+export const OPT_OUT = "data-palette-no-snapshot";
+/** Both names hosts may use: data-palette-no-snapshot, or the older data-komo-no-snapshot. */
+const OPTED_OUT = `[${OPT_OUT}],[data-komo-no-snapshot]`;
+const optedOut = (element: Element) => element.matches(OPTED_OUT);
 /** Palette's own UI on the page: its host, Design mode stand-ins, previews and Frame's viewport. */
-// Not data-komo-design-tokens: hosts that register tokens carry it on the document root.
-const OWN = "[data-branch-comments],[data-komo-move-clone],[data-komo-viewport],[data-komo-snapshot-sandbox]";
+// Not data-palette-design-tokens: hosts that register tokens carry it on the document root.
+const OWN = "[data-branch-comments],[data-palette-move-clone],[data-palette-viewport],[data-palette-snapshot-sandbox]";
 export const PLACEHOLDER = "[redacted]";
 const DROP = new Set(["script", "noscript", "template", "style", "link", "meta", "base", "title"]);
 const URL_ATTRIBUTE = /^(?:href|src|action|formaction|xlink:href|poster|data|background)$/i;
@@ -38,7 +41,7 @@ const cap = (text: string, limit: number) => (text.length > limit ? `${text.slic
 const bytes = (text: string) => new TextEncoder().encode(text).length;
 
 /** True when the element can't be captured: Palette's UI, or inside a host's no-snapshot region. */
-export const skipped = (element: Element) => !!element.closest(`[${OPT_OUT}],${OWN}`);
+export const skipped = (element: Element) => !!element.closest(`${OPTED_OUT},${OWN}`);
 
 /** Copy an element's attributes onto its shallow clone, minus handlers, script URLs and Palette's markers. */
 function cleanAttributes(clone: Element, limit = Infinity) {
@@ -46,7 +49,7 @@ function cleanAttributes(clone: Element, limit = Infinity) {
     if (
       /^on/i.test(name) ||
       name === "srcdoc" ||
-      (name.startsWith("data-komo-") && name !== OPT_OUT) ||
+      (/^data-(palette|komo)-/.test(name) && !/-no-snapshot$/.test(name)) ||
       (URL_ATTRIBUTE.test(name) && /^\s*(?:javascript|vbscript):/i.test(value))
     )
       clone.removeAttribute(name);
@@ -86,7 +89,7 @@ export function snapshotHtml(
     cleanAttributes(clone, ATTRIBUTE_LIMIT);
     if (typed(original)) redactField(original, clone);
     left -= clone.outerHTML.length;
-    if (original.hasAttribute(OPT_OUT)) return clone;
+    if (optedOut(original)) return clone;
     if (redact?.(original)) {
       if (!typed(original)) clone.textContent = PLACEHOLDER;
       return clone;
@@ -178,7 +181,7 @@ async function imageData(image: HTMLImageElement, scale: number, view: Window) {
 /** Computed styles of each tag in an unstyled document, so clones only carry what differs. */
 function baselines() {
   const frame = document.createElement("iframe");
-  frame.setAttribute("data-komo-snapshot-sandbox", "");
+  frame.setAttribute("data-palette-snapshot-sandbox", "");
   frame.setAttribute("aria-hidden", "true");
   frame.tabIndex = -1;
   frame.style.cssText = "position:fixed;left:-10px;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
@@ -332,7 +335,7 @@ async function render(element: Element, redact: ((element: Element) => boolean) 
     if (!parent)
       // The root lays out at the top left of the image, at its own size, untransformed.
       css += `${computed.display === "inline" ? "display:inline-block;" : ""}margin:0;position:relative;inset:auto;float:none;transform:none;translate:none;rotate:none;scale:none;flex:none;box-sizing:border-box;width:${width}px;height:${height}px;max-width:none;max-height:none;min-width:0;min-height:0;`;
-    const hidden = original.hasAttribute(OPT_OUT) && !!parent;
+    const hidden = optedOut(original) && !!parent;
     // A private region inside the target keeps its box and loses its contents.
     if (hidden) css += "color:transparent;background:#e5e5e5;background-image:none;";
     styled.push([clone, inline(css)]);
@@ -440,7 +443,7 @@ const NOTES: Record<SnapshotNote, string> = {
   unsupported: "this browser can't encode WebP",
   failed: "it couldn't be drawn",
 };
-export const noteComment = (note: SnapshotNote) => `<!-- komo: no image snapshot, ${NOTES[note]}. -->`;
+export const noteComment = (note: SnapshotNote) => `<!-- palette: no image snapshot, ${NOTES[note]}. -->`;
 
 /**
  * Capture what the options ask for. Returns null when there is nothing to keep:

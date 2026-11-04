@@ -17,13 +17,13 @@ The browser widget and CLI use the same API protocol on Cloudflare and Node. Thi
      --google-client-id YOUR_GOOGLE_CLIENT_ID
    ```
 
-   This writes `.komo/node.env` and `.komo/owner-key`, adds them to `.gitignore`, and configures the existing widget and agent CLI. The preview wildcard matches one hostname label under a domain you control. The endpoint is the **public API origin**, not a preview URL. For local development it may use HTTP localhost. Keep the generated owner key private.
+   This writes `.palette/node.env` and `.palette/owner-key`, adds them to `.gitignore`, and configures the existing widget and agent CLI. The preview wildcard matches one hostname label under a domain you control. The endpoint is the **public API origin**, not a preview URL. For local development it may use HTTP localhost. Keep the generated owner key private.
 
-2. Provide a PostgreSQL database with a dedicated user allowed to create tables and triggers. Replace the `DATABASE_URL` and `GOOGLE_CLIENT_SECRET` placeholders in `.komo/node.env`. Add the printed `https://comments.example.com/auth/google/callback` URL to the Google OAuth client's authorized redirect URIs. In Cloud Run, supply the same variables through service configuration and a secret store. Do not commit the environment file. The Node runtime does not enable hosted provisioning (`KOMO_HOSTED`).
+2. Provide a PostgreSQL database with a dedicated user allowed to create tables and triggers. Replace the `DATABASE_URL` and `GOOGLE_CLIENT_SECRET` placeholders in `.palette/node.env`. Add the printed `https://comments.example.com/auth/google/callback` URL to the Google OAuth client's authorized redirect URIs. In Cloud Run, supply the same variables through service configuration and a secret store. Do not commit the environment file. The Node runtime does not enable hosted provisioning (`PALETTE_HOSTED`).
 
-   To enable signed webhooks, generate a 32-byte encryption key with `openssl rand -base64 32` and provide `KOMO_WEBHOOK_KEYS` through your secret manager as `{"current":"key-id","keys":{"key-id":"BASE64_KEY"}}`. Never store the key in source control or expose it in logs. Webhook endpoints must use HTTPS on port 443; the Node sender rejects private or mixed DNS answers and pins the vetted public address for the request.
+   To enable signed webhooks, generate a 32-byte encryption key with `openssl rand -base64 32` and provide `PALETTE_WEBHOOK_KEYS` through your secret manager as `{"current":"key-id","keys":{"key-id":"BASE64_KEY"}}`. Never store the key in source control or expose it in logs. Webhook endpoints must use HTTPS on port 443; the Node sender rejects private or mixed DNS answers and pins the vetted public address for the request.
 
-3. Build this repository's image with `docker build -f Dockerfile.node -t komo-node .`. Run it with the generated variables and HTTPS in front. For a local check, set `PUBLIC_URL=http://localhost:8080` in `.komo/node.env` and run `docker run --env-file /path/to/your-website/.komo/node.env -p 8080:8080 komo-node`. For Cloud Run, set the container port to 8080. Cloud SQL or another reachable PostgreSQL service can be used through `DATABASE_URL`; the database connection URL must be reachable from the container. Startup applies the bundled schema under a database lock. `/health` returns `{"ok":true}` after migrations succeed.
+3. Build this repository's image with `docker build -f Dockerfile.node -t komo-node .`. Run it with the generated variables and HTTPS in front. For a local check, set `PUBLIC_URL=http://localhost:8080` in `.palette/node.env` and run `docker run --env-file /path/to/your-website/.palette/node.env -p 8080:8080 komo-node`. For Cloud Run, set the container port to 8080. Cloud SQL or another reachable PostgreSQL service can be used through `DATABASE_URL`; the database connection URL must be reachable from the container. Startup applies the bundled schema under a database lock. `/health` returns `{"ok":true}` after migrations succeed.
 
    The image installs the PostgreSQL client (`pg`). To run `@hazem3500/palette/node` outside it, install `pg` next to Palette: it is an optional peer, so browser installs of Palette never include it.
 
@@ -49,11 +49,11 @@ If a reverse proxy serves Palette under a path, include it in `PUBLIC_URL`, for 
 
 Behind a proxy that authenticates users and signs each request, Palette can trust the proxy's identity instead of running its own OAuth client. This is off by default. One provider is supported:
 
-- **`KOMO_PROXY_AUTH=gcp-iap`:** Google Cloud Identity-Aware Proxy (IAP). Set **`KOMO_PROXY_AUDIENCE`** to the backend audience, `/projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID`. Palette verifies the `x-goog-iap-jwt-assertion` ES256 JWT against Google's IAP keys. It caches them for an hour, and fetches them again for an unknown key ID, at most every 30 seconds. A key fetch times out after 5 seconds. After a failed fetch it waits 30 seconds before trying again, and keeps verifying with the last keys for up to 24 hours. It checks the issuer, audience, expiry and issue time, allowing 60 seconds of clock skew. The subject must be `accounts.google.com:DIGITS`. The account ID is `google:DIGITS`, the same ID Google OAuth sign-in uses, so an existing account signs in as itself. The email is stored in lower case. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` aren't needed.
-- **`KOMO_IAP_AUDIENCE`**, the older name, still works: set alone, it means `gcp-iap` with that audience.
-- **`KOMO_AUTH_PATH_PREFIX`** (optional, for example `/backoffice`, older name `KOMO_AUTH_PREFIX`): serves the sign-in handlers only under this path, so the proxy can protect just that path. Without the prefix, those handlers return 404. It needs `KOMO_PROXY_AUTH`; set without one, the server doesn't start.
+- **`PALETTE_PROXY_AUTH=gcp-iap`:** Google Cloud Identity-Aware Proxy (IAP). Set **`PALETTE_PROXY_AUDIENCE`** to the backend audience, `/projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID`. Palette verifies the `x-goog-iap-jwt-assertion` ES256 JWT against Google's IAP keys. It caches them for an hour, and fetches them again for an unknown key ID, at most every 30 seconds. A key fetch times out after 5 seconds. After a failed fetch it waits 30 seconds before trying again, and keeps verifying with the last keys for up to 24 hours. It checks the issuer, audience, expiry and issue time, allowing 60 seconds of clock skew. The subject must be `accounts.google.com:DIGITS`. The account ID is `google:DIGITS`, the same ID Google OAuth sign-in uses, so an existing account signs in as itself. The email is stored in lower case. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` aren't needed.
+- **`PALETTE_IAP_AUDIENCE`**, the older name, still works: set alone, it means `gcp-iap` with that audience.
+- **`PALETTE_AUTH_PATH_PREFIX`** (optional, for example `/backoffice`, older name `PALETTE_AUTH_PREFIX`): serves the sign-in handlers only under this path, so the proxy can protect just that path. Without the prefix, those handlers return 404. It needs `PALETTE_PROXY_AUTH`; set without one, the server doesn't start.
 
-Any other `KOMO_PROXY_AUTH` value stops the server at startup with the list of supported providers.
+Any other `PALETTE_PROXY_AUTH` value stops the server at startup with the list of supported providers.
 
 The sign-in handlers are:
 
@@ -63,7 +63,7 @@ The sign-in handlers are:
 While a proxy is on:
 
 - Google is the only sign-in method, and `/config` reports `google: true`. GitHub sign-in returns 503, and the GitHub and Google OAuth handlers return 403 or 404.
-- Reads need a session and guests are off, whatever `KOMO_REQUIRE_SESSION_FOR_READS` and `KOMO_ALLOW_GUESTS` say.
+- Reads need a session and guests are off, whatever `PALETTE_REQUIRE_SESSION_FOR_READS` and `PALETTE_ALLOW_GUESTS` say.
 - Only sessions the proxy signed in are accepted, on every route. Each session records how it was signed in. Sessions from before the proxy was turned on are refused with 401 `Your session expired. Sign in again.`, whether from Google OAuth, GitHub or a guest, and reviewers sign in again through the proxy.
 - Personal access tokens are refused with 403, and `/config` reports `tokens: false`. A token would keep working after the proxy stopped vouching for its owner. Agents use `/auth/proxy/session` instead.
 - Missing, forged, expired, future-dated or wrong-audience assertions are rejected.
@@ -78,13 +78,13 @@ Proxy sign-in completes without a consent screen: a reviewer already signed in t
 
 Each option is off by default and works on Node and on a self-hosted Worker:
 
-- **`KOMO_REQUIRE_SESSION_FOR_READS=true`:** listing or fetching threads and comments needs a valid session. Other reads, such as snapshots, usage and exports, already need one. Anonymous reads return 401 `Sign in to see comments.`, and `/config` leaves out `repo` for callers without a session. Guest sessions still count, unless guests are off.
-- **`KOMO_ALLOW_GUESTS=false`:** refuses guest sign-in on every project with `Guest comments are disabled.`, and refuses existing guest sessions with the same message. `/config` then reports `guests: false` and `snapshots.guests: false`, even if a project sets `allowGuestSnapshots`. While guests are allowed, a project's own `allowGuests: false` still applies.
-- **`KOMO_SESSION_MAX_AGE_DAYS=N`** (1 to 36500): new sessions expire after N days, and sessions issued more than N days ago are refused, so lowering the cap applies to every existing session. Without it, sessions last until sign-out (100 years). Sessions record when they were issued from D1 migration `0021_session_origin` and PostgreSQL migration `007_session_origin`. Older sessions are dated by the 100-year lifetime, which is exact for them. A session that some other server issued with a shorter lifetime looks older than it is, so a cap refuses it. Personal access tokens keep the expiry chosen when they were created.
+- **`PALETTE_REQUIRE_SESSION_FOR_READS=true`:** listing or fetching threads and comments needs a valid session. Other reads, such as snapshots, usage and exports, already need one. Anonymous reads return 401 `Sign in to see comments.`, and `/config` leaves out `repo` for callers without a session. Guest sessions still count, unless guests are off.
+- **`PALETTE_ALLOW_GUESTS=false`:** refuses guest sign-in on every project with `Guest comments are disabled.`, and refuses existing guest sessions with the same message. `/config` then reports `guests: false` and `snapshots.guests: false`, even if a project sets `allowGuestSnapshots`. While guests are allowed, a project's own `allowGuests: false` still applies.
+- **`PALETTE_SESSION_MAX_AGE_DAYS=N`** (1 to 36500): new sessions expire after N days, and sessions issued more than N days ago are refused, so lowering the cap applies to every existing session. Without it, sessions last until sign-out (100 years). Sessions record when they were issued from D1 migration `0021_session_origin` and PostgreSQL migration `007_session_origin`. Older sessions are dated by the 100-year lifetime, which is exact for them. A session that some other server issued with a shorter lifetime looks older than it is, so a cap refuses it. Personal access tokens keep the expiry chosen when they were created.
 
 The flags take only `true` or `false`. An invalid value stops the Node server at startup, and makes every Worker request fail with the option named in the logs.
 
-On a self-hosted Worker, apply the D1 migrations (`wrangler d1 migrations apply`) before turning on `KOMO_PROXY_AUTH` or `KOMO_SESSION_MAX_AGE_DAYS`. Without migration 0021, sessions are still issued as before, but those two options fail every authenticated request with a log naming the migration. The Node server applies its migrations at startup.
+On a self-hosted Worker, apply the D1 migrations (`wrangler d1 migrations apply`) before turning on `PALETTE_PROXY_AUTH` or `PALETTE_SESSION_MAX_AGE_DAYS`. Without migration 0021, sessions are still issued as before, but those two options fail every authenticated request with a log naming the migration. The Node server applies its migrations at startup.
 
 ### Deploy behind Google Cloud IAP
 
@@ -92,7 +92,9 @@ Build the image with `docker build -f Dockerfile.node -t komo-node .`. It runs `
 
 Put only `PREFIX/auth/google/authorize` and `PREFIX/auth/proxy/session` behind IAP. Leave the rest of the API outside it.
 
-Google Cloud's external Application Load Balancer appends two `X-Forwarded-For` entries, the client's address and then the load balancer's forwarding rule address. Behind it alone, set `KOMO_TRUSTED_PROXY_HOPS=2`. Add one for each proxy after it that appends the address it received from, such as nginx with `$proxy_add_x_forwarded_for`: a load balancer plus nginx is `3`. A proxy that passes the header through unchanged adds nothing.
+Google Cloud's external Application Load Balancer appends two `X-Forwarded-For` entries, the client's address and then the load balancer's forwarding rule address. Behind it alone, set `PALETTE_TRUSTED_PROXY_HOPS=2`. Add one for each proxy after it that appends the address it received from, such as nginx with `$proxy_add_x_forwarded_for`: a load balancer plus nginx is `3`. A proxy that passes the header through unchanged adds nothing.
+
+Deployments configured before the rename keep working unchanged: each `PALETTE_*` variable below is also read under its older `KOMO_*` name (`KOMO_ALLOW_GUESTS`, `KOMO_TRUSTED_PROXY_HOPS` and so on) when the `PALETTE_*` name is unset. When both are set, `PALETTE_*` wins.
 
 | Variable | Purpose | Default | Example |
 | --- | --- | --- | --- |
@@ -100,29 +102,29 @@ Google Cloud's external Application Load Balancer appends two `X-Forwarded-For` 
 | `PUBLIC_URL` | Public URL, including any path the gateway strips | required | `https://comments.example.com/komo` |
 | `PROJECTS` | Project keys, repositories and approved origins, on one line | required | `{"site":{"repo":"your-org/your-repo","origins":["https://*-web.preview.example.com","https://dev.example.com:*"],"allowGuests":false}}` |
 | `PORT` | Listen port | `8080` | `8080` |
-| `KOMO_PROXY_AUTH` | Identity proxy provider | off | `gcp-iap` |
-| `KOMO_PROXY_AUDIENCE` | IAP audience (older name `KOMO_IAP_AUDIENCE`) | unset | `/projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID` |
-| `KOMO_AUTH_PATH_PREFIX` | Path IAP protects for sign-in (older name `KOMO_AUTH_PREFIX`) | none | `/backoffice` |
-| `KOMO_SESSION_MAX_AGE_DAYS` | Session lifetime cap | unset (100 years) | `30` |
-| `KOMO_TRUSTED_PROXY_HOPS` | `X-Forwarded-For` entries trusted proxies append (older name `KOMO_PROXY_HOPS`) | `0` | `2` behind the load balancer alone; `3` with one appending proxy, such as nginx, after it |
-| `KOMO_REQUIRE_SESSION_FOR_READS` | Reads need a session | `false` | forced `true` by the proxy; leave unset |
-| `KOMO_ALLOW_GUESTS` | Guest sign-in | `true` | forced `false` by the proxy; leave unset |
+| `PALETTE_PROXY_AUTH` | Identity proxy provider | off | `gcp-iap` |
+| `PALETTE_PROXY_AUDIENCE` | IAP audience (older name `PALETTE_IAP_AUDIENCE`) | unset | `/projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID` |
+| `PALETTE_AUTH_PATH_PREFIX` | Path IAP protects for sign-in (older name `PALETTE_AUTH_PREFIX`) | none | `/backoffice` |
+| `PALETTE_SESSION_MAX_AGE_DAYS` | Session lifetime cap | unset (100 years) | `30` |
+| `PALETTE_TRUSTED_PROXY_HOPS` | `X-Forwarded-For` entries trusted proxies append (older name `PALETTE_PROXY_HOPS`) | `0` | `2` behind the load balancer alone; `3` with one appending proxy, such as nginx, after it |
+| `PALETTE_REQUIRE_SESSION_FOR_READS` | Reads need a session | `false` | forced `true` by the proxy; leave unset |
+| `PALETTE_ALLOW_GUESTS` | Guest sign-in | `true` | forced `false` by the proxy; leave unset |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth | unset | not needed with IAP |
-| `KOMO_TOKEN_PEPPER` | Secret mixed into access token hashes | unset | a long random secret |
-| `KOMO_WEBHOOK_KEYS` | Webhook secret encryption keys | unset | see Configure, step 2 |
+| `PALETTE_TOKEN_PEPPER` | Secret mixed into access token hashes | unset | a long random secret |
+| `PALETTE_WEBHOOK_KEYS` | Webhook secret encryption keys | unset | see Configure, step 2 |
 
 ### Move a patched upstream server to this package
 
 For a server that ran upstream komo with a local IAP patch:
 
 1. Back up and upgrade the database as in [Upgrade a database from upstream komo](#upgrade-a-database-from-upstream-komo). Migration `007_session_origin.sql` adds two nullable columns to `sessions`, recording how and when each session was signed in. Existing rows keep NULL.
-2. Keep `KOMO_IAP_AUDIENCE`, or rename it to `KOMO_PROXY_AUTH=gcp-iap` plus `KOMO_PROXY_AUDIENCE`. `KOMO_PROXY_HOPS` keeps its meaning.
-3. Replace a patched session lifetime with `KOMO_SESSION_MAX_AGE_DAYS`. Behind the proxy, sessions issued before the upgrade aren't accepted, because nothing records that the proxy signed them in. Each reviewer and agent signs in through IAP once more. The popup does this without a prompt, and agents call `/auth/proxy/session`. Personal access tokens stop working behind the proxy.
-4. Set `PUBLIC_URL` to the external URL, including the path the gateway strips, and `KOMO_AUTH_PATH_PREFIX` to the path IAP protects. `/auth/google/start` then returns `https://HOST/PATH/PREFIX/auth/google/authorize`, so a proxy rewrite of that response is no longer needed. Palette serves the prefixed handlers itself.
+2. Keep `PALETTE_IAP_AUDIENCE`, or rename it to `PALETTE_PROXY_AUTH=gcp-iap` plus `PALETTE_PROXY_AUDIENCE`. `PALETTE_PROXY_HOPS` keeps its meaning.
+3. Replace a patched session lifetime with `PALETTE_SESSION_MAX_AGE_DAYS`. Behind the proxy, sessions issued before the upgrade aren't accepted, because nothing records that the proxy signed them in. Each reviewer and agent signs in through IAP once more. The popup does this without a prompt, and agents call `/auth/proxy/session`. Personal access tokens stop working behind the proxy.
+4. Set `PUBLIC_URL` to the external URL, including the path the gateway strips, and `PALETTE_AUTH_PATH_PREFIX` to the path IAP protects. `/auth/google/start` then returns `https://HOST/PATH/PREFIX/auth/google/authorize`, so a proxy rewrite of that response is no longer needed. Palette serves the prefixed handlers itself.
 5. Point health checks at `GET /health`. Palette doesn't answer `GET /` with 200.
 6. Startup is stricter. A server now stops with a named error on:
-   - a `KOMO_PROXY_HOPS` value that isn't a single digit from 0 to 8, such as `01` or ` 1`;
-   - `KOMO_AUTH_PREFIX` set without a proxy;
+   - a `PALETTE_PROXY_HOPS` value that isn't a single digit from 0 to 8, such as `01` or ` 1`;
+   - `PALETTE_AUTH_PREFIX` set without a proxy;
    - a sign-in prefix with `.` or `..` segments;
    - a `PROJECTS` origin that isn't a valid pattern.
 
@@ -140,7 +142,7 @@ initPalette({
 });
 ```
 
-Point the existing CLI at the same endpoint, project, repository, and branch. `palette login` uses Google when configured; `KOMO_TOKEN` accepts a personal access token (create one at `/account?project=KEY` on your server; see Bots and CI in the README) or a previously issued session token for a non-interactive bot. Store that token as a secret. Access tokens are limited by their scopes and projects; session tokens have the same permissions as their user. Optionally set `KOMO_TOKEN_PEPPER` to a long random secret to mix into stored token hashes; changing it revokes every access token. For example:
+Point the existing CLI at the same endpoint, project, repository, and branch. `palette login` uses Google when configured; `PALETTE_TOKEN` accepts a personal access token (create one at `/account?project=KEY` on your server; see Bots and CI in the README) or a previously issued session token for a non-interactive bot. Store that token as a secret. Access tokens are limited by their scopes and projects; session tokens have the same permissions as their user. Optionally set `PALETTE_TOKEN_PEPPER` to a long random secret to mix into stored token hashes; changing it revokes every access token. For example:
 
 ```sh
 palette comments list --endpoint https://comments.example.com --project YOUR_GENERATED_PROJECT_KEY --repo your-org/your-repo --branch pr-42 --origin https://pr-42.preview.example.com
@@ -163,4 +165,4 @@ To roll back, restore the backup. Redeploying the old image is not enough: the u
 
 The API's storage contract is `prepare().bind().first()/all()/run()` plus atomic `batch()`. `server/postgres.ts` implements it with a PostgreSQL pool, parameterized statements, and one transaction per batch. `server/postgres/001_initial.sql` mirrors the SQLite schema and its quota, revision, retention, and deletion triggers; later numbered files, such as `005_snapshots.sql` for element snapshots (`bytea`), mirror later D1 migrations. Add a numbered PostgreSQL migration whenever the D1 schema changes. Existing D1 migrations and the Worker entry point stay separate. The Node server runs the same request handler; transport and storage are the only new adapters.
 
-The Node process runs retention cleanup after requests, as the self-hosted Worker does. It handles `SIGTERM` by closing its HTTP listener and database pool. Database connection failures prevent startup; request errors return the existing API error format. Rate limits use the direct socket IP by default, and never trust a client's `X-Forwarded-For`. Behind trusted reverse proxies, set `KOMO_TRUSTED_PROXY_HOPS` (older name `KOMO_PROXY_HOPS`, 0 to 8) to the number of `X-Forwarded-For` entries those proxies append before the app. Most proxies append one; Google Cloud's external Application Load Balancer appends two (see [Deploy behind Google Cloud IAP](#deploy-behind-google-cloud-iap)). The client address is then that many entries from the right; entries further left are ignored. If the header has fewer entries, or that entry isn't an IP address, the socket IP is used. Check your load balancer’s forwarding behavior for the correct value, and only set it when requests can't bypass those proxies. Client-supplied `CF-Connecting-IP` is ignored. The Cloudflare Worker uses Cloudflare's `CF-Connecting-IP`.
+The Node process runs retention cleanup after requests, as the self-hosted Worker does. It handles `SIGTERM` by closing its HTTP listener and database pool. Database connection failures prevent startup; request errors return the existing API error format. Rate limits use the direct socket IP by default, and never trust a client's `X-Forwarded-For`. Behind trusted reverse proxies, set `PALETTE_TRUSTED_PROXY_HOPS` (older name `PALETTE_PROXY_HOPS`, 0 to 8) to the number of `X-Forwarded-For` entries those proxies append before the app. Most proxies append one; Google Cloud's external Application Load Balancer appends two (see [Deploy behind Google Cloud IAP](#deploy-behind-google-cloud-iap)). The client address is then that many entries from the right; entries further left are ignored. If the header has fewer entries, or that entry isn't an IP address, the socket IP is used. Check your load balancer’s forwarding behavior for the correct value, and only set it when requests can't bypass those proxies. Client-supplied `CF-Connecting-IP` is ignored. The Cloudflare Worker uses Cloudflare's `CF-Connecting-IP`.

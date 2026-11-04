@@ -15,7 +15,7 @@ it("keeps the popup, query, active token and scroll position through async theme
   const tokens = Array.from({ length: 80 }, (_, i) => ({ path: `color.${i}`, type: "color" as const, value: "#123456", label: `Color ${i}`, properties: ["color"] }));
   const options = { trigger, tokens, property: "color", current: "color.1", onSelect: vi.fn() };
   const close = openTokenPicker(options);
-  const popup = document.querySelector(".komo-tokens")!;
+  const popup = document.querySelector(".palette-tokens")!;
   const search = popup.querySelector("input")!;
   search.value = "Color 1";
   search.dispatchEvent(new Event("input"));
@@ -25,7 +25,7 @@ it("keeps the popup, query, active token and scroll position through async theme
   const active = popup.querySelector('[data-active]')!.getAttribute("aria-label");
   refreshTokenPicker(trigger);
   refreshTokenPicker(trigger, { ...options, tokens: tokens.map(token => ({ ...token, value: "#abcdef" })) });
-  expect(document.querySelector(".komo-tokens")).toBe(popup);
+  expect(document.querySelector(".palette-tokens")).toBe(popup);
   expect(search.value).toBe("Color 1");
   expect(list.scrollTop).toBe(48);
   expect(popup.querySelector('[data-active]')!.getAttribute("aria-label")).toBe(active!.replace("#123456", "#abcdef"));
@@ -41,21 +41,21 @@ it("opens unbound values in Custom, allows Tab, and restores before a single cus
   const close = openTokenPicker({ trigger, tokens: [], property: "font-family", onSelect: vi.fn(), custom: {
     value, onPreview(next) { const before = value; value = next; return () => { value = before; }; }, onSelect: commit,
   } });
-  await vi.waitFor(() => expect(document.querySelector(".komo-custom")).not.toBeNull());
+  await vi.waitFor(() => expect(document.querySelector(".palette-custom")).not.toBeNull());
   const input = document.querySelector<HTMLInputElement>('[aria-label="CSS value"]')!;
   input.value = "monospace";
   input.dispatchEvent(new Event("input"));
   expect(value).toBe("monospace");
   input.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-  expect(document.querySelector(".komo-tokens")).not.toBeNull();
+  expect(document.querySelector(".palette-tokens")).not.toBeNull();
   expect(commit).not.toHaveBeenCalled();
   // No Apply button: Enter keeps the value, and a host without live commits takes it on close.
-  expect(document.querySelector(".komo-custom button")).toBeNull();
+  expect(document.querySelector(".palette-custom button")).toBeNull();
   input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   expect(value).toBe("monospace");
   expect(commit).not.toHaveBeenCalled();
   document.body.dispatchEvent(new Event("pointerdown", { bubbles: true, composed: true }));
   expect(commit).toHaveBeenCalledExactlyOnceWith("monospace");
-  expect(document.querySelector(".komo-tokens")).toBeNull();
+  expect(document.querySelector(".palette-tokens")).toBeNull();
   close();
 });

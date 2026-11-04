@@ -48,12 +48,12 @@ describe("font family display", () => {
       apply(_control, property, value) { values.push(value); if (value) element.style.setProperty(property, value); },
     }));
     const input = box.querySelector<HTMLInputElement>("input[data-property]")!;
-    expect(box.querySelector(".komo-font-name span")?.textContent).toBe("Acme, Display");
+    expect(box.querySelector(".palette-font-name span")?.textContent).toBe("Acme, Display");
     expect(input.value).toBe(getComputedStyle(element).fontFamily);
     input.value = "'Other, Face', monospace";
     input.dispatchEvent(new Event("input"));
     expect(element.style.fontFamily).toBe('"Other, Face", monospace');
-    expect(box.querySelector(".komo-font-name span")?.textContent).toBe("Other, Face");
+    expect(box.querySelector(".palette-font-name span")?.textContent).toBe("Other, Face");
     expect(input.title).toContain("Other, Face");
   });
 });

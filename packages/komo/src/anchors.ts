@@ -330,7 +330,7 @@ export function locateAnchor(
   return measure(anchor, resolveAnchor(anchor, target));
 }
 /** A comment preview that moves an element hides it and shows this stand-in in its place. */
-export const STAND_IN = Symbol.for("komo.stand-in");
+export const STAND_IN = Symbol.for("palette.stand-in");
 function measure(anchor: Anchor, element: Element | null) {
   if (element) {
     const stand = (element as Element & { [STAND_IN]?: Element })[STAND_IN];

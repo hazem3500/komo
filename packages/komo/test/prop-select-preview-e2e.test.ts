@@ -42,7 +42,7 @@ beforeAll(async () => {
           enumProp('size',['sm','md','lg']),enumProp('tone',['calm','bold'],false)]};
         function Button({onPropsChange,onClick,...props}){
           const inspect=usePaletteInspectable({component:definition,props,onChange:onPropsChange,enabled:true});
-          return h('button',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],type:'button',className:'fixture-button',
+          return h('button',{ref:inspect.ref,'data-palette-inspectable':inspect['data-palette-inspectable'],type:'button',className:'fixture-button',
             'data-variant':props.variant,'data-color':props.color,'data-size':props.size,'data-tone':String(props.tone),onClick},'Example button');
         }
         function Chip(props){
@@ -106,8 +106,8 @@ async function open(version: number, target: string) {
   return { page, errors };
 }
 const tools = (page: Page) => ({
-  list: page.locator(".komo-select"),
-  option: (name: string) => page.locator(".komo-select").getByRole("option", { name, exact: true }),
+  list: page.locator(".palette-select"),
+  option: (name: string) => page.locator(".palette-select").getByRole("option", { name, exact: true }),
   count: () => page.locator(".design-inspector__count").textContent(),
   undo: () => page.getByRole("button", { name: "Undo", exact: true }).click(),
 });

@@ -15,8 +15,9 @@ await build({
   minify: true,
   format: "esm",
 });
-if (process.env.KOMO_BENCH_BASELINE)
-  await cp(process.env.KOMO_BENCH_BASELINE, join(root, "before"), {
+const baseline = process.env.PALETTE_BENCH_BASELINE || process.env.KOMO_BENCH_BASELINE;
+if (baseline)
+  await cp(baseline, join(root, "before"), {
     recursive: true,
   });
 const server = createServer(async (request, response) => {

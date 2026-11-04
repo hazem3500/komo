@@ -126,7 +126,7 @@ it("logout removes every branch snapshot and legacy cache for this session only"
   const dom = page();
   const api = new CommentsApi(options);
   api.save({ token: "signed-in", user });
-  const prefix = `branch-comments:${options.endpoint}:${options.project}`;
+  const prefix = `palette:${options.endpoint}:${options.project}`;
   const store = dom.window.localStorage;
   store.setItem(`${prefix}:["repo","main"]:threads`, "private-main");
   store.setItem(`${prefix}:["repo","feature"]:threads`, "private-feature");
@@ -155,7 +155,7 @@ it("never adopts a legacy project-only cookie and retains only endpoint-scoped l
   expect(new CommentsApi(options).token).toBeNull();
   expect(dom.window.document.cookie).not.toContain("bc-session-project=");
   dom.window.localStorage.setItem(
-    `branch-comments:${options.endpoint}:${options.project}`,
+    `palette:${options.endpoint}:${options.project}`,
     "scoped-token",
   );
   expect(new CommentsApi(options).token).toBe("scoped-token");
@@ -167,7 +167,7 @@ it("never adopts a legacy project-only cookie and retains only endpoint-scoped l
 it("restores the scoped local session when the cookie getter is blocked", () => {
   const dom = page();
   dom.window.localStorage.setItem(
-    `branch-comments:${options.endpoint}:${options.project}`,
+    `palette:${options.endpoint}:${options.project}`,
     "local-session",
   );
   Object.defineProperty(dom.window.document, "cookie", {
@@ -211,10 +211,10 @@ it("shared logout prevents another preview's local fallback from reviving the se
   vi.stubGlobal("document", first.window.document);
   vi.stubGlobal("location", first.window.location);
   vi.stubGlobal("localStorage", first.window.localStorage);
-  expect(first.window.localStorage.getItem(`branch-comments:${options.endpoint}:${options.project}`)).toBe("shared");
+  expect(first.window.localStorage.getItem(`palette:${options.endpoint}:${options.project}`)).toBe("shared");
   expect(new CommentsApi(shared).token).toBeNull();
   expect(new CommentsApi(shared).user).toBeNull();
-  expect(first.window.localStorage.getItem(`branch-comments:${options.endpoint}:${options.project}`)).toBeNull();
+  expect(first.window.localStorage.getItem(`palette:${options.endpoint}:${options.project}`)).toBeNull();
 });
 
 it("marks memory-only sessions so a focus check cannot mistake blocked persistence for logout", () => {
@@ -229,7 +229,7 @@ it("marks memory-only sessions so a focus check cannot mistake blocked persisten
 
 it("migrates a previously validated endpoint-scoped account snapshot without trusting legacy cookies", async () => {
   const dom = page();
-  const key = `branch-comments:${options.endpoint}:${options.project}`;
+  const key = `palette:${options.endpoint}:${options.project}`;
   dom.window.localStorage.setItem(`${key}:user`, JSON.stringify({ token: "known-session", user }));
   const api = new CommentsApi(options);
   expect(api.token).toBe("known-session");

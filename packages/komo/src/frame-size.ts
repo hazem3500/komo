@@ -296,7 +296,7 @@ export function mountFrameSize(
   const zooms = (["Fit", "100%"] as const).map((label, index) => {
     const item = element("button", "", { type: "button", role: "menuitemradio", "aria-keyshortcuts": zoomKeys[index].label }, label);
     // Keycaps as Palette draws them elsewhere (⇧ on Apple platforms).
-    const keys = element("span", "komo-kbd", { "aria-hidden": "true", "data-variant": "surface" });
+    const keys = element("span", "palette-kbd", { "aria-hidden": "true", "data-variant": "surface" });
     for (const cap of [/mac|iphone|ipad/i.test(navigator.platform) ? "⇧" : "Shift", zoomKeys[index].key]) keys.append(element("kbd", "", {}, cap));
     item.append(keys);
     item.addEventListener("click", () => {

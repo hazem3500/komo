@@ -17,6 +17,7 @@ import {
   type PatAccess,
 } from "./tokens";
 import { authOptions, type ProxyAuthProvider, type ProxyIdentity } from "./proxy-auth";
+import { paletteEnv } from "./public-env";
 import setupClient from "./setup-client.txt";
 import {
   dispatchWebhook,
@@ -135,7 +136,7 @@ function webhookEvent(
 const json = (data: unknown, status = 200) => Response.json(data, { status });
 const token = () => crypto.randomUUID() + crypto.randomUUID();
 // Sessions should not force reviewers back through sign-in: unless
-// KOMO_SESSION_MAX_AGE_DAYS caps them, keep them valid for a century and only
+// PALETTE_SESSION_MAX_AGE_DAYS caps them, keep them valid for a century and only
 // revoke on logout.
 const SESSION_LIFETIME = 100 * 365 * 86400000;
 async function hash(value: string) {
@@ -319,7 +320,7 @@ async function authenticate(
   } catch (error) {
     if (missingSessionColumns(error))
       throw new ConfigError(
-        "KOMO_PROXY_AUTH and KOMO_SESSION_MAX_AGE_DAYS need D1 migration 0021_session_origin. Apply the migrations."
+        "PALETTE_PROXY_AUTH and PALETTE_SESSION_MAX_AGE_DAYS need D1 migration 0021_session_origin. Apply the migrations."
       );
     throw error;
   }
@@ -430,7 +431,7 @@ async function oauthAuthorize(
   authorize.search = new URLSearchParams({
     client_id:
       provider === "google" ? env.GOOGLE_CLIENT_ID : env.GITHUB_CLIENT_ID,
-    redirect_uri: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/auth/${provider}/callback`,
+    redirect_uri: `${url.origin}${env.PALETTE_PUBLIC_PATH ?? ""}/auth/${provider}/callback`,
     ...(provider === "google"
       ? { response_type: "code", scope: "openid profile email" }
       : {}),
@@ -505,7 +506,7 @@ async function oauthCallback(
             : env.GITHUB_CLIENT_SECRET,
         grant_type: "authorization_code",
         code,
-        redirect_uri: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/auth/${provider}/callback`,
+        redirect_uri: `${url.origin}${env.PALETTE_PUBLIC_PATH ?? ""}/auth/${provider}/callback`,
         code_verifier: saved.verifier,
       }),
     }
@@ -594,7 +595,7 @@ async function finishSignIn(
   via: SessionVia = provider
 ) {
   const setupCode =
-    env.KOMO_HOSTED === "true" &&
+    env.PALETTE_HOSTED === "true" &&
     saved.approved_origins &&
     saved.project.startsWith("setup:")
       ? saved.project.slice(6)
@@ -726,12 +727,12 @@ async function route(
   const url = new URL(request.url);
   // Invalid sign-in options fail every request, health checks included.
   const auth = authOptions(env);
-  if (url.pathname === "/health") return json({ ok: true, version: env.KOMO_VERSION?.id });
+  if (url.pathname === "/health") return json({ ok: true, version: env.PALETTE_VERSION?.id });
   if (url.pathname === "/setup-client.js" && request.method === "GET")
     return new Response(setupClient, {
       headers: { "Content-Type": "text/javascript; charset=utf-8" },
     });
-  if (env.KOMO_PAUSED === "true")
+  if (env.PALETTE_PAUSED === "true")
     throw new HttpError(503, "Inline feedback is temporarily paused.");
   if (env.EDGE_LIMIT) {
     const allowed = await env.EDGE_LIMIT.limit({
@@ -741,12 +742,12 @@ async function route(
   }
   // Keep exact shared quotas: the per-location edge limiter cannot enforce a
   // service-wide daily budget. Unchanged polls still consume these counters.
-  if (env.KOMO_HOSTED === "true")
+  if (env.PALETTE_HOSTED === "true")
     await limit(env, "service:requests", 100000, 86400);
   if (
     url.pathname === "/setup/connect" &&
     request.method === "GET" &&
-    env.KOMO_HOSTED === "true"
+    env.PALETTE_HOSTED === "true"
   ) {
     check(
       env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET,
@@ -819,13 +820,13 @@ async function route(
     authorize.searchParams.set("state", state);
     return oauthAuthorize(new Request(authorize), env, "google");
   }
-  if (url.pathname === "/setup") return setupPage(env.KOMO_PUBLIC_PATH ?? "");
+  if (url.pathname === "/setup") return setupPage(env.PALETTE_PUBLIC_PATH ?? "");
   if (url.pathname === "/account" && request.method === "GET")
     return accountPage(env, url);
   if (
     url.pathname === "/setup/start" &&
     request.method === "POST" &&
-    env.KOMO_HOSTED === "true"
+    env.PALETTE_HOSTED === "true"
   ) {
     await limit(
       env,
@@ -846,12 +847,12 @@ async function route(
     )
       .bind(id, await hash(secret), JSON.stringify(config), Date.now() + 600000)
       .run();
-    return json({ id, secret, url: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/setup?code=${id}` });
+    return json({ id, secret, url: `${url.origin}${env.PALETTE_PUBLIC_PATH ?? ""}/setup?code=${id}` });
   }
   if (
     url.pathname === "/setup/poll" &&
     request.method === "POST" &&
-    env.KOMO_HOSTED === "true"
+    env.PALETTE_HOSTED === "true"
   ) {
     await limit(
       env,
@@ -874,7 +875,7 @@ async function route(
         ? {
             project: row.project,
             repo: JSON.parse(row.config).repo,
-            endpoint: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}`,
+            endpoint: `${url.origin}${env.PALETTE_PUBLIC_PATH ?? ""}`,
           }
         : { pending: true }
     );
@@ -884,7 +885,7 @@ async function route(
   );
   if (auth.proxy) {
     // Proxy sign-in replaces OAuth. Its handlers live only under
-    // KOMO_AUTH_PATH_PREFIX when set, the path the proxy protects.
+    // PALETTE_AUTH_PATH_PREFIX when set, the path the proxy protects.
     const prefix = auth.signInPrefix;
     const signInPath =
       !prefix || url.pathname.startsWith(`${prefix}/auth/`)
@@ -913,7 +914,7 @@ async function route(
       : oauthCallback(request, env, oauthPath[1] as "github" | "google");
   const project = string(url.searchParams.get("project"), 100, "project");
   const config: Project | undefined =
-    project === "_komo" && env.KOMO_HOSTED === "true"
+    project === "_komo" && env.PALETTE_HOSTED === "true"
       ? { repo: "_komo", origins: [url.origin], allowGuests: false }
       : await projectConfig(env, project);
   check(config, 404, "Unknown comments project.");
@@ -991,7 +992,7 @@ async function route(
     url.pathname === "/setup/complete" &&
     request.method === "POST" &&
     project === "_komo" &&
-    env.KOMO_HOSTED === "true"
+    env.PALETTE_HOSTED === "true"
   ) {
     const user = await authenticate(request, env, project);
     check(
@@ -1122,7 +1123,7 @@ async function route(
       403,
       "A Google-authenticated owner must finish workspace setup first."
     );
-  if (env.KOMO_HOSTED !== "true") ctx.waitUntil(maintain(env.DB));
+  if (env.PALETTE_HOSTED !== "true") ctx.waitUntil(maintain(env.DB));
   if (url.pathname === "/config" && request.method === "GET")
     return json({
       // The repository is feedback metadata: keep it from anonymous callers
@@ -1274,8 +1275,8 @@ async function route(
       )
       .run();
     return json({
-      // KOMO_PUBLIC_PATH covers apps served under a path behind a proxy that strips it.
-      url: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}${auth.signInPrefix}/auth/${provider}/authorize?state=${encodeURIComponent(state)}`,
+      // PALETTE_PUBLIC_PATH covers apps served under a path behind a proxy that strips it.
+      url: `${url.origin}${env.PALETTE_PUBLIC_PATH ?? ""}${auth.signInPrefix}/auth/${provider}/authorize?state=${encodeURIComponent(state)}`,
     });
   }
   if (url.pathname === "/me") {
@@ -1447,7 +1448,7 @@ async function route(
       const group = snapshotsByThread.get(item.thread_id) ?? {};
       scope.set("v", String(item.created_at));
       group[item.kind] =
-        `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/threads/${item.thread_id}/snapshot/${item.kind}?${scope}`;
+        `${url.origin}${env.PALETTE_PUBLIC_PATH ?? ""}/threads/${item.thread_id}/snapshot/${item.kind}?${scope}`;
       snapshotsByThread.set(item.thread_id, group);
     }
     const commentsByThread = new Map<string, CommentRow[]>();
@@ -1675,7 +1676,7 @@ async function route(
         ok: true,
         kind: snapshot.kind,
         size: snapshot.bytes.length,
-        url: `${url.origin}${env.KOMO_PUBLIC_PATH ?? ""}/threads/${threadId}/snapshot/${snapshot.kind}?${scope}`,
+        url: `${url.origin}${env.PALETTE_PUBLIC_PATH ?? ""}/threads/${threadId}/snapshot/${snapshot.kind}?${scope}`,
       },
       201
     );
@@ -1952,11 +1953,16 @@ function parseTags(value: string | null | undefined): string[] {
     return [];
   }
 }
+const settingsFor = new WeakMap<Env, Env>();
 export default {
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(maintain(env.DB, true));
   },
-  async fetch(request, env, ctx) {
+  async fetch(request, settings, ctx) {
+    // Deployments configured before the rename set KOMO_ names. One copy per
+    // bindings object keeps the per-env caches (sign-in options) warm.
+    let env = settingsFor.get(settings);
+    if (!env) settingsFor.set(settings, (env = paletteEnv(settings)));
     let response: Response;
     // An unapproved site may read why /config refused it, and nothing else.
     let refusedSite = false;
@@ -2003,7 +2009,7 @@ export default {
     let config: { origins: string[] } | undefined;
     try {
       config = project
-        ? project === "_komo" && env.KOMO_HOSTED === "true"
+        ? project === "_komo" && env.PALETTE_HOSTED === "true"
           ? { origins: [new URL(request.url).origin] }
           : await projectConfig(env, project)
         : undefined;

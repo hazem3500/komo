@@ -225,9 +225,9 @@ type DraftTokens = { adapter: TokenAdapter; tokens: readonly DesignToken[]; them
 const kids = (parent: Element, skip?: Element) => [...parent.children].filter(child => child !== skip && !child.hasAttribute(CLONE) &&
   !child.matches("script,style,template") && !/^(none|contents)$/.test(getComputedStyle(child).display));
 const indexOf = (element: Element, parent: Element) => kids(parent, element).filter(child => child.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING).length;
-const CLONE = "data-komo-move-clone";
+const CLONE = "data-palette-move-clone";
 // Comment anchors measure this stand-in while it shows a moved element (anchors.ts).
-const STAND_IN = Symbol.for("komo.stand-in");
+const STAND_IN = Symbol.for("palette.stand-in");
 type StandIn = Element & { [STAND_IN]?: Element };
 
 /**
@@ -318,7 +318,7 @@ function previewProp(element: Element, name: string, raw = "", design?: DesignSy
 }
 
 /** Outline what After changed in the selection colour, and a moved box's origin faintly. */
-function mark(root: Node, boxes: Array<{ box(): DOMRect | null; origin?: boolean }>, color = "var(--komo-selection,#0c93f5)") {
+function mark(root: Node, boxes: Array<{ box(): DOMRect | null; origin?: boolean }>, color = "var(--palette-selection,var(--komo-selection,#0c93f5))") {
   const layer = document.createElement("div");
   layer.setAttribute("aria-hidden", "true");
   const nodes = boxes.map(({ origin }) => layer.appendChild(Object.assign(document.createElement("div"), {

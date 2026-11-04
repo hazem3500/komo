@@ -22,7 +22,7 @@ beforeAll(async () => {
     stdin: { contents: `
       import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':lifecycle';
+      const key='palette:'+location.origin+':lifecycle';
       localStorage.setItem(key,'synthetic-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
       window.fetch=async input=>{const path=new URL(typeof input==='string'?input:input.url).pathname;return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads:[]}:{});};

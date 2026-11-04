@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveConfig } from "../src/config";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,10 +37,10 @@ describe("simple Palette setup", () => {
     const server = createServer(async (req, res) => {
       if (req.url === "/setup/poll") {
         generatedBeforeSignIn = await readFile(
-          join(dir, "komo.config.js"),
+          join(dir, "palette.config.js"),
           "utf8"
         );
-        privateSetup = await readFile(join(dir, ".komo/setup.json"), "utf8");
+        privateSetup = await readFile(join(dir, ".palette/setup.json"), "utf8");
       }
       res.setHeader("Content-Type", "application/json");
       res.end(
@@ -80,7 +80,7 @@ describe("simple Palette setup", () => {
           env: {
             ...process.env,
             CF_PAGES_URL: "https://site.example.com",
-            KOMO_BRANCH: "preview/one",
+            PALETTE_BRANCH: "preview/one",
           },
           timeout: 10000,
         }
@@ -90,23 +90,24 @@ describe("simple Palette setup", () => {
       expect(generatedBeforeSignIn).not.toContain("fixture-poll-secret");
       expect(privateSetup).toContain("fixture-poll-secret");
       expect(await readFile(join(dir, ".gitignore"), "utf8")).toContain(
-        ".komo/setup.json"
+        ".palette/setup.json"
       );
       await expect(
-        readFile(join(dir, ".komo/setup.json"), "utf8")
+        readFile(join(dir, ".palette/setup.json"), "utf8")
       ).rejects.toThrow();
       expect(initialized.stdout).toContain("from '@hazem3500/palette'");
       expect(initialized.stdout).not.toContain("fixture-poll-secret");
-      const generated = await readFile(join(dir, "komo.config.js"), "utf8");
+      const generated = await readFile(join(dir, "palette.config.js"), "utf8");
       expect(generated).toContain("from '@hazem3500/palette/setup'");
       expect(generated).toContain("preview/one");
       expect(generated).not.toContain("onboarding");
       expect(generated).not.toContain("fixture-poll-secret");
       await promisify(execFile)(process.execPath, [cli, "sync"], {
         cwd: dir,
+        // The older name still works.
         env: { ...process.env, KOMO_BRANCH: "preview/two" },
       });
-      expect(await readFile(join(dir, "komo.config.js"), "utf8")).toContain(
+      expect(await readFile(join(dir, "palette.config.js"), "utf8")).toContain(
         "preview/two"
       );
       await expect(
@@ -114,6 +115,19 @@ describe("simple Palette setup", () => {
       ).rejects.toThrow();
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+  it("keeps .komo/ and komo.config.js for a project set up before the rename", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "palette-cli-legacy-"));
+    try {
+      await mkdir(join(dir, ".komo"));
+      await writeFile(join(dir, ".komo/project.json"), JSON.stringify(config));
+      await promisify(execFile)(process.execPath, [cli, "sync"], { cwd: dir });
+      expect(await readFile(join(dir, "komo.config.js"), "utf8")).toContain('"project": "project-id"');
+      await expect(access(join(dir, "palette.config.js"))).rejects.toThrow();
+      await expect(access(join(dir, ".palette"))).rejects.toThrow();
+    } finally {
       await rm(dir, { recursive: true, force: true });
     }
   });

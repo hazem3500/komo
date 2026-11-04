@@ -22,7 +22,7 @@ it("keeps a retained panel subscribed on preview cancellation and disposes it on
   try {
     root.append(panel);
     await Promise.resolve();
-    root.dispatchEvent(new Event("komo-preview-cancel"));
+    root.dispatchEvent(new Event("palette-preview-cancel"));
     root.replaceChildren();
     root.append(panel);
     await Promise.resolve();
@@ -31,7 +31,7 @@ it("keeps a retained panel subscribed on preview cancellation and disposes it on
     panel.remove();
     await Promise.resolve();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
-    root.dispatchEvent(new Event("komo-preview-cancel"));
+    root.dispatchEvent(new Event("palette-preview-cancel"));
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   } finally { host.remove(); element.remove(); }
 });

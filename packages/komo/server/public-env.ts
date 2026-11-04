@@ -7,34 +7,82 @@ export interface ServerEnv {
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
   GOOGLE_CLIENT_SECRET: string;
-  KOMO_WEBHOOK_KEYS?: string;
-  KOMO_WEBHOOK_SEND?: (
+  EDGE_LIMIT?: RateLimit;
+  PALETTE_WEBHOOK_KEYS?: string;
+  PALETTE_WEBHOOK_SEND?: (
     url: string,
     body: string,
     headers: Record<string, string>
   ) => Promise<void>;
   /** Optional server secret mixed into access token hashes. Changing it revokes every token. */
-  KOMO_TOKEN_PEPPER?: string;
-  KOMO_HOSTED?: string;
-  KOMO_PAUSED?: string;
+  PALETTE_TOKEN_PEPPER?: string;
+  PALETTE_HOSTED?: string;
+  PALETTE_PAUSED?: string;
   /** Trusted identity proxy that signs reviewers in, e.g. "gcp-iap". Off unless set. */
-  KOMO_PROXY_AUTH?: string;
+  PALETTE_PROXY_AUTH?: string;
   /** The audience the proxy signs its assertions for. */
-  KOMO_PROXY_AUDIENCE?: string;
+  PALETTE_PROXY_AUDIENCE?: string;
   /** Older name: setting it alone turns on "gcp-iap" with this audience. */
-  KOMO_IAP_AUDIENCE?: string;
+  PALETTE_IAP_AUDIENCE?: string;
   /** Path the proxy protects for the sign-in handlers, e.g. "/backoffice". */
-  KOMO_AUTH_PATH_PREFIX?: string;
-  /** Older name for KOMO_AUTH_PATH_PREFIX. */
-  KOMO_AUTH_PREFIX?: string;
+  PALETTE_AUTH_PATH_PREFIX?: string;
+  /** Older name for PALETTE_AUTH_PATH_PREFIX. */
+  PALETTE_AUTH_PREFIX?: string;
   /** "true" makes reading comments need a session. Always on with a proxy. */
-  KOMO_REQUIRE_SESSION_FOR_READS?: string;
+  PALETTE_REQUIRE_SESSION_FOR_READS?: string;
   /** "false" refuses guest sign-in on every project. Always off with a proxy. */
-  KOMO_ALLOW_GUESTS?: string;
+  PALETTE_ALLOW_GUESTS?: string;
   /** Caps session age in days. Unset keeps sessions until sign-out. */
+  PALETTE_SESSION_MAX_AGE_DAYS?: string;
+  /** Path the app is served under behind a proxy that strips it, e.g. "/palette". */
+  PALETTE_PUBLIC_PATH?: string;
+  PALETTE_VERSION?: { id: string };
+  /** @deprecated Read when PALETTE_WEBHOOK_KEYS is unset. */
+  KOMO_WEBHOOK_KEYS?: string;
+  /** @deprecated Read when PALETTE_WEBHOOK_SEND is unset. */
+  KOMO_WEBHOOK_SEND?: (
+    url: string,
+    body: string,
+    headers: Record<string, string>
+  ) => Promise<void>;
+  /** @deprecated Read when PALETTE_TOKEN_PEPPER is unset. */
+  KOMO_TOKEN_PEPPER?: string;
+  /** @deprecated Read when PALETTE_HOSTED is unset. */
+  KOMO_HOSTED?: string;
+  /** @deprecated Read when PALETTE_PAUSED is unset. */
+  KOMO_PAUSED?: string;
+  /** @deprecated Read when PALETTE_PROXY_AUTH is unset. */
+  KOMO_PROXY_AUTH?: string;
+  /** @deprecated Read when PALETTE_PROXY_AUDIENCE is unset. */
+  KOMO_PROXY_AUDIENCE?: string;
+  /** @deprecated Read when PALETTE_IAP_AUDIENCE is unset. */
+  KOMO_IAP_AUDIENCE?: string;
+  /** @deprecated Read when PALETTE_AUTH_PATH_PREFIX is unset. */
+  KOMO_AUTH_PATH_PREFIX?: string;
+  /** @deprecated Read when PALETTE_AUTH_PREFIX is unset. */
+  KOMO_AUTH_PREFIX?: string;
+  /** @deprecated Read when PALETTE_REQUIRE_SESSION_FOR_READS is unset. */
+  KOMO_REQUIRE_SESSION_FOR_READS?: string;
+  /** @deprecated Read when PALETTE_ALLOW_GUESTS is unset. */
+  KOMO_ALLOW_GUESTS?: string;
+  /** @deprecated Read when PALETTE_SESSION_MAX_AGE_DAYS is unset. */
   KOMO_SESSION_MAX_AGE_DAYS?: string;
-  /** Path the app is served under behind a proxy that strips it, e.g. "/komo". */
+  /** @deprecated Read when PALETTE_PUBLIC_PATH is unset. */
   KOMO_PUBLIC_PATH?: string;
-  EDGE_LIMIT?: RateLimit;
+  /** @deprecated Read when PALETTE_VERSION is unset. */
   KOMO_VERSION?: { id: string };
+}
+
+/**
+ * `env` with each PALETTE_ setting filled from its older KOMO_ name when unset,
+ * so deployments configured before the rename keep working unchanged.
+ */
+export function paletteEnv<T extends object>(env: T): T {
+  const values = env as Record<string, unknown>;
+  const legacy: Record<string, unknown> = {};
+  for (const key in values)
+    if (key.startsWith("KOMO_") && values[`PALETTE_${key.slice(5)}`] === undefined)
+      legacy[`PALETTE_${key.slice(5)}`] = values[key];
+  // Layered over `env`, so every binding stays reachable whether or not it is enumerable.
+  return Object.keys(legacy).length ? Object.assign(Object.create(env) as T, legacy) : env;
 }

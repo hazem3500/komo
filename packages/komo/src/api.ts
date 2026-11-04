@@ -144,7 +144,7 @@ export class CommentsApi {
         ? domain
         : "";
     this.cookieName = `${this.cookieDomain ? "__Secure-" : "__Host-"}bc-session-${encodeURIComponent(JSON.stringify([scope, options.project]))}`;
-    this.key = `branch-comments:${options.endpoint}:${options.project}`;
+    this.key = `palette:${options.endpoint}:${options.project}`;
     let cookiePresent = false;
     try {
       const cookie = document.cookie.split("; ")

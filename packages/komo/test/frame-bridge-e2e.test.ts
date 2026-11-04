@@ -30,12 +30,12 @@ beforeAll(async () => {
       const definition={id:'option',name:'Option',source:'fixture/option.tsx',line:1,props:[{name:'selected',kind:'boolean',required:true,typeLabel:'boolean'}]};
       const tokens=[{path:'color.accent',cssVariable:'--accent',type:'color',properties:['background-color'],impactSelector:'.card'}];
       // Only the framed copy registers its tokens, as an app rendered only in the frame would.
-      const framed=window.name==='komo-viewport';
+      const framed=window.name==='palette-viewport';
       function App(){
         const[props,setProps]=React.useState({selected:false});
         const inspect=usePaletteInspectable({component:definition,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
         usePaletteDesignTokens({tokens,enabled:framed});
-        return h('section',{className:'card',id:'card'},h('button',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],id:'option',type:'button','data-selected':String(props.selected)},'Example option'));
+        return h('section',{className:'card',id:'card'},h('button',{ref:inspect.ref,'data-palette-inspectable':inspect['data-palette-inspectable'],id:'option',type:'button','data-selected':String(props.selected)},'Example option'));
       }
       createRoot(document.querySelector('main')).render(h(App));
       window.fetch=async()=>Response.json({threads:[],guests:true});
@@ -74,15 +74,15 @@ async function viewport(page: Page): Promise<Frame> {
   await page.keyboard.press("l");
   await page.waitForFunction(() => {
     const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;
-    const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]");
+    const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
     return !!frame?.contentDocument?.getElementById("option") && !root!.querySelector(".frame-stage[data-loading]");
   });
-  return page.frames().find((item) => item.name() === "komo-viewport")!;
+  return page.frames().find((item) => item.name() === "palette-viewport")!;
 }
 /** An element inside the viewport iframe, on screen. */
 const framed = (page: Page, id: string) => page.evaluate((id) => {
   const root = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
-  const frame = root.querySelector<HTMLIFrameElement>("iframe[data-komo-viewport]")!;
+  const frame = root.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]")!;
   const outer = frame.getBoundingClientRect(), scale = outer.width / frame.offsetWidth;
   const inner = frame.contentDocument!.getElementById(id)!.getBoundingClientRect();
   return { x: outer.left + (inner.left + inner.width / 2) * scale, y: outer.top + (inner.top + inner.height / 2) * scale };
@@ -123,13 +123,13 @@ describe.skipIf(!chrome)("Frame bridge", () => {
     await expect.poll(() => page.locator(".design-inspector").textContent()).toContain("accent");
     // The Tokens view lists the frame's tokens and previews them on its root.
     // A press on the stage outside the frame deselects.
-    const outer = (await page.locator("iframe[data-komo-viewport]").boundingBox())!;
+    const outer = (await page.locator("iframe[data-palette-viewport]").boundingBox())!;
     await page.mouse.click(outer.x + outer.width / 2, outer.y + outer.height + 8);
     await page.getByRole("button", { name: "Edit tokens", exact: true }).click();
     const row = page.locator(".design-token-row").filter({ hasText: "accent" });
     await row.waitFor();
     await row.locator("button").first().click();
-    const hex = page.locator('.komo-color input[aria-label="Hex"]');
+    const hex = page.locator('.palette-color input[aria-label="Hex"]');
     await hex.fill("ff8000");
     await hex.press("Enter");
     await row.locator("button").first().click();

@@ -56,7 +56,7 @@ beforeAll(async () => {
         qa.clear=()=>{resetDesignPreviews();review.replaceChildren()};
         createRoot(document.querySelector('main')).render(React.createElement(new URLSearchParams(location.search).has('bridge')?Bridge:App));
         const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
-        const key='branch-comments:'+location.origin+':text-preview';
+        const key='palette:'+location.origin+':text-preview';
         localStorage.setItem(key,'synthetic-session');
         localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
         window.fetch=async (input,init)=>{const path=new URL(input instanceof Request?input.url:String(input)).pathname;if(init?.method==="POST"&&path.endsWith("/threads"))qa.post=JSON.parse(init.body);return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:[]}:{});};
@@ -228,7 +228,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
   it("commits physical multiline typing through the registered React text bridge and Undo", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     await page.goto(`${origin}/?react=${version}&mode=floating&bridge=1`);
-    const target = page.locator('#bridge[data-komo-text-prop]');
+    const target = page.locator('#bridge[data-palette-text-prop]');
     await target.waitFor();
     await openDesign(page);
     await target.click();

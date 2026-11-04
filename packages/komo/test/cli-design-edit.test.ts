@@ -49,7 +49,7 @@ Proposed inline text change (preview only)
 describe("design edits from comment bodies", () => {
   it("derives a DesignEdit from style and token adapter proposals", () => {
     expect(designEditFromComment(styleAndTokens, "h2")).toEqual({
-      komo: "design-edit",
+      palette: "design-edit",
       version: 1,
       target: { selector: "body > main:nth-of-type(1) > h2:nth-of-type(1)" },
       tokens: "tailwind",
@@ -70,7 +70,7 @@ describe("design edits from comment bodies", () => {
 
   it("reads CSS variable rebinds, custom values and shared theme edits, targeting the anchor", () => {
     expect(designEditFromComment(cssVariables, "header > a")).toEqual({
-      komo: "design-edit",
+      palette: "design-edit",
       version: 1,
       target: { selector: "header > a" },
       tokens: "css-variables",
@@ -90,7 +90,7 @@ describe("design edits from comment bodies", () => {
 
   it("reads React prop and inline text proposals with the component identity", () => {
     expect(designEditFromComment(reactAndText, "button")).toEqual({
-      komo: "design-edit",
+      palette: "design-edit",
       version: 1,
       target: { selector: "button", component: { name: "Button", source: "src/components/Button.tsx:12" } },
       changes: [
@@ -116,7 +116,7 @@ Source: examples/react-props/src/card.tsx:19
 - brandColor: "var(--color-muted)" → "var(--color-brand)" [color.brand]
 - tone: "calm" → "bold" [custom value]`;
     expect(designEditFromComment(body, "article")).toEqual({
-      komo: "design-edit",
+      palette: "design-edit",
       version: 1,
       target: {
         selector: "#promo",
@@ -140,7 +140,7 @@ Source: examples/react-props/src/card.tsx:19
   });
 
   it("validates the optional prop token in fenced edits", () => {
-    const edit = (token: unknown) => JSON.stringify({ komo: "design-edit", version: 1, target: { selector: "a" }, changes: [{ kind: "prop", name: "tone", from: "a", to: "b", token }] });
+    const edit = (token: unknown) => JSON.stringify({ palette: "design-edit", version: 1, target: { selector: "a" }, changes: [{ kind: "prop", name: "tone", from: "a", to: "b", token }] });
     expect(parseDesignEdit(edit("color.brand")).changes[0].token).toBe("color.brand");
     expect(parseDesignEdit(edit(undefined)).changes[0]).not.toHaveProperty("token");
     expect(parseDesignEdit(edit(3))).toBeNull();
@@ -153,9 +153,9 @@ Source: examples/react-props/src/card.tsx:19
     expect(designEditFromComment(42 as unknown as string, "h1")).toBeNull();
   });
 
-  it("prefers a valid fenced komo-design-edit block and ignores a malformed one", () => {
+  it("prefers a valid fenced palette-design-edit block and ignores a malformed one", () => {
     const edit = {
-      komo: "design-edit",
+      palette: "design-edit",
       version: 1,
       target: { selector: "#cta", component: { name: "Button", props: { variant: "secondary" } } },
       theme: { mode: "dark" },
@@ -163,9 +163,9 @@ Source: examples/react-props/src/card.tsx:19
       changes: [{ kind: "token", property: "color", from: { offToken: "#555" }, to: { path: "color.primary" }, extra: 1 }],
       extra: true,
     };
-    const fenced = (json: string) => `Note\n\n\`\`\`komo-design-edit\n${json}\n\`\`\`\n\n${styleAndTokens}`;
+    const fenced = (json: string) => `Note\n\n\`\`\`palette-design-edit\n${json}\n\`\`\`\n\n${styleAndTokens}`;
     expect(designEditFromComment(fenced(JSON.stringify(edit)), "h2")).toEqual({
-      komo: "design-edit",
+      palette: "design-edit",
       version: 1,
       target: edit.target,
       theme: { mode: "dark" },
@@ -175,11 +175,22 @@ Source: examples/react-props/src/card.tsx:19
     // Malformed JSON falls back to the prose sections.
     expect(designEditFromComment(fenced("{ nope"), "h2")?.tokens).toBe("tailwind");
   });
+
+  it("still parses a comment written before the rename", () => {
+    const old = { komo: "design-edit", version: 1, target: { selector: "#cta" }, changes: [{ kind: "css", property: "color", from: "red", to: "blue" }] };
+    const body = `Note\n\n\`\`\`json komo-design-edit\n${JSON.stringify(old)}\n\`\`\``;
+    expect(designEditFromComment(body, "h2")).toEqual({
+      palette: "design-edit",
+      version: 1,
+      target: { selector: "#cta" },
+      changes: [{ kind: "css", property: "color", from: "red", to: "blue" }],
+    });
+  });
 });
 
 describe("DesignEdit validation", () => {
   const valid = {
-    komo: "design-edit",
+    palette: "design-edit",
     version: 1,
     target: { selector: "h1" },
     changes: [{ kind: "css", property: "color", from: "red", to: "blue" }],
@@ -187,7 +198,7 @@ describe("DesignEdit validation", () => {
   it("accepts only Palette design-edit version 1 with valid changes", () => {
     expect(parseDesignEdit(JSON.stringify(valid))).toEqual(valid);
     for (const bad of [
-      { ...valid, komo: "design" },
+      { ...valid, palette: "design" },
       { ...valid, version: 2 },
       { ...valid, target: { selector: "" } },
       { ...valid, changes: [] },
@@ -227,7 +238,7 @@ Token adapter: css-variables`;
 describe("page-wide token changes", () => {
   it("parse Token lines as token-value changes on :root, with their theme", () => {
     expect(designEditFromComment(pageTokens, "body")).toEqual({
-      komo: "design-edit",
+      palette: "design-edit",
       version: 1,
       target: { selector: ":root" },
       tokens: "css-variables",
@@ -239,7 +250,7 @@ describe("page-wide token changes", () => {
   });
 
   it("keep version 1: records without theme stay valid and a theme must be text", () => {
-    const record = (change: object) => JSON.stringify({ komo: "design-edit", version: 1, target: { selector: ":root" }, changes: [change] });
+    const record = (change: object) => JSON.stringify({ palette: "design-edit", version: 1, target: { selector: ":root" }, changes: [change] });
     const old = { kind: "token-value", path: "color.brand", from: "#4f5f42", to: "#c2410c" };
     expect(parseDesignEdit(record(old))?.changes).toEqual([old]);
     expect(parseDesignEdit(record({ ...old, theme: "docs+dark" }))?.changes).toEqual([{ ...old, theme: "docs+dark" }]);
@@ -298,7 +309,7 @@ it("adds designEdit to CLI JSON and a delimited block to the agent prompt", asyn
     const prompt = await run("comments", "prompt");
     expect(prompt).toContain(formatDesignEdit(expected));
     expect(prompt).toContain(formatDesignEdit(tokens));
-    expect(prompt.match(/```json komo-design-edit/g)).toHaveLength(2);
+    expect(prompt.match(/```json palette-design-edit/g)).toHaveLength(2);
     const json = JSON.parse(await run("comments", "prompt", "--json")).data;
     expect(json.designEdits).toEqual([{ thread: "t1", comment: "c1", designEdit: expected }, { thread: "t2", comment: "c3", designEdit: tokens }]);
     expect(tokens.changes[0]).toEqual({ kind: "token-value", path: "color.text.primary", theme: "dark", from: "#e6e6e6", to: "#f5f5f5" });

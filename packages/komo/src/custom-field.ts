@@ -23,9 +23,9 @@ export function registerCustomField(control: Control, field: Field, context: Pic
   if (field.property === "font-family") {
     const box = control.parentElement!;
     const style = document.createElement("style");
-    style.textContent = '.komo-font-name{position:absolute;inset:0 28px 0 var(--lead,8px);display:flex;align-items:center;gap:6px;pointer-events:none;overflow:hidden;white-space:nowrap}.komo-font-name span{overflow:hidden;color:#f1efeb;text-overflow:ellipsis}.komo-font-name small{flex:none;color:#898680;font-size:10px}.komo-font-name[data-unresolved] span{color:#e7c27d}.design-field:has(.komo-font-name)>input:not(:focus){color:transparent}.design-field:has(>input:focus)>.komo-font-name,.design-field[data-token-mode=token]>.komo-font-name,.design-field[data-token-mode=connected]>.komo-font-name{display:none}';
+    style.textContent = '.palette-font-name{position:absolute;inset:0 28px 0 var(--lead,8px);display:flex;align-items:center;gap:6px;pointer-events:none;overflow:hidden;white-space:nowrap}.palette-font-name span{overflow:hidden;color:#f1efeb;text-overflow:ellipsis}.palette-font-name small{flex:none;color:#898680;font-size:10px}.palette-font-name[data-unresolved] span{color:#e7c27d}.design-field:has(.palette-font-name)>input:not(:focus){color:transparent}.design-field:has(>input:focus)>.palette-font-name,.design-field[data-token-mode=token]>.palette-font-name,.design-field[data-token-mode=connected]>.palette-font-name{display:none}';
     const name = document.createElement("span"), aa = document.createElement("b"), text = document.createElement("span"), note = document.createElement("small");
-    name.className = "komo-font-name"; name.setAttribute("aria-hidden", "true"); aa.textContent = "Aa"; name.append(aa, text, note);
+    name.className = "palette-font-name"; name.setAttribute("aria-hidden", "true"); aa.textContent = "Aa"; name.append(aa, text, note);
     const sync = () => {
       const element = context.element, computed = getComputedStyle(element);
       const view = fontView(element.style.getPropertyValue("font-family") || declaredFamily(element), computed.fontFamily, variable => computed.getPropertyValue(variable));

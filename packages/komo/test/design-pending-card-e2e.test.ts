@@ -39,7 +39,7 @@ beforeAll(async () => {
       const query=new URLSearchParams(location.search);
       document.documentElement.setAttribute('data-mode',query.get('theme')??'light');
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
-      const key='branch-comments:'+location.origin+':pending-card';
+      const key='palette:'+location.origin+':pending-card';
       localStorage.setItem(key,'synthetic-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
       window.fetch=async(input)=>{const path=new URL(String(input instanceof Request?input.url:input)).pathname;
@@ -134,11 +134,11 @@ describe.skipIf(!chrome).each(["light", "dark"])("pending changes card on a %s p
     await page.getByRole("button", { name: /^Edit tokens/ }).click();
     const surface = page.locator(".design-token-row").filter({ has: page.locator("b").getByText("surface", { exact: true }) });
     await surface.locator("button").first().click();
-    const hex = page.locator('.komo-color input[aria-label="Hex"]');
+    const hex = page.locator('.palette-color input[aria-label="Hex"]');
     await hex.fill("ffd9a8");
     await hex.press("Enter");
     await surface.locator("button").first().click();
-    await page.locator(".komo-color").waitFor({ state: "detached" });
+    await page.locator(".palette-color").waitFor({ state: "detached" });
     // Leaving and re-entering Design mode keeps every preview pending and shows the card.
     await page.keyboard.press("Escape");
     await openDesign(page);
