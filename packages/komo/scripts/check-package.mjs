@@ -115,6 +115,12 @@ try {
     initKomo({project:'packed-test', design: { components: discoverReactComponents({ maxProps: 8 }) }}).destroy();
     if (tailwindTokens({tokens: tailwindSpacing({prefix:['p'], steps:[4]})}).list({})[0].value !== '16px') throw Error('Tailwind adapter failed');
     if (classTheme({id:'mode', options:[{id:'light'}]}).id !== 'mode') throw Error('Class theme adapter failed');
+    // The build-time instrumentation plugin is Node-only; disabled, it has no hooks at all.
+    const { paletteComponents } = await import('@hazem3500/komo/vite');
+    assert.deepEqual(Object.keys(paletteComponents()), ['name']);
+    assert.deepEqual(Object.keys(paletteComponents({ enabled: false, packages: ['@acme/ui'] })), ['name']);
+    assert.ok(['resolveId', 'load', 'buildStart'].every((hook) => hook in paletteComponents({ enabled: true })));
+    assert.ok(import.meta.resolve('@hazem3500/komo/react-instrument').endsWith('/dist/react-instrument.js'));
   `,
   );
   run(process.execPath, ["smoke.mjs"]);
@@ -140,6 +146,12 @@ try {
     import { classTheme } from '@hazem3500/komo/adapters/class-theme';
     import { discoverCssTokens } from '@hazem3500/komo/adapters/css-variables';
     import { discoverReactComponents } from '@hazem3500/komo/adapters/react-fiber';
+    import { paletteComponents, type PaletteComponentsOptions } from '@hazem3500/komo/vite';
+    import { instrument, type InstrumentedComponent } from '@hazem3500/komo/react-instrument';
+    const plugin: PaletteComponentsOptions = { enabled: false, packages: ['@acme/ui'], components: ['src/Card.tsx#Card'] };
+    paletteComponents(plugin);
+    const meta: InstrumentedComponent = { name: 'Card', props: [{ name: 'tone', kind: 'enum', values: ['calm'], required: false, typeLabel: '"calm"' }] };
+    instrument((props: { tone?: 'calm' }) => null, meta);
     const mode = classTheme({ id: 'mode', options: [{ id: 'light', class: 'light' }, { id: 'dark', class: 'dark' }], colorScheme: true });
     const table: TailwindTable = { tokens: [{ path: 'color.text.primary', type: 'color', class: 'text-primary', properties: ['color'], values: { light: '#000', dark: '#fff' } }, ...tailwindSpacing()] };
     const config: KomoConfig = {project:'packed-test', design: { tokens: tailwindTokens(table, { themes: [mode] }), themes: [mode] }};
@@ -240,7 +252,7 @@ try {
     join(root, ".komo/wrangler.json"),
   ]);
   console.log(
-    `Packed consumer passed: SSR/types, shell guard tree-shaking, Node server/metadata exports, workerd source, self-host init/resume, migrations, server bundles (${packed.entryCount} files).`,
+    `Packed consumer passed: SSR/types, shell guard tree-shaking, Vite instrumentation entries, Node server/metadata exports, workerd source, self-host init/resume, migrations, server bundles (${packed.entryCount} files).`,
   );
 } finally {
   await rm(root, { recursive: true, force: true });
