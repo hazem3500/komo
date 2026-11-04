@@ -41,7 +41,8 @@ it("instruments the preview build, with component metadata and the runtime, and 
   expect(shipped).toContain("src/ProjectCard.tsx:11");
   // Excluded exports are never wrapped: no metadata names them.
   for (const name of ["ThemeProvider", "CheckIcon", "useToggle", "ProjectList"]) expect(shipped).not.toMatch(new RegExp(`name:\\s*["\`]${name}["\`]`));
-  expect(warnings.filter((warning) => warning.includes("not instrumented"))).toEqual([]);
+  // The fixture's List keeps only children whose type is ListItem, so ListItem stays as it is.
+  expect(warnings.filter((warning) => warning.includes("not instrumented"))).toEqual([expect.stringContaining("@fixture/ui/extras#ListItem: compared by element type in extras.js, not instrumented")]);
   const added = gzip(entry(builds.preview)) - gzip(entry(builds.baseline));
   const customer = gzip(entry(builds.none));
   console.info(`instrumentation adds ${added} B gzip to the preview entry (${gzip(entry(builds.preview))} B); the customer entry is ${customer} B`);

@@ -1,3 +1,1 @@
-{ "name": "@fixture/ui", "version": "1.0.0", "type": "module", "sideEffects": false,
-  "exports": { ".": { "types": "./index.d.ts", "import": "./index.js" } },
-  "peerDependencies": { "react": "*", "react-dom": "*" } }
+{"name":"@fixture/ui","version":"1.0.0","type":"module","sideEffects":false,"exports":{".":{"types":"./index.d.ts","import":"./index.js"},"./extras":{"types":"./extras.d.ts","import":"./extras.js"},"./package.json":"./package.json"},"peerDependencies":{"react":"*","react-dom":"*"}}

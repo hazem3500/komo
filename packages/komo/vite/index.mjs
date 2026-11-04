@@ -9,6 +9,7 @@
 // from @hazem3500/palette/react-instrument. Node-only.
 import { resolve } from "node:path";
 import { collectComponents, defaultExclude } from "./metadata.mjs";
+import { expandPackages, packageDirectory, packageName, typeComparedNames } from "./packages.mjs";
 
 const PREFIX = "\0palette-components:";
 const RUNTIME = "@hazem3500/palette/react-instrument";
@@ -17,7 +18,10 @@ const RUNTIME = "@hazem3500/palette/react-instrument";
 export function paletteComponents(options = {}) {
   const name = "palette-components";
   if (options.enabled !== true) return { name };
-  const packages = [...new Set(options.packages ?? [])];
+  const listed = [...new Set(options.packages ?? [])];
+  /** Specifiers after expanding `@scope/ds/*` globs. */
+  let packages = listed.filter((entry) => !entry.endsWith("/*"));
+  let expanded;
   const modules = (options.components ?? []).map((entry) => {
     const [file, exported] = String(entry).split("#");
     return { file, exports: exported ? exported.split(",").map((item) => item.trim()).filter(Boolean) : undefined };
@@ -49,8 +53,32 @@ export function paletteComponents(options = {}) {
     return lines.join("\n") + "\n";
   }
 
+  const expand = () => (expanded ??= expandPackages(listed, root).then((result) => {
+    packages = result.specifiers;
+    return result;
+  }));
+
   async function prepare(context) {
+    const { warnings } = await expand();
+    for (const warning of warnings) context.warn(warning);
     const { entries, skipped } = await collectComponents({ root, packages, modules, tsconfig: options.tsconfig, exclude: options.exclude ?? defaultExclude });
+    // A component the package compares by element type (`child.type === Footer`) would stop
+    // matching once the app renders the wrapper: leave it as it is, and say where.
+    const compared = new Map();
+    for (const entry of entries) {
+      if (entry.kind !== "package" || !entry.components.length) continue;
+      const name = packageName(entry.specifier);
+      if (!compared.has(name)) {
+        const dir = packageDirectory(name, root);
+        compared.set(name, dir ? await typeComparedNames(dir) : new Map());
+      }
+      const names = compared.get(name);
+      entry.components = entry.components.filter((component) => {
+        const file = names.get(component.name) ?? names.get(component.export);
+        if (file) skipped.push({ from: entry.specifier, name: component.export, reason: `compared by element type in ${file}` });
+        return !file;
+      });
+    }
     let count = 0;
     for (const [index, entry] of entries.entries()) {
       if (!entry.components.length) continue;
@@ -67,8 +95,13 @@ export function paletteComponents(options = {}) {
   return {
     name,
     enforce: "pre",
-    config: () => ({ optimizeDeps: { include: [RUNTIME, ...packages] } }),
+    async config(config) {
+      root = resolve(config.root ?? process.cwd());
+      const { specifiers } = await expand();
+      return { optimizeDeps: { include: [RUNTIME, ...specifiers] } };
+    },
     configResolved(config) {
+      if (resolve(config.root) !== root) expanded = undefined;
       root = config.root;
     },
     buildStart() {

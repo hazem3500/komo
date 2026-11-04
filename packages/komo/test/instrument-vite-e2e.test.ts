@@ -240,6 +240,21 @@ describe.skipIf(!chrome).each([19, 18])("build-time instrumented components, Rea
     await page.close();
   });
 
+  it("instruments a subpath export and leaves a type-compared compound part alone", async () => {
+    const { page, errors } = await open(react);
+    // List keeps only ListItem children: ListItem isn't wrapped, so both items still render.
+    expect(await attr(page, ".ui-list", "count")).toBe("2");
+    await pick(page, ".ui-chip");
+    await choose(page, "Chip tone", "bright");
+    await expect.poll(() => attr(page, ".ui-chip", "tone")).toBe("bright");
+    await pick(page, ".ui-list");
+    await choose(page, "List density", "compact");
+    await expect.poll(() => attr(page, ".ui-list", "density")).toBe("compact");
+    expect(await attr(page, ".ui-list", "count")).toBe("2");
+    expect(errors).toEqual([]);
+    await page.close();
+  });
+
   it("drops an unmounted instance and gives a remounted one its own props", async () => {
     const { page, errors } = await open(react);
     await pick(page, "#transient");

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import Quote, { Avatar, Tag, Badge, Button, Counter, Pair, Panel, Popover, Tabs, TextField, ThemeProvider, colors, cx, useToggle } from "@fixture/ui";
 import { ProjectCard, ProjectList } from "./ProjectCard";
 import Summary from "@views/summary";
+import { Chip, List, ListItem } from "@fixture/ui/extras";
 
 declare global { interface Window { qa: Record<string, any> } }
 const qa = (window.qa = { tagRenders: () => (Tag as { renders?: number }).renders ?? 0, renders: 0, refs: [] as unknown[], colors, cx: cx("a", false, "b"), tab: typeof Tabs.Tab });
@@ -41,6 +42,8 @@ function App() {
       <Tag tone="calm" note={String(tick)} />
       <Quote />
       <Summary tone="plain" />
+      <Chip label="Subpath" />
+      <List><ListItem>First</ListItem><ListItem>Second</ListItem></List>
       <output id="tick">{tick}</output>
     </ThemeProvider>
   );
