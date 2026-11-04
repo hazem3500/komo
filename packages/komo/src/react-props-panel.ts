@@ -5,6 +5,7 @@ import { previewStyle, watchPopup } from "./design-popup.js";
 import { isDesignTarget, type DesignTarget } from "./design-target.js";
 import { holdHostMotion, stillPreview } from "./host-motion.js";
 import { isHTMLElement, previewTarget } from "./frame-target.js";
+import { componentAdapter } from "./component-adapters.js";
 import {
   adaptComponentEditor,
   currentInspectableElement,
@@ -276,7 +277,7 @@ export function proposedReactChanges(element: DesignTarget): string | undefined 
 function adapterIdentity(element: Element, design?: DesignSystem): ComponentIdentity | null {
   if (inspectableFor(element)) return null;
   let identity: ComponentIdentity | null | undefined;
-  try { identity = design?.components?.identify(element); } catch { /* An adapter that throws names nothing. */ }
+  try { identity = componentAdapter(element, design)?.identify(element); } catch { /* An adapter that throws names nothing. */ }
   const owner = inspectableAncestor(element);
   return identity?.name && (!owner || (owner.root !== identity.element && owner.root.contains(identity.element))) ? identity : null;
 }
@@ -1417,7 +1418,7 @@ export function createReactPropsPanel(
   if (!component) {
     const found = adapterIdentity(element, design);
     let editor;
-    try { editor = found && design?.components?.editor?.(found); } catch { /* Unsupported editors stay read-only. */ }
+    try { editor = found && componentAdapter(element, design)?.editor?.(found); } catch { /* Unsupported editors stay read-only. */ }
     if (editor && found && isDesignTarget(found.element)) {
       if (found.element !== element) {
         ensurePanelStyles(styleRoot);
@@ -1437,7 +1438,7 @@ export function createReactPropsPanel(
     }
     if (!component) {
       let discovered: HTMLElement | null = null;
-      try { discovered = (found && design?.components?.panel?.(found)) || null; } catch { /* A panel that throws shows nothing. */ }
+      try { discovered = (found && componentAdapter(element, design)?.panel?.(found)) || null; } catch { /* A panel that throws shows nothing. */ }
       if (discovered) {
         ensurePanelStyles(styleRoot);
         const summary = discovered.querySelector("summary");

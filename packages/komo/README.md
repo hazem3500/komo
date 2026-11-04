@@ -235,6 +235,52 @@ initKomo({ project, design: { tokens: discoverCssTokens() } });
 - `include(name)` filters variables and `limit` caps the list (300). Values come from the computed style, so they follow the current theme. The scan reruns on every `list()`; `@layer` and `@media` blocks are read, but variables set only under a theme selector such as `[data-mode=dark]` are not listed on their own.
 - Selector-based impact counts and **Edit shared theme values** need `useKomoDesignTokens` and are not part of this adapter.
 
+#### Instrumenting components at build time
+
+`komoComponents()` from `@hazem3500/komo/vite` makes a design system's components, and the app components you list, editable in Design mode with no code at their call sites. It is a Vite plugin (Vite 5 or later) for **preview builds only**: pass `enabled: true` only for builds that never reach customers.
+
+```ts
+// vite.config.ts
+import { komoComponents } from "@hazem3500/komo/vite";
+
+export default defineConfig({
+  plugins: [
+    komoComponents({
+      enabled: process.env.PREVIEW_BUILD === "1",
+      // Every component export of these packages that has editable props.
+      packages: ["@acme/ui"],
+      // App components, by module and export, relative to the Vite root.
+      components: ["src/cards/ProjectCard.tsx#ProjectCard", "src/nav/TopBar.tsx"],
+    }),
+  ],
+});
+```
+
+- **Disabled, it does nothing.** With `enabled` off, the plugin has no hooks: the build is byte-for-byte the build without it, with no runtime, registry or component metadata. komo's tests check this on a minified production build.
+- **What gets instrumented.** The plugin reads each export's types with TypeScript, the way the app already compiles. A React component (function, class, `forwardRef` or `memo`) is instrumented when it has at least one editable prop:
+  - string, number and boolean props;
+  - unions of their literals, such as a `variant` or `size`, including `cva`-style variant types.
+  
+  These are never instrumented:
+  - **Never controls:** callbacks, refs, React nodes, objects, `className`, `style`, `children`, and attributes inherited from React's DOM types.
+  - **Never wrapped:** hooks, tokens, helpers, and names ending in `Provider`, `Context` or `Icon` (`exclude(name, from)` replaces that list).
+  
+  The build logs how many components were instrumented. It also warns about any listed app export it skipped, and why.
+- **How it edits.** Imports of the listed packages and modules resolve to generated modules that re-export everything and wrap each eligible component once. The wrapper:
+  - renders the original component;
+  - adds no DOM element;
+  - forwards `ref`;
+  - keeps `memo` and its compare function;
+  - keeps statics such as `Select.Option`.
+
+  Each mounted instance keeps its own previews in its own state, so edits go through React's normal render path in production React 18 and 19. Previews hold through parent re-renders, and Before/After, Undo, Redo and Reset work as for registered components. Reset restores a prop exactly, including one that was never passed. Previews exist only once someone edits in Design mode. Unmounting drops an instance's previews; they never move to another instance.
+- **Finding the instance.** Picking an element reads React's fiber links (`return`, `child`, `memoizedState`) to find the nearest instrumented instance, like the fiber adapter, and never writes them. In Viewport, the framed app's own instances answer.
+- **Cost.** The preview build carries a 2 KB gzip runtime plus each component's prop list. komo's fixture measured 2.1 KB for 9 components, and on an Apple M4 Max about 0.6 µs per instance to mount and 0.3 µs per update.
+- **Limits.**
+  - Code that compares element types, such as `child.type === Tab` inside the package, sees the wrapper instead of the original. Exclude such components.
+  - A component with several root elements is selected by its first one.
+  - Components used only inside the package itself, not imported by the app, aren't instrumented.
+
 #### Discovering React components
 
 `discoverReactComponents()` from `@hazem3500/komo/adapters/react-fiber` finds the React component behind a picked element, so Design mode can show its name, props and where it was rendered without registering each component by hand. It is **opt-in and off by default**, and it is the one place komo reads React's private fields. Use it in development builds.

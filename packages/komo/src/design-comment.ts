@@ -4,6 +4,7 @@ import { textEntry } from "./dom.js";
 import { isDesignTarget } from "./design-target.js";
 import { elementLabel, namedComponent } from "./element-label.js";
 import { isHTMLElement, onFrame, previewTarget, screenRect } from "./frame-target.js";
+import { componentAdapter } from "./component-adapters.js";
 import { inlineStyleSnapshot, removeEmptyStyle } from "./design-preview.js";
 import { previewText } from "./text-preview.js";
 import { sourceInfo, sourceInfoStyles, type SourceHref } from "./source-info.js";
@@ -305,7 +306,7 @@ function previewMove(element: Element, move: NonNullable<DesignChange["apply"]>,
 /** A recorded prop value through the app's component editor; undefined when it has none. */
 function previewProp(element: Element, name: string, raw = "", design?: DesignSystem) {
   try {
-    const components = design?.components, identity = components?.identify(element);
+    const components = componentAdapter(element, design), identity = components?.identify(element);
     const editor = identity && components!.editor?.(identity);
     if (!editor || editor.available?.() === false || !editor.schema.some(prop => prop.name === name && prop.kind !== "unsupported")) return;
     let value: string | number | boolean | undefined;

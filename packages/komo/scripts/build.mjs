@@ -116,6 +116,19 @@ const adapters = await build({
   minify: true,
   metafile: true,
 });
+// Build-time component instrumentation's runtime (@hazem3500/komo/react-instrument): only
+// preview builds with the Vite plugin enabled import it, through the plugin's proxies.
+const instrument = await build({
+  entryPoints: ["src/react-instrument.ts"],
+  outfile: "dist/react-instrument.js",
+  bundle: true,
+  format: "esm",
+  platform: "browser",
+  target: "es2022",
+  minify: true,
+  metafile: true,
+  external: ["react"],
+});
 // The single-copy Viewport guard (@hazem3500/komo/shell): self-contained, with no
 // top-level side effects, so a build-time guard around isShell() drops it.
 const shell = await build({
@@ -141,7 +154,7 @@ function visit(path) {
 }
 visit(Object.keys(result.metafile.outputs).find((path) => result.metafile.outputs[path].entryPoint === "src/index.ts"));
 await Promise.all(
-  [...Object.keys(result.metafile.outputs), ...Object.keys(adapters.metafile.outputs), ...Object.keys(shell.metafile.outputs)]
+  [...Object.keys(result.metafile.outputs), ...Object.keys(adapters.metafile.outputs), ...Object.keys(shell.metafile.outputs), ...Object.keys(instrument.metafile.outputs)]
     .filter((path) => path.endsWith(".js"))
     .map(async (path) => {
       const { code } = await minify(await readFile(path, "utf8"), {

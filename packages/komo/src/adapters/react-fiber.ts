@@ -77,7 +77,7 @@ const text = (value: unknown, limit: number) => {
   return string.length > limit ? `${string.slice(0, limit)}…` : string;
 };
 
-type Fiber = {
+export type Fiber = {
   tag?: number;
   type?: unknown;
   return?: Fiber | null;
@@ -118,7 +118,7 @@ function fiberOf(node: Element): Fiber | null {
 }
 
 /** The nearest fiber at or above `element`, crossing shadow roots. */
-function hostFiber(element: Element): Fiber | null {
+export function hostFiber(element: Element): Fiber | null {
   let node: Node | null = element;
   for (let steps = 0; node && steps < 2000; steps++) {
     if (node.nodeType === 1) {
@@ -135,7 +135,7 @@ function hostFiber(element: Element): Fiber | null {
  * Match the fiber, level by level from the root, against the root's current tree.
  * A reused child may retain return links through the other copy, so keep its owner here.
  */
-function current(fiber: Fiber): { fiber: Fiber; root: object } | null {
+export function current(fiber: Fiber): { fiber: Fiber; root: object } | null {
   const chain: Fiber[] = [];
   for (let up: Fiber | null | undefined = fiber; up && chain.length < 5000; up = up.return) chain.push(up);
   const top = chain[chain.length - 1];
@@ -167,7 +167,7 @@ function nameOf(type: unknown, depth = 0): string | undefined {
 }
 
 /** The first DOM element a component renders, from any realm: `instanceof Element` fails across frames. */
-function rootElement(fiber: Fiber): Element | null {
+export function rootElement(fiber: Fiber): Element | null {
   let node = fiber.child;
   for (let steps = 0; node && steps < 2000; steps++) {
     if (node.tag === HOST_COMPONENT) return (node.stateNode as Node | null)?.nodeType === 1 ? node.stateNode as Element : null;

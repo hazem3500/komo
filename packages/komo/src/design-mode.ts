@@ -5,6 +5,7 @@ import { el, icon } from "./dom.js";
 import { isMac } from "./kbd.js";
 import { drawHighlight, watchHighlight } from "./highlight.js";
 import { clientPoint, isHTMLElement, onFrame, screenRect } from "./frame-target.js";
+import { componentAdapter } from "./component-adapters.js";
 import type { Control, PanelContext } from "./design-panel.js";
 import type { InlineTextTools } from "./inline-text-editor.js";
 import type { DesignSystem } from "./design-system.js";
@@ -338,7 +339,7 @@ export function createDesignMode(options: DesignModeOptions) {
     } satisfies PanelContext);
     if (retainedProps) controls.prepend(retainedProps);
     // Any design-system adapter needs the token and props controls, not only registered elements.
-    if (options.design?.tokens || options.design?.themes || options.design?.components || element.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
+    if (options.design?.tokens || options.design?.themes || componentAdapter(element, options.design) || element.closest("[data-komo-inspectable], [data-komo-design-tokens]")) {
       reactPanelPromise ??= import("./react-props-panel.js").then((module) => reactPanelModule = module).catch((error: unknown) => {
         reactPanelPromise = null;
         throw error;
