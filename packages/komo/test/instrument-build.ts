@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { build } from "vite";
-import { komoComponents, type KomoComponentsOptions } from "../vite/index.mjs";
+import { paletteComponents, type PaletteComponentsOptions } from "../vite/index.mjs";
 
 // Builds test/fixtures/instrument/app with Vite in production mode: minified, production React,
 // against the fixture design-system package installed under node_modules like a real one.
@@ -23,7 +23,7 @@ export async function fixtureApp(react: 18 | 19 = 19) {
   return { directory, app };
 }
 
-export const instrumentOptions = { packages: ["@fixture/ui"], components: ["src/ProjectCard.tsx#ProjectCard"] } satisfies KomoComponentsOptions;
+export const instrumentOptions = { packages: ["@fixture/ui"], components: ["src/ProjectCard.tsx#ProjectCard"] } satisfies PaletteComponentsOptions;
 
 /** `plugin`: true or false for an enabled or disabled plugin, null for none at all. */
 export async function buildApp(app: string, outDir: string, plugin: boolean | null, review = plugin === true, warnings: string[] = []) {
@@ -45,7 +45,7 @@ export async function buildApp(app: string, outDir: string, plugin: boolean | nu
       ],
     },
     customLogger: { info() {}, warn(message) { warnings.push(message); }, warnOnce(message) { warnings.push(message); }, error(message) { warnings.push(message); }, clearScreen() {}, hasErrorLogged: () => false, hasWarned: false },
-    plugins: plugin === null ? [] : [komoComponents({ ...instrumentOptions, enabled: plugin })],
+    plugins: plugin === null ? [] : [paletteComponents({ ...instrumentOptions, enabled: plugin })],
     build: { outDir, emptyOutDir: true, reportCompressedSize: false },
   }); } finally { process.env.NODE_ENV = environment; }
   return outDir;

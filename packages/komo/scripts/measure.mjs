@@ -379,4 +379,4 @@ if (report.shell.gzip > 500)
 // builds with the Vite plugin enabled load it. The wrapper, its state-backed editor and the fiber
 // lookup measure 1,990, plus ~5%.
 if (report.instrument.gzip > 2_100)
-  throw new Error("komo's component instrumentation runtime exceeds its gzip budget.");
+  throw new Error("The component instrumentation runtime exceeds its gzip budget.");

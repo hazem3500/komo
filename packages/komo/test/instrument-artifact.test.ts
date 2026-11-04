@@ -32,12 +32,12 @@ it("leaves a customer build exactly as it is without the plugin", () => {
   expect([...builds.disabled.keys()].sort()).toEqual([...builds.none.keys()].sort());
   for (const [name, text] of builds.none) expect(builds.disabled.get(name), name).toBe(text);
   const shipped = code(builds.disabled);
-  for (const marker of ["komo", "instrumented-components", "typeLabel", "ProjectCard.tsx:", "@fixture/ui\""]) expect(shipped).not.toContain(marker);
+  for (const marker of ["komo", "palette", "instrumented-components", "typeLabel", "ProjectCard.tsx:", "@fixture/ui\""]) expect(shipped).not.toContain(marker);
 });
 
 it("instruments the preview build, with component metadata and the runtime, and reports the cost", () => {
   const shipped = code(builds.preview);
-  expect(shipped).toContain("komo.instrumented-components");
+  expect(shipped).toContain("palette.instrumented-components");
   expect(shipped).toContain("src/ProjectCard.tsx:11");
   // Excluded exports are never wrapped: no metadata names them.
   for (const name of ["ThemeProvider", "CheckIcon", "useToggle", "ProjectList"]) expect(shipped).not.toMatch(new RegExp(`name:\\s*["\`]${name}["\`]`));
@@ -45,7 +45,7 @@ it("instruments the preview build, with component metadata and the runtime, and 
   const added = gzip(entry(builds.preview)) - gzip(entry(builds.baseline));
   const customer = gzip(entry(builds.none));
   console.info(`instrumentation adds ${added} B gzip to the preview entry (${gzip(entry(builds.preview))} B); the customer entry is ${customer} B`);
-  // Runtime plus metadata for 9 components; komo itself stays in its own lazily loaded chunks.
+  // Runtime plus metadata for 9 components; the review UI stays in its own lazily loaded chunks.
   expect(added).toBeGreaterThan(0);
   expect(added).toBeLessThan(4000);
 });

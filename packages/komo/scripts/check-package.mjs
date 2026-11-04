@@ -116,10 +116,10 @@ try {
     if (tailwindTokens({tokens: tailwindSpacing({prefix:['p'], steps:[4]})}).list({})[0].value !== '16px') throw Error('Tailwind adapter failed');
     if (classTheme({id:'mode', options:[{id:'light'}]}).id !== 'mode') throw Error('Class theme adapter failed');
     // The build-time instrumentation plugin is Node-only; disabled, it has no hooks at all.
-    const { komoComponents } = await import('@hazem3500/komo/vite');
-    assert.deepEqual(Object.keys(komoComponents()), ['name']);
-    assert.deepEqual(Object.keys(komoComponents({ enabled: false, packages: ['@acme/ui'] })), ['name']);
-    assert.ok(['resolveId', 'load', 'buildStart'].every((hook) => hook in komoComponents({ enabled: true })));
+    const { paletteComponents } = await import('@hazem3500/komo/vite');
+    assert.deepEqual(Object.keys(paletteComponents()), ['name']);
+    assert.deepEqual(Object.keys(paletteComponents({ enabled: false, packages: ['@acme/ui'] })), ['name']);
+    assert.ok(['resolveId', 'load', 'buildStart'].every((hook) => hook in paletteComponents({ enabled: true })));
     assert.ok(import.meta.resolve('@hazem3500/komo/react-instrument').endsWith('/dist/react-instrument.js'));
   `,
   );
@@ -146,10 +146,10 @@ try {
     import { classTheme } from '@hazem3500/komo/adapters/class-theme';
     import { discoverCssTokens } from '@hazem3500/komo/adapters/css-variables';
     import { discoverReactComponents } from '@hazem3500/komo/adapters/react-fiber';
-    import { komoComponents, type KomoComponentsOptions } from '@hazem3500/komo/vite';
+    import { paletteComponents, type PaletteComponentsOptions } from '@hazem3500/komo/vite';
     import { instrument, type InstrumentedComponent } from '@hazem3500/komo/react-instrument';
-    const plugin: KomoComponentsOptions = { enabled: false, packages: ['@acme/ui'], components: ['src/Card.tsx#Card'] };
-    komoComponents(plugin);
+    const plugin: PaletteComponentsOptions = { enabled: false, packages: ['@acme/ui'], components: ['src/Card.tsx#Card'] };
+    paletteComponents(plugin);
     const meta: InstrumentedComponent = { name: 'Card', props: [{ name: 'tone', kind: 'enum', values: ['calm'], required: false, typeLabel: '"calm"' }] };
     instrument((props: { tone?: 'calm' }) => null, meta);
     const mode = classTheme({ id: 'mode', options: [{ id: 'light', class: 'light' }, { id: 'dark', class: 'dark' }], colorScheme: true });

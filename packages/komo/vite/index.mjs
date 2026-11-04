@@ -1,7 +1,7 @@
 // @hazem3500/komo/vite: build-time component instrumentation for preview builds.
 //
-//   import { komoComponents } from "@hazem3500/komo/vite";
-//   plugins: [komoComponents({ enabled: process.env.PREVIEW === "1", packages: ["@acme/ui"], components: ["src/cards/Card.tsx#Card"] })]
+//   import { paletteComponents } from "@hazem3500/komo/vite";
+//   plugins: [paletteComponents({ enabled: process.env.PREVIEW === "1", packages: ["@acme/ui"], components: ["src/cards/Card.tsx#Card"] })]
 //
 // Off unless `enabled` is true: a disabled plugin has no hooks, so the build is the same as
 // without it. Enabled, imports of the listed packages and app modules resolve to generated
@@ -10,12 +10,12 @@
 import { basename, dirname, extname, resolve } from "node:path";
 import { collectComponents, defaultExclude } from "./metadata.mjs";
 
-const PREFIX = "\0komo-components:";
+const PREFIX = "\0palette-components:";
 const RUNTIME = "@hazem3500/komo/react-instrument";
 
-/** @param {import("./index.d.ts").KomoComponentsOptions} [options] */
-export function komoComponents(options = {}) {
-  const name = "komo-components";
+/** @param {import("./index.d.ts").PaletteComponentsOptions} [options] */
+export function paletteComponents(options = {}) {
+  const name = "palette-components";
   if (options.enabled !== true) return { name };
   const packages = [...new Set(options.packages ?? [])];
   const modules = (options.components ?? []).map((entry) => {

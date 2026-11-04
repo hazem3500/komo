@@ -2,7 +2,7 @@ import type { ComponentAdapter, ComponentIdentity, DesignSystem } from "./design
 
 // Components instrumented at build time (@hazem3500/komo/vite) publish an adapter on their own
 // window, so Frame's viewport iframe answers for its realm.
-const INSTRUMENTED = Symbol.for("komo.instrumented-components");
+const INSTRUMENTED = Symbol.for("palette.instrumented-components");
 const combined = new WeakMap<ComponentAdapter, WeakMap<ComponentAdapter, ComponentAdapter>>();
 
 function instrumented(element: Element | null | undefined): ComponentAdapter | undefined {

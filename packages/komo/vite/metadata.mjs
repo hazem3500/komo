@@ -37,7 +37,7 @@ export async function collectComponents(options) {
     ...options.modules.map((module) => ({ kind: "module", specifier: toImport(resolve(root, module.file), root), file: resolve(root, module.file), exports: module.exports, from: module.file })),
   ];
   // One probe file imports every target, so the checker resolves them as the app does.
-  const probe = join(root, `__komo_components_${process.pid}__.ts`);
+  const probe = join(root, `__palette_components_${process.pid}__.ts`);
   const text = entries.map((entry, index) => `import * as m${index} from ${JSON.stringify(entry.specifier)};`).join("\n");
   const host = ts.createCompilerHost({ ...compilerOptions, noEmit: true });
   const getSourceFile = host.getSourceFile.bind(host), fileExists = host.fileExists.bind(host), readFile = host.readFile.bind(host);

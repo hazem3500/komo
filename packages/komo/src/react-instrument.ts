@@ -36,7 +36,7 @@ interface Instance {
   editor?: ComponentEditor;
 }
 
-export const INSTRUMENTED_COMPONENTS = Symbol.for("komo.instrumented-components");
+export const INSTRUMENTED_COMPONENTS = Symbol.for("palette.instrumented-components");
 const MEMO = Symbol.for("react.memo");
 const FORWARD_REF = Symbol.for("react.forward_ref");
 // React 18 function components never receive `ref`; React 19 passes it as a prop.

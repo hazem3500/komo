@@ -1,4 +1,4 @@
-export interface KomoComponentsOptions {
+export interface PaletteComponentsOptions {
   /**
    * Turn instrumentation on. Pass true only for builds that never reach customers, e.g.
    * `process.env.PREVIEW === "1"`. Off, the plugin has no hooks and the build is unchanged.
@@ -20,7 +20,7 @@ export interface KomoComponentsOptions {
 }
 
 /** Vite plugin; works with Vite 5 and later. */
-export function komoComponents(options?: KomoComponentsOptions): {
+export function paletteComponents(options?: PaletteComponentsOptions): {
   name: string;
   enforce?: "pre";
   [hook: string]: unknown;
