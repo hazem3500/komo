@@ -222,6 +222,14 @@ async function readSaved(paths) {
     }
   return null;
 }
+async function readEach(paths) {
+  const tokens = [];
+  for (const path of paths) {
+    const token = await readSaved([path]);
+    if (token) tokens.push(token);
+  }
+  return tokens;
+}
 // Precedence: PALETTE_TOKEN (or KOMO_TOKEN), then a saved access token, then a login session.
 async function readCredentials(sessionPaths, patPaths, env) {
   const saved = { session: await readSaved(sessionPaths), pat: await readSaved(patPaths) };
@@ -562,11 +570,14 @@ export async function runAgent(
     else if (command === "logout") {
       // Only login sessions are revoked here. Access tokens are revoked on
       // the account page, so logout never destroys a token other jobs share.
+      // Every distinct session goes: the environment's, and those saved under
+      // ~/.config/palette and, from before the rename, ~/.config/komo.
       const variable = setting(env, "TOKEN");
-      const session = variable && !isPersonalToken(variable)
-        ? variable
-        : saved.session;
-      if (session)
+      const sessions = new Set([
+        ...(variable && !isPersonalToken(variable) ? [variable] : []),
+        ...(await readEach(paths)),
+      ]);
+      for (const session of sessions)
         try {
           await apiClient(config, session)("me", "DELETE");
         } catch (error) {

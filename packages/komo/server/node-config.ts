@@ -39,6 +39,11 @@ export function checkProjects(value: string): void {
 // places from the right. Entries further left are whatever the client sent and
 // are never trusted.
 
+/** The Node setting PALETTE_<name>, or its older KOMO_<name> when that is unset or empty. */
+export function nodeSetting(env: Record<string, string | undefined>, name: string): string | undefined {
+  return env[`PALETTE_${name}`] || env[`KOMO_${name}`] || undefined;
+}
+
 /** PALETTE_TRUSTED_PROXY_HOPS, or its older name PALETTE_PROXY_HOPS (each also read as KOMO_); 0 when unset. */
 export function trustedProxyHops(settings: Record<string, string | undefined>): number {
   const env = paletteEnv(settings);

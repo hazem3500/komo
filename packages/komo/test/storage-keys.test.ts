@@ -2,7 +2,7 @@ import { JSDOM } from "jsdom";
 import { afterEach, expect, it, vi } from "vitest";
 import { CommentsApi } from "../src/api";
 import { shellNonce } from "../src/shell-session";
-import { migrateStorage } from "../src/storage-keys";
+import { forget, legacyKey, migrateStorage } from "../src/storage-keys";
 
 const options = { endpoint: "https://api.example.test", project: "project", repo: "repo", branch: "main" };
 const user = { id: "reviewer", name: "Reviewer", verified: true };
@@ -20,21 +20,32 @@ afterEach(() => {
   dom.window.close();
 });
 
-it("moves keys written before the rename to their palette: names once", () => {
+it("copies Palette's keys from before the rename and keeps the old ones", () => {
   page();
   localStorage.setItem("branch-comments:pin-size:project:repo", "dot");
   localStorage.setItem("komo:setup:https://api.example.test:code", '{"project":"komo_1"}');
   localStorage.setItem("komo:geometry-moved", "1");
   sessionStorage.setItem("branch-comments:comments-hidden:project:repo", "1");
-  localStorage.setItem("host-app:theme", "dark");
   migrateStorage();
   expect(localStorage.getItem("palette:pin-size:project:repo")).toBe("dot");
   expect(localStorage.getItem("palette:setup:https://api.example.test:code")).toBe('{"project":"komo_1"}');
   expect(localStorage.getItem("palette:geometry-moved")).toBe("1");
   expect(sessionStorage.getItem("palette:comments-hidden:project:repo")).toBe("1");
-  expect(Object.keys(localStorage).filter((key) => /^(branch-comments|komo):/.test(key))).toEqual([]);
-  expect(Object.keys(sessionStorage).filter((key) => /^(branch-comments|komo):/.test(key))).toEqual([]);
-  expect(localStorage.getItem("host-app:theme")).toBe("dark");
+  // An older copy of the app on this origin, or a rollback, still reads them.
+  expect(localStorage.getItem("branch-comments:pin-size:project:repo")).toBe("dot");
+  expect(localStorage.getItem("komo:setup:https://api.example.test:code")).toBe('{"project":"komo_1"}');
+  expect(localStorage.getItem("komo:geometry-moved")).toBe("1");
+  expect(sessionStorage.getItem("branch-comments:comments-hidden:project:repo")).toBe("1");
+});
+
+it("leaves the host's own keys alone", () => {
+  page();
+  localStorage.setItem("komo:theme", "dark");
+  localStorage.setItem("komo:cart", "3");
+  localStorage.setItem("branch-comments:something-else", "x");
+  localStorage.setItem("host-app:theme", "dark");
+  migrateStorage();
+  expect(Object.keys(localStorage).sort()).toEqual(["branch-comments:something-else", "host-app:theme", "komo:cart", "komo:theme"]);
 });
 
 it("keeps a value already written under the new name", () => {
@@ -43,7 +54,20 @@ it("keeps a value already written under the new name", () => {
   localStorage.setItem("branch-comments:pin-size:project:repo", "dot");
   migrateStorage();
   expect(localStorage.getItem("palette:pin-size:project:repo")).toBe("full");
-  expect(localStorage.getItem("branch-comments:pin-size:project:repo")).toBeNull();
+  expect(localStorage.getItem("branch-comments:pin-size:project:repo")).toBe("dot");
+});
+
+it("forgets a key under both names, so a cleared value doesn't come back", () => {
+  page();
+  sessionStorage.setItem("branch-comments:toolbar-dismissed:project:repo", "1");
+  migrateStorage();
+  forget(sessionStorage, "palette:toolbar-dismissed:project:repo");
+  migrateStorage();
+  expect(sessionStorage.getItem("palette:toolbar-dismissed:project:repo")).toBeNull();
+  expect(sessionStorage.getItem("branch-comments:toolbar-dismissed:project:repo")).toBeNull();
+  expect(legacyKey("palette:shell")).toBe("komo:shell");
+  expect(legacyKey("palette:https://api.example.test:project")).toBe("branch-comments:https://api.example.test:project");
+  expect(legacyKey("palette:unknown")).toBeUndefined();
 });
 
 it("keeps a session stored before the upgrade signed in", () => {
@@ -57,6 +81,11 @@ it("keeps a session stored before the upgrade signed in", () => {
   const api = new CommentsApi(options);
   expect(api.token).toBe("old-session");
   expect(api.user).toEqual(user);
+  // Signing out clears the session under both names, so the next mount can't restore it.
+  api.clear();
+  migrateStorage();
+  expect(new CommentsApi(options).token).toBeNull();
+  expect(Object.keys(localStorage).filter((key) => key.includes(options.endpoint))).toEqual([]);
 });
 
 it("recognizes a shell started before the upgrade, before Palette mounts", () => {

@@ -2599,7 +2599,9 @@ describe("personal access tokens", () => {
       await account("/account/tokens", "GET", "owner-token")
     ).json();
     const item = listed.tokens.find((t: any) => t.id === body.item.id);
-    expect(item.prefix).toBe(`palette_pat_${body.item.id}`);
+    // The listed prefix doesn't claim which name the token was issued under.
+    expect(item.prefix).toBe(`…_pat_${body.item.id}`);
+    expect(body.item.prefix).toBe(`…_pat_${body.item.id}`);
     expect(JSON.stringify(listed)).not.toContain(token.slice(-43));
     expect(listed.projects).toEqual(
       expect.arrayContaining(["other", "owned"])

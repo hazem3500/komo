@@ -4,7 +4,7 @@ import { loadPostgres, postgresDatabase } from "./postgres";
 import worker from "./index";
 import { sendWebhookPinned } from "./node-webhooks";
 import { authOptions, publicLocation } from "./proxy-auth";
-import { checkProjects, clientAddress, trustedProxyHops } from "./node-config";
+import { checkProjects, clientAddress, nodeSetting, trustedProxyHops } from "./node-config";
 
 const databaseUrl = process.env.DATABASE_URL;
 const projects = process.env.PROJECTS;
@@ -17,9 +17,7 @@ const { origin: publicOrigin, path: publicPath } = publicLocation(publicUrl);
 checkProjects(projects);
 const proxyHops = trustedProxyHops(process.env);
 const db = postgresDatabase(databaseUrl, await loadPostgres());
-// Each setting is read as PALETTE_<name>, then by its older KOMO_<name>.
-const option = (name: string) =>
-  process.env[`PALETTE_${name}`] || process.env[`KOMO_${name}`] || undefined;
+const option = (name: string) => nodeSetting(process.env, name);
 const env = {
   DB: db,
   PROJECTS: projects,
@@ -27,7 +25,7 @@ const env = {
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ?? "",
   GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID ?? "",
   GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET ?? "",
-  PALETTE_WEBHOOK_KEYS: process.env.PALETTE_WEBHOOK_KEYS ?? process.env.KOMO_WEBHOOK_KEYS,
+  PALETTE_WEBHOOK_KEYS: option("WEBHOOK_KEYS"),
   PALETTE_TOKEN_PEPPER: option("TOKEN_PEPPER"),
   PALETTE_WEBHOOK_SEND: sendWebhookPinned,
   PALETTE_PROXY_AUTH: option("PROXY_AUTH"),

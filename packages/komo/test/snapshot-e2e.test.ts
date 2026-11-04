@@ -268,7 +268,7 @@ describe.skipIf(!chrome)("comment snapshots", () => {
       const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
       return !!frame?.contentDocument?.getElementById("plain") && !root!.querySelector(".frame-stage[data-loading]");
     });
-    const frame = page.frames().find((item) => item.name() === "palette-viewport") as Frame;
+    const frame = page.frames().find((item) => item.name() === "komo-viewport") as Frame;
     const box = await page.evaluate(() => {
       const root = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
       const frame = root.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]")!;

@@ -73,16 +73,24 @@ export interface ServerEnv {
   KOMO_VERSION?: { id: string };
 }
 
+const unset = (value: unknown) => value === undefined || value === null || value === "";
+
 /**
- * `env` with each PALETTE_ setting filled from its older KOMO_ name when unset,
- * so deployments configured before the rename keep working unchanged.
+ * `env` with each PALETTE_ setting filled from its older KOMO_ name when unset
+ * (missing, null or ""), so deployments configured before the rename keep working
+ * unchanged and an empty PALETTE_ value never hides a KOMO_ one.
  */
 export function paletteEnv<T extends object>(env: T): T {
-  const values = env as Record<string, unknown>;
+  const values = env as Record<PropertyKey, unknown>;
   const legacy: Record<string, unknown> = {};
   for (const key in values)
-    if (key.startsWith("KOMO_") && values[`PALETTE_${key.slice(5)}`] === undefined)
+    if (key.startsWith("KOMO_") && unset(values[`PALETTE_${key.slice(5)}`]) && !unset(values[key]))
       legacy[`PALETTE_${key.slice(5)}`] = values[key];
-  // Layered over `env`, so every binding stays reachable whether or not it is enumerable.
-  return Object.keys(legacy).length ? Object.assign(Object.create(env) as T, legacy) : env;
+  if (!Object.keys(legacy).length) return env;
+  // A plain copy of every binding (enumerable or not, by reference), so a spread,
+  // Object.keys or JSON.stringify of the result still sees all of them.
+  const copy: Record<PropertyKey, unknown> = {};
+  for (const key of Reflect.ownKeys(env)) copy[key] = values[key];
+  for (const key in values) copy[key] = values[key];
+  return Object.assign(copy, legacy) as T;
 }

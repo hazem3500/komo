@@ -30,7 +30,7 @@ beforeAll(async () => {
       const definition={id:'option',name:'Option',source:'fixture/option.tsx',line:1,props:[{name:'selected',kind:'boolean',required:true,typeLabel:'boolean'}]};
       const tokens=[{path:'color.accent',cssVariable:'--accent',type:'color',properties:['background-color'],impactSelector:'.card'}];
       // Only the framed copy registers its tokens, as an app rendered only in the frame would.
-      const framed=window.name==='palette-viewport';
+      const framed=window.name==='komo-viewport';
       function App(){
         const[props,setProps]=React.useState({selected:false});
         const inspect=usePaletteInspectable({component:definition,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
@@ -77,7 +77,7 @@ async function viewport(page: Page): Promise<Frame> {
     const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
     return !!frame?.contentDocument?.getElementById("option") && !root!.querySelector(".frame-stage[data-loading]");
   });
-  return page.frames().find((item) => item.name() === "palette-viewport")!;
+  return page.frames().find((item) => item.name() === "komo-viewport")!;
 }
 /** An element inside the viewport iframe, on screen. */
 const framed = (page: Page, id: string) => page.evaluate((id) => {

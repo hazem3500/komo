@@ -84,7 +84,7 @@ async function viewportFrame(page: Page, after = 0): Promise<Frame> {
     const view = frame?.contentWindow as (Window & { qa?: { loaded: number } }) | null | undefined;
     return !!frame?.contentDocument?.getElementById("card") && (view?.qa?.loaded ?? 0) > after && !root!.querySelector(".frame-stage[data-loading]");
   }, after);
-  return page.frames().find((item) => item.name() === "palette-viewport")!;
+  return page.frames().find((item) => item.name() === "komo-viewport")!;
 }
 /** Where an element of the reviewed page sits on screen, through the frame's offset and scale. */
 const box = (page: Review, id: string) => page.evaluate(([id, framed]) => {

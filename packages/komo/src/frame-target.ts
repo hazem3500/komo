@@ -6,9 +6,12 @@
 // every helper is the plain same-document read.
 import type { PreviewTarget } from "./design-system.js";
 
-/** The viewport iframe's name: Palette inside it stays inert, so only one instance reviews. */
-export const FRAME_NAME = "palette-viewport";
-/** True inside Frame's viewport iframe, also when an older release named it komo-viewport. */
+/**
+ * The viewport iframe's name: Palette inside it stays inert, so only one instance reviews.
+ * It keeps its name from before the rename, so an older framed copy still sees it is framed.
+ */
+export const FRAME_NAME = "komo-viewport";
+/** True inside Frame's viewport iframe; either name and either attribute counts. */
 export const framedByPalette = () => {
   try {
     const frame = window.frameElement;

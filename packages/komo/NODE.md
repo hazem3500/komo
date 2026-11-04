@@ -94,7 +94,7 @@ Put only `PREFIX/auth/google/authorize` and `PREFIX/auth/proxy/session` behind I
 
 Google Cloud's external Application Load Balancer appends two `X-Forwarded-For` entries, the client's address and then the load balancer's forwarding rule address. Behind it alone, set `PALETTE_TRUSTED_PROXY_HOPS=2`. Add one for each proxy after it that appends the address it received from, such as nginx with `$proxy_add_x_forwarded_for`: a load balancer plus nginx is `3`. A proxy that passes the header through unchanged adds nothing.
 
-Deployments configured before the rename keep working unchanged: each `PALETTE_*` variable below is also read under its older `KOMO_*` name (`KOMO_ALLOW_GUESTS`, `KOMO_TRUSTED_PROXY_HOPS` and so on) when the `PALETTE_*` name is unset. When both are set, `PALETTE_*` wins.
+Deployments configured before the rename keep working unchanged: each `PALETTE_*` variable below is also read under its older `KOMO_*` name (`KOMO_ALLOW_GUESTS`, `KOMO_TRUSTED_PROXY_HOPS` and so on) when the `PALETTE_*` name is unset or empty. When both are set, `PALETTE_*` wins.
 
 | Variable | Purpose | Default | Example |
 | --- | --- | --- | --- |

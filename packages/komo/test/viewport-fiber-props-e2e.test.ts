@@ -113,7 +113,7 @@ async function load(page: Page, mode: Mode): Promise<Page | Frame> {
     const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
     return !!frame?.contentDocument?.querySelector(".fixture-button") && !root!.querySelector(".frame-stage[data-loading]");
   });
-  return page.frames().find((item) => item.name() === "palette-viewport")!;
+  return page.frames().find((item) => item.name() === "komo-viewport")!;
 }
 
 /** The centre of `selector` on screen, inside the viewport iframe when one shows the page. */

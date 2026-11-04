@@ -15,7 +15,7 @@ import { drawHighlight, watchHighlight } from "./highlight.js";
 import { createFramePortals, preserveFrameStyles } from "./frame-portals.js";
 import { createFrameViewport } from "./frame-viewport.js";
 import { SHELL_OFF_KEY, SHELL_PARAM, LEGACY_SHELL_PARAM, claimShell, shellNonce } from "./shell-session.js";
-import { migrateStorage } from "./storage-keys.js";
+import { forget, migrateStorage } from "./storage-keys.js";
 import {
   clientPoint,
   counterpart,
@@ -940,7 +940,7 @@ export function initComments(options: CommentsOptions): CommentsController {
           viewportFailed = "";
           shellSkipped = false;
           try {
-            sessionStorage.removeItem(SHELL_OFF_KEY);
+            forget(sessionStorage, SHELL_OFF_KEY);
           } catch {
             /* The tab keeps two copies. */
           }
@@ -2778,7 +2778,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     commentsHidden = false;
     revealExpanded = false;
     try {
-      sessionStorage.removeItem(visibilityKey);
+      forget(sessionStorage, visibilityKey);
     } catch {
       /* Comments stay shown for this page. */
     }
@@ -2824,7 +2824,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     toolbarDismissed = false;
     hidden = false;
     try {
-      sessionStorage.removeItem(toolbarDismissKey);
+      forget(sessionStorage, toolbarDismissKey);
     } catch {
       /* The toolbar remains visible for this page session. */
     }

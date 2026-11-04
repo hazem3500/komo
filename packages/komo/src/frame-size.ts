@@ -1,3 +1,4 @@
+import { forget } from "./storage-keys.js";
 import type { textEntry } from "./dom.js";
 import type { FrameView, frameView as placeView } from "./review-layout.js";
 import type { onFrame } from "./frame-target.js";
@@ -185,7 +186,7 @@ export function mountFrameSize(
     try {
       const record = frameSizeRecord(size, actual, choice());
       if (record) localStorage.setItem(key, record);
-      else localStorage.removeItem(key);
+      else forget(localStorage, key);
     } catch {
       /* Keep the size for this session when storage is blocked. */
     }

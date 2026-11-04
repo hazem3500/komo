@@ -177,15 +177,15 @@ it("keeps login credentials private and rejects a foreign callback origin", asyn
   }
 });
 
-it("reads a session saved under ~/.config/komo before the rename, and logout removes it", async () => {
+it("reads a session saved under ~/.config/komo before the rename, and logout revokes and removes every saved session", async () => {
   const home = await mkdtemp(join(tmpdir(), "palette-legacy-home-"));
   const user = { id: "google:test", name: "CLI reviewer", verified: true };
-  let revoked = false;
+  const revoked: string[] = [];
   const api = createServer((req, res) => {
     res.setHeader("Content-Type", "application/json");
     if (req.url?.startsWith("/config")) res.end(JSON.stringify({ repo: "owner/site" }));
-    else if (req.headers.authorization === "Bearer legacy-session") {
-      if (req.method === "DELETE") revoked = true;
+    else if (["Bearer legacy-session", "Bearer current-session"].includes(req.headers.authorization ?? "")) {
+      if (req.method === "DELETE") revoked.push(req.headers.authorization!.slice(7));
       res.end(JSON.stringify({ user }));
     } else {
       res.statusCode = 401;
@@ -212,9 +212,14 @@ it("reads a session saved under ~/.config/komo before the rename, and logout rem
     await writeFile(legacy, JSON.stringify({ token: "legacy-session" }));
     const whoami = await promisify(execFile)(process.execPath, [entry, "whoami"], { env, cwd: home });
     expect(JSON.parse(whoami.stdout).data).toMatchObject({ user, auth: "session" });
+    // Signed in again after the upgrade: a second session, saved under ~/.config/palette.
+    const current = join(home, ".config", "palette", `${key}.json`);
+    await mkdir(dirname(current), { recursive: true });
+    await writeFile(current, JSON.stringify({ token: "current-session" }));
     await promisify(execFile)(process.execPath, [entry, "logout"], { env, cwd: home });
-    expect(revoked).toBe(true);
+    expect(revoked.sort()).toEqual(["current-session", "legacy-session"]);
     await expect(stat(legacy)).rejects.toThrow();
+    await expect(stat(current)).rejects.toThrow();
   } finally {
     api.close();
     api.closeAllConnections();

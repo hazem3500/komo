@@ -106,8 +106,13 @@ async function viewportFrame(page: Page): Promise<Frame> {
     const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
     return !!frame?.contentDocument?.getElementById("title") && !root!.querySelector(".frame-stage[data-loading]");
   });
-  const frame = page.frames().find((item) => item.name() === "palette-viewport");
+  const frame = page.frames().find((item) => item.name() === "komo-viewport");
   expect(frame).toBeTruthy();
+  // Both attributes and the name from before the rename, so an older framed copy sees it is framed.
+  expect(await page.evaluate(() => {
+    const iframe = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]")!;
+    return [iframe.name, iframe.hasAttribute("data-komo-viewport")];
+  })).toEqual(["komo-viewport", true]);
   return frame!;
 }
 async function open(page: Page, query = "") {

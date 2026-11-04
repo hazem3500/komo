@@ -1,3 +1,4 @@
+import { forget } from "./storage-keys.js";
 import type { CommentsOptions } from "./types.js";
 
 /** Remembers whether the sidebar was open, per `restoreOpen`. */
@@ -8,7 +9,7 @@ export function openState(
   let store: Storage | undefined;
   try {
     // Drop the old localStorage key so it can't reopen the sidebar.
-    if (mode !== "always") localStorage.removeItem(key);
+    if (mode !== "always") forget(localStorage, key);
   } catch {
     /* Storage is blocked. */
   }
@@ -29,7 +30,7 @@ export function openState(
     set(open: boolean) {
       try {
         if (open) store?.setItem(key, "1");
-        else store?.removeItem(key);
+        else if (store) forget(store, key);
       } catch {
         /* The sidebar starts closed next time. */
       }

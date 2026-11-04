@@ -1,3 +1,4 @@
+import { forget, legacyKey } from "./storage-keys.js";
 import type { CommentsOptions, Identity, Thread } from "./types.js";
 export class ApiError extends Error {
   constructor(
@@ -192,7 +193,7 @@ export class CommentsApi {
           this.userKey,
           JSON.stringify({ token: this.token, user: this.user }),
         );
-      else localStorage.removeItem(this.userKey);
+      else forget(localStorage, this.userKey);
     } catch {
       /* The account reloads from the server next time. */
     }
@@ -334,7 +335,7 @@ export class CommentsApi {
           threads.push(compact);
         }
         if (partial && !threads.length) {
-          localStorage.removeItem(this.listKey);
+          forget(localStorage, this.listKey);
           return;
         }
         localStorage.setItem(
@@ -350,7 +351,7 @@ export class CommentsApi {
         // Do not repeatedly serialize snapshots into a full/disabled store.
         this.persistenceBlocked = true;
         try {
-          localStorage.removeItem(this.listKey);
+          forget(localStorage, this.listKey);
         } catch {
           /* Storage disabled. */
         }
@@ -453,10 +454,11 @@ export class CommentsApi {
   clear() {
     this.cancelReads();
     try {
-      localStorage.removeItem(this.listKey);
+      forget(localStorage, this.listKey);
       // Clear every channel's snapshot, including legacy keys containing tokens.
+      const old = legacyKey(this.key);
       for (const key of Object.keys(localStorage))
-        if (key.startsWith(`${this.key}:`)) localStorage.removeItem(key);
+        if (key.startsWith(`${this.key}:`) || (old && key.startsWith(`${old}:`))) localStorage.removeItem(key);
     } catch {
       /* Nothing cached. */
     }
@@ -469,7 +471,7 @@ export class CommentsApi {
     // An empty shared cookie prevents another preview's local fallback reviving logout.
     this.writeCookie("", 400 * 86400);
     try {
-      localStorage.removeItem(this.key);
+      forget(localStorage, this.key);
     } catch {
       /* No persistent session. */
     }

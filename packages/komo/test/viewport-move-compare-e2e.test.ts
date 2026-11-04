@@ -124,7 +124,7 @@ async function open(mode: Mode) {
       const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
       return !!frame?.contentDocument?.getElementById("new") && !root!.querySelector(".frame-stage[data-loading]");
     });
-    app = page.frames().find((item) => item.name() === "palette-viewport")!;
+    app = page.frames().find((item) => item.name() === "komo-viewport")!;
   } else await page.locator("#new").waitFor();
   await frameZoom(page, "Fit");
   await page.waitForTimeout(200);

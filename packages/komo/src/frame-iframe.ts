@@ -141,7 +141,8 @@ export function openFrameViewport(options: FrameViewportOptions): FrameViewport 
   const iframe = el("iframe");
   // The framed page's own Palette sees this and stays inert; Palette here does the reviewing.
   iframe.name = FRAME_NAME;
-  iframe.dataset.paletteViewport = "";
+  // Both attributes: an older framed copy checks data-komo-viewport.
+  iframe.dataset.paletteViewport = iframe.dataset.komoViewport = "";
   iframe.title = "Page viewport";
   port.append(iframe);
   stage.append(port);

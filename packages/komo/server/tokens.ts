@@ -110,7 +110,8 @@ export async function accountProjects(env: Env, userId: string) {
 const publicToken = (row: TokenRow, now: number) => ({
   id: row.id,
   name: row.name,
-  prefix: `${PAT_PREFIX}${row.id}`,
+  // Issuance-neutral: tokens issued before the rename start komo_pat_, newer ones palette_pat_.
+  prefix: `…_pat_${row.id}`,
   last4: row.last4,
   scopes: list(row.scopes) ?? [],
   projects: list(row.projects),

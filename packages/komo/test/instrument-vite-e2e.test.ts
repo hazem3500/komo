@@ -188,7 +188,7 @@ describe.skipIf(!chrome).each([19, 18])("build-time instrumented components, Rea
       const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
       return !!frame?.contentDocument?.querySelector("#primary") && !root!.querySelector(".frame-stage[data-loading]");
     });
-    const frame = page.frames().find((item) => item.name() === "palette-viewport")!;
+    const frame = page.frames().find((item) => item.name() === "komo-viewport")!;
     await openDesign(page);
     const point = await page.evaluate(() => {
       const root = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;

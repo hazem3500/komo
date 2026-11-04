@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { frameBridge } from "../src/frame-target";
+import { framedByPalette, frameBridge } from "../src/frame-target";
 import { claimShell, shellClaimed } from "../src/shell-session";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -21,4 +21,13 @@ it("claims the shell under both names, so an older guard stands down", () => {
   expect(realm[Symbol.for("komo.shell")]).toBe("nonce");
   delete realm[Symbol.for("palette.shell")];
   expect(shellClaimed("nonce")).toBe(true);
+});
+
+it("knows it is framed under either iframe name and attribute", () => {
+  for (const [name, attribute] of [["komo-viewport", "data-komo-viewport"], ["komo-viewport", "data-palette-viewport"], ["palette-viewport", "data-palette-viewport"]]) {
+    vi.stubGlobal("window", { name, frameElement: { hasAttribute: (value: string) => value === attribute } });
+    expect(framedByPalette(), `${name} ${attribute}`).toBe(true);
+  }
+  vi.stubGlobal("window", { name: "other", frameElement: { hasAttribute: () => true } });
+  expect(framedByPalette()).toBe(false);
 });

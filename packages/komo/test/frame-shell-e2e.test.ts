@@ -100,7 +100,7 @@ async function viewportFrame(page: Page): Promise<Frame> {
     const frame = root?.querySelector<HTMLIFrameElement>("iframe[data-palette-viewport]");
     return !!frame?.contentDocument?.getElementById("title") && !root!.querySelector(".frame-stage[data-loading]");
   });
-  return page.frames().find((item) => item.name() === "palette-viewport")!;
+  return page.frames().find((item) => item.name() === "komo-viewport")!;
 }
 /** Opens Frame on the normal page and accepts the reload into the shell. */
 async function enter(page: Page, query = "") {

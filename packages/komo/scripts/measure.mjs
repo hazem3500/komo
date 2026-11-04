@@ -222,10 +222,12 @@ await writeFile(
 // chunk above (4,046) and its hooks; 248,610 measured on main 3aeee4d (0.9.101) with this branch, plus ~190 for CI.
 // 248,800 -> 249,100: Design mode asks a realm's build-time instrumented components (@hazem3500/palette/vite)
 // before the app's adapter, combining the two in the on-demand design chunks; 248,897 measured, plus CI margin.
-// 249,100 -> 249,400: the compatibility rename. Storage keys move from branch-comments:/komo: to palette: at mount,
-// the frame bridge and shell claim are published and read under both names, and Palette's own classes, custom
-// properties and events say palette (+283: 248,940 -> 249,223 measured on main 756ac1d, initial +208), plus CI margin.
-if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 249_400)
+// 249,100 -> 249,850: the compatibility rename. Palette's own branch-comments:/komo: storage keys are copied to
+// palette: at mount and kept, and a cleared key is cleared under both names (an owned-key pattern, ~460 gzip
+// standalone); the frame bridge and shell claim are published and read under both names; Palette's own classes,
+// custom properties and events say palette (+757: 248,940 -> 249,697 measured on main 756ac1d, initial +629),
+// plus CI margin.
+if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 249_850)
   throw new Error("Palette exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
