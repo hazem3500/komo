@@ -23,7 +23,7 @@ export async function fixtureApp(react: 18 | 19 = 19) {
   return { directory, app };
 }
 
-export const instrumentOptions = { packages: ["@fixture/ui"], components: ["src/ProjectCard.tsx#ProjectCard", "src/Summary.view.tsx#default"] } satisfies PaletteComponentsOptions;
+export const instrumentOptions = { packages: ["@fixture/ui/*"], components: ["src/ProjectCard.tsx#ProjectCard", "src/Summary.view.tsx#default"] } satisfies PaletteComponentsOptions;
 
 /** `plugin`: true or false for an enabled or disabled plugin, null for none at all. */
 export async function buildApp(app: string, outDir: string, plugin: boolean | null, review = plugin === true, warnings: string[] = []) {

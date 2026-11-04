@@ -4,7 +4,11 @@ export interface PaletteComponentsOptions {
    * `process.env.PREVIEW === "1"`. Off, the plugin has no hooks and the build is unchanged.
    */
   enabled?: boolean;
-  /** Design-system packages (or package subpaths): every eligible component export is instrumented. */
+  /**
+   * Design-system packages or package subpaths: every eligible component export is instrumented.
+   * "@scope/ds/*" expands to every subpath in the package's exports map. Components the package
+   * compares by element type (`child.type === Item`) are left alone, with a warning.
+   */
   packages?: string[];
   /**
    * App components to instrument, relative to the Vite root: "src/cards/Card.tsx" for every

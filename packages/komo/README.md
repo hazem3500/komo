@@ -256,7 +256,8 @@ export default defineConfig({
   plugins: [
     paletteComponents({
       enabled: process.env.PREVIEW_BUILD === "1",
-      // Every component export of these packages that has editable props.
+      // Every component export of these packages that has editable props. "@acme/ui/*" lists
+      // every subpath in the package's exports map (@acme/ui/button, @acme/ui/badge, …).
       packages: ["@acme/ui"],
       // App components, by module and export, relative to the Vite root.
       components: ["src/cards/ProjectCard.tsx#ProjectCard", "src/nav/TopBar.tsx"],
@@ -286,7 +287,7 @@ export default defineConfig({
 - **Finding the instance.** Picking an element reads React's fiber links (`return`, `child`, `memoizedState`) to find the nearest instrumented instance, like the fiber adapter, and never writes them. In Viewport, the framed app's own instances answer.
 - **Cost.** The preview build carries a 2 KB gzip runtime plus each component's prop list. The test fixture measured 2.3 KB for 13 components, and on an Apple M4 Max about 0.6 µs per instance to mount and 0.3 µs per update.
 - **Limits.**
-  - Code that compares element types, such as `child.type === Tab` inside the package, sees the wrapper instead of the original. Exclude such components.
+  - Code that compares element types, such as `child.type === Tab`, would see the wrapper instead of the original. The plugin scans each package's shipped JavaScript for such comparisons and leaves those components uninstrumented, with a warning naming the file. A minified package renames its locals, so the scan can't see them there: exclude such components yourself.
   - A component with several root elements is selected by its first one.
   - Components used only inside the package itself, not imported by the app, aren't instrumented.
 
