@@ -208,6 +208,38 @@ describe.skipIf(!chrome).each([19, 18])("build-time instrumented components, Rea
     await page.close();
   });
 
+  it("edits next to a null and an over-long prop, keeps memo's compare, and covers default and aliased exports", async () => {
+    const { page, errors } = await open(react);
+    // Avatar's src is null and its caption too long for a control: editing size leaves both as they were.
+    await pick(page, ".ui-avatar");
+    await choose(page, "Avatar size", "lg");
+    await expect.poll(() => attr(page, ".ui-avatar", "size")).toBe("lg");
+    expect(await attr(page, ".ui-avatar", "src")).toBe("null");
+    expect(await attr(page, ".ui-avatar", "caption-length")).toBe("600");
+    expect(await attr(page, ".ui-avatar", "author")).toBe("Sam");
+
+    // Tag's compare ignores note: parent renders still bail out, as without instrumentation.
+    const renders = await page.evaluate(() => (window as any).qa.tagRenders());
+    for (let i = 0; i < 3; i++) await page.evaluate(() => window.qa.rerender());
+    await expect.poll(() => page.locator("#tick").textContent()).toBe("3");
+    expect(await page.evaluate(() => (window as any).qa.tagRenders())).toBe(renders);
+    await pick(page, ".ui-tag");
+    await choose(page, "Tag tone", "bold");
+    await expect.poll(() => attr(page, ".ui-tag", "tone")).toBe("bold");
+
+    // A default export re-exported as { Quote as default }, and an app module behind an alias.
+    await pick(page, ".ui-quote");
+    const author = page.getByRole("textbox", { name: "Quote author", exact: true });
+    await author.fill("Kai");
+    await author.press("Enter");
+    await expect.poll(() => page.locator(".ui-quote").textContent()).toBe("Kai");
+    await pick(page, ".summary");
+    await choose(page, "Summary tone", "loud");
+    await expect.poll(() => attr(page, ".summary", "tone")).toBe("loud");
+    expect(errors).toEqual([]);
+    await page.close();
+  });
+
   it("drops an unmounted instance and gives a remounted one its own props", async () => {
     const { page, errors } = await open(react);
     await pick(page, "#transient");

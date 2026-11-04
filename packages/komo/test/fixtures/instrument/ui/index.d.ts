@@ -28,3 +28,7 @@ export declare function Pair(props: { first?: string; second?: string }): ReactN
 export declare class Panel extends Component<{ elevation?: 0 | 1 | 2; children?: ReactNode }> { render(): ReactNode }
 export declare function Tabs(props: { selected?: string; children?: ReactNode }): ReactNode;
 export declare namespace Tabs { function Tab(props: { id: string; children?: ReactNode }): ReactNode }
+export declare function Avatar(props: { src: string | null; size?: "sm" | "md" | "lg"; caption?: string; author?: string }): ReactNode;
+export declare const Tag: MemoExoticComponent<(props: { tone?: "calm" | "bold"; note?: string }) => ReactNode> & { renders?: number };
+declare function Quote(props: { author?: string }): ReactNode;
+export { Quote as default };

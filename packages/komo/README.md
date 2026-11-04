@@ -275,7 +275,7 @@ export default defineConfig({
 
   Each mounted instance keeps its own previews in its own state, so edits go through React's normal render path in production React 18 and 19. Previews hold through parent re-renders, and Before/After, Undo, Redo and Reset work as for registered components. Reset restores a prop exactly, including one that was never passed. Previews exist only once someone edits in Design mode. Unmounting drops an instance's previews; they never move to another instance.
 - **Finding the instance.** Picking an element reads React's fiber links (`return`, `child`, `memoizedState`) to find the nearest instrumented instance, like the fiber adapter, and never writes them. In Viewport, the framed app's own instances answer.
-- **Cost.** The preview build carries a 2 KB gzip runtime plus each component's prop list. The test fixture measured 2.1 KB for 9 components, and on an Apple M4 Max about 0.6 µs per instance to mount and 0.3 µs per update.
+- **Cost.** The preview build carries a 2 KB gzip runtime plus each component's prop list. The test fixture measured 2.3 KB for 13 components, and on an Apple M4 Max about 0.6 µs per instance to mount and 0.3 µs per update.
 - **Limits.**
   - Code that compares element types, such as `child.type === Tab` inside the package, sees the wrapper instead of the original. Exclude such components.
   - A component with several root elements is selected by its first one.

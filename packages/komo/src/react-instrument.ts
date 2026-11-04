@@ -156,6 +156,14 @@ function values(instance: Instance) {
   return result;
 }
 
+/** Whether the panel can show this value in the prop's control. */
+function shown(prop: ComponentProperty, value: unknown) {
+  if (prop.kind === "string") return typeof value === "string" && value.length <= 500;
+  if (prop.kind === "number") return typeof value === "number" && Number.isFinite(value);
+  if (prop.kind === "boolean") return typeof value === "boolean";
+  return prop.kind === "enum" && (prop.values ?? []).includes(value as never);
+}
+
 function editorOf(instance: Instance): ComponentEditor {
   return instance.editor ??= {
     schema: instance.meta.props,
@@ -177,9 +185,12 @@ function editorOf(instance: Instance): ComponentEditor {
       let changed = false;
       for (const prop of instance.meta.props) {
         const name = prop.name, value = next[name];
+        // Only what the panel sends. A value it can't show (null, a long string) reaches it as
+        // unset, so unset there leaves the page's own value alone.
+        if (!(name in next)) continue;
         let edit = instance.owned.get(name);
         if (!edit) {
-          if (Object.is(base[name], value) || (value === undefined && base[name] == null)) continue;
+          if (Object.is(base[name], value) || (value === undefined && !shown(prop, base[name]))) continue;
           edit = { before: base[name], present: Object.hasOwn(base, name), value };
           instance.owned.set(name, edit);
           changed = true;

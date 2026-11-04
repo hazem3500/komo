@@ -45,7 +45,7 @@ it("instruments the preview build, with component metadata and the runtime, and 
   const added = gzip(entry(builds.preview)) - gzip(entry(builds.baseline));
   const customer = gzip(entry(builds.none));
   console.info(`instrumentation adds ${added} B gzip to the preview entry (${gzip(entry(builds.preview))} B); the customer entry is ${customer} B`);
-  // Runtime plus metadata for 9 components; the review UI stays in its own lazily loaded chunks.
+  // Runtime plus metadata for 13 components; the review UI stays in its own lazily loaded chunks.
   expect(added).toBeGreaterThan(0);
   expect(added).toBeLessThan(4000);
 });

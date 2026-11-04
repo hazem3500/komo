@@ -7,7 +7,9 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 // a component's design surface.
 const PLATFORM = /[\\/]node_modules[\\/](?:\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?(?:@types[\\/]react(?:-dom)?|csstype)[\\/]|[\\/]typescript[\\/]lib[\\/]lib\.[^\\/]*\.d\.ts$/;
 const STRUCTURAL = /^(key|ref|children|className|style|id|as|asChild|slot|dangerouslySetInnerHTML|suppressHydrationWarning|suppressContentEditableWarning)$|^on[A-Z]|^(data|aria)-|^_|^\$/;
-const SECRET = /pass(word|wd)?|secret|token|auth|api[-_]?key|credential|cookie|session|private/i;
+const SECRET = new Set(["password", "passwd", "secret", "token", "auth", "apikey", "credential", "credentials", "cookie", "session", "private"]);
+// "authToken" and "api_key" are secret-looking; "author" and "compass" aren't.
+const secret = (name) => name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/api[-_ ]?key/gi, "apikey").toLowerCase().split(/[^a-z0-9]+/).some((word) => SECRET.has(word));
 const MAX_VALUES = 64;
 
 /** Exports that are never components to edit: providers, contexts and icons. */
@@ -57,25 +59,38 @@ export async function collectComponents(options) {
       return;
     }
     const components = [];
+    const values = [];
     let hasDefault = false;
+    const listed = (name, reason) => { if (entry.exports?.includes(name)) skipped.push({ from: entry.from, name, reason }); };
     for (const symbol of checker.getExportsOfModule(module)) {
       const name = symbol.getName();
-      if (name === "default") hasDefault = true;
-      const display = name === "default" ? defaultName(symbol, checker) : name;
-      if (entry.exports && !entry.exports.includes(name)) continue;
-      if (!display || !/^[A-Z]/.test(display)) continue;
-      if (exclude(display, entry.from)) continue;
       const target = symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
-      if (!(target.flags & (ts.SymbolFlags.Value))) continue;
+      // Types don't exist at runtime; the proxy re-exports values by name.
+      if (!(target.flags & ts.SymbolFlags.Value)) {
+        listed(name, "a type, not a component");
+        continue;
+      }
+      if (name === "default") hasDefault = true;
+      else values.push(name);
+      const display = name === "default" ? defaultName(symbol, target, entry) : name;
+      if (entry.exports && !entry.exports.includes(name)) continue;
+      if (!display || !/^[A-Z]/.test(display)) {
+        listed(name, "not a component name");
+        continue;
+      }
+      if (exclude(display, entry.from)) {
+        listed(name, "excluded");
+        continue;
+      }
       const type = checker.getTypeOfSymbolAtLocation(target, statement);
       const props = componentProps(ts, checker, type, statement);
       if (!props) {
-        if (entry.exports?.includes(name)) skipped.push({ from: entry.from, name, reason: "not a React component" });
+        listed(name, "not a React component");
         continue;
       }
       const editable = editableProps(ts, checker, props, statement);
       if (!editable.length) {
-        if (entry.exports?.includes(name)) skipped.push({ from: entry.from, name, reason: "no editable scalar props" });
+        listed(name, "no editable scalar props");
         continue;
       }
       const declaration = target.valueDeclaration ?? target.declarations?.[0];
@@ -89,7 +104,7 @@ export async function collectComponents(options) {
     for (const name of entry.exports ?? [])
       if (!components.some((component) => component.export === name) && !skipped.some((item) => item.name === name && item.from === entry.from))
         skipped.push({ from: entry.from, name, reason: "not exported" });
-    results.push({ ...entry, hasDefault, components });
+    results.push({ ...entry, hasDefault, values, components });
   });
   return { entries: results, skipped };
 }
@@ -98,10 +113,12 @@ function toImport(file, root) {
   return isAbsolute(file) ? file : resolve(root, file);
 }
 
-function defaultName(symbol, checker) {
-  const declaration = symbol.declarations?.[0];
-  const named = declaration?.name?.text ?? declaration?.expression?.text;
-  return typeof named === "string" ? named : undefined;
+/** A default export's component name: its declaration's, an `export { X as default }`'s, or the module's file name. */
+function defaultName(symbol, target, entry) {
+  for (const candidate of [target.getName(), symbol.declarations?.[0]?.propertyName?.text, symbol.declarations?.[0]?.expression?.text, target.valueDeclaration?.name?.text])
+    if (typeof candidate === "string" && /^[A-Z]/.test(candidate)) return candidate;
+  const file = entry.file ? entry.file.split(/[\\/]/).pop().replace(/\..*$/, "") : "";
+  return /^[A-Z]/.test(file) ? file : undefined;
 }
 
 function location(declaration, root) {
@@ -133,7 +150,7 @@ function editableProps(ts, checker, props, at) {
   const result = [];
   for (const symbol of checker.getPropertiesOfType(props)) {
     const name = symbol.getName();
-    if (STRUCTURAL.test(name) || SECRET.test(name)) continue;
+    if (STRUCTURAL.test(name) || secret(name)) continue;
     const declarations = symbol.declarations ?? [];
     if (declarations.length && declarations.every((declaration) => PLATFORM.test(declaration.getSourceFile().fileName))) continue;
     const type = checker.getTypeOfSymbolAtLocation(symbol, at);
@@ -143,7 +160,8 @@ function editableProps(ts, checker, props, at) {
       name,
       kind: schema.kind,
       ...(schema.values ? { values: schema.values } : {}),
-      required: !(symbol.flags & ts.SymbolFlags.Optional),
+      // A prop whose type admits null or undefined can be left out.
+      required: !(symbol.flags & ts.SymbolFlags.Optional) && !schema.nullable,
       typeLabel: checker.typeToString(type, at, ts.TypeFormatFlags.NoTruncation).slice(0, 100),
     });
   }
@@ -155,6 +173,12 @@ function scalar(ts, checker, type) {
   const parts = type.flags & ts.TypeFlags.Union ? type.types : [type];
   const kept = parts.filter((part) => !(part.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void)));
   if (!kept.length) return undefined;
+  const nullable = kept.length < parts.length;
+  const result = scalarKind(ts, kept);
+  return result && { ...result, nullable };
+}
+
+function scalarKind(ts, kept) {
   if (kept.every((part) => part.flags & ts.TypeFlags.BooleanLiteral) && kept.length === 2) return { kind: "boolean" };
   if (kept.length === 1) {
     const [part] = kept;

@@ -7,7 +7,7 @@
 // without it. Enabled, imports of the listed packages and app modules resolve to generated
 // proxies that re-export everything and wrap each eligible component with `instrument()`
 // from @hazem3500/komo/react-instrument. Node-only.
-import { basename, dirname, extname, resolve } from "node:path";
+import { resolve } from "node:path";
 import { collectComponents, defaultExclude } from "./metadata.mjs";
 
 const PREFIX = "\0palette-components:";
@@ -27,7 +27,6 @@ export function paletteComponents(options = {}) {
   const proxies = new Map();
   const byPackage = new Map();
   const byFile = new Map();
-  const names = new Set();
   let ready;
 
   function proxy(entry) {
@@ -35,7 +34,8 @@ export function paletteComponents(options = {}) {
     const lines = [
       `import * as original from ${from};`,
       `import { instrument } from ${JSON.stringify(RUNTIME)};`,
-      `export * from ${from};`,
+      // Named re-exports, not `export *`: the dev server's CommonJS interop can't carry a star.
+      ...(entry.values.length ? [`export { ${entry.values.filter((name) => !entry.components.some((component) => component.export === name)).join(", ")} } from ${from};`] : []),
     ];
     let index = 0;
     for (const component of entry.components) {
@@ -58,11 +58,7 @@ export function paletteComponents(options = {}) {
       proxies.set(id, { code: proxy(entry) });
       count += entry.components.length;
       if (entry.kind === "package") byPackage.set(entry.specifier, id);
-      else {
-        byFile.set(entry.file, id);
-        names.add(basename(entry.file, extname(entry.file)));
-        if (basename(entry.file, extname(entry.file)) === "index") names.add(basename(dirname(entry.file)));
-      }
+      else byFile.set(entry.file, id);
     }
     for (const item of skipped) context.warn(`${item.from}${item.name ? `#${item.name}` : ""}: ${item.reason}, not instrumented`);
     if (options.report !== false) context.info?.(`instrumented ${count} component${count === 1 ? "" : "s"} for Design mode`);
@@ -71,7 +67,7 @@ export function paletteComponents(options = {}) {
   return {
     name,
     enforce: "pre",
-    config: () => ({ optimizeDeps: { include: [RUNTIME] } }),
+    config: () => ({ optimizeDeps: { include: [RUNTIME, ...packages] } }),
     configResolved(config) {
       root = config.root;
     },
@@ -84,9 +80,9 @@ export function paletteComponents(options = {}) {
       await ready;
       const forPackage = byPackage.get(source);
       if (forPackage) return forPackage;
-      if (!byFile.size) return null;
-      const last = source.split(/[\\/]/).pop() ?? "";
-      if (!names.has(basename(last, extname(last)))) return null;
+      // Any specifier can reach a listed module (relative, aliased, a barrel), so resolve each
+      // one from app code; dependencies never import the app.
+      if (!byFile.size || /[\\/]node_modules[\\/]/.test(importer)) return null;
       const resolved = await this.resolve(source, importer, { ...resolveOptions, skipSelf: true });
       const file = resolved && !resolved.external ? resolve(resolved.id.replace(/[?#].*$/, "")) : undefined;
       if (!file || file === resolve(importer.replace(/[?#].*$/, ""))) return null;

@@ -47,3 +47,17 @@ export class Panel extends Component {
 
 export function Tabs({ selected = "one", children }) { return h("div", { className: "ui-tabs", "data-selected": selected }, children); }
 Tabs.Tab = function Tab({ id, children }) { return h("button", { type: "button", "data-tab": id }, children); };
+
+// A required prop that may be null, and a caption too long for a text control.
+export function Avatar({ src, size = "md", caption = "", author = "" }) {
+  return h("span", { className: "ui-avatar", "data-src": String(src), "data-size": size, "data-caption-length": String(caption.length), "data-author": author });
+}
+
+// memo with its own compare: only tone matters.
+export const Tag = memo(function Tag({ tone = "calm", note }) {
+  Tag.renders = (Tag.renders ?? 0) + 1;
+  return h("span", { className: "ui-tag", "data-tone": tone }, note);
+}, (before, after) => before.tone === after.tone);
+
+function Quote({ author = "Anonymous" }) { return h("blockquote", { className: "ui-quote" }, author); }
+export { Quote as default };

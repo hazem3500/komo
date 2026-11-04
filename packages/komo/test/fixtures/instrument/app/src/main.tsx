@@ -1,10 +1,11 @@
 import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Badge, Button, Counter, Pair, Panel, Popover, Tabs, TextField, ThemeProvider, colors, cx, useToggle } from "@fixture/ui";
+import Quote, { Avatar, Tag, Badge, Button, Counter, Pair, Panel, Popover, Tabs, TextField, ThemeProvider, colors, cx, useToggle } from "@fixture/ui";
 import { ProjectCard, ProjectList } from "./ProjectCard";
+import Summary from "@views/summary";
 
 declare global { interface Window { qa: Record<string, any> } }
-const qa = (window.qa = { renders: 0, refs: [] as unknown[], colors, cx: cx("a", false, "b"), tab: typeof Tabs.Tab });
+const qa = (window.qa = { tagRenders: () => (Tag as { renders?: number }).renders ?? 0, renders: 0, refs: [] as unknown[], colors, cx: cx("a", false, "b"), tab: typeof Tabs.Tab });
 
 function App() {
   const [text, setText] = useState("Hello");
@@ -36,6 +37,10 @@ function App() {
       <ProjectList>
         <ProjectCard title="Ship the beta" status="on-track" progress={40} owner={{ name: "Sam" }} />
       </ProjectList>
+      <Avatar src={null} size="sm" caption={"x".repeat(600)} author="Sam" />
+      <Tag tone="calm" note={String(tick)} />
+      <Quote />
+      <Summary tone="plain" />
       <output id="tick">{tick}</output>
     </ThemeProvider>
   );
