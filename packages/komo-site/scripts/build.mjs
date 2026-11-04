@@ -62,7 +62,7 @@ const navIcons = {
   "/faq/": "help",
 };
 const logoSvg = await readFile(new URL("../src/logo.svg", import.meta.url), "utf8");
-const logo = (id) => `<span class="komo-logo" data-motion="soft" aria-hidden="true"><img class="komo-symbol" src="/favicon.svg" width="24" height="24" alt="">${logoSvg.replaceAll("komo-mask", `komo-mask-${id}`).replace('class="wordmark"', 'class="komo-wordmark"').replace('role="img" aria-label="komo"', 'aria-hidden="true"')}</span>`;
+const logo = (id) => `<span class="komo-logo" data-motion="soft" aria-hidden="true"><img class="komo-symbol" src="/favicon.svg" width="24" height="24" alt="">${logoSvg.replace('class="wordmark"', 'class="komo-wordmark"').replace('role="img" aria-label="Palette"', 'aria-hidden="true"')}</span>`;
 const homeSocial = {
   title: "Palette — Package — Off brand",
   description: "Leave feedback anywhere on your website. Comment, reply, react, and copy the context into your coding agent.",
