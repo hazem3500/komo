@@ -50,7 +50,7 @@ createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictM
 
 // Design mode loads only in review builds, and only when the test asks for it.
 if (import.meta.env.VITE_REVIEW === "1") qa.startPalette = async (viewport = false) => {
-  const { initPalette } = await import("@hazem3500/komo");
+  const { initPalette } = await import("@hazem3500/palette");
   window.fetch = async () => Response.json({ threads: [], guests: true });
   qa.palette = initPalette({
     endpoint: location.origin, project: "instrument", repo: "example/review", branch: "fixture", restoreOpen: false,

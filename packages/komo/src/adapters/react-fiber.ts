@@ -1,6 +1,6 @@
 // Opt-in component adapter that discovers React components from a picked DOM element.
 //
-//   import { discoverReactComponents } from "@hazem3500/komo/adapters/react-fiber";
+//   import { discoverReactComponents } from "@hazem3500/palette/adapters/react-fiber";
 //   initPalette({ design: { components: discoverReactComponents() } });
 //
 // WARNING: this reads React's private fields (`__reactFiber$*` on DOM nodes, `fiber.return`,

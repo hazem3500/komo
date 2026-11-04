@@ -1,17 +1,17 @@
-// @hazem3500/komo/vite: build-time component instrumentation for preview builds.
+// @hazem3500/palette/vite: build-time component instrumentation for preview builds.
 //
-//   import { paletteComponents } from "@hazem3500/komo/vite";
+//   import { paletteComponents } from "@hazem3500/palette/vite";
 //   plugins: [paletteComponents({ enabled: process.env.PREVIEW === "1", packages: ["@acme/ui"], components: ["src/cards/Card.tsx#Card"] })]
 //
 // Off unless `enabled` is true: a disabled plugin has no hooks, so the build is the same as
 // without it. Enabled, imports of the listed packages and app modules resolve to generated
 // proxies that re-export everything and wrap each eligible component with `instrument()`
-// from @hazem3500/komo/react-instrument. Node-only.
+// from @hazem3500/palette/react-instrument. Node-only.
 import { resolve } from "node:path";
 import { collectComponents, defaultExclude } from "./metadata.mjs";
 
 const PREFIX = "\0palette-components:";
-const RUNTIME = "@hazem3500/komo/react-instrument";
+const RUNTIME = "@hazem3500/palette/react-instrument";
 
 /** @param {import("./index.d.ts").PaletteComponentsOptions} [options] */
 export function paletteComponents(options = {}) {

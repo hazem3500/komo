@@ -220,7 +220,7 @@ await writeFile(
 // 243,450 -> 244,200: Frame's compact bar (one size-and-zoom trigger, Fit/100% menu rows with ⇧1/⇧0, the ⓘ note, the Simulate real viewport row) grows the on-demand frame-size chunk ~600 and initial ~20 (the hooks it is passed); 244,058 measured on main 7025c77, plus CI margin.
 // 244,200 -> 248,800: main's compact Frame bar and single-copy Viewport together with the snapshot view
 // chunk above (4,046) and its hooks; 248,610 measured on main 3aeee4d (0.9.101) with this branch, plus ~190 for CI.
-// 248,800 -> 249,100: Design mode asks a realm's build-time instrumented components (@hazem3500/komo/vite)
+// 248,800 -> 249,100: Design mode asks a realm's build-time instrumented components (@hazem3500/palette/vite)
 // before the app's adapter, combining the two in the on-demand design chunks; 248,897 measured, plus CI margin.
 if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 249_100)
   throw new Error("Palette exceeds its core production consumer bundle budget.");
@@ -244,7 +244,7 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 249_100)
 // restored on re-entry (7,677 -> 8,109 on main 418bc33).
 // 8,150 -> 8,215: the pending changes card's hooks (row hover outline, Discard all held in Before for Undo and Redo); the card itself is in the export chunk (8,103 -> 8,166 on main bc089fe).
 // 8,215 -> 8,300: the footer wraps under 420px (count and Before/After, then tools and Comment), so Comment is never clipped; CSS only (8,165 -> 8,255 on main ff2f416).
-// 8,300 -> 8,400: Design mode also opens the props panel for build-time instrumented components (@hazem3500/komo/vite), found on the element's own window (8,255 -> 8,324).
+// 8,300 -> 8,400: Design mode also opens the props panel for build-time instrumented components (@hazem3500/palette/vite), found on the element's own window (8,255 -> 8,324).
 if (report.optionalDesignMode.gzip > 8_400)
   throw new Error("Palette's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
@@ -349,7 +349,7 @@ if (report.optionalColorEditor.gzip > 6_500)
 // visibility, remove, a sample tile) and the structured typography editor measure 5,698, plus ~3%.
 if (report.optionalTypedEditor.gzip > 5_875)
   throw new Error("Palette's typed Custom editor chunk exceeds its gzip budget.");
-// Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
+// Design-system adapters are their own entry points (@hazem3500/palette/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.
 // 2,600: opt-in onlyGenerated (stylesheet scan, escaped class matching, re-scan on sheet
@@ -371,11 +371,11 @@ if (report.adapterReactPreview.gzip > 2_000)
   throw new Error("Palette's opt-in React preview bridge exceeds its gzip budget.");
 if (report.adapterClassTheme.gzip > 1_000)
   throw new Error("Palette's class theme adapter exceeds its gzip budget.");
-// The single-copy Viewport guard (@hazem3500/komo/shell) runs before the app mounts, and a
+// The single-copy Viewport guard (@hazem3500/palette/shell) runs before the app mounts, and a
 // build-time guard drops it from production; 434 measured.
 if (report.shell.gzip > 500)
   throw new Error("Palette's shell guard exceeds its gzip budget.");
-// Build-time component instrumentation's runtime (@hazem3500/komo/react-instrument): only preview
+// Build-time component instrumentation's runtime (@hazem3500/palette/react-instrument): only preview
 // builds with the Vite plugin enabled load it. The wrapper, its state-backed editor and the fiber
 // lookup measure 1,990, plus ~5%.
 if (report.instrument.gzip > 2_100)

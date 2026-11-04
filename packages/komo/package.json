@@ -1,6 +1,6 @@
 {
-  "name": "@hazem3500/komo",
-  "version": "0.9.105",
+  "name": "@hazem3500/palette",
+  "version": "0.9.106",
   "description": "Point, area, and threaded comments for website branches.",
   "type": "module",
   "license": "MIT",
@@ -119,7 +119,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hazem3500/komo.git",
+    "url": "git+https://github.com/hazem3500/palette.git",
     "directory": "packages/komo"
   },
   "publishConfig": {
@@ -157,9 +157,9 @@
   "engines": {
     "node": ">=22.12"
   },
-  "homepage": "https://github.com/hazem3500/komo#readme",
+  "homepage": "https://github.com/hazem3500/palette#readme",
   "bugs": {
-    "url": "https://github.com/hazem3500/komo/issues"
+    "url": "https://github.com/hazem3500/palette/issues"
   },
   "peerDependencies": {
     "react": "^18.2.0 || ^19.0.0",

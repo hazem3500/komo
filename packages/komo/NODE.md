@@ -7,7 +7,7 @@ The browser widget and CLI use the same API protocol on Cloudflare and Node. Thi
 1. In your website repository, install Palette and generate the Node project:
 
    ```sh
-   npm install @hazem3500/komo
+   npm install @hazem3500/palette
    npx palette init --node \
      --endpoint https://comments.example.com \
      --origin https://pr-42.preview.example.com \
@@ -25,7 +25,7 @@ The browser widget and CLI use the same API protocol on Cloudflare and Node. Thi
 
 3. Build this repository's image with `docker build -f Dockerfile.node -t komo-node .`. Run it with the generated variables and HTTPS in front. For a local check, set `PUBLIC_URL=http://localhost:8080` in `.komo/node.env` and run `docker run --env-file /path/to/your-website/.komo/node.env -p 8080:8080 komo-node`. For Cloud Run, set the container port to 8080. Cloud SQL or another reachable PostgreSQL service can be used through `DATABASE_URL`; the database connection URL must be reachable from the container. Startup applies the bundled schema under a database lock. `/health` returns `{"ok":true}` after migrations succeed.
 
-   The image installs the PostgreSQL client (`pg`). To run `@hazem3500/komo/node` outside it, install `pg` next to Palette: it is an optional peer, so browser installs of Palette never include it.
+   The image installs the PostgreSQL client (`pg`). To run `@hazem3500/palette/node` outside it, install `pg` next to Palette: it is an optional peer, so browser installs of Palette never include it.
 
 4. Open the owner-claim URL printed by `palette init --node` and sign in with Google. The setup page claims ownership once; the owner can then manage approved sites and private access. The generated widget config contains your project key. Use the same project key and branch in the bot CLI.
 
@@ -88,7 +88,7 @@ On a self-hosted Worker, apply the D1 migrations (`wrangler d1 migrations apply`
 
 ### Deploy behind Google Cloud IAP
 
-Build the image with `docker build -f Dockerfile.node -t komo-node .`. It runs `pnpm --filter @hazem3500/komo build`, which builds the server with `build:node`, and starts `node packages/komo/dist/node.mjs`. Outside Docker, run `pnpm install --frozen-lockfile && pnpm --filter @hazem3500/komo build`, then `node packages/komo/dist/node.mjs`.
+Build the image with `docker build -f Dockerfile.node -t komo-node .`. It runs `pnpm --filter @hazem3500/palette build`, which builds the server with `build:node`, and starts `node packages/komo/dist/node.mjs`. Outside Docker, run `pnpm install --frozen-lockfile && pnpm --filter @hazem3500/palette build`, then `node packages/komo/dist/node.mjs`.
 
 Put only `PREFIX/auth/google/authorize` and `PREFIX/auth/proxy/session` behind IAP. Leave the rest of the API outside it.
 

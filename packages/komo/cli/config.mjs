@@ -30,5 +30,5 @@ export function branchName(env, cwd) {
   );
 }
 export function clientModule(config) {
-  return `import { definePalette } from '@hazem3500/komo/setup';\n\nexport const initPalette = definePalette(${JSON.stringify(config, null, 2)});\n\n/** @deprecated Use initPalette. */\nexport const initKomo = initPalette;\n`;
+  return `import { definePalette } from '@hazem3500/palette/setup';\n\nexport const initPalette = definePalette(${JSON.stringify(config, null, 2)});\n\n/** @deprecated Use initPalette. */\nexport const initKomo = initPalette;\n`;
 }

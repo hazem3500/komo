@@ -2,7 +2,7 @@
 // once, in Frame's viewport iframe. Palette marks a shell page with a random nonce,
 // kept both in this tab's sessionStorage and in the URL, so a link alone can't
 // make one. This is the part core reads at mount; shell-mode.ts moves pages, and
-// the side-effect-free `@hazem3500/komo/shell` entry is built from both on its own.
+// the side-effect-free `@hazem3500/palette/shell` entry is built from both on its own.
 // Nothing here runs at import.
 
 /** The URL parameter that carries the shell's nonce. */

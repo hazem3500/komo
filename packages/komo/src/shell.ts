@@ -1,4 +1,4 @@
-// `@hazem3500/komo/shell`: the entry guard for Frame's single-copy simulated viewport. It has no
+// `@hazem3500/palette/shell`: the entry guard for Frame's single-copy simulated viewport. It has no
 // top-level side effects, so `import.meta.env.DEV && isShell(project)` drops it
 // from production builds.
 

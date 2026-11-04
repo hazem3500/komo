@@ -284,7 +284,7 @@ export interface CommentsOptions {
     /**
      * Single-copy simulated viewport (with mode "iframe"): turning it on reloads this page as a
      * shell for Palette, so the app runs once, in the frame. Requires the app's entry
-     * to skip mounting when `isShell(project)` from `@hazem3500/komo/shell` is true.
+     * to skip mounting when `isShell(project)` from `@hazem3500/palette/shell` is true.
      */
     shell?: boolean;
   };

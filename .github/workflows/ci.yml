@@ -24,7 +24,7 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm size
-      - run: pnpm --filter @hazem3500/komo test:package
+      - run: pnpm --filter @hazem3500/palette test:package
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -54,8 +54,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm --filter @hazem3500/komo run build:setup
-      - run: pnpm --filter @hazem3500/komo exec vitest run --config vitest.config.ts --shard=${{ matrix.shard }}/6
+      - run: pnpm --filter @hazem3500/palette run build:setup
+      - run: pnpm --filter @hazem3500/palette exec vitest run --config vitest.config.ts --shard=${{ matrix.shard }}/6
   check:
     if: always()
     needs: [static, test]

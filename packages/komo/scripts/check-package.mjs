@@ -55,12 +55,12 @@ try {
   for (const name of ["pg", "@cloudflare/workers-types", "wrangler"]) {
     assert.equal(existsSync(join(root, "node_modules", name)), false, `${name} must not install with Palette`);
   }
-  const shipped = JSON.parse(await readFile(join(root, "node_modules/@hazem3500/komo/package.json"), "utf8"));
+  const shipped = JSON.parse(await readFile(join(root, "node_modules/@hazem3500/palette/package.json"), "utf8"));
   assert.deepEqual(Object.keys(shipped.dependencies ?? {}), ["emoji-regex"], "runtime dependencies are browser-safe only");
   // A Workers host that imports komo/server has the optional Workers types peer installed.
   run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", `@cloudflare/workers-types@${shipped.peerDependencies["@cloudflare/workers-types"]}`]);
   assert.match(
-    await readFile(join(root, "node_modules/@hazem3500/komo/dist/react.js"), "utf8"),
+    await readFile(join(root, "node_modules/@hazem3500/palette/dist/react.js"), "utf8"),
     /^['"]use client['"];?/,
     "React entry must preserve its client boundary after minification",
   );
@@ -68,7 +68,7 @@ try {
   // import.meta.env.DEV, and stays in development.
   await writeFile(
     join(root, "shell-host.js"),
-    `import { isShell } from '@hazem3500/komo/shell';
+    `import { isShell } from '@hazem3500/palette/shell';
     if (import.meta.env.DEV && isShell('example-project')) console.log('shell-branch');
     else console.log('app-branch');`,
   );
@@ -90,46 +90,46 @@ try {
     join(root, "smoke.mjs"),
     `
     import assert from 'node:assert/strict';
-    import server from '@hazem3500/komo/server';
-    import metadata from '@hazem3500/komo/package.json' with { type: 'json' };
-    assert.equal(metadata.name, '@hazem3500/komo');
-    assert.ok(import.meta.resolve('@hazem3500/komo/server').endsWith('/dist/server.js'));
-    assert.ok(import.meta.resolve('@hazem3500/komo/package.json').endsWith('/komo/package.json'));
+    import server from '@hazem3500/palette/server';
+    import metadata from '@hazem3500/palette/package.json' with { type: 'json' };
+    assert.equal(metadata.name, '@hazem3500/palette');
+    assert.ok(import.meta.resolve('@hazem3500/palette/server').endsWith('/dist/server.js'));
+    assert.ok(import.meta.resolve('@hazem3500/palette/package.json').endsWith('/palette/package.json'));
     assert.equal(typeof server.scheduled, 'function');
     const health = await server.fetch(new Request('https://example.test/health'), {}, { waitUntil() {} });
     assert.equal(health.status, 200);
     assert.deepEqual(await health.json(), { ok: true });
-    import { initPalette } from '@hazem3500/komo';
-    import { definePalette } from '@hazem3500/komo/setup';
-    import { usePalette } from '@hazem3500/komo/react';
+    import { initPalette } from '@hazem3500/palette';
+    import { definePalette } from '@hazem3500/palette/setup';
+    import { usePalette } from '@hazem3500/palette/react';
     import { createElement } from 'react';
     import { renderToString } from 'react-dom/server';
     const config = {project:'packed-test'};
     initPalette(config).destroy(); definePalette(config)().destroy();
     function App(){usePalette(config);return createElement('p',null,'ok')}
     // The komo names stay as deprecated aliases of the Palette ones.
-    const legacy = { ...(await import('@hazem3500/komo')), ...(await import('@hazem3500/komo/setup')), ...(await import('@hazem3500/komo/react')) };
+    const legacy = { ...(await import('@hazem3500/palette')), ...(await import('@hazem3500/palette/setup')), ...(await import('@hazem3500/palette/react')) };
     assert.equal(legacy.initKomo, initPalette);
     assert.equal(legacy.defineKomo, definePalette);
     assert.equal(legacy.useKomo, usePalette);
     assert.equal(legacy.useKomoInspectable, legacy.usePaletteInspectable);
     assert.equal(legacy.useKomoDesignTokens, legacy.usePaletteDesignTokens);
     if(renderToString(createElement(App)) !== '<p>ok</p>') throw Error('SSR failed');
-    const { tailwindTokens, tailwindSpacing } = await import('@hazem3500/komo/adapters/tailwind');
-    const { classTheme } = await import('@hazem3500/komo/adapters/class-theme');
-    const { discoverCssTokens } = await import('@hazem3500/komo/adapters/css-variables');
+    const { tailwindTokens, tailwindSpacing } = await import('@hazem3500/palette/adapters/tailwind');
+    const { classTheme } = await import('@hazem3500/palette/adapters/class-theme');
+    const { discoverCssTokens } = await import('@hazem3500/palette/adapters/css-variables');
     if (typeof discoverCssTokens !== 'function') throw Error('CSS variable adapter failed');
-    const { discoverReactComponents } = await import('@hazem3500/komo/adapters/react-fiber');
+    const { discoverReactComponents } = await import('@hazem3500/palette/adapters/react-fiber');
     if (typeof discoverReactComponents().identify !== 'function') throw Error('React fiber adapter failed');
     initPalette({project:'packed-test', design: { components: discoverReactComponents({ maxProps: 8 }) }}).destroy();
     if (tailwindTokens({tokens: tailwindSpacing({prefix:['p'], steps:[4]})}).list({})[0].value !== '16px') throw Error('Tailwind adapter failed');
     if (classTheme({id:'mode', options:[{id:'light'}]}).id !== 'mode') throw Error('Class theme adapter failed');
     // The build-time instrumentation plugin is Node-only; disabled, it has no hooks at all.
-    const { paletteComponents } = await import('@hazem3500/komo/vite');
+    const { paletteComponents } = await import('@hazem3500/palette/vite');
     assert.deepEqual(Object.keys(paletteComponents()), ['name']);
     assert.deepEqual(Object.keys(paletteComponents({ enabled: false, packages: ['@acme/ui'] })), ['name']);
     assert.ok(['resolveId', 'load', 'buildStart'].every((hook) => hook in paletteComponents({ enabled: true })));
-    assert.ok(import.meta.resolve('@hazem3500/komo/react-instrument').endsWith('/dist/react-instrument.js'));
+    assert.ok(import.meta.resolve('@hazem3500/palette/react-instrument').endsWith('/dist/react-instrument.js'));
   `,
   );
   run(process.execPath, ["smoke.mjs"]);
@@ -138,25 +138,25 @@ try {
     "--input-type=module",
     "--eval",
     `import assert from 'node:assert/strict';
-     assert.match(import.meta.resolve('@hazem3500/komo/server'), /\\/server\\/index\\.ts$/);`,
+     assert.match(import.meta.resolve('@hazem3500/palette/server'), /\\/server\\/index\\.ts$/);`,
   ]);
   await writeFile(
     join(root, "consumer.ts"),
     `
-    import server, { type ServerEnv } from '@hazem3500/komo/server';
+    import server, { type ServerEnv } from '@hazem3500/palette/server';
     declare const env: ServerEnv;
     declare const request: Parameters<typeof server.fetch>[0];
     declare const context: Parameters<typeof server.fetch>[2];
     server.fetch(request, env, context);
-    import { initPalette, type PaletteConfig } from '@hazem3500/komo';
-    import { definePalette } from '@hazem3500/komo/setup';
-    import { usePalette } from '@hazem3500/komo/react';
-    import { tailwindTokens, tailwindSpacing, type TailwindTable } from '@hazem3500/komo/adapters/tailwind';
-    import { classTheme } from '@hazem3500/komo/adapters/class-theme';
-    import { discoverCssTokens } from '@hazem3500/komo/adapters/css-variables';
-    import { discoverReactComponents } from '@hazem3500/komo/adapters/react-fiber';
-    import { paletteComponents, type PaletteComponentsOptions } from '@hazem3500/komo/vite';
-    import { instrument, type InstrumentedComponent } from '@hazem3500/komo/react-instrument';
+    import { initPalette, type PaletteConfig } from '@hazem3500/palette';
+    import { definePalette } from '@hazem3500/palette/setup';
+    import { usePalette } from '@hazem3500/palette/react';
+    import { tailwindTokens, tailwindSpacing, type TailwindTable } from '@hazem3500/palette/adapters/tailwind';
+    import { classTheme } from '@hazem3500/palette/adapters/class-theme';
+    import { discoverCssTokens } from '@hazem3500/palette/adapters/css-variables';
+    import { discoverReactComponents } from '@hazem3500/palette/adapters/react-fiber';
+    import { paletteComponents, type PaletteComponentsOptions } from '@hazem3500/palette/vite';
+    import { instrument, type InstrumentedComponent } from '@hazem3500/palette/react-instrument';
     const plugin: PaletteComponentsOptions = { enabled: false, packages: ['@acme/ui'], components: ['src/Card.tsx#Card'] };
     paletteComponents(plugin);
     const meta: InstrumentedComponent = { name: 'Card', props: [{ name: 'tone', kind: 'enum', values: ['calm'], required: false, typeLabel: '"calm"' }] };
@@ -167,9 +167,9 @@ try {
     initPalette({project:'packed-test', design: { tokens: discoverCssTokens({ limit: 10 }) }}).destroy();
     initPalette({project:'packed-test', design: { components: discoverReactComponents({ maxProps: 8 }) }}).destroy();
     initPalette(config).destroy(); definePalette(config)().destroy(); usePalette(config);
-    import { initKomo, type KomoConfig, type KomoShortcuts, type KomoPins, type KomoFeatures, type KomoToolbar, type KomoSnapshots, type PaletteShortcuts, type PalettePins, type PaletteFeatures, type PaletteToolbar, type PaletteSnapshots } from '@hazem3500/komo';
-    import { defineKomo } from '@hazem3500/komo/setup';
-    import { useKomo, useKomoInspectable, useKomoDesignTokens, usePaletteInspectable, usePaletteDesignTokens, type KomoDesignToken, type KomoDesignTokenType, type PaletteDesignToken, type UseKomoInspectableOptions, type UseKomoDesignTokensOptions, type UsePaletteInspectableOptions, type UsePaletteDesignTokensOptions } from '@hazem3500/komo/react';
+    import { initKomo, type KomoConfig, type KomoShortcuts, type KomoPins, type KomoFeatures, type KomoToolbar, type KomoSnapshots, type PaletteShortcuts, type PalettePins, type PaletteFeatures, type PaletteToolbar, type PaletteSnapshots } from '@hazem3500/palette';
+    import { defineKomo } from '@hazem3500/palette/setup';
+    import { useKomo, useKomoInspectable, useKomoDesignTokens, usePaletteInspectable, usePaletteDesignTokens, type KomoDesignToken, type KomoDesignTokenType, type PaletteDesignToken, type UseKomoInspectableOptions, type UseKomoDesignTokensOptions, type UsePaletteInspectableOptions, type UsePaletteDesignTokensOptions } from '@hazem3500/palette/react';
     const legacyConfig: KomoConfig = config;
     initKomo(legacyConfig).destroy(); defineKomo(legacyConfig)().destroy(); useKomo(legacyConfig);
     const sameHooks: [typeof usePaletteInspectable, typeof usePaletteDesignTokens] = [useKomoInspectable, useKomoDesignTokens];
@@ -211,7 +211,7 @@ try {
   `,
     { mode: 0o755 },
   );
-  const cli = join(root, "node_modules/@hazem3500/komo/cli/index.mjs");
+  const cli = join(root, "node_modules/@hazem3500/palette/cli/index.mjs");
   for (const name of ["palette", "komo"]) {
     assert.match(run(join(root, "node_modules/.bin", name), ["--help"]), /palette init/, `the ${name} bin runs the CLI`);
   }
@@ -250,7 +250,7 @@ try {
     2,
   );
   const migrations = await readdir(
-    join(root, "node_modules/@hazem3500/komo/server/migrations"),
+    join(root, "node_modules/@hazem3500/palette/server/migrations"),
   );
   assert.deepEqual(await readdir(join(root, ".komo/migrations")), migrations);
   const generated = await readFile(join(root, "komo.config.js"), "utf8");
