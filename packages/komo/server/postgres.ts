@@ -26,6 +26,9 @@ import { fileURLToPath } from "node:url";
 // Keep the D1-shaped boundary used by the API. A batch always has one transaction.
 export function postgresDatabase(connectionString: string, pg: Pg) {
   const pool = new pg.Pool({ connectionString, max: 10 });
+  // An idle connection the database closes (a restart, a failover, an administrator) is
+  // reported here; without a listener it would crash the server. The pool reconnects on demand.
+  pool.on("error", (error: Error & { code?: string }) => console.warn(`Palette: lost an idle PostgreSQL connection (${error.code ?? error.message}); reconnecting on the next query.`));
   const query = async (sql: string, values: unknown[], client?: PoolClient) => {
     const text = translate(sql);
     const result = await (client ?? pool).query(text, values);

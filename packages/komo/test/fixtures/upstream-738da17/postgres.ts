@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 // Keep the D1-shaped boundary used by the API. A batch always has one transaction.
 export function postgresDatabase(connectionString: string) {
   const pool = new Pool({ connectionString, max: 10 });
+  pool.on("error", () => {}); // Test-only: dropping the database closes idle connections.
   const query = async (sql: string, values: unknown[], client?: PoolClient) => {
     const text = translate(sql);
     const result = await (client ?? pool).query(text, values);
