@@ -84,7 +84,7 @@ async function protectLocalFiles() {
     "komo.config.js",
   ].filter((line) => !existing.split("\n").includes(line));
   if (additions.length)
-    await writeFile(path, `${existing}\n# komo\n${additions.join("\n")}\n`);
+    await writeFile(path, `${existing}\n# Palette\n${additions.join("\n")}\n`);
 }
 async function deploy() {
   const dir = resolve(cwd, ".komo"),
@@ -112,7 +112,7 @@ async function deploy() {
     output.match(/https:\/\/[a-z0-9.-]+\.workers\.dev\b/)?.[0];
   if (!endpoint)
     throw Error(
-      "No API URL returned. Run komo deploy --endpoint YOUR_WORKER_URL."
+      "No API URL returned. Run palette deploy --endpoint YOUR_WORKER_URL."
     );
   await writeFile(statePath, JSON.stringify({ ...state, endpoint }, null, 2));
   console.log("Store the Google OAuth client secret:");
@@ -140,7 +140,7 @@ async function deploy() {
 }
 async function init() {
   if (await exists(resolve(cwd, ".komo/deployment.json")))
-    throw Error("Self-host setup exists. Run komo deploy to resume.");
+    throw Error("Self-host setup exists. Run palette deploy to resume.");
   const previous = (await exists(settingsPath))
     ? JSON.parse(await readFile(settingsPath, "utf8"))
     : null;
@@ -150,7 +150,7 @@ async function init() {
     ((await exists(settingsPath)) || (await exists(generatedPath)))
   )
     throw Error(
-      "komo is already configured. Edit .komo/project.json, then run komo sync."
+      "Palette is already configured. Edit .komo/project.json, then run palette sync."
     );
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const ask = async (text, fallback = "") => {
@@ -245,7 +245,7 @@ async function init() {
       await sync();
       await installAgentWorkflow(cwd);
       console.log(
-        `\nMount komo in your app:\n\nimport { initKomo } from './komo.config.js';\ninitKomo();\n\nOpen ${origin} and choose Connect in the sidebar.\nKeep this terminal open while you start your app in another terminal.\nHosted recovery: ${setup.url}\n`
+        `\nMount Palette in your app:\n\nimport { initPalette } from './komo.config.js';\ninitPalette();\n\nOpen ${origin} and choose Connect in the sidebar.\nKeep this terminal open while you start your app in another terminal.\nHosted recovery: ${setup.url}\n`
       );
       console.log("Waiting for your project to connect…");
       const end = setup.expiresAt;
@@ -267,7 +267,7 @@ async function init() {
         }
       }
       if (!config)
-        throw Error("Sign-in timed out. Run komo init again to resume setup.");
+        throw Error("Sign-in timed out. Run palette init again to resume setup.");
       await rm(setupPath, { force: true });
     } else if (nodeHosted) {
       const endpoint = flag("--endpoint") || (await ask("Public API URL"));
@@ -316,7 +316,7 @@ async function init() {
         !(await exists(resolve(cwd, "node_modules/@hazem3500/komo/package.json")))
       )
         throw Error(
-          "Install komo in this project before self-hosting: npm install @hazem3500/komo (or install the preview tarball before publication)."
+          "Install Palette in this project before self-hosting: npm install @hazem3500/komo (or install the preview tarball before publication)."
         );
       await protectLocalFiles();
       const name = `komo-${basename(cwd)
@@ -372,9 +372,9 @@ async function init() {
     await protectLocalFiles();
     await sync();
     await installAgentWorkflow(cwd);
-    console.log("Added the komo comment workflow to AGENTS.md");
+    console.log("Added the Palette comment workflow to AGENTS.md");
     console.log(
-      `\nMount after the page loads:\n\nimport { initKomo } from '@hazem3500/komo';\ninitKomo(${JSON.stringify({ ...config, origin: undefined, ...(config.scope === "branch" ? { branch: branchName(process.env, cwd) } : {}) }, null, 2)});\n\nFor automatic branch detection, use the generated komo.config.js helper and run komo sync before your build.\n`
+      `\nMount after the page loads:\n\nimport { initPalette } from '@hazem3500/komo';\ninitPalette(${JSON.stringify({ ...config, origin: undefined, ...(config.scope === "branch" ? { branch: branchName(process.env, cwd) } : {}) }, null, 2)});\n\nFor automatic branch detection, use the generated komo.config.js helper and run palette sync before your build.\n`
     );
   } finally {
     rl.close();
@@ -383,7 +383,7 @@ async function init() {
 try {
   if (args.includes("--help") || !command)
     console.log(
-      `komo\n\n  komo init          Create a Google-owned hosted workspace\n  komo init --self-host  Deploy your own Worker and D1 database\n  komo init --node       Prepare a Node/PostgreSQL project\n  komo deploy        Resume self-hosted deployment\n  komo sync          Regenerate client settings; detect the current branch\n\nOptions: --origin URL --endpoint API_URL --repo OWNER/REPO --branch-scope\nSelf-host: --google-client-id ID; Node: --preview-origin HTTPS_WILDCARD\n\nComments are shared across deployments unless --branch-scope is set.${
+      `Palette\n\n  palette init          Create a Google-owned hosted workspace\n  palette init --self-host  Deploy your own Worker and D1 database\n  palette init --node       Prepare a Node/PostgreSQL project\n  palette deploy        Resume self-hosted deployment\n  palette sync          Regenerate client settings; detect the current branch\n\nOptions: --origin URL --endpoint API_URL --repo OWNER/REPO --branch-scope\nSelf-host: --google-client-id ID; Node: --preview-origin HTTPS_WILDCARD\n\nComments are shared across deployments unless --branch-scope is set.${
         agentHelp
       }`
     );

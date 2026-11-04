@@ -50,8 +50,8 @@ describe("React props inspector bridge", () => {
   }
 
   beforeEach(() => {
-    document.body.innerHTML = '<main><article id="promo"><h2>Card title</h2></article></main><div id="komo"></div>';
-    host = document.querySelector<HTMLElement>("#komo")!;
+    document.body.innerHTML = '<main><article id="promo"><h2>Card title</h2></article></main><div id="palette"></div>';
+    host = document.querySelector<HTMLElement>("#palette")!;
     card = document.querySelector<HTMLElement>("#promo")!;
     title = card.querySelector("h2")!;
     target = card;

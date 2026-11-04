@@ -38,11 +38,11 @@ export async function saveSnapshots(config, token, thread, directory, ignore = f
       const reason = await response.json().then((result) => result?.error, () => undefined);
       const error = Error(
         response.status === 429
-          ? "Too many requests. Wait a minute, then run komo comments snapshots THREAD_ID."
+          ? "Too many requests. Wait a minute, then run palette comments snapshots THREAD_ID."
           : response.status === 401
             ? token.startsWith("komo_pat_")
               ? "Access token invalid, expired, or revoked. Create a new one at /account."
-              : "Session missing or expired. Run komo login."
+              : "Session missing or expired. Run palette login."
             : reason || `Could not download the ${kind} snapshot (${response.status}).`
       );
       error.status = response.status;

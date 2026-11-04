@@ -18,9 +18,9 @@ it("replaces the native EyeDropper with a stub and makes a native open throw", a
   expect(() => new Native().open()).toThrow("Native EyeDropper reached");
   const Stub = scope.EyeDropper as new () => { open(): Promise<{ sRGBHex: string }> };
   await expect(new Stub().open()).resolves.toEqual({ sRGBHex: EYEDROPPER_STUB_HEX });
-  scope.__komoEyeDropper = "abort";
+  scope.__paletteEyeDropper = "abort";
   await expect(new Stub().open()).rejects.toMatchObject({ name: "AbortError" });
-  expect(scope.__komoEyeDropperCalls).toBe(2);
+  expect(scope.__paletteEyeDropperCalls).toBe(2);
 });
 
 it("wraps every Chromium launch", () => {

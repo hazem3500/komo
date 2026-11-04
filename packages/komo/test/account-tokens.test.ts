@@ -77,7 +77,7 @@ it("shows an empty state and explains servers without tokens without offering a 
   expect((await mount(api)).view.textContent).toContain("No tokens yet");
   vi.mocked(api.request).mockRejectedValueOnce(new ApiError(404, "Not found."));
   const missing = (await mount(api)).view;
-  expect(missing.querySelector("[role=alert]")!.textContent).toBe("This komo server doesn’t support API tokens.");
+  expect(missing.querySelector("[role=alert]")!.textContent).toBe("This Palette server doesn’t support API tokens.");
   expect(buttonNamed(missing, "Try again")).toBeUndefined();
   vi.mocked(api.request).mockRejectedValueOnce(new ApiError(429, "Too many requests. Try again shortly."));
   const limited = (await mount(api)).view;

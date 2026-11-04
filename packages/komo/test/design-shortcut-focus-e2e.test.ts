@@ -25,7 +25,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-shortcut-focus-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+':focus';
       localStorage.setItem(key,'fixture-session');
@@ -34,7 +34,7 @@ beforeAll(async () => {
         const path=new URL(input instanceof URL?input.href:typeof input==='string'?input:input.url).pathname;
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:[]}:{});
       };
-      window.komo=initKomo({endpoint:location.origin,project:'focus',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000});
+      window.palette=initPalette({endpoint:location.origin,project:'focus',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -67,7 +67,7 @@ const root = "document.querySelector('[data-branch-comments]').shadowRoot";
 
 async function design(page: Page) {
   await page.goto(origin);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await openDesign(page);
   await page.locator(".design-inspector__empty").waitFor();
   await page.locator("#target").click();
@@ -90,7 +90,7 @@ const focused = (page: Page) => page.evaluate(() => {
   return node === document.body ? "body" : `${node?.tagName}${node?.id ? "#" + node.id : ""}${node?.getAttribute("role") ? "[" + node.getAttribute("role") + "]" : ""}`;
 });
 
-// Press each key at the focused target and report what komo did with it.
+// Press each key at the focused target and report what Palette did with it.
 async function outcomes(page: Page, focus: () => Promise<void>): Promise<Outcome & { kept: string; value?: string }> {
   await focus();
   const target = await focused(page);
@@ -122,7 +122,7 @@ const panel = (page: Page, selector: string) => page.evaluate(([css, query]) => 
   const node = eval(css).querySelector(query) as HTMLElement;
   node.focus();
 }, [root, selector] as const);
-// Panel markup komo has no instance of yet (a switch, scrub fields), added to the footer bar,
+// Panel markup Palette has no instance of yet (a switch, scrub fields), added to the footer bar,
 // which undo does not redraw.
 const inject = (page: Page, markup: string) => page.evaluate(([css, html]) => {
   const bar = eval(css).querySelector(".design-inspector__bar") as HTMLElement;
@@ -157,7 +157,7 @@ describe.skipIf(!chrome)("Design mode shortcuts by focus target, with real keys"
       const result = await outcomes(page, () => focus(page));
       const { kept, value, ...fired } = result;
       expect(fired).toEqual(expected);
-      // A closed select never takes komo's keys as type-ahead.
+      // A closed select never takes Palette's keys as type-ahead.
       expect(value).toBeUndefined();
       if (expected.undo && name !== "canvas") expect(kept, "undo leaves focus on the control").not.toBe("body");
       expect(errors).toEqual([]);

@@ -1,6 +1,6 @@
 import type { AnimationOptions, DOMKeyframesDefinition } from "motion";
 
-/** The parts of Motion's playback controls komo's own surfaces use. */
+/** The parts of Motion's playback controls Palette's own surfaces use. */
 export type MotionControls = { stop(): void; readonly finished: Promise<unknown> };
 
 let motion: typeof import("./motion-animate.js") | undefined;
@@ -8,7 +8,7 @@ let loading: Promise<typeof import("./motion-animate.js")> | undefined;
 
 /**
  * Motion only runs once a reviewer opens or moves something, so it stays out of
- * the mount bundle. The toolbar's menu shares the chunk; komo prefetches it on idle.
+ * the mount bundle. The toolbar's menu shares the chunk; Palette prefetches it on idle.
  */
 export function loadMotion() {
   return (loading ??= import("./motion-animate.js").then(
@@ -20,7 +20,7 @@ export function loadMotion() {
   ));
 }
 
-// The two-value keyframes komo writes ("from", "to") are CSS properties; `y` is Motion's.
+// The two-value keyframes Palette writes ("from", "to") are CSS properties; `y` is Motion's.
 function hold(target: HTMLElement, keyframes: DOMKeyframesDefinition, at: 0 | -1) {
   for (const [key, value] of Object.entries(keyframes)) {
     const frame = Array.isArray(value) ? value.at(at) : at ? value : undefined;

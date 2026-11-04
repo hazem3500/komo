@@ -147,7 +147,7 @@ describe("snapshot UI", () => {
     expect(image.hasAttribute("src")).toBe(false);
   });
 
-  it("revokes every blob URL in a root when komo unmounts", async () => {
+  it("revokes every blob URL in a root when Palette unmounts", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("png")));
     const slot = document.createElement("div");
     root.append(slot);

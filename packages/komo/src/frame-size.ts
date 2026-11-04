@@ -158,11 +158,11 @@ export function mountFrameSize(
     anchor?(): { x: number; y: number } | null;
     /** Listens in Frame's viewport iframe too; passed in, like frameView, so this chunk shares no module with core. */
     onFrame?: typeof onFrame;
-    /** komo's own shortcuts: Fit and 100% yield to one configured on the same key. */
+    /** Palette's own shortcuts: Fit and 100% yield to one configured on the same key. */
     shortcuts?: Record<string, Shortcut | null>;
-    /** Single-copy simulated viewport (frame.shell): turning it on reloads into komo's shell, with no second copy. */
+    /** Single-copy simulated viewport (frame.shell): turning it on reloads into Palette's shell, with no second copy. */
     shell?: boolean;
-    /** komo's text-entry test, so Fit and 100% pause while typing. */
+    /** Palette's text-entry test, so Fit and 100% pause while typing. */
     textEntry?: typeof textEntry;
   } = {},
 ): FrameSizeControls {
@@ -295,7 +295,7 @@ export function mountFrameSize(
   const zoomKeys: Shortcut[] = ["1", "0"].map((key) => ({ key, shift: true, alt: false, ctrl: false, meta: false, label: `Shift+${key}` }));
   const zooms = (["Fit", "100%"] as const).map((label, index) => {
     const item = element("button", "", { type: "button", role: "menuitemradio", "aria-keyshortcuts": zoomKeys[index].label }, label);
-    // Keycaps as komo draws them elsewhere (⇧ on Apple platforms).
+    // Keycaps as Palette draws them elsewhere (⇧ on Apple platforms).
     const keys = element("span", "komo-kbd", { "aria-hidden": "true", "data-variant": "surface" });
     for (const cap of [/mac|iphone|ipad/i.test(navigator.platform) ? "⇧" : "Shift", zoomKeys[index].key]) keys.append(element("kbd", "", {}, cap));
     item.append(keys);
@@ -456,8 +456,8 @@ export function mountFrameSize(
   });
   hintFull.addEventListener("click", () => zoomTo(true));
   // ⇧1 fits and ⇧0 shows 100% while Frame is on, also with focus in the simulated viewport,
-  // except while typing or when one of komo's own shortcuts uses the key.
-  // Bubbling to the window, after komo's own keys and never while shortcut help holds the keyboard.
+  // except while typing or when one of Palette's own shortcuts uses the key.
+  // Bubbling to the window, after Palette's own keys and never while shortcut help holds the keyboard.
   const taken = zoomKeys.map(({ key }) => Object.values(hooks.shortcuts ?? {}).some((shortcut) =>
     !!shortcut?.shift && !shortcut.alt && !shortcut.ctrl && !shortcut.meta && shortcut.key === key));
   const zoomKey = (event: KeyboardEvent) => {

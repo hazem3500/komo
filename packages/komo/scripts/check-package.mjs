@@ -36,6 +36,8 @@ try {
   for (const [name, path] of Object.entries(bin)) {
     assert.doesNotMatch(path, /^\.\//, `bin.${name} must not start with ./`);
   }
+  // palette is the command; komo stays for existing scripts and docs.
+  assert.deepEqual(bin, { palette: "cli/index.mjs", komo: "cli/index.mjs" });
   await writeFile(
     join(root, "package.json"),
     JSON.stringify({ private: true, type: "module" }),
@@ -49,9 +51,9 @@ try {
     // react.d.ts imports React's types; a TypeScript consumer has them installed.
     "@types/react@19",
   ]);
-  // Browser hosts install komo for the client: no server, database or Workers packages ride along.
+  // Browser hosts install Palette for the client: no server, database or Workers packages ride along.
   for (const name of ["pg", "@cloudflare/workers-types", "wrangler"]) {
-    assert.equal(existsSync(join(root, "node_modules", name)), false, `${name} must not install with komo`);
+    assert.equal(existsSync(join(root, "node_modules", name)), false, `${name} must not install with Palette`);
   }
   const shipped = JSON.parse(await readFile(join(root, "node_modules/@hazem3500/komo/package.json"), "utf8"));
   assert.deepEqual(Object.keys(shipped.dependencies ?? {}), ["emoji-regex"], "runtime dependencies are browser-safe only");
@@ -97,14 +99,21 @@ try {
     const health = await server.fetch(new Request('https://example.test/health'), {}, { waitUntil() {} });
     assert.equal(health.status, 200);
     assert.deepEqual(await health.json(), { ok: true });
-    import { initKomo } from '@hazem3500/komo';
-    import { defineKomo } from '@hazem3500/komo/setup';
-    import { useKomo } from '@hazem3500/komo/react';
+    import { initPalette } from '@hazem3500/komo';
+    import { definePalette } from '@hazem3500/komo/setup';
+    import { usePalette } from '@hazem3500/komo/react';
     import { createElement } from 'react';
     import { renderToString } from 'react-dom/server';
     const config = {project:'packed-test'};
-    initKomo(config).destroy(); defineKomo(config)().destroy();
-    function App(){useKomo(config);return createElement('p',null,'ok')}
+    initPalette(config).destroy(); definePalette(config)().destroy();
+    function App(){usePalette(config);return createElement('p',null,'ok')}
+    // The komo names stay as deprecated aliases of the Palette ones.
+    const legacy = { ...(await import('@hazem3500/komo')), ...(await import('@hazem3500/komo/setup')), ...(await import('@hazem3500/komo/react')) };
+    assert.equal(legacy.initKomo, initPalette);
+    assert.equal(legacy.defineKomo, definePalette);
+    assert.equal(legacy.useKomo, usePalette);
+    assert.equal(legacy.useKomoInspectable, legacy.usePaletteInspectable);
+    assert.equal(legacy.useKomoDesignTokens, legacy.usePaletteDesignTokens);
     if(renderToString(createElement(App)) !== '<p>ok</p>') throw Error('SSR failed');
     const { tailwindTokens, tailwindSpacing } = await import('@hazem3500/komo/adapters/tailwind');
     const { classTheme } = await import('@hazem3500/komo/adapters/class-theme');
@@ -112,7 +121,7 @@ try {
     if (typeof discoverCssTokens !== 'function') throw Error('CSS variable adapter failed');
     const { discoverReactComponents } = await import('@hazem3500/komo/adapters/react-fiber');
     if (typeof discoverReactComponents().identify !== 'function') throw Error('React fiber adapter failed');
-    initKomo({project:'packed-test', design: { components: discoverReactComponents({ maxProps: 8 }) }}).destroy();
+    initPalette({project:'packed-test', design: { components: discoverReactComponents({ maxProps: 8 }) }}).destroy();
     if (tailwindTokens({tokens: tailwindSpacing({prefix:['p'], steps:[4]})}).list({})[0].value !== '16px') throw Error('Tailwind adapter failed');
     if (classTheme({id:'mode', options:[{id:'light'}]}).id !== 'mode') throw Error('Class theme adapter failed');
     // The build-time instrumentation plugin is Node-only; disabled, it has no hooks at all.
@@ -139,9 +148,9 @@ try {
     declare const request: Parameters<typeof server.fetch>[0];
     declare const context: Parameters<typeof server.fetch>[2];
     server.fetch(request, env, context);
-    import { initKomo, type KomoConfig } from '@hazem3500/komo';
-    import { defineKomo } from '@hazem3500/komo/setup';
-    import { useKomo } from '@hazem3500/komo/react';
+    import { initPalette, type PaletteConfig } from '@hazem3500/komo';
+    import { definePalette } from '@hazem3500/komo/setup';
+    import { usePalette } from '@hazem3500/komo/react';
     import { tailwindTokens, tailwindSpacing, type TailwindTable } from '@hazem3500/komo/adapters/tailwind';
     import { classTheme } from '@hazem3500/komo/adapters/class-theme';
     import { discoverCssTokens } from '@hazem3500/komo/adapters/css-variables';
@@ -154,10 +163,21 @@ try {
     instrument((props: { tone?: 'calm' }) => null, meta);
     const mode = classTheme({ id: 'mode', options: [{ id: 'light', class: 'light' }, { id: 'dark', class: 'dark' }], colorScheme: true });
     const table: TailwindTable = { tokens: [{ path: 'color.text.primary', type: 'color', class: 'text-primary', properties: ['color'], values: { light: '#000', dark: '#fff' } }, ...tailwindSpacing()] };
-    const config: KomoConfig = {project:'packed-test', design: { tokens: tailwindTokens(table, { themes: [mode] }), themes: [mode] }};
-    initKomo({project:'packed-test', design: { tokens: discoverCssTokens({ limit: 10 }) }}).destroy();
-    initKomo({project:'packed-test', design: { components: discoverReactComponents({ maxProps: 8 }) }}).destroy();
-    initKomo(config).destroy(); defineKomo(config)().destroy(); useKomo(config);
+    const config: PaletteConfig = {project:'packed-test', design: { tokens: tailwindTokens(table, { themes: [mode] }), themes: [mode] }};
+    initPalette({project:'packed-test', design: { tokens: discoverCssTokens({ limit: 10 }) }}).destroy();
+    initPalette({project:'packed-test', design: { components: discoverReactComponents({ maxProps: 8 }) }}).destroy();
+    initPalette(config).destroy(); definePalette(config)().destroy(); usePalette(config);
+    import { initKomo, type KomoConfig, type KomoShortcuts, type KomoPins, type KomoFeatures, type KomoToolbar, type KomoSnapshots, type PaletteShortcuts, type PalettePins, type PaletteFeatures, type PaletteToolbar, type PaletteSnapshots } from '@hazem3500/komo';
+    import { defineKomo } from '@hazem3500/komo/setup';
+    import { useKomo, useKomoInspectable, useKomoDesignTokens, usePaletteInspectable, usePaletteDesignTokens, type KomoDesignToken, type KomoDesignTokenType, type PaletteDesignToken, type UseKomoInspectableOptions, type UseKomoDesignTokensOptions, type UsePaletteInspectableOptions, type UsePaletteDesignTokensOptions } from '@hazem3500/komo/react';
+    const legacyConfig: KomoConfig = config;
+    initKomo(legacyConfig).destroy(); defineKomo(legacyConfig)().destroy(); useKomo(legacyConfig);
+    const sameHooks: [typeof usePaletteInspectable, typeof usePaletteDesignTokens] = [useKomoInspectable, useKomoDesignTokens];
+    const legacyToken: KomoDesignToken = { path: 'color.brand', cssVariable: '--brand', type: 'color' satisfies KomoDesignTokenType, properties: ['color'], impactSelector: ':root' };
+    const token: PaletteDesignToken = legacyToken;
+    type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+    const sameTypes: [Same<KomoShortcuts, PaletteShortcuts>, Same<KomoPins, PalettePins>, Same<KomoFeatures, PaletteFeatures>, Same<KomoToolbar, PaletteToolbar>, Same<KomoSnapshots, PaletteSnapshots>, Same<UseKomoInspectableOptions, UsePaletteInspectableOptions>, Same<UseKomoDesignTokensOptions, UsePaletteDesignTokensOptions>] = [true, true, true, true, true, true, true];
+    void sameHooks; void token; void sameTypes;
   `,
   );
   run(join(source, "node_modules/.bin/tsc"), [
@@ -192,6 +212,9 @@ try {
     { mode: 0o755 },
   );
   const cli = join(root, "node_modules/@hazem3500/komo/cli/index.mjs");
+  for (const name of ["palette", "komo"]) {
+    assert.match(run(join(root, "node_modules/.bin", name), ["--help"]), /palette init/, `the ${name} bin runs the CLI`);
+  }
   const env = {
     ...process.env,
     PATH: `${join(root, "bin")}:${process.env.PATH}`,
@@ -230,10 +253,11 @@ try {
     join(root, "node_modules/@hazem3500/komo/server/migrations"),
   );
   assert.deepEqual(await readdir(join(root, ".komo/migrations")), migrations);
-  assert.match(
-    await readFile(join(root, "komo.config.js"), "utf8"),
-    /packed-test.workers.dev/,
-  );
+  const generated = await readFile(join(root, "komo.config.js"), "utf8");
+  assert.match(generated, /packed-test.workers.dev/);
+  // Apps that import initKomo from the generated module keep working after sync.
+  assert.match(generated, /export const initPalette = definePalette\(/);
+  assert.match(generated, /export const initKomo = initPalette;/);
   for (const conditions of [[], ["workerd"]]) {
     await build({
       conditions,
@@ -252,7 +276,7 @@ try {
     join(root, ".komo/wrangler.json"),
   ]);
   console.log(
-    `Packed consumer passed: SSR/types, shell guard tree-shaking, Vite instrumentation entries, Node server/metadata exports, workerd source, self-host init/resume, migrations, server bundles (${packed.entryCount} files).`,
+    `Packed consumer passed: palette and komo bins, deprecated komo aliases, SSR/types, shell guard tree-shaking, Vite instrumentation entries, Node server/metadata exports, workerd source, self-host init/resume, migrations, server bundles (${packed.entryCount} files).`,
   );
 } finally {
   await rm(root, { recursive: true, force: true });

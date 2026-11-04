@@ -27,7 +27,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-design-keys-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+':keys';
       localStorage.setItem(key,'fixture-session');
@@ -43,7 +43,7 @@ beforeAll(async () => {
         editor:()=>({schema:[{name:'variant',kind:'enum',required:false,values:['primary','secondary'],typeLabel:'"primary" | "secondary"'}],
           read:()=>({variant:card.dataset.variant}),apply:next=>{card.dataset.variant=next.variant??'primary'}}),
       };
-      window.komo=initKomo({endpoint:location.origin,project:'keys',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
+      window.palette=initPalette({endpoint:location.origin,project:'keys',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
         design:{components,experimentalGeometry:true}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -81,7 +81,7 @@ async function design(select = "#card") {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(origin);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await openDesign(page);
   await page.locator(".design-inspector__empty").waitFor();
   await page.locator(select).click({ position: { x: 4, y: 4 } });

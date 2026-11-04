@@ -276,7 +276,7 @@ function liveColors(container: HTMLElement, element: DesignTarget) {
 /** Render only the sections that apply to the element; empty Fill and Border offer a quiet add. */
 export function renderPanel(container: HTMLElement, context: PanelContext) {
   const { element, changed } = context;
-  // Selects open komo's own listbox once that module (fetched with the panel) is in.
+  // Selects open Palette's own listbox once that module (fetched with the panel) is in.
   void selectMenu.then((menu) => menu?.attach(container, context.element, context.reserved));
   // Icon segments, weight samples and unit suffixes join the fields once their chunk is in.
   void controls.then((module) => module?.enhance(container, context.element));

@@ -23,7 +23,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-lazy-chunks-"));
   const result = await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user = { id: "synthetic-reviewer", name: "Example reviewer", verified: true };
       const anchor = { selector: "#target", text: "", x: .5, y: .5, width: 0, height: 0, pageX: 0, pageY: 0, viewportWidth: 1280 };
       const threads = [0, 1].map(index => ({
@@ -34,7 +34,7 @@ beforeAll(async () => {
       localStorage.setItem(key, "synthetic-session");
       localStorage.setItem(key + ":user", JSON.stringify({ token: "synthetic-session", user }));
       window.fetch = async () => Response.json({ user, threads, guests: true });
-      window.komo = initKomo({
+      window.palette = initPalette({
         endpoint: location.origin, project: "lazy-chunks", repo: "example/review", branch: "fixture",
         pageRoot: document.querySelector("main"), restoreOpen: false, autoHideDrawer: false,
       });

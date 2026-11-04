@@ -2,7 +2,7 @@ import "../../../src/adapters/react-preview.js";
 import { createElement, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { useKomo, useKomoDesignTokens, useKomoInspectable, type InspectableComponent, type InspectableScalar, type KomoDesignToken } from "../../../src/react.js";
+import { usePalette, usePaletteDesignTokens, usePaletteInspectable, type InspectableComponent, type InspectableScalar, type PaletteDesignToken } from "../../../src/react.js";
 import type { DesignToken, ThemeAxis, TokenAdapter, TokenUsage } from "../../../src/types.js";
 import { discoverCssTokens } from "../../../src/adapters/css-variables.js";
 import { discoverReactComponents } from "../../../src/adapters/react-fiber.js";
@@ -19,7 +19,7 @@ const headlineComponent: InspectableComponent = {
   props: [{ name: "text", kind: "string", required: true, typeLabel: "string" }],
   textProp: "text",
 };
-const themeTokens: KomoDesignToken[] = [
+const themeTokens: PaletteDesignToken[] = [
   { path: "color.brand", cssVariable: "--color-brand", type: "color", properties: ["color", "background-color", "border-color"], impactSelector: '.promo-card[data-tone="bold"]' },
   { path: "spacing.card", cssVariable: "--space-card", type: "dimension", properties: ["padding", "gap"], impactSelector: ".promo-card" },
   { path: "typography.body", cssVariable: "--font-body", type: "fontFamily", properties: ["font-family"], impactSelector: "body, .promo-card" },
@@ -28,7 +28,7 @@ const themeTokens: KomoDesignToken[] = [
 ];
 
 function InlineHeadline({ text, onChange }: { text: string; onChange(next: string): void }) {
-  const inspectable = useKomoInspectable({
+  const inspectable = usePaletteInspectable({
     component: headlineComponent,
     props: { text },
     onChange(next: Record<string, InspectableScalar>) { if (typeof next.text === "string") onChange(next.text); },
@@ -163,7 +163,7 @@ function BodyPortals() {
   );
 }
 
-// Not registered with useKomoInspectable: Design mode finds it, read-only, only through the fiber adapter.
+// Not registered with usePaletteInspectable: Design mode finds it, read-only, only through the fiber adapter.
 function TeamBadge({ team, seats, active, tags, owner, icon, authToken, onOpen }: {
   team: string; seats: number; active: boolean; tags: string[]; owner: { name: string; role: string };
   icon: ReturnType<typeof createElement>; authToken: string; onOpen(): void;
@@ -194,7 +194,7 @@ function Demo() {
     details: { featured: true },
     onActivate: () => setProps((current) => ({ ...current, visits: current.visits + 1 })),
   });
-  useKomo({
+  usePalette({
     endpoint: "https://oz-box.camel-hake.ts.net:4342",
     project: "komo-landing-demo",
     repo: "tjcages/komo",
@@ -205,12 +205,12 @@ function Demo() {
     ...(query.has("portal") ? { pageRoot: document.getElementById("root")! } : {}),
     ...(classAdapter || cssAdapter || themes || fiberAdapter ? { design: { ...(classAdapter ? { tokens: classTokens } : cssAdapter ? { tokens: cssAdapter } : {}), ...(themes ? { themes } : {}), ...(fiberAdapter ? { components: fiberAdapter } : {}) } } : {}),
   });
-  useKomoDesignTokens({ tokens: themeTokens, enabled: true });
+  usePaletteDesignTokens({ tokens: themeTokens, enabled: true });
   const updateProps = (next: Record<string, string | number | boolean | undefined>) =>
     setProps((current) => ({ ...current, ...next }));
   const page = (
     <main>
-      <span className="eyebrow">komo · isolated React inspector</span>
+      <span className="eyebrow">Palette · isolated React inspector</span>
       <InlineHeadline text={headline} onChange={setHeadline} />
       <p className="intro">
         Press D for Design mode, select this heading to try direct text editing, then

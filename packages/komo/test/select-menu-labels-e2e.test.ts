@@ -8,7 +8,7 @@ import { chromium, type Browser, type Locator, type Page } from "playwright-core
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openDesign } from "./design-e2e.js";
 
-// komo's select menus show every label in full: in the color popup's format menu, in a unit
+// Palette's select menus show every label in full: in the color popup's format menu, in a unit
 // select inside a Custom popup, and in the panel's own selects. Only the viewport may cut one short.
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -20,14 +20,14 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-select-labels-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       const tokens=tailwindTokens({tokens:[
         {path:'color.ink',type:'color',class:'text-ink',properties:['color'],value:'#131213',label:'Ink'},
         {path:'radius.small',type:'dimension',class:'radius-small',properties:['border-radius'],value:'8px',label:'Small'},
       ]});
       window.fetch=async()=>Response.json({threads:[],guests:true});
-      window.komo=initKomo({endpoint:location.origin,project:'select-labels',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens}});
+      window.palette=initPalette({endpoint:location.origin,project:'select-labels',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -64,7 +64,7 @@ const settle = (tab: Page) => tab.evaluate(async () => {
   await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
 });
 
-/** Opens a komo select with the mouse and reads its list: labels, truncation, rows and the check column. */
+/** Opens a Palette select with the mouse and reads its list: labels, truncation, rows and the check column. */
 async function menu(tab: Page, trigger: Locator) {
   await trigger.click();
   const list = tab.locator(".komo-select");
@@ -87,14 +87,14 @@ async function menu(tab: Page, trigger: Locator) {
   }, (await trigger.boundingBox())!.width);
 }
 
-describe.skipIf(!chrome).each([{ width: 1280, height: 860 }, { width: 390, height: 844 }])("komo select labels at $width px", viewport => {
+describe.skipIf(!chrome).each([{ width: 1280, height: 860 }, { width: 390, height: 844 }])("Palette select labels at $width px", viewport => {
   it("shows each menu's options in full: the color format, a Custom unit and a panel select", async () => {
     const tab = await browser.newPage({ viewport });
     tab.setDefaultTimeout(5000);
     const errors: string[] = [];
     tab.on("pageerror", error => errors.push(error.message));
     await tab.goto(origin);
-    await tab.waitForFunction(() => !!(window as any).komo);
+    await tab.waitForFunction(() => !!(window as any).palette);
     await openDesign(tab);
     await settle(tab);
     await tab.locator("#card").click();

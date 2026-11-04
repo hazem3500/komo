@@ -11,7 +11,7 @@ import { openDesign } from "./design-e2e.js";
 // The header theme control in real Chrome, in the Design panel and the Tokens view: one
 // light/dark axis is a sun/moon switch, two other options a two-segment switch, more
 // options or axes the compact menu, and no themes no control. One click switches, the
-// komo tooltip names the next state, and leaving Design mode restores the page's theme.
+// Palette tooltip names the next state, and leaving Design mode restores the page's theme.
 // Header screenshots land in <tmpdir>/komo-theme-toggle.
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -25,7 +25,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-theme-toggle-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { discoverCssTokens } from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       import { classTheme } from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
@@ -48,7 +48,7 @@ beforeAll(async () => {
         axes:[mode,density],
         none:undefined,
       }[query.get('themes')];
-      window.komo=initKomo({endpoint:location.origin,project:'themes',repo:'example/review',branch:'fixture',pageRoot:layout==='floating'?undefined:document.querySelector('main'),sidebar:layout==='floating'?'edge':'background',frame:{scale:layout==='scaled'},restoreOpen:false,pollInterval:60000,design:{tokens:discoverCssTokens({scopes:{dark:'.dark'}}),...(themes?{themes}:{})}});
+      window.palette=initPalette({endpoint:location.origin,project:'themes',repo:'example/review',branch:'fixture',pageRoot:layout==='floating'?undefined:document.querySelector('main'),sidebar:layout==='floating'?'edge':'background',frame:{scale:layout==='scaled'},restoreOpen:false,pollInterval:60000,design:{tokens:discoverCssTokens({scopes:{dark:'.dark'}}),...(themes?{themes}:{})}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -82,7 +82,7 @@ async function open(themes: string, layout = "floating", viewport = { width: 128
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(`${origin}/?themes=${themes}&layout=${layout}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await openDesign(page);
   await page.getByRole("button", { name: "Edit tokens", exact: true }).waitFor();
   return { page, errors };

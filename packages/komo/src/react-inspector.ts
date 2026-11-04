@@ -73,7 +73,7 @@ export function adaptComponentEditor(identity: ComponentIdentity, editor: Compon
 /** Resolve only an adapter's renderer-proven instance; registered text owners never migrate. */
 export function currentInspectableElement(element: Element): Element | null {
   // A root registered in Frame's viewport iframe answers from that realm's registry;
-  // an adapter editor komo made here for a framed element stays in this realm's map.
+  // an adapter editor Palette made here for a framed element stays in this realm's map.
   const bridged = frameBridge(element)?.currentInspectableElement;
   const framed = bridged?.(element as never) as Element | null | undefined;
   if (framed) return framed;
@@ -212,5 +212,5 @@ export function inspectableAncestor(
   return null;
 }
 
-// Inside Frame's viewport iframe, komo in the parent window reads this realm's registrations.
+// Inside Frame's viewport iframe, Palette in the parent window reads this realm's registrations.
 publishFrameBridge({ inspectableFor, currentInspectableElement });

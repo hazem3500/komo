@@ -80,7 +80,7 @@ it("saves a thread's snapshots as files and lists them in the prompt", async () 
     expect(await readFile(join(out, "t1.html.txt"), "utf8")).toBe(markup);
 
     const plain = await run("comments", "prompt");
-    expect(plain).toContain('save it as files with komo comments snapshots "t1"');
+    expect(plain).toContain('save it as files with palette comments snapshots "t1"');
     const prompt = await run("comments", "prompt", "--snapshots");
     expect(prompt).toContain(`- Image: ${JSON.stringify(join(folder, "t1.webp"))}`);
     expect(prompt).toContain(`- HTML, as text: ${JSON.stringify(join(folder, "t1.html.txt"))}`);
@@ -88,7 +88,7 @@ it("saves a thread's snapshots as files and lists them in the prompt", async () 
     const json = JSON.parse(await run("comments", "prompt", "--snapshots", "--json")).data;
     expect(json.snapshots).toEqual([{ thread: "t1", image: join(folder, "t1.webp"), html: join(folder, "t1.html.txt") }]);
 
-    await expect(run("comments", "list", "--snapshots")).rejects.toThrow("Use --snapshots with komo comments get or prompt.");
+    await expect(run("comments", "list", "--snapshots")).rejects.toThrow("Use --snapshots with palette comments get or prompt.");
   } finally {
     api.close();
     await rm(directory, { recursive: true, force: true });

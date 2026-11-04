@@ -30,7 +30,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-progressive-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       import { classTheme } from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
       const query=new URLSearchParams(location.search);
@@ -43,7 +43,7 @@ beforeAll(async () => {
         tone('surface.base','Surface','background-color','#f4f4f4','#2a2a2a'),
       ]},{themes:[axis]});
       window.fetch=async()=>Response.json({threads:[],guests:true});
-      window.komo=initKomo({endpoint:location.origin,project:'progressive',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens,themes:[axis]}});
+      window.palette=initPalette({endpoint:location.origin,project:'progressive',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens,themes:[axis]}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -86,7 +86,7 @@ async function open(zoom: string, viewport = { width: 1280, height: 760 }) {
   const errors: string[] = [];
   tab.on("pageerror", error => errors.push(error.message));
   await tab.goto(origin);
-  await tab.waitForFunction(() => !!(window as any).komo);
+  await tab.waitForFunction(() => !!(window as any).palette);
   await openDesign(tab);
   await settle(tab);
   // The card is picked at Fit, where all of it shows, then the zoom changes.

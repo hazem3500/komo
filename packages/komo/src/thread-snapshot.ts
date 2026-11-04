@@ -6,7 +6,7 @@
 // Snapshot reads need the session's bearer token, so images can't be plain <img src>
 // URLs: each is fetched once it is on screen, kept per URL (the URL's `v=` changes
 // when a snapshot is replaced) and shown through a blob URL that is revoked as soon
-// as its element leaves komo's UI. HTML is only ever shown as text.
+// as its element leaves Palette's UI. HTML is only ever shown as text.
 import { button, el } from "./dom.js";
 import type { Thread } from "./types.js";
 
@@ -18,7 +18,7 @@ export interface SnapshotContext {
   origin(): string;
   /** Drafts whose capture is left out when they post. */
   dropped: WeakSet<Thread["anchor"]>;
-  /** Opens a page through komo's navigation (the host router when there is one). */
+  /** Opens a page through Palette's navigation (the host router when there is one). */
   go(url: URL): void;
   notify(text: string, action?: { label: string; run: () => void }): void;
   /** Removes the thread's snapshots, optimistically. */
@@ -131,7 +131,7 @@ export function readSnapshot(url: string, context: SnapshotContext): Promise<Blo
 }
 
 // Mounted images and their blob URLs. Elements are observed while connected; once
-// one leaves komo's UI its URL is revoked, and it loads again if it comes back.
+// one leaves Palette's UI its URL is revoked, and it loads again if it comes back.
 const sources = new WeakMap<HTMLImageElement, { url: string; context: SnapshotContext; done?: (ok: boolean) => void }>();
 const live = new Map<HTMLImageElement, string>();
 const watched = new WeakSet<ShadowRoot>();
@@ -188,7 +188,7 @@ function watch(root: ShadowRoot) {
   }).observe(root, { childList: true, subtree: true });
 }
 
-/** Revokes the blob URLs shown in `root`, when its komo unmounts. */
+/** Revokes the blob URLs shown in `root`, when its Palette unmounts. */
 export function disposeSnapshots(root: ShadowRoot) {
   for (const finish of [...(viewers.get(root) ?? [])]) finish();
   for (const [image, src] of live)
@@ -231,7 +231,7 @@ function code(html: string) {
   return block;
 }
 
-// Open viewers by root, so unmounting komo closes them and hands the keyboard back.
+// Open viewers by root, so unmounting Palette closes them and hands the keyboard back.
 const viewers = new Map<ShadowRoot, Set<() => void>>();
 
 /**
@@ -261,7 +261,7 @@ export async function openSnapshotViewer(root: ShadowRoot, content: { src?: stri
     if (note) dialog.append(el("p", "", note));
     dialog.append(code(markup));
   }
-  // komo unmounted while the image decoded.
+  // Palette unmounted while the image decoded.
   if (!root.host.isConnected) return release?.();
   const listeners = new AbortController();
   const { signal } = listeners;
@@ -276,7 +276,7 @@ export async function openSnapshotViewer(root: ShadowRoot, content: { src?: stri
   };
   dialog.addEventListener("close", finish, { signal });
   viewers.set(root, (viewers.get(root) ?? new Set()).add(finish));
-  // The viewer owns the keyboard while open: komo's and the host's shortcuts wait.
+  // The viewer owns the keyboard while open: Palette's and the host's shortcuts wait.
   window.addEventListener(
     "keydown",
     (event) => {
@@ -412,7 +412,7 @@ function route(thread: Snapshotted, context: SnapshotContext) {
 }
 
 /**
- * Fills a slot komo's core left for a snapshot. Modes: 0 a list row (images only),
+ * Fills a slot Palette's core left for a snapshot. Modes: 0 a list row (images only),
  * 1 the open card (the image's thumbnail, or a button that opens the HTML as text),
  * 2 how it looked, for a card on another page, 3 the composer's pending capture,
  * 4 a card whose element isn't on this page: its route, then how it looked.

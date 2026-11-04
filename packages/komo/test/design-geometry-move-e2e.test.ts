@@ -62,7 +62,7 @@ beforeAll(async () => {
       stdin: { contents: `
         import React from 'react';
         import {createRoot} from 'react-dom/client';
-        import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+        import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
         const h=React.createElement;
         function App(){
           const[count,setCount]=React.useState(0);
@@ -83,7 +83,7 @@ beforeAll(async () => {
         if(location.search.includes('dark'))document.body.classList.add('dark');
         const frame=location.search.includes('frame');
         if(!frame)document.body.append(document.createElement('aside'));
-        window.komo=initKomo({endpoint:location.origin,project:'move',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:location.search.includes('scaled')},design:{experimentalGeometry:true},restoreOpen:false,pollInterval:60000});
+        window.palette=initPalette({endpoint:location.origin,project:'move',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:location.search.includes('scaled')},design:{experimentalGeometry:true},restoreOpen:false,pollInterval:60000});
       `, resolveDir: process.cwd(), loader: "ts" },
       alias: { react: dirname(require.resolve("react/package.json")), "react-dom": dirname(require.resolve("react-dom/package.json")) },
       outdir: join(directory, String(version)), entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -121,7 +121,7 @@ async function open(query = "") {
   page.on("console", message => { if (message.type() === "error" && /removeChild|insertBefore|not a child|hydrat/i.test(message.text())) errors.push(message.text()); });
   page.setDefaultTimeout(5000);
   await page.goto(`${origin}/?${query}`);
-  await page.waitForFunction(() => !!(window as any).komo && !!(window as any).reactQA);
+  await page.waitForFunction(() => !!(window as any).palette && !!(window as any).reactQA);
   await openDesign(page);
   return { page, errors };
 }
@@ -242,7 +242,7 @@ describe.skipIf(!chrome)("structural move", () => {
       expect(await page.locator("#three").getAttribute("style")).toBeNull();
       await openDesign(page);
       await expect.poll(() => order(page, "list")).toEqual(["Three*", "One", "Two"]);
-      await page.evaluate(() => (window as any).komo.destroy());
+      await page.evaluate(() => (window as any).palette.destroy());
       expect(await clones(page)).toBe(0);
       expect(await page.locator("#blocks [style], #rows [style], #cells [style]").evaluateAll(nodes => nodes.map(node => node.id))).toEqual(["wrapper", "r1"]);
       expect(errors).toEqual([]);

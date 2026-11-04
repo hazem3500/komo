@@ -20,7 +20,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-design-lifecycle-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+':lifecycle';
       localStorage.setItem(key,'synthetic-session');
@@ -28,7 +28,7 @@ beforeAll(async () => {
       window.fetch=async input=>{const path=new URL(typeof input==='string'?input:input.url).pathname;return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads:[]}:{});};
       const frame=location.search.includes('frame');
       if(!frame)document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'lifecycle',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:true},restoreOpen:false,pollInterval:60000});
+      window.palette=initPalette({endpoint:location.origin,project:'lifecycle',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:true},restoreOpen:false,pollInterval:60000});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -76,7 +76,7 @@ describe.skipIf(!chrome).each([false, true])("SVG lifecycle in Frame=%s", frame 
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/${frame ? "?frame" : ""}`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     if (frame) await page.locator("#shape").evaluate(node => (node as SVGElement).style.setProperty("transition", "opacity 120ms linear", "important"));
     const original = await page.locator("#shape").getAttribute("style");
     const edit = async (selector: string, color: string, precise = false) => {

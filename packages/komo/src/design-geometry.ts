@@ -85,7 +85,7 @@ export function geometryReason(element: Element | null): string | null {
     if ((style.rotate && style.rotate !== 'none') || (transform && (!transform.is2D || transform.b || transform.c || transform.a <= 0 || transform.d <= 0)) ||
         scale.length > 2 || scale.some(value => !(value > 0)))
       return "Rotated, skewed, 3D or mirrored boxes can't be previewed.";
-    // Only motion that moves or sizes the box counts (border-top-color is no edge), and none komo is previewing.
+    // Only motion that moves or sizes the box counts (border-top-color is no edge), and none Palette is previewing.
     if (!node.closest(`[${STILL}]`) && node.getAnimations?.().some(animation => animation.playState === 'running' &&
         (animation.effect as KeyframeEffect | null)?.getKeyframes?.().some(frame => Object.keys(frame).some(key => /^(transform|translate|scale|rotate|inset|left|top|right|bottom|flex|grid)|(width|height)$/i.test(key)))))
       return WAIT;
@@ -272,7 +272,7 @@ export function bindGeometry(hooks: Hooks) {
   const guides = [node('div', 'design-geometry__guide', surface), node('div', 'design-geometry__guide', surface)];
   const readout = node('div', 'design-geometry__readout', surface);
   readout.setAttribute('aria-hidden', 'true');
-  // Moves and resizes announce through komo's one polite live region.
+  // Moves and resizes announce through Palette's one polite live region.
   const say = (text: string) => surface.dispatchEvent(new CustomEvent('komo-announce', { detail: text, bubbles: true, composed: true }));
   // Reasons, side effects and the grid option live in the panel's Layout section, never over the page.
   const note = document.createElement('div');

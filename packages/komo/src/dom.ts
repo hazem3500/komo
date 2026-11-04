@@ -24,9 +24,9 @@ export const textEntry = (node?: EventTarget | null) =>
     node.matches('[aria-expanded="true"]:is(select,[role=combobox])') ||
     !!node.closest('[contenteditable]:not([contenteditable="false"]),[role=textbox],[role=searchbox],[role=listbox]'));
 /**
- * Events komo stops at its shadow host (isolateEvents), so host shortcut
- * libraries and modal "outside interaction" listeners never see komo's UI.
- * Key events are stopped only while typing in a komo field.
+ * Events Palette stops at its shadow host (isolateEvents), so host shortcut
+ * libraries and modal "outside interaction" listeners never see Palette's UI.
+ * Key events are stopped only while typing in a Palette field.
  */
 export const isolatedEvents =
   "pointerdown mousedown touchstart touchmove touchend click wheel focusin focusout keydown keyup keypress".split(" ");
@@ -45,7 +45,7 @@ export function isolateEscape(host: HTMLElement, signal: AbortSignal) {
     { capture: true, signal },
   );
 }
-/** Listen on document and Frame's viewport iframe, plus komo's shadow root for the events stopped at its host. */
+/** Listen on document and Frame's viewport iframe, plus Palette's shadow root for the events stopped at its host. */
 export function onPage<E extends Event>(
   node: Node,
   type: string,

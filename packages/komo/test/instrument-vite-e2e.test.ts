@@ -42,8 +42,8 @@ async function open(react: number, before?: (page: Page) => Promise<void>) {
   await page.goto(sites[react]!.origin);
   await page.locator("#primary").waitFor();
   await before?.(page);
-  await page.evaluate(() => window.qa.startKomo());
-  await page.waitForFunction(() => !!window.qa.komo);
+  await page.evaluate(() => window.qa.startPalette());
+  await page.waitForFunction(() => !!window.qa.palette);
   await openDesign(page);
   return { page, errors };
 }
@@ -180,8 +180,8 @@ describe.skipIf(!chrome).each([19, 18])("build-time instrumented components, Rea
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(sites[react]!.origin);
     await page.locator("#primary").waitFor();
-    await page.evaluate(() => window.qa.startKomo(true));
-    await page.waitForFunction(() => !!window.qa.komo);
+    await page.evaluate(() => window.qa.startPalette(true));
+    await page.waitForFunction(() => !!window.qa.palette);
     await page.keyboard.press("l");
     await page.waitForFunction(() => {
       const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;

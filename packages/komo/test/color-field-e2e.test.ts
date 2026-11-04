@@ -36,7 +36,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-color-field-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       import { classTheme } from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
       const axis=classTheme({id:'mode',options:[{id:'light',label:'Light',attribute:{'data-mode':'light'}},{id:'dark',label:'Dark',attribute:{'data-mode':'dark'}}]});
@@ -49,7 +49,7 @@ beforeAll(async () => {
       ]},{themes:[axis]});
       window.fetch=async()=>Response.json({threads:[],guests:true});
       const mode=new URLSearchParams(location.search).get('mode');
-      window.komo=initKomo({endpoint:location.origin,project:'color-fields',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens,themes:[axis]}});
+      window.palette=initPalette({endpoint:location.origin,project:'color-fields',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens,themes:[axis]}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -83,7 +83,7 @@ async function open(mode: string, viewport = { width: 1280, height: 720 }) {
   const errors: string[] = [];
   tab.on("pageerror", error => errors.push(error.message));
   await tab.goto(`${origin}/?mode=${mode}`);
-  await tab.waitForFunction(() => !!(window as any).komo);
+  await tab.waitForFunction(() => !!(window as any).palette);
   await openDesign(tab);
   // Design mode's own entrance (Frame or sidebar motion) ends before any popup opens.
   await settle(tab);
@@ -191,7 +191,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("color fields in
     if (selector === "#chip")
       expect(await tab.locator('[data-field-property="color"]').getAttribute("data-token-mode")).toBe("connected");
     expect(errors).toEqual([]);
-    await tab.evaluate(() => (window as any).komo.destroy());
+    await tab.evaluate(() => (window as any).palette.destroy());
     await tab.close();
   });
 
@@ -254,7 +254,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("color fields in
     const last = await probe("border-color", "last");
     if (last.roomBelow < 336) expect(last.up).toBe(true);
     expect(errors).toEqual([]);
-    await tab.evaluate(() => (window as any).komo.destroy());
+    await tab.evaluate(() => (window as any).palette.destroy());
     await tab.close();
   });
 });

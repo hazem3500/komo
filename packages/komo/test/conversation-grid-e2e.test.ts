@@ -17,7 +17,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-grid-"));
   await build({
     stdin: { contents: `
-import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
 const q=new URLSearchParams(location.search);
 const user={id:'fixture',name:'Alex Morgan',verified:true};
 const anchor=selector=>({selector,text:'',x:.5,y:.5,width:0,height:0,pageX:0,pageY:0,viewportWidth:1280});
@@ -35,8 +35,8 @@ localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}
 window.fetch=async(input,init)=>{const method=init?.method||'GET',path=new URL(String(input),location.origin).pathname;
 if(method!=='GET'){const body=JSON.parse(init.body||'{}');window.qa.writes.push({method,path,body});const t=threads.find(t=>path.includes('/threads/'+t.id));if(t&&method==='PATCH'&&!path.includes('/comments/'))Object.assign(t,body);return Response.json({id:'saved',tags:t?.tags??[]});}
 return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads}:{});};
-window.komo=initKomo({endpoint:location.origin,project:'grid',repo:'example/fixture',branch:'local',restoreOpen:false,sidebar:q.get('mode')||'background',pageRoot:document.querySelector('main')});
-if(!q.has('closed')) window.komo.open();
+window.palette=initPalette({endpoint:location.origin,project:'grid',repo:'example/fixture',branch:'local',restoreOpen:false,sidebar:q.get('mode')||'background',pageRoot:document.querySelector('main')});
+if(!q.has('closed')) window.palette.open();
 `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022", jsx: "automatic",
   });
@@ -198,7 +198,7 @@ describe.skipIf(!chrome)("shared conversation grid", () => {
         await editor.fill("Good idea, I will add the date range.\nAnd the time zone.");
         const grown = await editor.boundingBox();
         expect(grown!.height).toBeGreaterThan(edit.editor.bottom - edit.editor.top);
-        await page.evaluate(() => (window as any).komo.refresh());
+        await page.evaluate(() => (window as any).palette.refresh());
         await expect.poll(() => editor.inputValue()).toBe("Good idea, I will add the date range.\nAnd the time zone.");
         await editor.press("Escape");
         await expect.poll(() => editor.count()).toBe(0);

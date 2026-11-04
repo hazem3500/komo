@@ -28,10 +28,10 @@ beforeAll(async () => {
       import ${JSON.stringify(resolve("src/adapters/react-preview.ts"))};
       import React from 'react';
       import {createRoot} from 'react-dom/client';
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       import {isShell} from ${JSON.stringify(resolve("src/shell.ts"))};
       import {discoverReactComponents} from ${JSON.stringify(resolve("src/adapters/react-fiber.ts"))};
-      import {useKomoInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
+      import {usePaletteInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
       const params=new URLSearchParams(location.search);
       const mode=params.get('mode')||'inplace';
       const project='viewport-props';
@@ -45,7 +45,7 @@ beforeAll(async () => {
       const tag={id:'Tag',name:'Tag',source:'fixture/tag.tsx',line:1,props:[{name:'label',kind:'string',required:true,typeLabel:'string'}]};
       function Tag(){
         const[props,setProps]=React.useState({label:'Example tag'});
-        const inspect=useKomoInspectable({component:tag,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
+        const inspect=usePaletteInspectable({component:tag,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
         return h('span',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],id:'tag'},props.label);
       }
       function App(){
@@ -64,7 +64,7 @@ beforeAll(async () => {
       const schema=identity=>identity.name==='Button'?[
         {name:'variant',kind:'enum',required:true,values:['primary','secondary','ghost'],typeLabel:'"primary" | "secondary" | "ghost"'},
         {name:'pill',kind:'boolean',required:true,typeLabel:'boolean'}]:undefined;
-      window.komo=initKomo({endpoint:location.origin,project,repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
+      window.palette=initPalette({endpoint:location.origin,project,repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
         design:{components:discoverReactComponents({edit:true,schema})},
         ...(mode==='inplace'?{}:{frame:{mode:'iframe',shell:mode==='shell'}})});
     `, resolveDir: process.cwd(), loader: "ts" },
@@ -100,13 +100,13 @@ type Mode = "inplace" | "viewport" | "shell";
 async function load(page: Page, mode: Mode): Promise<Page | Frame> {
   page.setDefaultTimeout(8000);
   await page.goto(`${origin}/?mode=${mode}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   if (mode === "inplace") return page;
   if (mode === "shell") page.once("dialog", (dialog) => void dialog.accept());
   await page.keyboard.press("l");
   if (mode === "shell") {
     await page.waitForURL(/komo-shell=[0-9a-f]{32}/);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
   }
   await page.waitForFunction(() => {
     const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;

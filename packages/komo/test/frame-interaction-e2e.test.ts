@@ -17,7 +17,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-frame-interaction-"));
   await build({
     stdin: { contents: `
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       const grid=document.querySelector('#grid'),scroller=document.querySelector('#scroller');
       const tile=document.querySelector('#tile'),popover=document.querySelector('#popover');
       for(let index=0;index<24;index++){const row=document.createElement('div');row.textContent='Row '+index;row.style.cssText='height:60px;box-sizing:border-box;padding:16px;color:#475569';grid.append(row);}
@@ -39,10 +39,10 @@ beforeAll(async () => {
       scroller.scrollTop=500;
       scroller.addEventListener('scroll',position);window.addEventListener('resize',position);
       window.fetch=async()=>Response.json({threads:[],guests:true});
-      window.mountGridQA=()=>initKomo({endpoint:location.origin,project:'grid-review',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',frame:{scale:new URLSearchParams(location.search).get('mode')==='scaled'},restoreOpen:false,shortcuts:new URLSearchParams(location.search).has('parity')?{comments:'Shift+L'}:undefined,pollInterval:60000});
+      window.mountGridQA=()=>initPalette({endpoint:location.origin,project:'grid-review',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',frame:{scale:new URLSearchParams(location.search).get('mode')==='scaled'},restoreOpen:false,shortcuts:new URLSearchParams(location.search).has('parity')?{comments:'Shift+L'}:undefined,pollInterval:60000});
       // These cases cover the unscaled in-place frame: the space beside the comments.
       localStorage.setItem('branch-comments:frame-size:grid-review:example/review',JSON.stringify({v:2,size:'available'}));
-      window.komo=window.mountGridQA();
+      window.palette=window.mountGridQA();
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -74,7 +74,7 @@ describe.skipIf(!chrome).each(["reflow", "scaled"])("Frame style attributes in %
   it.each(["no-preference", "reduce"] as const)("matches native pointer and configured shortcut motion with reduced motion=%s", async reducedMotion => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion });
     await page.goto(`${origin}/?mode=${mode}&parity=1`);
-    await page.waitForFunction(() => !!(window as any).komo && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
+    await page.waitForFunction(() => !!(window as any).palette && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
     const original = await page.evaluate(() => (window as any).gridQA.styles());
     const trace = async (run: () => Promise<unknown>) => {
       await page.evaluate(() => {
@@ -114,7 +114,7 @@ describe.skipIf(!chrome).each(["reflow", "scaled"])("Frame style attributes in %
     await page.waitForTimeout(300);
     expect(await page.evaluate(() => (window as any).gridQA.styles())).toEqual(original);
     expect(await page.locator("main").evaluate(node => node.getAnimations().length)).toBe(0);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     expect(await page.evaluate(() => (window as any).gridQA.styles())).toEqual(original);
     await page.close();
   });
@@ -122,7 +122,7 @@ describe.skipIf(!chrome).each(["reflow", "scaled"])("Frame style attributes in %
   it.each(["no-preference", "reduce"] as const)("preserves absent attributes through close, dismiss and interrupted motion with reduced motion=%s", async reducedMotion => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion });
     await page.goto(`${origin}/?mode=${mode}`);
-    await page.waitForFunction(() => !!(window as any).komo && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
+    await page.waitForFunction(() => !!(window as any).palette && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
     const styles = () => page.evaluate(() => (window as any).gridQA.styles());
     const original = await page.evaluate(() => (window as any).gridQA.baseline);
     expect(original).toEqual([null, null, null]);
@@ -145,7 +145,7 @@ describe.skipIf(!chrome).each(["reflow", "scaled"])("Frame style attributes in %
     expect(await styles()).toEqual(original);
     expect(await page.locator("main").evaluate(node => node.getAnimations().length)).toBe(0);
     expect(await page.locator("main").evaluate(node => getComputedStyle(node).transform)).toBe("none");
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     expect(await styles()).toEqual(original);
     await page.close();
   });
@@ -156,7 +156,7 @@ describe.skipIf(!chrome).each([false, true])("native grid coordinates with touch
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: touch, reducedMotion: "no-preference" });
     const page = await context.newPage();
     await page.goto(`${origin}/?parity=1`);
-    await page.waitForFunction(() => !!(window as any).komo && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
+    await page.waitForFunction(() => !!(window as any).palette && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
     const original = await page.evaluate(() => (window as any).gridQA.styles());
     const client = touch ? await context.newCDPSession(page) : null;
     for (let index = 0; index < 6; index++) {
@@ -180,7 +180,7 @@ describe.skipIf(!chrome).each([false, true])("native grid coordinates with touch
     expect(await page.evaluate(() => (window as any).gridQA.events.every((event: any) => event.trusted && event.moving && event.transform === "none"))).toBe(true);
     await page.waitForTimeout(300);
     expect(await page.evaluate(() => (window as any).gridQA.styles())).toEqual(original);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     expect(await page.evaluate(() => (window as any).gridQA.styles())).toEqual(original);
     await context.close();
   });
@@ -189,7 +189,7 @@ describe.skipIf(!chrome).each([false, true])("native grid coordinates with touch
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: touch });
     const page = await context.newPage();
     await page.goto(origin);
-    await page.waitForFunction(() => !!(window as any).komo && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
+    await page.waitForFunction(() => !!(window as any).palette && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     const original = await page.locator("main").getAttribute("style");
@@ -228,7 +228,7 @@ describe.skipIf(!chrome).each([false, true])("native grid coordinates with touch
     expect(popup!.x).toBeGreaterThanOrEqual(bounds!.x);
     expect(popup!.x + popup!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
     expect(await page.evaluate(() => (window as any).gridQA.events.every((event: any) => event.trusted && event.pointer === (navigator.maxTouchPoints ? 'touch' : 'mouse')))).toBe(true);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     expect(await page.locator("main").getAttribute("style")).toBe(original);
     expect(await page.locator("main").evaluate(node => node.parentElement === document.body)).toBe(parent);
     await choose(17);
@@ -240,20 +240,20 @@ describe.skipIf(!chrome).each([false, true])("native grid coordinates with touch
 it.skipIf(!chrome)("restores Frame-owned declarations and priorities while retaining independent host styles", async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await page.goto(origin);
-  await page.waitForFunction(() => !!(window as any).komo && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
+  await page.waitForFunction(() => !!(window as any).palette && [...document.body.children].some((node) => node.shadowRoot?.querySelector(".frame-bar")));
   await page.evaluate(() => {
-    (window as any).komo.destroy();
+    (window as any).palette.destroy();
     const root = document.querySelector<HTMLElement>("main")!;
     root.style.setProperty("width", "100%", "important");
     root.style.setProperty("background", "rgb(250, 250, 250)", "important");
     document.documentElement.style.setProperty("overflow", "auto", "important");
     document.body.style.setProperty("background", "rgb(245, 245, 245)", "important");
   });
-  await page.evaluate(() => { (window as any).komo=(window as any).mountGridQA(); });
+  await page.evaluate(() => { (window as any).palette=(window as any).mountGridQA(); });
   await page.keyboard.press("l");
   await page.waitForFunction(() => document.querySelector("main")!.getBoundingClientRect().width < 900);
   await page.locator("main").evaluate(node => { (node as HTMLElement).style.color = "rgb(1, 2, 3)"; });
-  await page.evaluate(() => (window as any).komo.destroy());
+  await page.evaluate(() => (window as any).palette.destroy());
   expect(await page.locator("main").evaluate(node => {
     const style = (node as HTMLElement).style;
     return [style.width, style.getPropertyPriority("width"), style.background, style.getPropertyPriority("background"), style.color];

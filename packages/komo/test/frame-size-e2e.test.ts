@@ -33,7 +33,7 @@ beforeAll(async () => {
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       import {captureAnchor} from ${JSON.stringify(resolve("src/anchors.ts"))};
       const grid=document.getElementById('grid');
       for(let hour=0;hour<24;hour++){
@@ -69,7 +69,7 @@ beforeAll(async () => {
         const path=new URL(input instanceof URL?input.href:typeof input==='string'?input:input.url).pathname;
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads}:{});
       };
-      window.komo=initKomo({endpoint:location.origin,project:'frame-size',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000});
+      window.palette=initPalette({endpoint:location.origin,project:'frame-size',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -101,7 +101,7 @@ const near = (actual: number, expected: number, label: string, tolerance = 1) =>
   expect(Math.abs(actual - expected), `${label}: ${actual} vs ${expected}`).toBeLessThanOrEqual(tolerance);
 async function open(page: Page, query = "") {
   await page.goto(`${origin}/${query}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   const original = await page.evaluate(() => [(window as any).frameQA.styles(), (window as any).frameQA.rules()]);
   await page.keyboard.press("l");
   await page.locator(".frame-bar").waitFor();
@@ -266,7 +266,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     await page.keyboard.press("l");
     await page.waitForTimeout(350);
     expectFitted(await frame(page), [1440, 900]);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     expect(await page.evaluate(() => [(window as any).frameQA.styles(), (window as any).frameQA.rules()])).toEqual(original);
     expect(await page.locator(".frame-bar").count()).toBe(0);
     expect(errors).toEqual([]);
@@ -365,7 +365,7 @@ describe.skipIf(!chrome)("Frame size controls", () => {
     expect(await select(page, 6, 12)).toEqual({ target: [6, 12], coordinates: [6, 12] });
 
     await page.reload();
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     await page.keyboard.press("l");
     await page.locator(".frame-bar").waitFor();
     await page.waitForTimeout(350);

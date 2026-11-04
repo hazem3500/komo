@@ -30,7 +30,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-inline-rows-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       const token=(path,label,property,value)=>({path,type:'dimension',class:path.replace('.','-'),properties:[property],value,label});
       const tokens=tailwindTokens({tokens:[
@@ -41,7 +41,7 @@ beforeAll(async () => {
         token('radius.large','Large','border-radius','12px'),token('radius.small','Small','border-radius','4px'),
       ]});
       window.fetch=async()=>Response.json({threads:[],guests:true});
-      window.komo=initKomo({endpoint:location.origin,project:'inline-rows',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens}});
+      window.palette=initPalette({endpoint:location.origin,project:'inline-rows',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -76,7 +76,7 @@ async function open(width: number, touch = false, target = "#card") {
   const errors: string[] = [];
   tab.on("pageerror", error => errors.push(error.message));
   await tab.goto(origin);
-  await tab.waitForFunction(() => !!(window as any).komo);
+  await tab.waitForFunction(() => !!(window as any).palette);
   await openDesign(tab);
   await tab.locator(target).click();
   await tab.mouse.move(2, 2);

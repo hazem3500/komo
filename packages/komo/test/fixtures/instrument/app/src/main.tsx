@@ -49,10 +49,10 @@ function App() {
 createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);
 
 // Design mode loads only in review builds, and only when the test asks for it.
-if (import.meta.env.VITE_REVIEW === "1") qa.startKomo = async (viewport = false) => {
-  const { initKomo } = await import("@hazem3500/komo");
+if (import.meta.env.VITE_REVIEW === "1") qa.startPalette = async (viewport = false) => {
+  const { initPalette } = await import("@hazem3500/komo");
   window.fetch = async () => Response.json({ threads: [], guests: true });
-  qa.komo = initKomo({
+  qa.palette = initPalette({
     endpoint: location.origin, project: "instrument", repo: "example/review", branch: "fixture", restoreOpen: false,
     // Viewport: Frame shows the app in an iframe, its own realm with its own React and instances.
     ...(viewport ? { sidebar: "background", pageRoot: document.querySelector("main")!, frame: { mode: "iframe" } } : { sidebar: "edge" }),

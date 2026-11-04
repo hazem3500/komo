@@ -1,15 +1,15 @@
-// The page komo reviews: this document, or the document of Frame's same-origin
-// viewport iframe while that iframe shows the page. komo's own UI always stays in
+// The page Palette reviews: this document, or the document of Frame's same-origin
+// viewport iframe while that iframe shows the page. Palette's own UI always stays in
 // this window; page reads (elements at a point, rectangles, queries, events) go
 // through these helpers so they reach into the frame and map back to the screen.
 // The mapping itself loads with viewport mode (frame-iframe.ts); until then
 // every helper is the plain same-document read.
 import type { PreviewTarget } from "./design-system.js";
 
-/** The viewport iframe's name: komo inside it stays inert, so only one instance reviews. */
+/** The viewport iframe's name: Palette inside it stays inert, so only one instance reviews. */
 export const FRAME_NAME = "komo-viewport";
 /** True inside Frame's viewport iframe. */
-export const framedByKomo = () => {
+export const framedByPalette = () => {
   try {
     return window.name === FRAME_NAME && !!window.frameElement?.hasAttribute("data-komo-viewport");
   } catch {
@@ -37,8 +37,8 @@ export const previewTarget = (): PreviewTarget => {
   return { document, root: document.documentElement };
 };
 /**
- * komo bundled into the framed app stays inert but publishes its React
- * registries (useKomoInspectable, useKomoDesignTokens) here, so komo in this
+ * Palette bundled into the framed app stays inert but publishes its React
+ * registries (usePaletteInspectable, usePaletteDesignTokens) here, so Palette in this
  * window can read registrations made in the frame's own realm.
  */
 const FRAME_BRIDGE = Symbol.for("komo.frame-bridge");
@@ -48,9 +48,9 @@ export function frameBridge(from: Node | Window | null | undefined): Bridge | un
   const view = from && ("nodeType" in from ? from.ownerDocument?.defaultView : from);
   return view && view !== window ? (view as unknown as Record<symbol, Bridge | undefined>)[FRAME_BRIDGE] : undefined;
 }
-/** Inside Frame's viewport iframe, publish this realm's registries for komo in the parent window. */
+/** Inside Frame's viewport iframe, publish this realm's registries for Palette in the parent window. */
 export function publishFrameBridge(entries: Bridge) {
-  if (framedByKomo()) Object.assign(((window as unknown as Record<symbol, Bridge>)[FRAME_BRIDGE] ??= {}), entries);
+  if (framedByPalette()) Object.assign(((window as unknown as Record<symbol, Bridge>)[FRAME_BRIDGE] ??= {}), entries);
 }
 /** The viewport iframe while it shows the page. */
 export const pageFrame = () => (frameDocument() ? frame : null);

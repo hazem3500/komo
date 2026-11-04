@@ -17,7 +17,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-router-preview-"));
   await build({
     stdin: { contents: `
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       const query=new URLSearchParams(location.search),scenario=query.get('scenario'),mode=query.get('mode');
       const main=document.querySelector('main'),content=main.querySelector('article');
       const qa=window.navigationQA={calls:[],writes:[],actions:0,main,document,pending:[]};
@@ -39,7 +39,7 @@ beforeAll(async () => {
       localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
       localStorage.setItem(key+':'+JSON.stringify(['example/review','local'])+':threads',JSON.stringify({token:'synthetic-session',threads}));
       window.fetch=async(input,init)=>{const path=new URL(input instanceof Request?input.url:String(input)).pathname;const method=init?.method??(input instanceof Request?input.method:'GET');if(method!=='GET'){qa.writes.push(method);throw Error('Unexpected fixture write')}return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads}:{});};
-      window.komo=initKomo({endpoint:location.origin,project:'router-preview',repo:'example/review',branch:'fixture',pageRoot:main,sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,navigate:async url=>{
+      window.palette=initPalette({endpoint:location.origin,project:'router-preview',repo:'example/review',branch:'fixture',pageRoot:main,sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,navigate:async url=>{
         qa.calls.push(url.href);
         if(scenario==='reject')throw Error('Synthetic guard rejected navigation');
         if(scenario==='pending')return new Promise(resolve=>qa.pending.push({url,resolve}));
@@ -116,7 +116,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("native retained
     })).toEqual({ sameDocument: true, sameRoot: true, calls: scenario === "reject" ? 2 : 1, actions: 0, writes: [] });
     if (scenario !== "missing") expect(await page.locator("#target").getAttribute("style")).toBe("color:rgb(68,85,102)");
     expect(errors).toEqual([]);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 
@@ -144,7 +144,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("native retained
         expect(await page.locator(".thread-navigation").textContent()).toContain("different page");
       }
       expect(await page.evaluate(() => ({ calls: (window as any).navigationQA.calls.length, writes: (window as any).navigationQA.writes }))).toEqual({ calls: cancel ? 1 : 2, writes: [] });
-      await page.evaluate(() => (window as any).komo.destroy());
+      await page.evaluate(() => (window as any).palette.destroy());
       await page.close();
     }
   });
@@ -162,7 +162,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("native retained
     expect(await page.getByRole("button", { name: "Before", exact: true }).getAttribute("aria-pressed")).toBe("true");
     expect(await page.locator("#target").getAttribute("style")).toBe("color:rgb(68,85,102)");
     expect(await page.evaluate(() => ({ calls: (window as any).navigationQA.calls.length, actions: (window as any).navigationQA.actions, writes: (window as any).navigationQA.writes }))).toEqual({ calls: 0, actions: 0, writes: [] });
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 });

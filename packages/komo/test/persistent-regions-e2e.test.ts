@@ -18,7 +18,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-persistent-regions-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { captureAnchor } from ${JSON.stringify(resolve("src/anchors.ts"))};
       const mode=new URLSearchParams(location.search).get('mode');
       const app=document.querySelector('#app'),aside=app.querySelector('aside'),main=app.querySelector('main');
@@ -57,7 +57,7 @@ beforeAll(async () => {
         }
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path==='/threads'?{threads:structuredClone(qa.threads)}:{});
       };
-      window.komo=initKomo({endpoint:location.origin,project:'scope-e2e',repo:'example/review',branch:'fixture',pageRoot:app,
+      window.palette=initPalette({endpoint:location.origin,project:'scope-e2e',repo:'example/review',branch:'fixture',pageRoot:app,
         sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,pollInterval:60000,
         persistentRegions:['[data-sidebar]'],navigate:url=>{qa.calls.push(url.pathname+url.search);qa.route(url.pathname+url.search+url.hash)}});
     `, resolveDir: process.cwd(), loader: "ts" },
@@ -223,7 +223,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("persistent layo
     await pin(page, "t1").waitFor();
     expect(await pin(page, "t2").count()).toBe(0);
     expect(errors).toEqual([]);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   }, 60000);
 });

@@ -21,7 +21,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-token-page-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { discoverCssTokens } from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       import { classTheme } from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
@@ -35,7 +35,7 @@ beforeAll(async () => {
       const mode=new URLSearchParams(location.search).get('mode');
       if(mode==='floating')document.body.append(document.createElement('aside'));
       const theme=classTheme({id:'mode',options:[{id:'light'},{id:'dark',class:'dark'}]});
-      window.komo=initKomo({endpoint:location.origin,project:'tokens',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,pollInterval:60000,design:{tokens:discoverCssTokens({scopes:{dark:'.dark'}}),themes:[theme]}});
+      window.palette=initPalette({endpoint:location.origin,project:'tokens',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,pollInterval:60000,design:{tokens:discoverCssTokens({scopes:{dark:'.dark'}}),themes:[theme]}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -72,7 +72,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?mode=${mode}`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     const original = await page.evaluate(() => [document.documentElement.getAttribute("style"), document.documentElement.className, document.head.innerHTML]);
     const look = () => page.locator("#card").evaluate(node => ({ background: getComputedStyle(node).backgroundColor, color: getComputedStyle(node).color }));
     const variable = (name: string) => page.evaluate(name => getComputedStyle(document.documentElement).getPropertyValue(name).trim(), name);
@@ -187,7 +187,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     await toggle.getByRole("button", { name: "After", exact: true }).click();
     await expect.poll(async () => (await look()).background).toBe("rgb(255, 128, 0)");
     expect(await page.locator("#card").evaluate(node => getComputedStyle(node).borderTopLeftRadius)).toBe("12px");
-    // komo's tooltip names the full path.
+    // Palette's tooltip names the full path.
     await label.hover();
     await expect.poll(() => page.locator(".sidebar-tooltip[data-open]").textContent()).toBe("color.surface (light)");
     await page.screenshot({ path: join(tmpdir(), `komo-token-page-${mode}-card.png`) });
@@ -211,7 +211,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     await page.getByRole("button", { name: "Edit tokens", exact: true }).click();
     await custom("surface", "#00ff00");
     expect((await look()).background).toBe("rgb(0, 255, 0)");
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await expect.poll(look).toEqual(light);
     expect(await page.evaluate(() => [document.documentElement.getAttribute("style"), document.documentElement.className, document.head.innerHTML])).toEqual(original);
     expect(errors).toEqual([]);
@@ -224,7 +224,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("Tokens view in 
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?mode=${mode}`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     await openDesign(page);
     await page.getByRole("button", { name: "Edit tokens", exact: true }).click();
     const rows = page.locator(".design-token-row");

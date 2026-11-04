@@ -30,8 +30,8 @@ beforeAll(async () => {
         import ${JSON.stringify(resolve("src/adapters/react-preview.ts"))};
         import React from 'react';
         import {createRoot} from 'react-dom/client';
-        import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
-        import {useKomoInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
+        import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
+        import {usePaletteInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
         import {discoverReactComponents} from ${JSON.stringify(resolve("src/adapters/react-fiber.ts"))};
         const h=React.createElement;
         const qa=window.qa={clicks:0,changes:0,version:React.version};
@@ -41,7 +41,7 @@ beforeAll(async () => {
           enumProp('variant',['primary','secondary','ghost']),enumProp('color',['neutral','accent','danger']),
           enumProp('size',['sm','md','lg']),enumProp('tone',['calm','bold'],false)]};
         function Button({onPropsChange,onClick,...props}){
-          const inspect=useKomoInspectable({component:definition,props,onChange:onPropsChange,enabled:true});
+          const inspect=usePaletteInspectable({component:definition,props,onChange:onPropsChange,enabled:true});
           return h('button',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],type:'button',className:'fixture-button',
             'data-variant':props.variant,'data-color':props.color,'data-size':props.size,'data-tone':String(props.tone),onClick},'Example button');
         }
@@ -62,7 +62,7 @@ beforeAll(async () => {
         window.fetch=async()=>Response.json({threads:[],guests:true});
         const components=discoverReactComponents({edit:true,schema:identity=>identity.name==='Chip'?[enumProp('kind',['info','warn'],false),enumProp('size',['sm','lg'],false),enumProp('tone',['calm','bold'])]:undefined});
         document.body.append(document.createElement('aside'));
-        window.komo=initKomo({endpoint:location.origin,project:'prop-preview',repo:'example/review',branch:'fixture',sidebar:'edge',restoreOpen:false,design:{components}});
+        window.palette=initPalette({endpoint:location.origin,project:'prop-preview',repo:'example/review',branch:'fixture',sidebar:'edge',restoreOpen:false,design:{components}});
       `, resolveDir: process.cwd(), loader: "ts" },
       alias: { react: dirname(require.resolve("react/package.json")), "react-dom": dirname(require.resolve("react-dom/package.json")) },
       outdir: join(directory, String(version)), entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",

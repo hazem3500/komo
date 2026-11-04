@@ -8,7 +8,7 @@ export const designModeStyles = `
 }
 .design-outline[data-kind="hover"] { outline-style:dashed; opacity:.8; }
 .design-outline--prospective[data-kind="hover"] { opacity:.55; }
-/* The inspector replaces the Comments view inside Komo's shared sidebar surface. */
+/* The inspector replaces the Comments view inside Palette's shared sidebar surface. */
 .design-inspector {
   position:absolute; inset:0; z-index:9;
   display:flex; flex-direction:column; overflow:hidden; color:#e9e6e1;
@@ -58,7 +58,7 @@ export const designModeStyles = `
 .design-inspector__count:empty { display:none; }
 .design-inspector__actions { display:flex; align-items:center; gap:2px; margin-left:auto; }
 .design-inspector__actions button:disabled { cursor:default; opacity:.35; }
-/* Comment is komo's primary action, as on the Comments panel. */
+/* Comment is Palette's primary action, as on the Comments panel. */
 .design-inspector__actions button:last-child { flex:none; white-space:nowrap; min-height:34px; margin-left:6px; padding:0 14px; border-radius:8px; background:var(--accent,#bda6ef); color:#211b2d; font-size:12px; font-weight:500; }
 .design-inspector__actions button:last-child:hover:not(:disabled) { background:var(--accent,#bda6ef); color:#211b2d; filter:brightness(1.08); }
 @container (max-width:419px) { .design-inspector__actions { flex-basis:calc(100% + 6px); margin-left:-6px; } .design-inspector__actions button:last-child { margin-left:auto; } }

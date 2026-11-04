@@ -18,7 +18,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-token-ownership-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       import { classTheme } from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
       const query=new URLSearchParams(location.search),radius=query.get('case')==='radius',theme=query.get('case')==='theme',semantic=query.get('case')==='semantic',baseline=query.get('baseline'),named=baseline?.startsWith('named');
@@ -48,7 +48,7 @@ beforeAll(async () => {
       window.fetch=async(input,init)=>{const method=init?.method??(input instanceof Request?input.method:'GET');if(method!=='GET'){qa.writes.push(method);throw Error('Unexpected fixture write')}return Response.json({...(radius?{user}:{}),threads:radius?[thread]:[],guests:true})};
       const mode=new URLSearchParams(location.search).get('mode');
       if(mode==='floating')document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'ownership',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens:adapter,...(theme||semantic?{themes:[axis]}:{})}});
+      window.palette=initPalette({endpoint:location.origin,project:'ownership',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens:adapter,...(theme||semantic?{themes:[axis]}:{})}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -93,7 +93,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(4000);
     await page.goto(`${origin}/?mode=${mode}&case=semantic&baseline=${baseline}`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     const target = page.locator("#target"), original = await target.evaluate(node => node.style.cssText);
     const value = () => target.evaluate(node => getComputedStyle(node).color);
     const theme = (id: string) => page.evaluate(id => (window as any).radiusQA.theme(id), id);
@@ -166,7 +166,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await page.keyboard.press("Escape");
     expect(await value()).toBe(dark);
     expect(await page.evaluate(() => ({ actions: (window as any).radiusQA.actions, writes: (window as any).radiusQA.writes }))).toEqual({ actions: 0, writes: [] });
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 
@@ -176,7 +176,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?mode=${mode}&case=theme&adapter=${adapter}`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     const target = page.locator("#target"), original = await target.getAttribute("style");
     const value = () => target.evaluate(node => getComputedStyle(node).color);
     const theme = (id: string) => page.evaluate(id => document.documentElement.setAttribute("data-review-mode", id), id);
@@ -253,7 +253,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     expect(await target.getAttribute("class")).toBe("text-base bg-base");
     expect(await page.evaluate(() => (window as any).radiusQA)).toEqual({ actions: 0, writes: [] });
     expect(errors).toEqual([]);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     expect(await page.locator("main").getAttribute("style")).toBeNull();
     await page.close();
   });
@@ -262,7 +262,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(4000);
     await page.goto(`${origin}/?mode=${mode}&case=radius`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     await openDesign(page);
     const target = page.locator("#target");
     const pick = await target.boundingBox();
@@ -383,14 +383,14 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     await target.evaluate(node => { node.className = "surface radius-full"; });
     await aligned("target", ".component-hover");
     await page.keyboard.press("Escape");
-    await page.evaluate(() => (window as any).komo.open());
+    await page.evaluate(() => (window as any).palette.open());
     await page.locator(".thread-card").filter({ hasText: "Synthetic radius conversation" }).click();
     await page.locator(".thread-title").filter({ hasText: "Synthetic radius conversation" }).waitFor();
     await page.locator(".thread-title").hover();
     await target.evaluate(node => { node.className = "surface radius-ellipse"; });
     await aligned("target", ".component-hover");
     expect(await page.evaluate(() => (window as any).radiusQA)).toEqual({ actions: 0, writes: [] });
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 
@@ -400,7 +400,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("token ownership
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?mode=${mode}`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     const original = await page.locator("#target").getAttribute("style");
     await openDesign(page);
     await page.locator("#target").click();

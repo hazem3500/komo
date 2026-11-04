@@ -30,7 +30,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-color-picker-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       import { classTheme } from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
       const query=new URLSearchParams(location.search);
@@ -44,7 +44,7 @@ beforeAll(async () => {
       ]},{themes:[axis]});
       window.fetch=async()=>Response.json({threads:[],guests:true});
       const mode=query.get('mode');
-      window.komo=initKomo({endpoint:location.origin,project:'color-picker',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens,themes:[axis]}});
+      window.palette=initPalette({endpoint:location.origin,project:'color-picker',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens,themes:[axis]}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -72,7 +72,7 @@ afterAll(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-/** Every running finite animation, on the page and in komo's shadow root, has finished, and two frames have passed. */
+/** Every running finite animation, on the page and in Palette's shadow root, has finished, and two frames have passed. */
 const settle = (tab: Page) => tab.evaluate(async () => {
   const roots = [document, ...[...document.querySelectorAll("*")].flatMap(node => node.shadowRoot ? [node.shadowRoot] : [])];
   const running = () => roots.flatMap(root => root.getAnimations()).filter(animation =>
@@ -88,7 +88,7 @@ async function open(mode: string, { theme = "light", viewport = { width: 1280, h
   const errors: string[] = [];
   tab.on("pageerror", error => errors.push(error.message));
   await tab.goto(`${origin}/?mode=${mode}&theme=${theme}`);
-  await tab.waitForFunction(() => !!(window as any).komo);
+  await tab.waitForFunction(() => !!(window as any).palette);
   await tab.evaluate(() => localStorage.clear());
   await openDesign(tab);
   await settle(tab);

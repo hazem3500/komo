@@ -351,7 +351,7 @@ async function completeSetup(
   )
     .bind(code, Date.now())
     .first<{ poll_hash: string; config: string; expires_at: number }>();
-  check(setup, 409, "Setup expired or already completed. Run komo init again.");
+  check(setup, 409, "Setup expired or already completed. Run palette init again.");
   const config = JSON.parse(setup.config);
   let created: { project: string; repo: string };
   try {
@@ -546,7 +546,7 @@ async function oauthCallback(
   const id = `${provider}:${provider === "google" ? profile.sub : profile.id}`;
   // The provider photo (Google's OIDC `picture`) becomes the avatar: plain
   // HTTPS only, otherwise the initial. Existing users without one (NULL) get it
-  // on their next sign-in; a photo they set or cleared in komo is kept.
+  // on their next sign-in; a photo they set or cleared in Palette is kept.
   let safeAvatar: string | null = null;
   try {
     const photo = new URL(profile.picture || profile.avatar_url || "");
@@ -769,12 +769,12 @@ async function route(
     check(
       setup,
       409,
-      "Setup expired or already completed. Run komo init again."
+      "Setup expired or already completed. Run palette init again."
     );
     check(
       originAllowed(origin, JSON.parse(setup.config).origins),
       403,
-      "Open the site configured by komo init."
+      "Open the site configured by palette init."
     );
     let sites: unknown;
     try {
@@ -868,7 +868,7 @@ async function route(
         Date.now()
       )
       .first<{ project: string | null; config: string }>();
-    check(row, 404, "Setup expired. Run komo init again.");
+    check(row, 404, "Setup expired. Run palette init again.");
     return json(
       row.project
         ? {

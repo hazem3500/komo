@@ -29,7 +29,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-frame-keys-"));
   await build({
     stdin: { contents: `
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+':frame-keys';
       localStorage.setItem(key,'fixture-session');
@@ -37,14 +37,14 @@ beforeAll(async () => {
       const params=new URLSearchParams(location.search);
       // A Custom 1600 x 1200 frame at 100%: larger than its stage, so it pans.
       if(params.has('pan')&&window===top)localStorage.setItem('branch-comments:frame-size:frame-keys:example/review',JSON.stringify({v:2,size:[1600,1200],actual:true}));
-      // The app's own key handler: the keys komo handles never reach it.
+      // The app's own key handler: the keys Palette handles never reach it.
       window.qa={keys:[],loaded:performance.timeOrigin};
       addEventListener('keydown',event=>qa.keys.push(event.key));
       window.fetch=async input=>{
         const path=new URL(input instanceof URL?input.href:typeof input==='string'?input:input.url,location.origin).pathname;
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:[]}:{});
       };
-      window.komo=initKomo({endpoint:location.origin,project:'frame-keys',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
+      window.palette=initPalette({endpoint:location.origin,project:'frame-keys',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
         design:{experimentalGeometry:true},frame:{mode:'iframe',...(params.has('inplace')?{defaultMode:'transform'}:{})}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -101,7 +101,7 @@ const active = (page: Page) => host(page).evaluate((node) => node.classList.cont
 const reviewed = (page: Review) => page.frame ?? page.mainFrame();
 const width = (page: Review) => reviewed(page).locator("#card").evaluate((node) => (node as HTMLElement).style.width);
 const appKeys = (page: Review) => reviewed(page).evaluate(() => (window as any).qa.keys as string[]);
-/** True when keyboard focus is inside the framed document (In place: on the page, outside komo). */
+/** True when keyboard focus is inside the framed document (In place: on the page, outside Palette). */
 const inFrame = (page: Review) => page.inPlace
   ? page.evaluate(() => !document.activeElement?.closest("[data-branch-comments]"))
   : page.frame!.evaluate(() => document.hasFocus());
@@ -124,7 +124,7 @@ async function open(query = ""): Promise<Review> {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(`${origin}/${query}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await page.keyboard.press("l");
   await page.locator(".frame-bar").waitFor();
   const inPlace = query.includes("inplace");
@@ -184,7 +184,7 @@ describe.skipIf(!chrome)("Viewport keys with focus inside the framed document", 
       expect(await width(page)).toBe("");
       await press(page, REDO);
       expect(await width(page)).toBe("300px");
-      // komo's keys stop at komo: the app's own handler never saw them.
+      // Palette's keys stop at Palette: the app's own handler never saw them.
       expect((await appKeys(page)).slice(seen).filter((key) => key !== "Meta" && key !== "Control" && key !== "Shift")).toEqual([]);
       await press(page, "Escape");
       expect(await active(page)).toBe(false);
@@ -297,7 +297,7 @@ describe.skipIf(!chrome)("Viewport keys with focus inside the framed document", 
     await page.keyboard.press(UNDO);
     expect(await width(page)).toBe("300px");
     expect(await active(page)).toBe(true);
-    // A pick lets go of the framed field, as in place: back in the frame, B is komo's again.
+    // A pick lets go of the framed field, as in place: back in the frame, B is Palette's again.
     const card = await box(page, "card");
     await page.mouse.click(card.x + 6, card.y + 6);
     await page.frame!.evaluate(() => window.focus());
@@ -340,7 +340,7 @@ describe.skipIf(!chrome)("Viewport keys with focus inside the framed document", 
     await clickInto(page, "third", 200);
     await page.keyboard.down(" ");
     expect(await hand.isVisible()).toBe(true);
-    // (komo's own button would take Space, so focus lands on this window's page.)
+    // (Palette's own button would take Space, so focus lands on this window's page.)
     await page.locator(".frame-size-trigger").evaluate((node: HTMLElement) => (node.focus(), node.blur()));
     expect(await page.frame!.evaluate(() => document.hasFocus())).toBe(false);
     await page.keyboard.up(" ");

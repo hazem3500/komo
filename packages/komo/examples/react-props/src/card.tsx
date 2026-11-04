@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useKomoInspectable, type InspectableComponent, type InspectableScalar } from "../../../src/react.js";
+import { usePaletteInspectable, type InspectableComponent, type InspectableScalar } from "../../../src/react.js";
 
 export interface PromoCardProps {
   title: string;
@@ -8,14 +8,14 @@ export interface PromoCardProps {
   tone: "calm" | "bold" | "quiet";
   compact?: boolean;
   visits: number;
-  /** @komoStyle color */
+  /** @paletteStyle color */
   brandColor: string;
   children: ReactNode;
   details: { featured: boolean };
   onActivate: (source: string) => void;
 }
 
-/** @komoInspectable @komoProps PromoCardProps */
+/** @paletteInspectable @paletteProps PromoCardProps */
 export function PromoCard({
   title,
   marker,
@@ -32,7 +32,7 @@ export function PromoCard({
   component: InspectableComponent;
   onPropsChange(next: Record<string, InspectableScalar>): void;
 }) {
-  const inspectable = useKomoInspectable({
+  const inspectable = usePaletteInspectable({
     component,
     props: { title, marker, tone, compact, visits, brandColor },
     onChange: onPropsChange,

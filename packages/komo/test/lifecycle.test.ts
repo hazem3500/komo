@@ -327,7 +327,7 @@ it("toggles the comment list with L and shows configured bindings in every hint"
   expect(key({ key: "l" })).toBe(false);
 });
 
-it("never fires shortcuts while typing in a page or komo field", () => {
+it("never fires shortcuts while typing in a page or Palette field", () => {
   controller = initComments({ ...options, onboarding: undefined });
   const root = ([...document.body.children].find((node) => node.shadowRoot) as HTMLElement).shadowRoot!;
   const key = (target: EventTarget, init: KeyboardEventInit = { key: "c" }) => {
@@ -362,7 +362,7 @@ it("never fires shortcuts while typing in a page or komo field", () => {
   root.append(field);
   expect(key(field)).toBe(false);
   expect(key(field, { key: "l" })).toBe(false);
-  // Bare letters still work from komo's own non-editable controls.
+  // Bare letters still work from Palette's own non-editable controls.
   expect(key(root.querySelector('[data-menu-item="browse"]')!, { key: "l" })).toBe(true);
 });
 
@@ -732,7 +732,7 @@ it("picks body-level portals outside pageRoot unless pickRoots narrows the bound
   expect(pick({ pickRoots: () => [portal] })).toBe(true);
 });
 
-it("keeps komo's typing, pointer and focus events away from page listeners", () => {
+it("keeps Palette's typing, pointer and focus events away from page listeners", () => {
   const mount = (extra: Partial<CommentsOptions> = {}) => {
     controller?.destroy();
     controller = initComments({ ...options, onboarding: undefined, ...extra });
@@ -765,7 +765,7 @@ it("keeps komo's typing, pointer and focus events away from page listeners", () 
   for (const type of ["pointerdown", "click", "wheel", "focusin", "focusout"])
     fire(control, type);
   expect(seen).toEqual([]);
-  // Keys on komo's buttons still reach page shortcuts.
+  // Keys on Palette's buttons still reach page shortcuts.
   fire(control, "keydown", { key: "k" });
   expect(seen).toEqual(["keydown:DIV"]);
   // Page events are untouched.
@@ -774,14 +774,14 @@ it("keeps komo's typing, pointer and focus events away from page listeners", () 
   fire(outside, "pointerdown");
   fire(outside, "keydown", { key: "x" });
   expect(seen.slice(1)).toEqual(["pointerdown:INPUT", "keydown:INPUT"]);
-  // Moving focus into komo doesn't reach later focus-trap listeners.
+  // Moving focus into Palette doesn't reach later focus-trap listeners.
   seen.length = 0;
   fire(outside, "focusout", { relatedTarget: host });
   fire(outside, "focusout", { relatedTarget: null });
   expect(seen).toEqual(["focusout:INPUT"]);
   stop();
 
-  // komo still handles its own shortcuts: Escape in a komo field leaves comment mode.
+  // Palette still handles its own shortcuts: Escape in a Palette field leaves comment mode.
   fire(document, "keydown", { key: "c" });
   const catcher = root.querySelector<HTMLElement>(".catch")!;
   expect(catcher.hidden).toBe(false);
@@ -797,7 +797,7 @@ it("keeps komo's typing, pointer and focus events away from page listeners", () 
   expect(seen).toEqual(["keydown:DIV", "pointerdown:DIV"]);
 });
 
-it("closes komo menus on pointerdown elsewhere in komo despite isolation", async () => {
+it("closes Palette menus on pointerdown elsewhere in Palette despite isolation", async () => {
   const { onPage } = await import("../src/dom");
   controller = initComments({ ...options, onboarding: undefined });
   const root = [...document.body.children].find((node) => node.shadowRoot)!

@@ -40,7 +40,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-thread-snapshot-"));
   await build({
     stdin: { contents: `
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       const params=new URLSearchParams(location.search);
       const user={id:'reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+'/api:thread-snapshots';
@@ -50,7 +50,7 @@ beforeAll(async () => {
       const create=URL.createObjectURL,revoke=URL.revokeObjectURL;
       URL.createObjectURL=blob=>{const url=create.call(URL,blob);window.blobs.created.push(url);return url};
       URL.revokeObjectURL=url=>{window.blobs.revoked.push(url);return revoke.call(URL,url)};
-      window.komo=initKomo({endpoint:location.origin+'/api',project:'thread-snapshots',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),
+      window.palette=initPalette({endpoint:location.origin+'/api',project:'thread-snapshots',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),
         sidebar:'background',restoreOpen:false,pollInterval:60000,...(params.has('capture')?{snapshots:{image:true,html:true}}:{})});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -140,7 +140,7 @@ async function open(page: Page, query = "") {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(`${origin}/${query}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   return errors;
 }
 const shadowEval = <T,>(page: Page, script: string) =>
@@ -212,7 +212,7 @@ describe.skipIf(!chrome)("thread snapshots in the review UI", () => {
     // The list row's thumbnail comes back from the cache, without another read.
     await page.locator('.thread-item[data-thread="hero"] .komo-snapshot[data-ready] img').waitFor();
     expect(api.reads.filter((read) => read.kind === "image")).toHaveLength(1);
-    // Unmounting komo closes an open viewer: the page gets its keyboard back and the blob URL goes.
+    // Unmounting Palette closes an open viewer: the page gets its keyboard back and the blob URL goes.
     await page.locator('.thread-item[data-thread="hero"] .komo-snapshot').focus();
     await page.keyboard.press("Enter");
     await viewer.waitFor();
@@ -220,7 +220,7 @@ describe.skipIf(!chrome)("thread snapshots in the review UI", () => {
     await page.evaluate(() => {
       (window as any).keys = [];
       window.addEventListener("keydown", (event) => (window as any).keys.push(event.key));
-      (window as any).komo.destroy();
+      (window as any).palette.destroy();
     });
     await page.keyboard.press("x");
     expect(await page.evaluate(() => (window as any).keys)).toEqual(["x"]);

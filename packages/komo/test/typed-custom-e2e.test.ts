@@ -15,7 +15,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-typed-"));
   if (evidence) await mkdir(evidence, { recursive: true });
   await build({ stdin: { contents: `
-    import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+    import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
     import {tailwindTokens} from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
     const listeners=new Set(); const axis={id:"mode",options:[{id:"light"},{id:"dark"}],current:()=>"light",apply(){listeners.forEach(fn=>fn())},subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn)}};
     const qa=window.qa={writes:[],actions:0,theme:()=>axis.apply()};
@@ -36,7 +36,7 @@ beforeAll(async () => {
       ...Array.from({length:70},(_,i)=>({path:'radius.extra'+i,type:'dimension',class:'radius-extra'+i,properties:['border-radius'],value:i+'px',label:'Extra '+i}))
     ]});
     const mode=new URLSearchParams(location.search).get('mode');if(mode==='floating')document.body.append(document.createElement('aside'));
-    window.komo=initKomo({endpoint:location.origin,project:'typed',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens,themes:[axis]}});
+    window.palette=initPalette({endpoint:location.origin,project:'typed',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens,themes:[axis]}});
   `, resolveDir: process.cwd(), loader: "ts" }, outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022" });
   server = createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://localhost"), path = url.pathname;
@@ -53,7 +53,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
     const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(5000);
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
-    await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).komo);
+    await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).palette);
     await openDesign(page); await page.locator("#target").click();
     const target = page.locator("#target"), undo = page.locator('.design-inspector__actions [aria-label="Undo"]');
     const original = await target.getAttribute("style");
@@ -180,7 +180,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
   });
   it("preserves host shorthand, unrelated declarations and priorities", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
-    await page.goto(`${origin}/?mode=${mode}&inline`); await page.waitForFunction(() => !!(window as any).komo);
+    await page.goto(`${origin}/?mode=${mode}&inline`); await page.waitForFunction(() => !!(window as any).palette);
     const target = page.locator("#target"), original = await target.getAttribute("style");
     await openDesign(page); await target.click();
     const open = async () => {
@@ -200,7 +200,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("typed Custom in
   it("opens a select inside the Custom popup above the popup and keeps the popup open", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
     page.setDefaultTimeout(5000);
-    await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).komo);
+    await page.goto(`${origin}/?mode=${mode}`); await page.waitForFunction(() => !!(window as any).palette);
     await openDesign(page); await page.locator("#target").click();
     await page.locator('[data-field-property="width"] select[data-picker]').click();
     await page.locator(".komo-tokens").waitFor(); if (await page.locator(".komo-tokens__more").isVisible()) await page.locator(".komo-tokens__more").click();

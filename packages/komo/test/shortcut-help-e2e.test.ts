@@ -35,7 +35,7 @@ beforeAll(async () => {
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const query=new URLSearchParams(location.search);
       const user={id:'reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+':help';
@@ -45,7 +45,7 @@ beforeAll(async () => {
         const path=new URL(input instanceof URL?input.href:typeof input==='string'?input:input.url).pathname;
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:[]}:{});
       };
-      window.komo=initKomo({endpoint:location.origin,project:'help',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),
+      window.palette=initPalette({endpoint:location.origin,project:'help',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),
         sidebar:'background',restoreOpen:false,pollInterval:60000,...(query.has('keys')?{shortcuts:JSON.parse(query.get('keys'))}:{})});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -80,7 +80,7 @@ async function open(query = "", viewport = { width: 1440, height: 900 }) {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(`${origin}/?${query}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   return Object.assign(page, { errors });
 }
 async function design(page: Page) {
@@ -126,7 +126,7 @@ describe.skipIf(!chrome)("keyboard shortcut help", () => {
     const paths: [string, () => Promise<void>][] = [
       ["close button", async () => {
         const close = help(page).getByRole("button", { name: "Close", exact: true });
-        // The dialog takes pointer events although komo's host lets them pass through.
+        // The dialog takes pointer events although Palette's host lets them pass through.
         const box = (await close.boundingBox())!;
         expect(await close.evaluate((node, [x, y]) => (node.getRootNode() as ShadowRoot).elementFromPoint(x!, y!)?.closest("button") === node, [box.x + box.width / 2, box.y + box.height / 2])).toBe(true);
         await close.click();
@@ -179,7 +179,7 @@ describe.skipIf(!chrome)("keyboard shortcut help", () => {
       expect(state.chips).toEqual([20]);
       expect(state.gestureChips).toBe(0);
       expect(state.note.top).toBeGreaterThanOrEqual(Math.max(...state.sections.map(section => section.bottom)) - 1);
-      // The modal sits above the page and the Design panel: the panel area hits komo's backdrop.
+      // The modal sits above the page and the Design panel: the panel area hits Palette's backdrop.
       expect(await page.evaluate(() => document.elementFromPoint(1300, 450)?.closest("[data-branch-comments]") !== null)).toBe(true);
       await page.keyboard.press("Escape");
       await help(page).waitFor({ state: "detached" });

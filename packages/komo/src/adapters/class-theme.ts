@@ -2,7 +2,7 @@
 // `<html class="dark">` or `<html data-theme="docs">`.
 //
 //   import { classTheme } from "@hazem3500/komo/adapters/class-theme";
-//   initKomo({ design: { themes: [classTheme({ id: "mode", options: [...], colorScheme: true })] } });
+//   initPalette({ design: { themes: [classTheme({ id: "mode", options: [...], colorScheme: true })] } });
 //
 // A separate entry point; it never enters the core bundle.
 import type { PreviewTarget, ThemeAxis } from "../design-system.js";

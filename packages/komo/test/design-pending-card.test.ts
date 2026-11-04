@@ -40,8 +40,8 @@ describe("pending changes card", () => {
   const redoKey = () => document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Z", ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
 
   beforeEach(async () => {
-    document.body.innerHTML = '<main><button id="hero">Hello</button><span id="label">Selected text</span></main><div id="komo"></div>';
-    host = document.querySelector("#komo")!;
+    document.body.innerHTML = '<main><button id="hero">Hello</button><span id="label">Selected text</span></main><div id="palette"></div>';
+    host = document.querySelector("#palette")!;
     shadow = host.attachShadow({ mode: "open" });
     comments = [];
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
@@ -127,7 +127,7 @@ describe("pending changes card", () => {
   });
 
   it("discards all without a confirm; ⌘Z brings everything back and ⌘⇧Z discards it again", async () => {
-    // komo's one polite live region, which index.ts provides.
+    // Palette's one polite live region, which index.ts provides.
     const live = Object.assign(document.createElement("div"), { className: "sr-only" });
     live.setAttribute("aria-live", "polite");
     shadow.append(live);

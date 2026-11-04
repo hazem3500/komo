@@ -25,7 +25,7 @@ main{min-height:100vh;box-sizing:border-box;padding:40px}
 </style><main><p id="card">Example card text</p></main><script type="module" src="/entry.js"></script>`;
 
 const entry = (src: (path: string) => string) => `
-  import { initKomo } from ${JSON.stringify(src("index.ts"))};
+  import { initPalette } from ${JSON.stringify(src("index.ts"))};
   import { tailwindTokens } from ${JSON.stringify(src("adapters/tailwind.ts"))};
   const query=new URLSearchParams(location.search);
   document.documentElement.setAttribute('data-mode',query.get('theme')??'light');
@@ -39,7 +39,7 @@ const entry = (src: (path: string) => string) => `
   ]});
   window.fetch=async()=>Response.json({threads:[],guests:true});
   const mode=query.get('mode');
-  window.komo=initKomo({endpoint:location.origin,project:'typed-compact',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens}});
+  window.palette=initPalette({endpoint:location.origin,project:'typed-compact',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{tokens}});
 `;
 
 beforeAll(async () => {
@@ -69,7 +69,7 @@ afterAll(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-/** Every running finite animation, on the page and in komo's shadow root, has finished, and two frames have passed. */
+/** Every running finite animation, on the page and in Palette's shadow root, has finished, and two frames have passed. */
 const settle = (tab: Page) => tab.evaluate(async () => {
   const roots = [document, ...[...document.querySelectorAll("*")].flatMap(node => node.shadowRoot ? [node.shadowRoot] : [])];
   const running = () => roots.flatMap(root => root.getAnimations()).filter(animation =>
@@ -85,7 +85,7 @@ async function open(mode: string, viewport = { width: 1280, height: 800 }, theme
   const errors: string[] = [];
   tab.on("pageerror", error => errors.push(error.message));
   await tab.goto(`${origin}/?mode=${mode}&theme=${theme}`);
-  await tab.waitForFunction(() => !!(window as any).komo);
+  await tab.waitForFunction(() => !!(window as any).palette);
   await openDesign(tab);
   await settle(tab);
   await tab.locator("#card").click();

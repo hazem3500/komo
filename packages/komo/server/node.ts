@@ -103,7 +103,7 @@ const server = createServer(async (incoming, outgoing) => {
   }
 });
 server.listen(port, "0.0.0.0", () =>
-  console.log(`komo API listening on ${port}`),
+  console.log(`Palette API listening on ${port}`),
 );
 process.on("SIGTERM", () => server.close(() => void db.close()));
 process.on("SIGINT", () => server.close(() => void db.close()));

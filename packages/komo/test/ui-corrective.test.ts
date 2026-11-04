@@ -1,4 +1,4 @@
-// Native public-initKomo regressions; uses only a synthetic loopback fixture.
+// Native public-initPalette regressions; uses only a synthetic loopback fixture.
 import { build } from "esbuild";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -19,7 +19,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-token-ownership-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       import { classTheme } from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
       const query=new URLSearchParams(location.search),radius=query.get('case')==='radius',theme=query.get('case')==='theme',semantic=query.get('case')==='semantic',baseline=query.get('baseline'),named=baseline?.startsWith('named');
@@ -48,7 +48,7 @@ beforeAll(async () => {
       window.fetch=async(input,init)=>{const method=init?.method??(input instanceof Request?input.method:'GET');if(method!=='GET'){qa.writes.push(method);throw Error('Unexpected fixture write')}return Response.json({...(radius?{user}:{}),threads:radius?[thread]:[],guests:true})};
       const mode=new URLSearchParams(location.search).get('mode');
       if(mode==='floating')document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'ownership',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',...(mode==='scaled'?{frame:{scale:true}}:{}),restoreOpen:false,...(query.has('restore')?{shortcuts:{restore:query.get('restore')}}:{}),design:{tokens:adapter,...(theme||semantic?{themes:[axis]}:{})}});
+      window.palette=initPalette({endpoint:location.origin,project:'ownership',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',...(mode==='scaled'?{frame:{scale:true}}:{}),restoreOpen:false,...(query.has('restore')?{shortcuts:{restore:query.get('restore')}}:{}),design:{tokens:adapter,...(theme||semantic?{themes:[axis]}:{})}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -96,7 +96,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     page.setDefaultTimeout(4000);
     try {
       await page.goto(origin + '/?mode=reflow&restore=Shift%2BJ');
-      await page.waitForFunction(() => !!(window as any).komo);
+      await page.waitForFunction(() => !!(window as any).palette);
       await page.locator('[data-menu-item="more"]').evaluate((el:HTMLElement)=>{el.focus();el.click()});
       await page.locator('[data-menu-item="shortcuts"]').evaluate((el:HTMLElement)=>{el.focus();el.click()});
       await expect.poll(() => page.locator('dialog.komo-shortcuts[open]').count()).toBe(1);
@@ -120,7 +120,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     page.setDefaultTimeout(4000);
     try {
       await page.goto(origin + '/?mode=reflow&case=semantic&baseline=classes');
-      await page.waitForFunction(() => !!(window as any).komo);
+      await page.waitForFunction(() => !!(window as any).palette);
       await openDesign(page); await page.locator('#target').click();
       await page.locator('[data-field-property="color"] select[data-picker]').click();
       await page.locator('.komo-tokens__more').click();
@@ -136,7 +136,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     page.setDefaultTimeout(4000);
     try {
       await page.goto(origin + '/?mode=reflow&case=semantic&baseline=classes');
-      await page.waitForFunction(() => !!(window as any).komo);
+      await page.waitForFunction(() => !!(window as any).palette);
       const target = page.locator('#target');
       const original = await target.evaluate(el => [el.className, el.getAttribute('style')]);
       await openDesign(page); await target.click();
@@ -163,7 +163,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     page.setDefaultTimeout(4000);
     try {
       await page.goto(origin + '/?mode=reflow');
-      await page.waitForFunction(() => !!(window as any).komo);
+      await page.waitForFunction(() => !!(window as any).palette);
       const target=page.locator('#target');
       const before=await target.evaluate(el=>[el.className,el.getAttribute('style')]);
       await openDesign(page); await target.click();
@@ -184,7 +184,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     const page=await browser.newPage({reducedMotion:'reduce'});page.setDefaultTimeout(4000);
     try {
       await page.goto(origin+'/?mode=reflow&case=semantic&baseline=classes');
-      await page.waitForFunction(()=>!!(window as any).komo);
+      await page.waitForFunction(()=>!!(window as any).palette);
       await openDesign(page);await page.locator('#target').click();
       const trigger=page.locator('[data-field-property="color"] select[data-picker]');
       await trigger.click();
@@ -205,7 +205,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
   it("public Custom to token to raw rolls back one gesture at a time", async () => {
     const page=await browser.newPage({reducedMotion:'reduce'});page.setDefaultTimeout(4000);
     try {
-      await page.goto(origin+'/?mode=reflow');await page.waitForFunction(()=>!!(window as any).komo);
+      await page.goto(origin+'/?mode=reflow');await page.waitForFunction(()=>!!(window as any).palette);
       const target=page.locator('#target');const state=()=>target.evaluate(el=>[el.className,el.getAttribute('style')]);const original=await state();
       await openDesign(page);await target.click();
       const trigger=page.locator('[data-field-property="color"] select[data-picker]');
@@ -234,7 +234,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       page.setDefaultTimeout(4000);
       try {
         await page.goto(origin + `/?mode=${mode}`);
-        await page.waitForFunction(() => !!(window as any).komo);
+        await page.waitForFunction(() => !!(window as any).palette);
         await openDesign(page); await page.locator('#target').click();
         await page.evaluate(() => {
           const dialog = document.createElement('dialog'); dialog.id = 'host-dialog';
@@ -258,7 +258,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       page.setDefaultTimeout(4000);
       try {
         await page.goto(origin + `/?mode=${mode}&case=radius`);
-        await page.waitForFunction(() => !!(window as any).komo);
+        await page.waitForFunction(() => !!(window as any).palette);
         await page.keyboard.press('c');
         const bounds = await page.locator('#other').boundingBox();
         await page.mouse.click(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
@@ -281,7 +281,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
         page.setDefaultTimeout(4000);
         try {
           await page.goto(origin + `/?mode=${mode}&case=semantic&baseline=${kind === 'offToken' ? 'custom' : 'classes'}`);
-          await page.waitForFunction(() => !!(window as any).komo);
+          await page.waitForFunction(() => !!(window as any).palette);
           const target = page.locator('#target');
           const original = await target.evaluate(el => [el.className, el.getAttribute('style')]);
           await openDesign(page); await target.click();
@@ -336,7 +336,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
       page.setDefaultTimeout(4000);
       try {
         await page.goto(origin + '/?case=semantic&baseline=classes');
-        await page.waitForFunction(() => !!(window as any).komo);
+        await page.waitForFunction(() => !!(window as any).palette);
         await openDesign(page); await page.locator('#target').click();
         const target = page.locator('#target');
         const original = await target.evaluate(el => [el.className, el.getAttribute('style')]);
@@ -385,7 +385,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     page.setDefaultTimeout(4000);
     try {
       await page.goto(origin + `/?mode=${mode}`);
-      await page.waitForFunction(() => !!(window as any).komo);
+      await page.waitForFunction(() => !!(window as any).palette);
       const target = page.locator("#target");
       const original = await target.evaluate(node => [node.className, node.getAttribute("style")]);
       await openDesign(page);
@@ -451,7 +451,7 @@ describe.skipIf(!chrome)("public UI corrective regressions", () => {
     page.setDefaultTimeout(4000);
     try {
       await page.goto(origin + '/?case=radius');
-      await page.waitForFunction(() => !!(window as any).komo);
+      await page.waitForFunction(() => !!(window as any).palette);
       await openDesign(page); await page.locator('#other').click();
       const field = page.locator('[data-field-property="border-radius"]');
       expect(await field.locator('.design-field__label').textContent()).toBe('Corner radius');

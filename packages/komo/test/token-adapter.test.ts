@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDesignMode } from "../src/design-mode.js";
-import { cssVariableTokens, registerDesignTokenSource, type KomoDesignToken } from "../src/design-tokens.js";
+import { cssVariableTokens, registerDesignTokenSource, type PaletteDesignToken } from "../src/design-tokens.js";
 import { createAdapterTokenControl, proposedDesignChanges } from "../src/react-props-panel.js";
 import { closestToken, listTokens, originalTokenStyle, refreshTokenSwaps, rememberTokenUsage, resetTokenSwaps, showTokenSwapsBefore, swapToken, tokenSwapChanges, watchTokenList } from "../src/token-adapter.js";
 import { tailwindTokens } from "../src/adapters/tailwind.js";
@@ -94,7 +94,7 @@ function classAdapter(options: { async?: boolean } = {}): TokenAdapter & { list:
 }
 
 describe("built-in css-variables token adapter", () => {
-  const tokens: KomoDesignToken[] = [
+  const tokens: PaletteDesignToken[] = [
     { path: "color.brand", cssVariable: "--brand", type: "color", properties: ["color", "background-color"], impactSelector: ".card" },
     { path: "spacing.card", cssVariable: "--space-card", type: "dimension", properties: ["padding"], impactSelector: ".card" },
   ];
@@ -135,9 +135,9 @@ describe("custom token adapter in Design mode", () => {
   let proposals: Array<string | undefined>;
 
   async function open(design: DesignSystem) {
-    document.body.innerHTML = '<main><p id="label" class="text-secondary">Hello</p></main><div id="komo"></div>';
+    document.body.innerHTML = '<main><p id="label" class="text-secondary">Hello</p></main><div id="palette"></div>';
     label = document.querySelector("#label")!;
-    host = document.querySelector("#komo")!;
+    host = document.querySelector("#palette")!;
     shadow = host.attachShadow({ mode: "open" });
     proposals = [];
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
@@ -683,7 +683,7 @@ describe("token list invalidation", () => {
     }
   });
 
-  it("ignores a report whose list did not change, such as one caused by komo's own previews", async () => {
+  it("ignores a report whose list did not change, such as one caused by Palette's own previews", async () => {
     const listeners = new Set<() => void>();
     let value = "#111111";
     const adapter = {

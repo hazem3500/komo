@@ -4,7 +4,7 @@ import { loadPostgres, postgresDatabase } from "../server/postgres";
 import { postgresDatabase as upstreamDatabase } from "./fixtures/upstream-738da17/postgres";
 import worker from "../server/index";
 
-// A database created by upstream komo 738da17's Node server, upgraded in place
+// A database created by upstream Palette 738da17's Node server, upgraded in place
 // by this package's runner as `dist/node.mjs` does at boot.
 vi.mock("../server/setup-client.txt", () => ({ default: "" }));
 const connection = process.env.KOMO_TEST_POSTGRES_URL;

@@ -88,7 +88,7 @@ export interface OnboardingOptions {
  * modifiers, e.g. "M" or "Shift+J". Set false to disable one. Escape and Tab
  * are reserved.
  */
-export interface KomoShortcuts {
+export interface PaletteShortcuts {
   /** Toggle comment mode. Defaults to "C". */
   comment?: string | false;
   /** Return to browsing. Defaults to "V". */
@@ -113,11 +113,13 @@ export interface KomoShortcuts {
    */
   select?: { next?: string | false; prev?: string | false; parent?: string | false; child?: string | false };
 }
+/** @deprecated Use `PaletteShortcuts`. */
+export type KomoShortcuts = PaletteShortcuts;
 
 /** How large comment pins are drawn on the page. */
 export type PinSize = "full" | "compact" | "dot" | "auto";
 
-export interface KomoPins {
+export interface PalettePins {
   /**
    * Default pin size; a reviewer's choice in More wins and is remembered per
    * project. "full" (default) shows the author's avatar, "compact" a small
@@ -135,14 +137,18 @@ export interface KomoPins {
    */
   cluster?: boolean;
 }
+/** @deprecated Use `PalettePins`. */
+export type KomoPins = PalettePins;
 
 /** Optional review features. Each defaults to true; false removes it from the UI. */
-export interface KomoFeatures {
+export interface PaletteFeatures {
   /** Design mode inspector, style previews, and design proposals. */
   designMode?: boolean;
   /** Thread group tags: add them while writing a comment or on an open thread; shown in the sidebar. */
   tags?: boolean;
 }
+/** @deprecated Use `PaletteFeatures`. */
+export type KomoFeatures = PaletteFeatures;
 
 /** Built-in toolbar controls. */
 export type ToolbarItemId =
@@ -156,19 +162,21 @@ export type ToolbarItemId =
 /** A built-in control, or "|" for a separator. */
 export type ToolbarItem = ToolbarItemId | "|";
 
-export interface KomoToolbar {
+export interface PaletteToolbar {
   /**
    * Order and visibility; omitted ids are hidden. "|" draws a separator.
    * Defaults to browse, comment, design | comments | more, account | dismiss.
    */
   items?: ToolbarItem[];
 }
+/** @deprecated Use `PaletteToolbar`. */
+export type KomoToolbar = PaletteToolbar;
 
 /**
  * Opt-in snapshots of a new comment's target, saved with its thread. Off unless a
  * kind is set to true. Needs server support; guests capture only when the project allows it.
  */
-export interface KomoSnapshots {
+export interface PaletteSnapshots {
   /** A WebP image of the element and some padding, at most 1200px wide. */
   image?: boolean;
   /** The element's trimmed outerHTML (about 20 KB at most), with typed values redacted. */
@@ -182,6 +190,8 @@ export interface KomoSnapshots {
    */
   redact?(element: Element): boolean;
 }
+/** @deprecated Use `PaletteSnapshots`. */
+export type KomoSnapshots = PaletteSnapshots;
 
 export interface CommentsOptions {
   /** Used by the hosted setup screen to reuse the sidebar account UI. */
@@ -197,13 +207,13 @@ export interface CommentsOptions {
   /** Hide the toolbar until controller.open() or the restore shortcut is used. Defaults to true. */
   showToolbar?: boolean;
   /** Override or disable the review keyboard shortcuts. */
-  shortcuts?: KomoShortcuts;
+  shortcuts?: PaletteShortcuts;
   /** Turn optional features off, e.g. { designMode: false, tags: false }. */
-  features?: KomoFeatures;
+  features?: PaletteFeatures;
   /** Toolbar order, visibility and separators. Hidden controls stay in More. */
-  toolbar?: KomoToolbar;
+  toolbar?: PaletteToolbar;
   /** Comment pin presentation, e.g. { size: "compact" }. */
-  pins?: KomoPins;
+  pins?: PalettePins;
   /**
    * Sidebar presentation when the review opens. "edge" (default) is a floating,
    * draggable sidebar that parks off and peeks from the viewport edge while
@@ -228,7 +238,7 @@ export interface CommentsOptions {
   /**
    * Roots, besides pageRoot, whose elements can be picked for comments and
    * Design mode, such as a portal container. Defaults to all of body except
-   * komo, so body-level dialogs and popovers are pickable. Return [] to limit
+   * Palette, so body-level dialogs and popovers are pickable. Return [] to limit
    * picking to pageRoot. Called on every pick; keep it cheap.
    */
   pickRoots?: () => Element[];
@@ -246,8 +256,8 @@ export interface CommentsOptions {
    *
    * `mode: "iframe"` adds a simulated viewport: the current URL renders in a
    * same-origin iframe sized to the chosen viewport, so media queries, viewport
-   * units, matchMedia, resize events and window.innerWidth are real. komo stays in
-   * this window and reaches into the frame; komo inside the frame stays inert. The
+   * units, matchMedia, resize events and window.innerWidth are real. Palette stays in
+   * this window and reaches into the frame; Palette inside the frame stays inert. The
    * framed copy is a second live instance of the app (its own requests, sockets
    * and analytics), so it is opt-in; "transform" (the default) frames the page
    * itself. Reviewers turn it on or off with "Simulate real viewport" in the Frame
@@ -273,14 +283,14 @@ export interface CommentsOptions {
     iframeUrl?(location: Location): string;
     /**
      * Single-copy simulated viewport (with mode "iframe"): turning it on reloads this page as a
-     * shell for komo, so the app runs once, in the frame. Requires the app's entry
+     * shell for Palette, so the app runs once, in the frame. Requires the app's entry
      * to skip mounting when `isShell(project)` from `@hazem3500/komo/shell` is true.
      */
     shell?: boolean;
   };
   /**
-   * Stop komo's own pointer, focus, wheel and typing events at its host
-   * element, so page shortcuts and open modals don't react to komo's UI.
+   * Stop Palette's own pointer, focus, wheel and typing events at its host
+   * element, so page shortcuts and open modals don't react to Palette's UI.
    * Defaults to true; set false if the host needs to observe them.
    */
   isolateEvents?: boolean;
@@ -310,7 +320,7 @@ export interface CommentsOptions {
   sourceUrl?: (source: string, branch: string) => string;
   /**
    * Defaults to location.pathname; query strings are not stored. In Frame's
-   * simulated viewport komo passes the frame's location: read it instead of
+   * simulated viewport Palette passes the frame's location: read it instead of
    * window.location so comments keep their page in both modes.
    */
   page?: (location?: Location) => string;
@@ -339,10 +349,10 @@ export interface CommentsOptions {
   avatar?: (user: Pick<Identity, "id" | "name">) => string | undefined;
   /**
    * Save an image and/or trimmed HTML of the commented element with each new
-   * thread, e.g. { image: true, html: true }. Off by default. komo's own UI is
+   * thread, e.g. { image: true, html: true }. Off by default. Palette's own UI is
    * never captured, nor is anything inside an element with data-komo-no-snapshot.
    */
-  snapshots?: KomoSnapshots;
+  snapshots?: PaletteSnapshots;
 }
 
 export interface CommentsController {

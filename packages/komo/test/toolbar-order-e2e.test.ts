@@ -20,7 +20,7 @@ beforeAll(async () => {
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const query = new URLSearchParams(location.search);
       const user = { id: "synthetic-reviewer", name: "Example reviewer", verified: true };
       const anchor = { selector: "#target", text: "", x: .5, y: .5, width: 0, height: 0, pageX: 0, pageY: 0, viewportWidth: 1280 };
@@ -33,7 +33,7 @@ beforeAll(async () => {
       localStorage.setItem(key + ":user", JSON.stringify({ token: "synthetic-session", user }));
       if (query.get("edge")) localStorage.setItem("branch-comments:drawer:toolbar-order:example/review", JSON.stringify({ x: 16, y: 260, edgeX: query.get("edge") }));
       window.fetch = async () => Response.json({ user, threads, guests: true });
-      window.komo = initKomo({
+      window.palette = initPalette({
         endpoint: location.origin, project: "toolbar-order", repo: "example/review", branch: "fixture",
         pageRoot: document.querySelector("main"), restoreOpen: false, autoHideDrawer: false,
         ...(query.has("items") ? { toolbar: { items: JSON.parse(query.get("items")) } } : {}),
@@ -79,7 +79,7 @@ async function open(query: string, viewport = { width: 1280, height: 800 }, touc
   const page = await browser.newPage({ viewport, reducedMotion: "reduce", hasTouch: touch, isMobile: touch });
   page.setDefaultTimeout(5000);
   await page.goto(`${origin}/?${query}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await page.locator(".morphing-menu__bar").waitFor();
   // Hovering loads the interactive menu (its controls carry no title); touch keeps the first paint.
   if (!touch) {

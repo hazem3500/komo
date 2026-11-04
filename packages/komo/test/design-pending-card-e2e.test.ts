@@ -34,7 +34,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-pending-card-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { discoverCssTokens } from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       const query=new URLSearchParams(location.search);
       document.documentElement.setAttribute('data-mode',query.get('theme')??'light');
@@ -44,7 +44,7 @@ beforeAll(async () => {
       localStorage.setItem(key+':user',JSON.stringify({token:'synthetic-session',user}));
       window.fetch=async(input)=>{const path=new URL(String(input instanceof Request?input.url:input)).pathname;
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:[]}:{})};
-      window.komo=initKomo({endpoint:location.origin,project:'pending-card',repo:'example/review',branch:'fixture',sidebar:'edge',restoreOpen:false,pollInterval:60000,design:{tokens:discoverCssTokens()}});
+      window.palette=initPalette({endpoint:location.origin,project:'pending-card',repo:'example/review',branch:'fixture',sidebar:'edge',restoreOpen:false,pollInterval:60000,design:{tokens:discoverCssTokens()}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -93,7 +93,7 @@ describe.skipIf(!chrome).each(["light", "dark"])("pending changes card on a %s p
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?theme=${theme}`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     const card = page.locator(".design-inspector__pending");
     const heading = card.locator("h3");
     const rows = card.locator(".design-change-row");

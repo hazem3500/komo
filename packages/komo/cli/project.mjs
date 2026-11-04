@@ -3,16 +3,16 @@ import { resolve } from "node:path";
 
 export const projectHelp = `
 Project commands (Google owner):
-  komo project info
-  komo project export --out comments.json
-  komo project import --file comments.json
-  komo project access --access public|private
-  komo project invite --email name@example.com
-  komo project join --invite TOKEN
-  komo project revoke --email name@example.com
-  komo project remove-member --user USER_ID
-  komo project clear-resolved --confirm PROJECT_KEY
-  komo project delete --confirm PROJECT_KEY
+  palette project info
+  palette project export --out comments.json
+  palette project import --file comments.json
+  palette project access --access public|private
+  palette project invite --email name@example.com
+  palette project join --invite TOKEN
+  palette project revoke --email name@example.com
+  palette project remove-member --user USER_ID
+  palette project clear-resolved --confirm PROJECT_KEY
+  palette project delete --confirm PROJECT_KEY
 Exports exclude credentials. Imports preserve feedback with unverified imported identities.
 `;
 export async function runProject(action, flags, request, config, cwd) {
@@ -75,7 +75,7 @@ export async function runProject(action, flags, request, config, cwd) {
       typeof snapshot.project !== "string" ||
       !snapshot.tables
     )
-      throw Error("Use a version 1 komo export.");
+      throw Error("Use a version 1 Palette export.");
     let imported = 0;
     for (const kind of ["users", "threads", "comments", "reactions", "snapshots"]) {
       // Exports made before snapshots existed have no snapshot table.
@@ -147,5 +147,5 @@ export async function runProject(action, flags, request, config, cwd) {
       { confirm: flags.confirm }
     );
   }
-  throw Error("Unknown project action. Run komo --help.");
+  throw Error("Unknown project action. Run palette --help.");
 }

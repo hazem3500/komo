@@ -33,7 +33,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-footer-fit-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const query=new URLSearchParams(location.search);
       document.documentElement.setAttribute('data-mode',query.get('theme')??'light');
       const width=Number(query.get('width'));
@@ -42,7 +42,7 @@ beforeAll(async () => {
       const frame=query.get('layout')==='frame';
       // A second page root keeps the floating panel floating; Frame needs one root to scale.
       if(!frame)document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'footer-fit',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:frame},restoreOpen:false,pollInterval:60000,design:{}});
+      window.palette=initPalette({endpoint:location.origin,project:'footer-fit',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:frame},restoreOpen:false,pollInterval:60000,design:{}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -84,7 +84,7 @@ describe.skipIf(!chrome).each(["light", "dark"])("Design footer on a %s page", t
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?theme=${theme}&${query}`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     await openDesign(page);
     await page.locator(".design-inspector__empty").waitFor();
     await page.locator("#card").click();

@@ -21,18 +21,18 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-color-clicks-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { discoverCssTokens } from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       window.fetch=async()=>Response.json({threads:[],guests:true});
       // A Tailwind adapter that lists only generated classes re-scans when stylesheets change, as the Tokens view's own preview does.
       const tailwind=tailwindTokens({tokens:['primary','secondary','accent'].map(name=>({path:'color.'+name,label:name,type:'color',class:'text-'+name,properties:['color'],value:getComputedStyle(document.documentElement).getPropertyValue('--color-'+name).trim()}))},{onlyGenerated:true});
-      // An adapter whose subscribe() reports on any page change, including komo's own previews.
+      // An adapter whose subscribe() reports on any page change, including Palette's own previews.
       const base=discoverCssTokens();
       const noisy={...base,id:'noisy',subscribe(onChange){const observer=new MutationObserver(()=>onChange());observer.observe(document,{attributes:true,childList:true,subtree:true,characterData:true});return()=>observer.disconnect()}};
       const kind=new URLSearchParams(location.search).get('adapter');
       const adapter=kind==='tailwind'?tailwind:kind==='noisy'?noisy:base;
-      window.komo=initKomo({endpoint:location.origin,project:'color-clicks',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens:adapter}});
+      window.palette=initPalette({endpoint:location.origin,project:'color-clicks',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens:adapter}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -109,7 +109,7 @@ describe.skipIf(!chrome).each(["Fit", "100%"].flatMap(zoom => ["css-variables", 
     const errors: string[] = [];
     tab.on("pageerror", error => errors.push(error.message));
     await tab.goto(`${origin}/?adapter=${adapter}`);
-    await tab.waitForFunction(() => !!(window as any).komo);
+    await tab.waitForFunction(() => !!(window as any).palette);
     await openDesign(tab);
     await settle(tab);
     await frameZoom(tab, zoom);

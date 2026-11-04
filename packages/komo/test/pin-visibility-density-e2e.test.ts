@@ -20,7 +20,7 @@ beforeAll(async () => {
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { captureAnchor } from ${JSON.stringify(resolve("src/anchors.ts"))};
       const query=new URLSearchParams(location.search),layout=query.get('layout')??'reflow';
       const user={id:'reviewer',name:'Example reviewer',verified:true};
@@ -39,7 +39,7 @@ beforeAll(async () => {
       };
       if(layout==='floating')document.body.append(document.createElement('aside'));
       const size=query.get('size'),visibility=query.get('visibility');
-      window.komo=initKomo({endpoint:location.origin,project:'density',repo:'example/review',branch:'fixture',
+      window.palette=initPalette({endpoint:location.origin,project:'density',repo:'example/review',branch:'fixture',
         pageRoot:layout==='floating'?undefined:document.querySelector('main'),sidebar:layout==='floating'?'edge':'background',
         ...(layout==='scaled'?{frame:{scale:true}}:{}),restoreOpen:'session',pollInterval:60000,
         ...(size?{pins:{size}}:{}),...(visibility?{shortcuts:{visibility:visibility==='false'?false:visibility}}:{})});

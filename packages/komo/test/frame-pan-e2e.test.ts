@@ -30,7 +30,7 @@ beforeAll(async () => {
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       import {captureAnchor} from ${JSON.stringify(resolve("src/anchors.ts"))};
       const list=document.getElementById('list');
       for(let index=0;index<60;index++){const row=document.createElement('p');row.textContent='Row '+index;list.append(row);}
@@ -57,7 +57,7 @@ beforeAll(async () => {
         const path=new URL(input instanceof URL?input.href:typeof input==='string'?input:input.url).pathname;
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads}:{});
       };
-      window.komo=initKomo({endpoint:location.origin,project:'frame-pan',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000});
+      window.palette=initPalette({endpoint:location.origin,project:'frame-pan',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -90,7 +90,7 @@ const range = [1600 - stage.width, 1200 - stage.height];
 async function open(tab: Page) {
   tab.setDefaultTimeout(6000);
   await tab.goto(`${origin}/`);
-  await tab.waitForFunction(() => !!(window as any).komo);
+  await tab.waitForFunction(() => !!(window as any).palette);
   await tab.keyboard.press("l");
   await tab.locator(".frame-bar").waitFor();
   await tab.waitForTimeout(350);

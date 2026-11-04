@@ -22,7 +22,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-pending-edits-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { discoverCssTokens } from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+':pending';
@@ -34,7 +34,7 @@ beforeAll(async () => {
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:qa.posts.map(post=>({id:'posted-thread',page:post.page,anchor:post.anchor,tags:[],resolved:false,resolvedBy:null,createdAt:1,updatedAt:1,comments:[{id:'posted-comment',body:post.body,author:user,createdAt:1,editedAt:null,reactions:{}}]}))}:{})};
       const mode=new URLSearchParams(location.search).get('mode');
       if(mode==='floating')document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'pending',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,pollInterval:60000,design:{tokens:discoverCssTokens(),experimentalGeometry:true}});
+      window.palette=initPalette({endpoint:location.origin,project:'pending',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,pollInterval:60000,design:{tokens:discoverCssTokens(),experimentalGeometry:true}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -85,7 +85,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?mode=${mode}`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     const original = await page.evaluate(() => [document.documentElement.getAttribute("style"), document.head.innerHTML]);
     const card = page.locator("#card");
     const background = () => card.evaluate(node => getComputedStyle(node).backgroundColor);
@@ -209,7 +209,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     // Discard all clears element and token previews together.
     // Posting selects the new thread, and D would open it in Design mode; start again from a fresh page.
     await page.reload();
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     await openDesign(page);
     await editSurface();
     await card.click();
@@ -224,7 +224,7 @@ describe.skipIf(!chrome).each(["floating", "reflow", "scaled"])("pending token a
     await expect.poll(async () => [await background(), await card.getAttribute("style")]).toEqual([light, null]);
     await pending.waitFor({ state: "hidden" });
 
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     expect(await page.evaluate(() => [document.documentElement.getAttribute("style"), document.head.innerHTML])).toEqual(original);
     expect(errors).toEqual([]);
     await page.close();

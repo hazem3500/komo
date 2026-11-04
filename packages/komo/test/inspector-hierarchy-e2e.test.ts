@@ -31,8 +31,8 @@ beforeAll(async () => {
       import ${JSON.stringify(resolve("src/adapters/react-preview.ts"))};
       import React from 'react';
       import {createRoot} from 'react-dom/client';
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
-      import {useKomoInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {usePaletteInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
       import {discoverReactComponents} from ${JSON.stringify(resolve("src/adapters/react-fiber.ts"))};
       import {classTheme} from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
       const query=new URLSearchParams(location.search),mode=query.get('mode'),view=query.get('case')||'registered';
@@ -51,7 +51,7 @@ beforeAll(async () => {
       window.open=(url)=>{window.qa.opened.push(String(url));return null};
       function Button(props){
         const [state,setState]=React.useState(props);
-        const inspectable=useKomoInspectable({component:definition,props:state,onChange(next){window.qa.changes.push(next);setState(next)},enabled:true});
+        const inspectable=usePaletteInspectable({component:definition,props:state,onChange(next){window.qa.changes.push(next);setState(next)},enabled:true});
         return React.createElement('button',{...inspectable,type:'button',className:'button button-'+state.variant+(state.size?' button-'+state.size:''),disabled:state.disabled,'data-loading':state.loading===undefined?'unset':String(state.loading)},state.label+(state.count===undefined?'':' ('+state.count+')'));
       }
       function Card(props){return React.createElement('article',{className:'card'},React.createElement('h2',null,props.title),React.createElement('p',null,props.tone+(props.elevated?' · elevated':'')));}
@@ -67,14 +67,14 @@ beforeAll(async () => {
       window.fetch=async()=>Response.json({threads:[],guests:true});
       if(mode==='floating')document.body.append(document.createElement('aside'));
       const axis=classTheme({id:'mode',label:'Mode',options:[{id:'light',attribute:{'data-mode':'light'}},{id:'dark',attribute:{'data-mode':'dark'}}],colorScheme:true});
-      window.komo=initKomo({endpoint:location.origin,project:'inspector',repo:'example/review',branch:'fixture',sourceUrl:(source,branch)=>'vscode://file/workspace/'+source+'?branch='+branch,pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{components,themes:[axis]}});
+      window.palette=initPalette({endpoint:location.origin,project:'inspector',repo:'example/review',branch:'fixture',sourceUrl:(source,branch)=>'vscode://file/workspace/'+source+'?branch='+branch,pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{components,themes:[axis]}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
     define: { "process.env.NODE_ENV": '"development"' },
   });
   await build({
     stdin: { contents: `
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       const query=new URLSearchParams(location.search),mode=query.get('mode'),long=query.has('long'),named=query.has('component');
       const qa=window.cardQA={opened:[],copied:[]};
       window.open=(url)=>{qa.opened.push(String(url));return null};
@@ -95,7 +95,7 @@ beforeAll(async () => {
       qa.posts=[];
       window.fetch=async(input,init)=>{const path=new URL(input instanceof Request?input.url:String(input)).pathname;if(init?.method==='POST'&&path.endsWith('/threads')){qa.posts.push(JSON.parse(init.body));return Response.json({thread})}return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:query.has('thread')?[thread]:[]}:{})};
       if(mode==='floating')document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'cards',repo:'example/review',branch:'fixture',sourceUrl:(path,branch)=>'vscode://file/workspace/'+path,pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{components}});
+      window.palette=initPalette({endpoint:location.origin,project:'cards',repo:'example/review',branch:'fixture',sourceUrl:(path,branch)=>'vscode://file/workspace/'+path,pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false,design:{components}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: join(directory, "card"), entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -136,7 +136,7 @@ async function open(mode: string, query: string, viewport = { width: 1280, heigh
   const page = await browser.newPage({ viewport, reducedMotion: "reduce" });
   page.setDefaultTimeout(5000);
   await page.goto(`${origin}/?mode=${mode}&${query}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   const target = page.locator("#app > *").first();
   await target.waitFor();
   await openDesign(page);
@@ -149,7 +149,7 @@ async function composer(mode: string, query: string, viewport = { width: 1280, h
   const page = await browser.newPage({ viewport, reducedMotion: "reduce" });
   page.setDefaultTimeout(5000);
   await page.goto(`${origin}/card?mode=${mode}&${query}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await openDesign(page);
   await page.locator("#target").click({ position: { x: 5, y: 5 } });
   await page.getByRole("button", { name: "Edit selected text inline", exact: true }).click();
@@ -166,8 +166,8 @@ async function posted(mode: string, query: string, viewport = { width: 1280, hei
   const page = await browser.newPage({ viewport, reducedMotion: "reduce" });
   page.setDefaultTimeout(5000);
   await page.goto(`${origin}/card?mode=${mode}&thread&${query}`);
-  await page.waitForFunction(() => !!(window as any).komo);
-  await page.evaluate(() => (window as any).komo.open());
+  await page.waitForFunction(() => !!(window as any).palette);
+  await page.evaluate(() => (window as any).palette.open());
   await page.locator(".thread-card").first().click();
   await page.locator(".message-text .design-card").first().waitFor();
   return page;

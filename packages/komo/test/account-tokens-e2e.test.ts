@@ -22,7 +22,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-account-tokens-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const fixture = JSON.parse(new URLSearchParams(location.search).get("user") || "null");
       const endpoint = location.origin + "/api/";
       const key = "branch-comments:" + endpoint + ":tokens";
@@ -30,7 +30,7 @@ beforeAll(async () => {
         localStorage.setItem(key, "synthetic-session");
         localStorage.setItem(key + ":user", JSON.stringify({ token: "synthetic-session", user: fixture }));
       }
-      window.komo = initKomo({ endpoint, project: "tokens", repo: "example/review", branch: "fixture", restoreOpen: false, autoHideDrawer: false, pollInterval: 60000 });
+      window.palette = initPalette({ endpoint, project: "tokens", repo: "example/review", branch: "fixture", restoreOpen: false, autoHideDrawer: false, pollInterval: 60000 });
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -115,7 +115,7 @@ async function open(scheme: "light" | "dark", user: object | null, mock: Mock): 
     return json({ error: "Not found." }, 404);
   });
   await page.goto(`${origin}/?user=${encodeURIComponent(JSON.stringify(user))}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await page.locator('.morphing-menu__bar [data-menu-item="account"]').click();
   await page.locator(".account-dialog").waitFor();
   return page;
@@ -179,10 +179,10 @@ describe.skipIf(!chrome).each(["light", "dark"] as const)("API tokens on a %s pa
       await expect.poll(() => page.evaluate(() => (document.querySelector("[data-branch-comments]")!.shadowRoot!.activeElement as HTMLInputElement)?.placeholder)).toBe("e.g. Deploy bot");
       expect(mock.posts).toEqual([]);
       await page.keyboard.type("CI bot");
-      // Any komo render rebuilds the account dialog; the view keeps its node, input and focus.
+      // Any Palette render rebuilds the account dialog; the view keeps its node, input and focus.
       await page.locator(".account-dialog").evaluate((node) => ((node as HTMLElement).dataset.before = ""));
       await page.locator(".account-tokens").evaluate((node) => ((node as HTMLElement).dataset.before = ""));
-      await page.evaluate(() => (window as any).komo.open());
+      await page.evaluate(() => (window as any).palette.open());
       await expect.poll(() => page.locator(".account-dialog[data-before]").count()).toBe(0);
       const name = form.getByRole("textbox", { name: "Name" });
       expect(await name.inputValue()).toBe("CI bot");
@@ -264,7 +264,7 @@ describe.skipIf(!chrome).each(["light", "dark"] as const)("API tokens on a %s pa
       await page.getByRole("button", { name: "API tokens" }).click();
       const alert = page.getByRole("region", { name: "API tokens" }).getByRole("alert");
       await alert.waitFor();
-      expect(await alert.textContent()).toBe("This komo server doesn’t support API tokens.");
+      expect(await alert.textContent()).toBe("This Palette server doesn’t support API tokens.");
       expect(await page.getByRole("button", { name: "Try again" }).count()).toBe(0);
       await shot(page, `unsupported-${scheme}`);
     } finally { await page.close(); }

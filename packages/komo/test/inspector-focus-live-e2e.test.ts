@@ -11,7 +11,7 @@ import { openDesign } from "./design-e2e.js";
 // The inspector in real Chrome: a redraw (⌘Z, Before/After, a theme switch) puts focus back on
 // the control that had it, and Undo or Reset with nothing left to focus moves it to the
 // selection, never to Exit. Field token captions are plain text the controls are described
-// by; komo keeps one polite live region for deliberate announcements such as applied tokens.
+// by; Palette keeps one polite live region for deliberate announcements such as applied tokens.
 
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -25,8 +25,8 @@ beforeAll(async () => {
     stdin: { contents: `
       import React from 'react';
       import {createRoot} from 'react-dom/client';
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
-      import {useKomoInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {usePaletteInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
       import {discoverCssTokens} from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       import {classTheme} from ${JSON.stringify(resolve("src/adapters/class-theme.ts"))};
       const h=React.createElement;
@@ -35,14 +35,14 @@ beforeAll(async () => {
         {name:'busy',kind:'boolean',required:true,typeLabel:'boolean'}]};
       function Button(initial){
         const[props,setProps]=React.useState(initial);
-        const inspect=useKomoInspectable({component:definition,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
+        const inspect=usePaletteInspectable({component:definition,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
         return h('button',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],type:'button',className:'fixture-button','data-variant':props.variant},'Example button');
       }
       createRoot(document.querySelector('main')).render(h(Button,{variant:'primary',busy:false}));
       window.fetch=async()=>Response.json({threads:[],guests:true});
       document.body.append(document.createElement('aside'));
       const mode=classTheme({id:'mode',options:[{id:'light'},{id:'dark',class:'dark'}]});
-      window.komo=initKomo({endpoint:location.origin,project:'inspector-focus',repo:'example/review',branch:'fixture',sidebar:'edge',restoreOpen:false,design:{tokens:discoverCssTokens({scopes:{dark:'.dark'}}),themes:[mode]}});
+      window.palette=initPalette({endpoint:location.origin,project:'inspector-focus',repo:'example/review',branch:'fixture',sidebar:'edge',restoreOpen:false,design:{tokens:discoverCssTokens({scopes:{dark:'.dark'}}),themes:[mode]}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });

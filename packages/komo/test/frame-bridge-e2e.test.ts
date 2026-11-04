@@ -8,8 +8,8 @@ import { chromium, type Browser, type Frame, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openDesign } from "./design-e2e";
 
-// React registrations made inside Frame's viewport iframe (useKomoInspectable,
-// useKomoDesignTokens) reach komo in the parent window through the frame bridge.
+// React registrations made inside Frame's viewport iframe (usePaletteInspectable,
+// usePaletteDesignTokens) reach Palette in the parent window through the frame bridge.
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
 const shots = join(tmpdir(), "komo-frame-bridge");
@@ -24,8 +24,8 @@ beforeAll(async () => {
     stdin: { contents: `
       import React from 'react';
       import {createRoot} from 'react-dom/client';
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
-      import {useKomoInspectable,useKomoDesignTokens,cssVariableTokens} from ${JSON.stringify(resolve("src/react.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {usePaletteInspectable,usePaletteDesignTokens,cssVariableTokens} from ${JSON.stringify(resolve("src/react.ts"))};
       const h=React.createElement;
       const definition={id:'option',name:'Option',source:'fixture/option.tsx',line:1,props:[{name:'selected',kind:'boolean',required:true,typeLabel:'boolean'}]};
       const tokens=[{path:'color.accent',cssVariable:'--accent',type:'color',properties:['background-color'],impactSelector:'.card'}];
@@ -33,13 +33,13 @@ beforeAll(async () => {
       const framed=window.name==='komo-viewport';
       function App(){
         const[props,setProps]=React.useState({selected:false});
-        const inspect=useKomoInspectable({component:definition,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
-        useKomoDesignTokens({tokens,enabled:framed});
+        const inspect=usePaletteInspectable({component:definition,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
+        usePaletteDesignTokens({tokens,enabled:framed});
         return h('section',{className:'card',id:'card'},h('button',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],id:'option',type:'button','data-selected':String(props.selected)},'Example option'));
       }
       createRoot(document.querySelector('main')).render(h(App));
       window.fetch=async()=>Response.json({threads:[],guests:true});
-      window.komo=initKomo({endpoint:location.origin,project:'frame-bridge',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
+      window.palette=initPalette({endpoint:location.origin,project:'frame-bridge',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
         design:{tokens:cssVariableTokens()},frame:{mode:'iframe'}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -70,7 +70,7 @@ afterAll(async () => {
 async function viewport(page: Page): Promise<Frame> {
   page.setDefaultTimeout(6000);
   await page.goto(`${origin}/`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await page.keyboard.press("l");
   await page.waitForFunction(() => {
     const root = [...document.body.children].find((node) => node.shadowRoot)?.shadowRoot;

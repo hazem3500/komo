@@ -127,7 +127,7 @@ export function bindMove(hooks: MoveHooks) {
     copies.forEach((node, index) => { node.removeAttribute('id'); if (!index || sources.length < 400) paint(node, sources[index]); });
     root.style.display = entry.display!;
     root.setAttribute(CLONE, '');
-    // A copy taken while komo previews the original must not keep its hold.
+    // A copy taken while Palette previews the original must not keep its hold.
     root.removeAttribute(STILL);
     root.setAttribute('aria-hidden', 'true');
     root.inert = true;

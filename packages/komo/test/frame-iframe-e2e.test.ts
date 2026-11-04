@@ -32,7 +32,7 @@ beforeAll(async () => {
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       import {discoverCssTokens} from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       const qa=window.qa={resizes:0,booted:(window.qa?.booted??0)+1};
       addEventListener('resize',()=>qa.resizes++);
@@ -56,7 +56,7 @@ beforeAll(async () => {
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads:stored()}:{});
       };
       const params=new URLSearchParams(location.search);
-      window.komo=initKomo({endpoint:location.origin,project:'frame-iframe',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
+      window.palette=initPalette({endpoint:location.origin,project:'frame-iframe',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
         ...(params.has('keys')?{shortcuts:{visibility:'Shift+1'}}:{}),
         design:{tokens:discoverCssTokens(),experimentalGeometry:params.has('geometry')},
         frame:{...(params.has('nomode')?{}:{mode:params.has('transform')?'transform':'iframe'}),...(params.has('inplace')?{defaultMode:'transform'}:{}),...(params.get('url')?{iframeUrl:()=>params.get('url')}:{})}});
@@ -113,7 +113,7 @@ async function viewportFrame(page: Page): Promise<Frame> {
 async function open(page: Page, query = "") {
   page.setDefaultTimeout(6000);
   await page.goto(`${origin}/${query}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await page.keyboard.press("l");
   await page.locator(".frame-bar").waitFor();
 }
@@ -140,7 +140,7 @@ const inside = (frame: Frame) => frame.evaluate(() => ({
   resizes: (window as any).qa.resizes,
   // A body-level fixed portal lays out against the frame's own viewport.
   toast: (({ right, bottom, width }) => [Math.round(right), Math.round(bottom), Math.round(width)])(document.getElementById("toast")!.getBoundingClientRect()),
-  komoHosts: [...document.body.children].filter((node) => node.shadowRoot).length,
+  paletteHosts: [...document.body.children].filter((node) => node.shadowRoot).length,
 }));
 
 describe.skipIf(!chrome)("Frame viewport mode", () => {
@@ -151,7 +151,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await open(page);
     const frame = await viewportFrame(page);
     // The default is the window's own size at Fit: the desktop layout, scaled down.
-    expect(await inside(frame)).toMatchObject({ innerWidth: 1280, innerHeight: 800, mobile: false, sidebar: "block", drawer: "none", komoHosts: 0 });
+    expect(await inside(frame)).toMatchObject({ innerWidth: 1280, innerHeight: 800, mobile: false, sidebar: "block", drawer: "none", paletteHosts: 0 });
     expect(await page.locator(".frame-note").isVisible()).toBe(false);
     await page.screenshot({ path: join(shots, "viewport-default-fit.png") });
     for (const [name, width, height, mobile] of [["Mobile", 390, 844, true], ["Tablet", 768, 1024, false], ["Wide", 1440, 900, false]] as const) {
@@ -164,12 +164,12 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
       expect(state.toast, `${name} portal`).toEqual([width - 12, height - 12, Math.round(width * 0.4)]);
       await page.screenshot({ path: join(shots, `viewport-${name.toLowerCase()}-fit.png`) });
     }
-    // The page stays inert-free: komo inside the frame never mounts a second instance.
-    expect((await inside(frame)).komoHosts).toBe(0);
+    // The page stays inert-free: Palette inside the frame never mounts a second instance.
+    expect((await inside(frame)).paletteHosts).toBe(0);
     expect(errors).toEqual([]);
     // Before: in place, the same sizes keep the browser window's desktop layout.
     await page.goto(`${origin}/?transform`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     await page.keyboard.press("l");
     await page.locator(".frame-bar").waitFor();
     for (const name of ["Mobile", "Tablet", "Wide"]) {
@@ -222,7 +222,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await page.waitForTimeout(200);
     // The same comment resolves on the same element in place.
     await page.goto(`${origin}/?transform`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     await page.keyboard.press("l");
     await page.locator(".frame-bar").waitFor();
     await pin.waitFor();
@@ -233,7 +233,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await comment(page, "card-4", "From in place", false);
     await page.locator('.pin[data-thread="thread-2"]').waitFor();
     await page.goto(`${origin}/`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     await page.keyboard.press("l");
     await viewportFrame(page);
     await page.locator('.pin[data-thread="thread-2"]').waitFor();
@@ -318,7 +318,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     const frame = await viewportFrame(page);
     const pin = page.locator('.pin[data-thread="home"]');
     await pin.waitFor();
-    // Focus inside the frame: komo's shortcuts still work.
+    // Focus inside the frame: Palette's shortcuts still work.
     await frame.locator("#title").click();
     expect(await frame.evaluate(() => document.hasFocus())).toBe(true);
     await page.keyboard.press("c");
@@ -330,7 +330,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     await page.keyboard.type("cv");
     expect(await frame.locator("#field").inputValue()).toBe("cv");
     expect(await page.locator(".catch").isVisible()).toBe(false);
-    // A client-side route inside the frame is a new page for komo; the parent URL stays.
+    // A client-side route inside the frame is a new page for Palette; the parent URL stays.
     await frame.locator("#next").click();
     await expect.poll(() => frame.evaluate(() => location.pathname)).toBe("/other");
     await pin.waitFor({ state: "detached" });
@@ -552,7 +552,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     page.setDefaultTimeout(6000);
     await page.goto(`${origin}/`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     await page.evaluate(() => scrollTo(0, 240));
     const snapshot = () => page.evaluate(() => [scrollY, ...["main", "body", "html"].map((selector) => document.querySelector(selector)!.getAttribute("style"))]);
     const original = await snapshot();
@@ -580,7 +580,7 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     expect(await page.locator("iframe[data-komo-viewport]").count()).toBe(0);
     expect(await page.locator(".frame-stage").count()).toBe(0);
     expect(await snapshot()).toEqual(original);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     expect(await snapshot()).toEqual(original);
     await page.close();
   });
@@ -837,7 +837,7 @@ describe.skipIf(!chrome)("Frame's compact bar", () => {
     await page.close();
   });
 
-  it("yields Shift+1 to a komo shortcut configured on it, and lists the zoom keys in shortcut help", async () => {
+  it("yields Shift+1 to a Palette shortcut configured on it, and lists the zoom keys in shortcut help", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await open(page, "?inplace&keys");
     await page.keyboard.press("Shift+Digit0");
