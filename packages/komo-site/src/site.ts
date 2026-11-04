@@ -169,12 +169,9 @@ mountUsageScene();
 mountConnectScene();
 mountFrameworkTabs();
 const review = initKomo({
-  // Preview API versions are selected by the same-origin Worker gateway.
-  endpoint: /^[a-z0-9-]+-komo-site\.off-brand\.workers\.dev$/.test(
-    location.hostname,
-  )
-    ? location.origin
-    : undefined,
+  // The site's Worker gateway serves the API on the same origin and selects
+  // preview API versions.
+  endpoint: location.origin,
   // These previews and the gateway are owned by us and use the same API.
   sessionDomain: "off-brand.workers.dev",
   sessionEndpoint: "https://komo.offbr.co",

@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { icon } from "../src/dom";
-import { initComments } from "../src/index";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { initComments, initPalette } from "../src/index";
+import { usePalette } from "../src/react";
+import { definePalette } from "../src/setup";
 import type { CommentsController, CommentsOptions } from "../src/types";
 
 let controller: CommentsController | undefined;
@@ -1431,4 +1435,49 @@ it.each([1, 3])("keeps route, tags and %s reply previews separate from thread na
   expect(url.searchParams.get("view")).toBe("week");
   expect(url.searchParams.get("comment")).toBe(main.id);
   localStorage.clear();
+});
+
+const missingEndpoint =
+  "Palette: set `endpoint` to your Palette server (see the self-hosting guide).";
+const mounted = () => [...document.body.children].some((node) => node.shadowRoot);
+
+it("stays inert with one console error when no endpoint is configured", () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  const inert = initPalette({ project: "fixture" });
+  expect(error).toHaveBeenCalledTimes(1);
+  expect(error).toHaveBeenCalledWith(missingEndpoint);
+  inert.open();
+  inert.comment(document.body);
+  inert.close();
+  inert.destroy();
+  expect(mounted()).toBe(false);
+  expect(definePalette({ project: "fixture" })()).toBeDefined();
+  expect(error).toHaveBeenCalledTimes(2);
+  expect(mounted()).toBe(false);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("mounts unchanged when the host or generated helper passes an endpoint", () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  controller = initPalette({ endpoint: "https://example.test", project: "fixture" });
+  expect(mounted()).toBe(true);
+  controller.destroy();
+  controller = definePalette({ endpoint: "https://example.test", project: "fixture" })();
+  expect(mounted()).toBe(true);
+  expect(error).not.toHaveBeenCalledWith(missingEndpoint);
+});
+
+it("usePalette without an endpoint renders nothing and does not throw", async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const App = () => (usePalette({ project: "fixture" }), null);
+  await act(async () => root.render(createElement(App)));
+  expect(error).toHaveBeenCalledWith(missingEndpoint);
+  expect(mounted()).toBe(false);
+  await act(async () => root.unmount());
 });

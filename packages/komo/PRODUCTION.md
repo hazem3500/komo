@@ -1,5 +1,7 @@
 # Production readiness
 
+> This file records upstream komo's own hosted service at `komo.offbr.co`, which a different operator runs. It is kept as history. Palette has no hosted default; to run your own server, see [Self-host](./README.md#self-host) or the [Node self-hosting guide](./NODE.md).
+
 Status: working preview / controlled beta. Not ready for an unrestricted public launch.
 
 ## Verified

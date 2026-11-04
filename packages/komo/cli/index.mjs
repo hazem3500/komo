@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
-import { branchName, clientModule, gitValue, projectLayout, repository } from "./config.mjs";
+import { branchName, clientModule, gitValue, projectLayout, repository, setting } from "./config.mjs";
 
 import { installAgentWorkflow } from "./workflow.mjs";
 import { agentCommands, agentHelp, runAgent } from "./agent.mjs";
@@ -208,8 +208,12 @@ async function init() {
     if (!selfHosted && !nodeHosted) {
       const endpoint =
         flag("--endpoint") ||
-        (resuming ? previous.endpoint : "") ||
-        "https://komo.offbr.co";
+        setting(process.env, "ENDPOINT") ||
+        (resuming ? previous.endpoint : "");
+      if (!endpoint)
+        throw Error(
+          "Palette has no default server. Pass --endpoint URL or set PALETTE_ENDPOINT to your Palette server, or self-host with palette init --node (see NODE.md) or palette init --self-host."
+        );
       const api = new URL(endpoint);
       if (
         api.protocol !== "https:" &&
@@ -226,7 +230,7 @@ async function init() {
         setup.expiresAt <= Date.now() ||
         flag("--origin") ||
         flag("--repo") ||
-        flag("--endpoint")
+        endpoint !== previous?.endpoint
       ) {
         setup = {
           ...(await request(endpoint, "/setup/start", { repo, origins })),
@@ -381,7 +385,7 @@ async function init() {
 try {
   if (args.includes("--help") || !command)
     console.log(
-      `Palette\n\n  palette init          Create a Google-owned hosted workspace\n  palette init --self-host  Deploy your own Worker and D1 database\n  palette init --node       Prepare a Node/PostgreSQL project\n  palette deploy        Resume self-hosted deployment\n  palette sync          Regenerate client settings; detect the current branch\n\nOptions: --origin URL --endpoint API_URL --repo OWNER/REPO --branch-scope\nSelf-host: --google-client-id ID; Node: --preview-origin HTTPS_WILDCARD\n\nComments are shared across deployments unless --branch-scope is set.${
+      `Palette\n\n  palette init --endpoint API_URL  Connect to an existing Palette server\n  palette init --self-host  Deploy your own Worker and D1 database\n  palette init --node       Prepare a Node/PostgreSQL project\n  palette deploy        Resume self-hosted deployment\n  palette sync          Regenerate client settings; detect the current branch\n\nOptions: --origin URL --endpoint API_URL --repo OWNER/REPO --branch-scope\nSelf-host: --google-client-id ID; Node: --preview-origin HTTPS_WILDCARD\n\nComments are shared across deployments unless --branch-scope is set.${
         agentHelp
       }`
     );

@@ -12,9 +12,7 @@ const cli = fileURLToPath(new URL("../cli/index.mjs", import.meta.url));
 const config = { endpoint: "https://api.example.com", project: "project-id" };
 describe("simple Palette setup", () => {
   it("defaults to project scope and requires a branch only when requested", () => {
-    expect(resolveConfig({ project: "project-id" }).endpoint).toBe(
-      "https://komo.offbr.co"
-    );
+    expect(resolveConfig({ project: "project-id" }).endpoint).toBe("");
     expect(resolveConfig(config)).toMatchObject({
       repo: "project-id",
       branch: "shared",
@@ -115,6 +113,41 @@ describe("simple Palette setup", () => {
       ).rejects.toThrow();
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+  it("has no default server: commands require --endpoint, PALETTE_ENDPOINT, or saved settings", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "palette-cli-endpoint-"));
+    const env = { ...process.env, PALETTE_ENDPOINT: "", KOMO_ENDPOINT: "", PALETTE_TOKEN: "test", KOMO_TOKEN: "" };
+    const stderr = (args: string[], extra = {}) =>
+      promisify(execFile)(process.execPath, [cli, ...args], {
+        cwd: dir,
+        env: { ...env, ...extra },
+        timeout: 10000,
+      }).then(
+        () => "",
+        (error: { stderr: string }) => error.stderr
+      );
+    try {
+      const init = await stderr(["init"]);
+      expect(init).toContain("no default server");
+      expect(init).toContain("--endpoint");
+      expect(init).toContain("PALETTE_ENDPOINT");
+      expect(init).toContain("--self-host");
+      await expect(access(join(dir, ".palette"))).rejects.toThrow();
+      const list = await stderr(["comments", "list", "--project", "fixture"]);
+      expect(list).toContain("No Palette server configured");
+      expect(list).toContain("PALETTE_ENDPOINT");
+      // The older KOMO_ENDPOINT is still read; this one fails URL validation offline.
+      expect(
+        await stderr(["comments", "list", "--project", "fixture"], {
+          KOMO_ENDPOINT: "http://public.example.test",
+        })
+      ).toContain("Use HTTPS");
+      expect(
+        await stderr(["init"], { KOMO_ENDPOINT: "http://public.example.test" })
+      ).toContain("must use HTTPS");
+    } finally {
       await rm(dir, { recursive: true, force: true });
     }
   });

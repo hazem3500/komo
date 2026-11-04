@@ -13,14 +13,16 @@ Review actions update immediately while saving in the background. Failed writes 
 
 ```sh
 npm install @hazem3500/palette
-npx @hazem3500/palette init
 ```
 
 Requires Node.js 22 or newer. The package was published as `@hazem3500/komo` before the rename.
 
-The setup command detects your Git repository, creates a project, and asks you to sign in with Google. It prints a public project key and a ready-to-paste inline configuration. It also saves settings to `.palette/project.json` and generates an optional `palette.config.js` helper.
+Palette has no hosted default. Comments go to a Palette server that you run, and every install sets `endpoint` to it. Start a server first:
 
-Hosted onboarding is available through the dedicated Palette service. Self-hosting is available through the same CLI.
+- **Node and PostgreSQL**, including Cloud Run: run `npx @hazem3500/palette init --node` and follow the [Node self-hosting guide](./packages/komo/NODE.md).
+- **Cloudflare Worker and D1**: run `npx @hazem3500/palette init --self-host`; see [Self-host](#self-host).
+
+Both print the `endpoint` and project key for your site. If your team already runs a Palette server with hosted setup turned on (`PALETTE_HOSTED=true`), connect to it with `npx @hazem3500/palette init --endpoint https://palette.example.com`; see [Hosted setup](#hosted-setup).
 
 ## Usage
 
@@ -28,13 +30,17 @@ Mount after the page has loaded:
 
 ```js
 import { initPalette } from '@hazem3500/palette';
-initPalette({ project: 'YOUR_PROJECT_KEY' });
+initPalette({
+  endpoint: 'https://palette.example.com',
+  project: 'YOUR_PROJECT_KEY',
+});
 ```
 
 Optional configuration stays at the call site:
 
 ```js
 initPalette({
+  endpoint: 'https://palette.example.com',
   project: 'YOUR_PROJECT_KEY',
   enabled: import.meta.env.DEV || import.meta.env.PUBLIC_PREVIEW === 'true',
   pageRoot: document.querySelector('#app'),
@@ -50,14 +56,17 @@ With React 18.2 or 19, call the hook once near your app root:
 import { usePalette } from '@hazem3500/palette/react';
 
 export function Palette() {
-  usePalette({ project: 'YOUR_PROJECT_KEY' });
+  usePalette({
+    endpoint: 'https://palette.example.com',
+    project: 'YOUR_PROJECT_KEY',
+  });
   return null;
 }
 ```
 
 Render `<Palette />` in your app or layout. The hook handles mounting, cleanup, and React Strict Mode. Inline configuration objects are supported; unchanged values do not restart Palette. Changing configuration remounts it, and `enabled: false` removes it. Memoize callback options with `useCallback` and pass stable DOM elements for `pageRoot` or `drawerContainer`. Mount only one hook per page; do not combine it with a separate `initPalette()` call. Server rendering does not mount the tool.
 
-The **endpoint is the comments API**, not your website or preview URL. Hosted Palette defaults to `https://komo.offbr.co`. Google sign-in returns to `https://komo.offbr.co/auth/google/callback`, regardless of the website embedding Palette. For self-hosting, pass the Worker URL as `endpoint`. Your current page comes from the browser. Setup detects repository metadata from Git; include its printed `repo` value to enrich agent prompts.
+The **endpoint is the comments API**, your Palette server, not your website or preview URL. It is required: without it, Palette logs an error and does not mount. Google sign-in returns to `ENDPOINT/auth/google/callback`, regardless of the website embedding Palette. Your current page comes from the browser. Setup detects repository metadata from Git; include its printed `repo` value to enrich agent prompts.
 
 Comments are shared across deployments by default. Use `pnpm exec palette init --branch-scope` to separate them by branch. For automatic branch detection, import from the optional generated `palette.config.js` helper and run `palette sync` before builds. It detects the current branch from deployment environment variables or Git; set `PALETTE_BRANCH` if neither is available. It fails rather than silently grouping unknown branches.
 
@@ -67,7 +76,7 @@ Comments are shared across deployments by default. Use `pnpm exec palette init -
 - Replies, reactions, author-only editing, resolution, and undo.
 - Searchable sidebar, draggable dock, and Google or guest profiles.
 - Copy open feedback with selectors, source paths, page URLs, replies, and geometry into an agent.
-- A separate Cloudflare Worker and D1 database, hosted or in your own account.
+- A separate Cloudflare Worker and D1 database in your own account, or a Node/PostgreSQL service.
 
 ## Agent CLI
 
@@ -120,7 +129,7 @@ Suggested agent workflow: list open threads, read a thread, inspect the reposito
 
 Give a bot its own revocable credential instead of sharing your login.
 
-1. **Create a token.** Sign in with Google at `/account` on your Palette server (`https://komo.offbr.co/account` when hosted). Name the token, pick an expiry, choose scopes, and optionally limit it to projects you own or have joined. The token is shown once; copy it into your secret manager. Guest sessions cannot create tokens.
+1. **Create a token.** Sign in with Google at `/account` on your Palette server. Name the token, pick an expiry, choose scopes, and optionally limit it to projects you own or have joined. The token is shown once; copy it into your secret manager. Guest sessions cannot create tokens.
 2. **Set `PALETTE_TOKEN`.** Export it in the bot's environment, or save it once with `printf %s "$PALETTE_TOKEN" | palette login --token` (stdin only; a token passed as an argument is refused). Check it with `palette whoami`. `palette logout` removes saved credentials.
 3. **Use the CLI as usual.** The project, endpoint, and origin come from `.palette/project.json` or the `PALETTE_*` overrides.
 
@@ -158,8 +167,10 @@ Projects default to link access. Owners can restrict feedback to invited Google 
 
 ## Hosted setup
 
+A Palette server with `PALETTE_HOSTED=true` lets Google users create their own workspaces. Point the CLI at it:
+
 ```sh
-pnpm exec palette init
+pnpm exec palette init --endpoint https://palette.example.com
 ```
 
 Open the link from your terminal. Setup uses Palette’s sidebar account modal: sign in with Google, then select **Create project**. Local development is ready immediately.
@@ -168,7 +179,7 @@ Approve your deployed website in **Approved sites**. Palette detects deployment 
 
 The setup page manages your account and approved sites. Leave comments on the website where you installed Palette.
 
-Return to `/setup?workspace=<project key>` to approve additional sites (up to ten). Only the Google owner can approve sites. The site address controls where that owner’s project can be embedded; it does not grant ownership of a domain or access to other projects. The API endpoint is the Palette service, not your website URL.
+Return to `/setup?workspace=<project key>` to approve additional sites (up to ten). Only the Google owner can approve sites. The site address controls where that owner’s project can be embedded; it does not grant ownership of a domain or access to other projects. The API endpoint is your Palette server, not your website URL.
 
 Starter limits per owner/workspace:
 
@@ -213,11 +224,11 @@ Self-hosted storage belongs to your Cloudflare account; its service limits and c
 
 Pass these to `initPalette(config)` from `@hazem3500/palette` or `usePalette(config)` from `@hazem3500/palette/react`.
 
-`YOUR_PROJECT_KEY` is a placeholder for a string. Hosted Palette generates the key during `palette init`; copy that value. For self-hosting, use the project identifier configured on your server. Reuse the same key across sites that should share feedback.
+`YOUR_PROJECT_KEY` is a placeholder for a string. Hosted setup (`palette init --endpoint`) generates the key; copy that value. For self-hosting, use the project identifier configured on your server. Reuse the same key across sites that should share feedback.
 
 | Option | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `endpoint` | `string` | Hosted Palette API | Comments API root; HTTPS outside localhost. |
+| `endpoint` | `string` | Required | Your Palette server's API root; HTTPS outside localhost. Without it, Palette logs an error and does not mount. |
 | `project` | `string` | Required | Public project identifier returned by setup. |
 | `repo` | `string` | Project key | Repository identifier, usually `owner/repo`. |
 | `scope` | `"project" \| "branch"` | `"project"` | `"project"` shares comments; `"branch"` separates branches. |
@@ -240,12 +251,12 @@ The returned controller has `open()`, `close()`, `comment(element)`, `refresh()`
 
 | Command / flag | Purpose |
 | --- | --- |
-| `palette init` | Create a Google-owned hosted workspace. |
+| `palette init --endpoint URL` | Create a Google-owned workspace on a server with hosted setup turned on. |
 | `palette init --self-host` | Create your Worker and D1 database. |
 | `palette sync` | Regenerate the public client helper. Run before dev/build. |
 | `palette deploy` | Resume or redeploy generated self-host infrastructure. |
 | `--origin URL` | Optional website address. Otherwise detected from Cloudflare Pages, Vercel, or Netlify; defaults to localhost. |
-| `--endpoint URL` | Override hosted API or self-host deployment URL. |
+| `--endpoint URL` | Your Palette server (or `PALETTE_ENDPOINT`). Required; there is no default. |
 | `--repo OWNER/REPO` | Override Git detection. |
 | `--branch-scope` | Opt into separate comments per branch. |
 | `--google-client-id ID` | Self-hosted Google OAuth client ID. |
@@ -347,4 +358,4 @@ npx @hazem3500/palette project import --file /path/to/comments.json
 
 Exports include threads, replies, reactions, anchors, and historical profiles across all pages and branches, including resolved feedback. They exclude sessions, credentials, verified emails, and membership. Imports use the destination repository and keep imported authors unverified. Retrying the same export is safe; existing imported records are not overwritten. Destination quotas still apply. Export retries are required if feedback changes while downloading. Keep export files private.
 
-Upgrade self-hosted deployments with `npm install @hazem3500/palette@latest` then `npx @hazem3500/palette deploy`; the CLI applies bundled database migrations before redeploying. Self-hosted project removal is controlled by your Worker configuration. Account-wide data requests remain available at ty@offbr.co.
+Upgrade self-hosted deployments with `npm install @hazem3500/palette@latest` then `npx @hazem3500/palette deploy`; the CLI applies bundled database migrations before redeploying. Self-hosted project removal is controlled by your Worker configuration.
