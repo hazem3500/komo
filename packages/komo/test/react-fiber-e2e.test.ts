@@ -66,6 +66,7 @@ const panelFields = (page: Page) =>
     const group = host.shadowRoot!.querySelector(".design-react-group")!;
     return {
       className: group.className,
+      empty: group.hasAttribute("data-empty"),
       heading: group.querySelector(".design-react-name")?.textContent,
       status: group.querySelector(".design-react-status")?.textContent,
       note: group.querySelector(".komo-source__button")?.getAttribute("title"),
@@ -76,19 +77,17 @@ const panelFields = (page: Page) =>
   });
 
 describe.skipIf(!chrome).each([18, 19] as const)("react-fiber adapter in the demo with React %i", (react) => {
-  it("shows discovered, read-only props and the source for an unregistered component", async () => {
+  it("shows the name and source, but no undeclared props, for an unregistered component", async () => {
     const { page, errors } = await open(react, { width: 1280, height: 800 });
     expect(await page.evaluate(() => (window as any).React?.version ?? document.querySelector("script[data-bundle]")?.getAttribute("data-bundle"))).toContain(react === 18 ? "-18" : "react-props.js");
     await pick(page, ".team-badge", { x: 4, y: 4 });
     const panel = await panelFields(page);
     expect(panel.className).toContain("design-react-discovered");
     expect(panel.heading).toBe("TeamBadge");
-    expect(panel.status).toBe("Read-only");
+    expect(panel.status).toBeUndefined();
+    expect(panel.empty).toBe(true);
     expect(panel.note).toMatch(/^examples\/react-props\/src\/main\.tsx:\d+/);
-    expect(panel.fields.team).toEqual({ value: '"Design systems"', disabled: false });
-    expect(panel.fields.seats.value).toBe("12");
-    expect(panel.fields.active.value).toBe("true");
-    for (const field of ["owner", "onOpen", "authToken", "tags"]) expect(panel.fields[field]).toBeUndefined();
+    expect(panel.fields).toEqual({});
     expect(panel.editable).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
@@ -107,7 +106,7 @@ describe.skipIf(!chrome).each([18, 19] as const)("react-fiber adapter in the dem
     await page.close();
   });
 
-  it.each([false, true])("edits discovered primitives with preview/reset in Frame=%s and keeps theme Escape local", async frame => {
+  it.each([false, true])("edits declared props of a discovered component with preview/reset in Frame=%s and keeps theme Escape local", async frame => {
     const { page, errors } = await open(react, { width: 1280, height: 800 }, `&edit&theme&tokens=classes${frame ? "&shell&sidebar=frame" : ""}`);
     await pick(page, ".team-badge", { x: 4, y: 4 });
     const team = page.getByRole("textbox", { name: "TeamBadge team", exact: true });

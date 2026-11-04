@@ -237,7 +237,7 @@ initKomo({ project, design: { tokens: discoverCssTokens() } });
 
 #### Discovering React components
 
-`discoverReactComponents()` from `@hazem3500/komo/adapters/react-fiber` finds the React component behind a picked element, so Design mode can show its name, props and where it was rendered without registering each component by hand. It is **opt-in and off by default**, and it is the one place komo reads React's private fields. Use it in development builds.
+`discoverReactComponents()` from `@hazem3500/komo/adapters/react-fiber` finds the React component behind a picked element, so Design mode can show its name and where it was rendered without registering each component by hand. It is **opt-in and off by default**, and it is the one place komo reads React's private fields. Use it in development builds.
 
 ```ts
 import { discoverReactComponents } from "@hazem3500/komo/adapters/react-fiber";
@@ -247,7 +247,7 @@ initKomo({ project, design: { components: discoverReactComponents() } });
 ```
 
 - **What it reads.** The `__reactFiber$*` key React puts on DOM nodes (or, when present, the renderers of `window.__REACT_DEVTOOLS_GLOBAL_HOOK__`), then `return`/`child` links, `memoizedProps`, `_debugSource` (React 18) and `_debugStack` (React 19 dev). It climbs from the picked element, through shadow hosts, to the nearest function, class, `forwardRef` or `memo` component, and picks that fiber's current copy so props are not stale after updates. Several React roots and renderers on a page are fine.
-- **Useful props first.** Strings, finite numbers and booleans appear under the component's name, marked **Read-only**. Callbacks, refs, undefined values, React children, opaque objects and framework internals are omitted without invoking getters. Technical primitive attributes are in collapsed **Advanced attributes**; `aria-label` stays with useful props. Secret-looking names and `redact(name)` matches are excluded from both the panel and proposals. `maxProps` (24) and `maxString` (80) bound the display.
+- **Only declared props.** The panel shows the component's name, and lists only the props you declare through `schema`. Undeclared props are not shown. Comments still get up to `maxProps` (24) of its strings, finite numbers and booleans as context, read without invoking getters. Callbacks, refs, React children, opaque objects, technical attributes, secret-looking names and `redact(name)` matches are always left out.
 - **Location and precedence.** The ⓘ beside the component name holds the JSX call site (`file:line`) with Copy, and Open when `sourceUrl` can link a repository-relative path. Use `resolveSource(file, line, column)` to map bundled locations. Explicit `useKomoInspectable` registrations and your own `adapter` win. A descendant points to its component root; props edit that instance only.
 - **Runtime editing is optional.** Import `@hazem3500/komo/adapters/react-preview` before the first `react-dom/client` import, then use `discoverReactComponents({ edit: true })`. The separate bootstrap captures React 18/19 development renderer capabilities, preserves an existing DevTools hook, and calls the renderer's own prop override method. It never assigns Fiber fields. Production and unsupported renderers, or renderers whose capabilities were not captured, stay read-only. Discovered class components need an explicit editor/registration. Import order matters: calling the installer after React has loaded cannot recover missing renderer capabilities. In Viewport, komo edits through the framed app's own React and bootstrap, so keep the import in the app entry that the frame loads.
 
@@ -255,10 +255,15 @@ initKomo({ project, design: { components: discoverReactComponents() } });
 // First import in the app's development entry, before its React/router graph.
 import "@hazem3500/komo/adapters/react-preview";
 // In the lazily enabled feedback configuration:
-const components = discoverReactComponents({ edit: true });
+const components = discoverReactComponents({
+  edit: true,
+  schema: identity => identity.name === "Button"
+    ? [{ name: "label", kind: "string", required: true, typeLabel: "string" }]
+    : undefined,
+});
 ```
 
-Primitive controls use current prop types. Declare optional or enum controls through `schema(identity)` when you have component metadata; runtime discovery cannot infer a union from one string. Edits stay applied through parent re-renders, suspend outside Design, and support Before/After, Undo, per-field Reset and Reset all. Reset restores the pre-edit value and releases the override; unmounting never transfers it to another instance. These are runtime previews, with proposed changes available for comments, not source edits.
+`schema(identity)` lists the editable props of each component; komo does not guess them from current values. A component without one gets no controls. Edits stay applied through parent re-renders, suspend outside Design, and support Before/After, Undo, per-field Reset and Reset all. Reset restores the pre-edit value and releases the override; unmounting never transfers it to another instance. These are runtime previews, with proposed changes available for comments, not source edits.
 
 For a framework-independent integration, a `ComponentAdapter` may supply `editor(identity)` returning a stable `ComponentEditor` with `schema`, `read()` and `apply(next)`. Apply through the app's state or supported renderer API, preserve other props, and keep the preview stable through re-renders. Optional `available()` rejects detached instances; `release(properties)` stops retaining overrides after baseline restoration, and `subscribe(listener)` refreshes computed controls after a render commits. Existing `useKomoInspectable` registrations remain supported and take precedence.
 

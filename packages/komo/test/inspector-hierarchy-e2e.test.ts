@@ -249,7 +249,7 @@ describe.skipIf(!chrome).each(modes)("inspector hierarchy in %s", mode => {
     await page.close();
   });
 
-  it("edits schema enums and switches on discovered components, labels read-only props and drops empty bodies", async () => {
+  it("edits schema enums and switches on discovered components, hides undeclared props and drops empty bodies", async () => {
     const page = await open(mode, "case=discovered");
     const card = page.locator("#app article");
     expect(await page.locator(".design-react-group summary").first().textContent()).toBe("Card");
@@ -261,9 +261,9 @@ describe.skipIf(!chrome).each(modes)("inspector hierarchy in %s", mode => {
     await page.close();
     const readonly = await open(mode, "case=readonly");
     const discovered = readonly.locator(".design-react-discovered");
-    expect(await discovered.locator("summary").textContent()).toBe("CardRead-only");
-    expect(await discovered.locator("input[readonly]").count()).toBe(3);
-    expect(await discovered.locator('[aria-label="title (discovered, read-only)"]').inputValue()).toBe('"Weekly summary"');
+    expect(await discovered.locator("summary").textContent()).toBe("Card");
+    expect(await discovered.getAttribute("data-empty")).toBe("");
+    expect(await discovered.locator("input, select, .design-react-field, .design-react-status").count()).toBe(0);
     await readonly.getByRole("button", { name: "Card source", exact: true }).click();
     const popup = readonly.getByRole("dialog", { name: "Card source", exact: true });
     expect(await popup.getByRole("button", { name: "Copy source path", exact: true }).count()).toBe(1);

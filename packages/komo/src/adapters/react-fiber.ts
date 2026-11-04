@@ -9,9 +9,10 @@
 // unexpected yields "no component" rather than an error. komo's core never reads them, so this
 // entry point is outside the core bundle and off unless an app installs it.
 //
-// Useful primitive props are shown without invoking getters or callbacks. Runtime editing
-// is opt-in and uses capabilities supplied by the separate React preview bridge. Explicitly
-// registered components always take precedence.
+// Primitive props are read for comment context without invoking getters or callbacks; the
+// panel shows no prop it was not told about. Runtime editing is opt-in, limited to props
+// declared through `schema`, and uses capabilities supplied by the separate React preview
+// bridge. Explicitly registered components always take precedence.
 import type { ComponentAdapter, ComponentEditor, ComponentIdentity, ComponentProperty, ComponentPropValue } from "../design-system.js";
 import type { ReactPreviewBridge, ReactPreviewRequest } from "./react-preview.js";
 
@@ -20,7 +21,7 @@ export interface DiscoverReactComponentsOptions {
   adapter?: ComponentAdapter;
   /** Enable runtime editing when the optional react-preview bridge supports this renderer. */
   edit?: boolean;
-  /** Declare enums or optional props that discovery cannot infer from their current values. */
+  /** The editable props of a discovered component; return undefined to leave it read-only. */
   schema?: (identity: ComponentIdentity) => ComponentProperty[] | undefined;
   /** Component names to show; return false to skip a component (e.g. library wrappers). */
   include?: (name: string) => boolean;
@@ -32,24 +33,20 @@ export interface DiscoverReactComponentsOptions {
   resolveSource?: (file: string, line: number, column: number) => string | undefined;
   /** Prop names whose values are never shown, in addition to secret-looking names. */
   redact?: (name: string) => boolean;
-  /** Most props listed; default 24. */
+  /** Most props kept for comment context; default 24. */
   maxProps?: number;
   /** @deprecated Opaque values are no longer displayed. */
   maxDepth?: number;
   /** @deprecated Opaque values are no longer displayed. */
   maxItems?: number;
-  /** Longest string shown; default 80. */
+  /** @deprecated Prop values are no longer displayed. */
   maxString?: number;
   /** @deprecated Only bounded primitive values are displayed. */
   maxValue?: number;
 }
 
-/** What `identify` found, kept beside the plain identity for the read-only panel. */
+/** The fiber `identify` found, kept beside the plain identity. */
 interface Discovery {
-  props: Array<[name: string, text: string]>;
-  hidden: number;
-  location?: string;
-  advanced: Array<[name: string, text: string]>;
   fiber: Fiber;
 }
 
@@ -216,25 +213,8 @@ function locate(fiber: Fiber, resolve?: DiscoverReactComponentsOptions["resolveS
   return typeof stack === "string" ? fromStack(stack, resolve) : undefined;
 }
 
-/** A read-only `design-react-field` row, styled like the registered props. */
-function row(name: string, value: string): HTMLElement {
-  const label = document.createElement("label");
-  label.className = "design-field design-react-field";
-  const caption = document.createElement("span");
-  caption.textContent = name;
-  caption.title = name;
-  const input = document.createElement("input");
-  input.value = value;
-  input.title = value;
-  input.readOnly = true;
-  input.setAttribute("aria-label", `${name} (discovered, read-only)`);
-  label.append(caption, input);
-  return label;
-}
-
 /** A `ComponentAdapter` that finds the nearest React component for a picked element. */
 export function discoverReactComponents(options: DiscoverReactComponentsOptions = {}): ComponentAdapter {
-  const maxString = Math.max(8, options.maxString ?? 80);
   const editors = new WeakMap<Fiber, ComponentEditor>();
   const maxProps = Math.max(1, options.maxProps ?? 24);
   const hidden = (name: string) => secret.test(name) || !!attempt(() => options.redact?.(name));
@@ -252,22 +232,17 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
     if (!name || minified.test(name) || (options.include && !options.include(name))) return null;
     const props = isFiber(fiber.memoizedProps) ? fiber.memoizedProps : {};
     const keys = attempt(() => Object.keys(props)) ?? [];
-    const listed: Array<[string, string]> = [];
     const plain: Record<string, ComponentPropValue> = {};
-    const advanced: Array<[string, string]> = [];
-    let hiddenCount = 0;
+    let kept = 0;
     for (const key of keys) {
       const descriptor = Object.getOwnPropertyDescriptor(props, key);
       if (!descriptor || !("value" in descriptor)) continue;
       const value = descriptor.value;
       if (hidden(key) || ignored(key)) continue;
-      if (value === null) { if (!technical(key)) plain[key] = null; continue; }
-      if (value === undefined ||
-        !(typeof value === "string" || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)))) continue;
-      if ((technical(key) ? advanced : listed).length >= maxProps) { hiddenCount++; continue; }
-      const display = typeof value === "string" ? JSON.stringify(text(value, maxString)) : String(value);
-      if (technical(key)) advanced.push([key, display]);
-      else { listed.push([key, display]); plain[key] = value as ComponentPropValue; }
+      if (technical(key)) continue;
+      if (value === null) { plain[key] = null; continue; }
+      if (!(typeof value === "string" || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)))) continue;
+      if (kept++ < maxProps) plain[key] = value;
     }
     const location = locate(fiber, options.resolveSource);
     const identity: ComponentIdentity = {
@@ -276,7 +251,7 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
       element: rootElement(fiber) ?? element,
       ...(location ? { source: location } : {}),
     };
-    discoveries.set(identity, { props: listed, advanced, hidden: hiddenCount, location, fiber });
+    discoveries.set(identity, { fiber });
     return identity;
   }
 
@@ -296,9 +271,8 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
       const prior = editors.get(found.fiber) ?? (found.fiber.alternate && editors.get(found.fiber.alternate));
       if (prior && prior.available?.() !== false) return prior;
       const declared = attempt(() => options.schema?.(identity));
-      const schema: ComponentProperty[] = (declared ?? Object.entries(identity.props ?? {}).filter(([, value]) => value !== null).map(([name, value]) => ({
-        name, kind: typeof value as "string" | "number" | "boolean", required: true, typeLabel: typeof value,
-      }))).filter(prop => !hidden(prop.name) && !ignored(prop.name) && prop.kind !== "unsupported");
+      if (!declared) return null;
+      const schema = declared.filter(prop => !hidden(prop.name) && !ignored(prop.name) && prop.kind !== "unsupported");
       const read: ReactPreviewRequest["current"] = () => attempt(() => {
         const snapshot = current(found.fiber);
         if (!snapshot) return null;
@@ -321,30 +295,9 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
       const name = document.createElement("span");
       name.className = "design-react-name";
       name.textContent = name.title = identity.name;
-      const status = document.createElement("small");
-      status.className = "design-react-status";
-      status.textContent = "Read-only";
-      status.title = options.edit ? "Runtime editing needs the React preview bridge loaded before a supported development renderer, or a component editor adapter." : "Enable a component editor adapter or React runtime previews to edit these props.";
-      const empty = !found.props.length && !found.advanced.length && !found.hidden;
-      summary.append(name, ...(empty ? [] : [status]));
-      group.toggleAttribute("data-empty", empty);
+      summary.append(name);
+      group.setAttribute("data-empty", "");
       group.append(summary);
-      for (const [name, value] of found.props) group.append(row(name, value));
-      if (found.advanced.length) {
-        const advanced = document.createElement("details");
-        advanced.className = "design-react-advanced";
-        const label = document.createElement("summary");
-        label.textContent = "Advanced attributes";
-        advanced.append(label);
-        for (const [name, value] of found.advanced) advanced.append(row(name, value));
-        group.append(advanced);
-      }
-      if (found.hidden) {
-        const more = document.createElement("small");
-        more.className = "design-react-source";
-        more.textContent = `+${found.hidden} more props not shown`;
-        group.append(more);
-      }
       return group;
     },
   };
