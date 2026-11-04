@@ -12,7 +12,7 @@ export function normalizeToolbarItems(items: unknown): readonly ToolbarItem[] {
     for (const item of items)
       if (item === "|" || (builtIn.has(item) && !result.includes(item))) result.push(item);
       else ignored.push(item);
-  if (ignored.length) console.warn(`komo: ignoring invalid or repeated toolbar.items: ${ignored.map(item => String(JSON.stringify(item))).join(", ")}.`);
+  if (ignored.length) console.warn(`Palette: ignoring invalid or repeated toolbar.items: ${ignored.map(item => String(JSON.stringify(item))).join(", ")}.`);
   return Array.isArray(items) ? result : defaultToolbarItems;
 }
 

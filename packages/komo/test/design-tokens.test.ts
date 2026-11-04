@@ -17,9 +17,9 @@ import {
 } from "../src/design-tokens.js";
 import * as panelFields from "../src/design-panel.js";
 import { createDesignThemePanel, createElementTokenControl, noteDesignTokenOverride, resetPreviews } from "../src/react-props-panel.js";
-import type { KomoDesignToken } from "../src/design-tokens.js";
+import type { PaletteDesignToken } from "../src/design-tokens.js";
 
-const tokens: KomoDesignToken[] = [
+const tokens: PaletteDesignToken[] = [
   { path: "color.brand", cssVariable: "--brand", type: "color", properties: ["color", "background-color"], impactSelector: ".card[data-theme='brand']" },
   { path: "spacing.card", cssVariable: "--space-card", type: "dimension", properties: ["padding", "gap"], impactSelector: ".card" },
 ];
@@ -89,7 +89,7 @@ describe("explicit design-token preview bridge", () => {
   });
 
   it("keeps compatible token choices on the style knob and preserves explicit overrides", async () => {
-    document.body.innerHTML = '<main><article class="card" data-theme="brand"></article><div id="komo"></div></main>';
+    document.body.innerHTML = '<main><article class="card" data-theme="brand"></article><div id="palette"></div></main>';
     const root = document.documentElement;
     root.style.setProperty("--brand", "#224466");
     const cleanup = registerDesignTokenSource(root, tokens);
@@ -212,7 +212,7 @@ describe("explicit design-token preview bridge", () => {
 
   it("groups long token lists by their first path segment", () => {
     document.body.innerHTML = '<main><article class="card"></article></main>';
-    const many: KomoDesignToken[] = ["a", "b", "c", "d"].flatMap((name) => [
+    const many: PaletteDesignToken[] = ["a", "b", "c", "d"].flatMap((name) => [
       { path: `color.${name}`, cssVariable: `--color-${name}`, type: "color", properties: ["color"], impactSelector: ".card" },
       { path: `radius.${name}`, cssVariable: `--radius-${name}`, type: "dimension", properties: ["border-radius"], impactSelector: ".card" },
     ]);
@@ -224,8 +224,8 @@ describe("explicit design-token preview bridge", () => {
   });
 
   it("shows the token section only for explicitly registered page roots", async () => {
-    document.body.innerHTML = '<article class="card"></article><div id="komo"></div>';
-    const host = document.querySelector<HTMLElement>("#komo")!;
+    document.body.innerHTML = '<article class="card"></article><div id="palette"></div>';
+    const host = document.querySelector<HTMLElement>("#palette")!;
     const card = document.querySelector<HTMLElement>(".card")!;
     const root = document.documentElement;
     root.style.setProperty("--brand", "#224466");
@@ -272,11 +272,11 @@ describe("explicit design-token preview bridge", () => {
   });
 
   it("keeps stylesheet token provenance through custom overrides and rebinding", async () => {
-    document.body.innerHTML = '<style>.card { display: flex; padding: var(--space-card); }</style><main><article class="card"></article></main><div id="komo"></div>';
+    document.body.innerHTML = '<style>.card { display: flex; padding: var(--space-card); }</style><main><article class="card"></article></main><div id="palette"></div>';
     const root = document.documentElement;
     root.style.setProperty("--space-card", "28px");
     const cleanup = registerDesignTokenSource(root, tokens);
-    const host = document.querySelector<HTMLElement>("#komo")!;
+    const host = document.querySelector<HTMLElement>("#palette")!;
     const card = document.querySelector<HTMLElement>(".card")!;
     const shadow = host.attachShadow({ mode: "open" });
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
@@ -322,11 +322,11 @@ describe("explicit design-token preview bridge", () => {
   });
 
   it("binds a token inline as a chip on the field and detaches it back to the raw value", async () => {
-    document.body.innerHTML = '<main><article class="card">Card copy</article></main><div id="komo"></div>';
+    document.body.innerHTML = '<main><article class="card">Card copy</article></main><div id="palette"></div>';
     const root = document.documentElement;
     root.style.setProperty("--brand", "#224466");
     const cleanup = registerDesignTokenSource(root, tokens);
-    const host = document.querySelector<HTMLElement>("#komo")!;
+    const host = document.querySelector<HTMLElement>("#palette")!;
     const card = document.querySelector<HTMLElement>(".card")!;
     card.style.backgroundColor = "#ff0000";
     const shadow = host.attachShadow({ mode: "open" });
@@ -366,13 +366,13 @@ describe("explicit design-token preview bridge", () => {
   });
 
   it("hides a select field's own value under the token chip until the token is detached", async () => {
-    document.body.innerHTML = '<main><article class="card">Card copy</article></main><div id="komo"></div>';
+    document.body.innerHTML = '<main><article class="card">Card copy</article></main><div id="palette"></div>';
     const root = document.documentElement;
     root.style.setProperty("--weight-title", "600");
     const cleanup = registerDesignTokenSource(root, [
       { path: "typography.p1", cssVariable: "--weight-title", type: "fontWeight", properties: ["font-weight"], impactSelector: ".card" },
     ]);
-    const host = document.querySelector<HTMLElement>("#komo")!;
+    const host = document.querySelector<HTMLElement>("#palette")!;
     const card = document.querySelector<HTMLElement>(".card")!;
     const shadow = host.attachShadow({ mode: "open" });
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });

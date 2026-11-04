@@ -1,9 +1,12 @@
 import { initComments } from "./index.js";
-import { resolveConfig, type KomoConfig } from "./config.js";
-export type { KomoConfig } from "./config.js";
+import { resolveConfig, type PaletteConfig } from "./config.js";
+export type { PaletteConfig, KomoConfig } from "./config.js";
 
 /** Bind generated public settings once; mount with optional per-site overrides. */
-export function defineKomo(config: KomoConfig) {
-  return (overrides: Partial<KomoConfig> = {}) =>
+export function definePalette(config: PaletteConfig) {
+  return (overrides: Partial<PaletteConfig> = {}) =>
     initComments(resolveConfig({ ...config, ...overrides }));
 }
+
+/** @deprecated Use `definePalette`. */
+export const defineKomo = definePalette;

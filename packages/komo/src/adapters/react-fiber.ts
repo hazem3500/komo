@@ -1,12 +1,12 @@
 // Opt-in component adapter that discovers React components from a picked DOM element.
 //
 //   import { discoverReactComponents } from "@hazem3500/komo/adapters/react-fiber";
-//   initKomo({ design: { components: discoverReactComponents() } });
+//   initPalette({ design: { components: discoverReactComponents() } });
 //
 // WARNING: this reads React's private fields (`__reactFiber$*` on DOM nodes, `fiber.return`,
 // `memoizedProps`, `_debugSource`, `_debugStack`, and the DevTools hook's renderers). They are
 // not a public API and can change in any React release; every access is guarded, and anything
-// unexpected yields "no component" rather than an error. komo's core never reads them, so this
+// unexpected yields "no component" rather than an error. Palette's core never reads them, so this
 // entry point is outside the core bundle and off unless an app installs it.
 //
 // Primitive props are read for comment context without invoking getters or callbacks; the
@@ -290,7 +290,7 @@ export function discoverReactComponents(options: DiscoverReactComponentsOptions 
       const group = document.createElement("details");
       group.className = "design-group design-react-group design-react-discovered";
       group.open = true;
-      // The name is the heading; komo adds the source behind an info button beside it.
+      // The name is the heading; Palette adds the source behind an info button beside it.
       const summary = document.createElement("summary");
       const name = document.createElement("span");
       name.className = "design-react-name";

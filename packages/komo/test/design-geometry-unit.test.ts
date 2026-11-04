@@ -46,7 +46,7 @@ describe("geometry eligibility reasons", () => {
     expect(geometryReason($("#empty"))).toBe("Boxes split across lines or columns can't be previewed.");
   });
 
-  it("waits only for running motion that moves or sizes the box, and never for a komo preview", () => {
+  it("waits only for running motion that moves or sizes the box, and never for a Palette preview", () => {
     layout();
     html(`<button id="button">Example</button><div data-komo-still><span id="held" style="display:block">x</span></div>`);
     const running = (...keys: string[]) => ({ playState: "running", effect: { getKeyframes: () => [Object.fromEntries([["offset", 0], ["easing", "ease"], ...keys.map(key => [key, "1px"])])] } });
@@ -60,7 +60,7 @@ describe("geometry eligibility reasons", () => {
     }
     animate($("#button"), { ...running("width"), playState: "finished" });
     expect(geometryReason($("#button"))).toBeNull();
-    // komo holds motion while it previews; whatever runs there is its own doing.
+    // Palette holds motion while it previews; whatever runs there is its own doing.
     animate($("#held"), running("width"));
     expect(geometryReason($("#held"))).toBeNull();
   });

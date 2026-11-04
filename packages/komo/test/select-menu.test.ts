@@ -86,7 +86,7 @@ afterEach(() => {
 });
 
 describe("select menu", () => {
-  it("opens a komo listbox from the select instead of the system popup", () => {
+  it("opens a Palette listbox from the select instead of the system popup", () => {
     const { root, select, list, pointer, down, active } = mount();
     // A mouse opens on press, and neither its pointerdown nor its mousedown reaches the system popup.
     expect(pointer("pointerdown", select).defaultPrevented).toBe(true);
@@ -331,7 +331,7 @@ describe("select menu", () => {
     expect(height).toBeLessThanOrEqual(44);
   });
 
-  it("stops only the keys it handles while open, so komo's shortcuts see the rest", () => {
+  it("stops only the keys it handles while open, so Palette's shortcuts see the rest", () => {
     const { select, list, press } = mount();
     select.focus();
     press("Enter");

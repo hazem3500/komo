@@ -123,7 +123,7 @@ export function connectProject(
       if (popup.closed) fail("Sign-in closed. Try connecting again.");
     }, 1000);
     const timeout = window.setTimeout(
-      () => fail("Setup expired. Run komo init again."),
+      () => fail("Setup expired. Run palette init again."),
       600000
     );
     window.addEventListener("message", receive);

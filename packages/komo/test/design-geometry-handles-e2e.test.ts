@@ -50,7 +50,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-geometry-handles-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+':handles';
       localStorage.setItem(key,'synthetic-session');
@@ -59,7 +59,7 @@ beforeAll(async () => {
       if(location.search.includes('dark'))document.body.classList.add('dark');
       const frame=location.search.includes('frame');
       if(!frame)document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'handles',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:location.search.includes('scaled')},design:{experimentalGeometry:true},restoreOpen:false,pollInterval:60000});
+      window.palette=initPalette({endpoint:location.origin,project:'handles',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:location.search.includes('scaled')},design:{experimentalGeometry:true},restoreOpen:false,pollInterval:60000});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -93,7 +93,7 @@ async function open(mode = "", viewport = { width: 1280, height: 900 }) {
   page.on("pageerror", error => errors.push(error.message));
   page.setDefaultTimeout(5000);
   await page.goto(`${origin}/?${mode}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await openDesign(page);
   return { page, errors };
 }
@@ -190,7 +190,7 @@ describe.skipIf(!chrome)("Figma-style geometry handles", () => {
           const overlapY = Math.min(handle.square.bottom, state.content.bottom) - Math.max(handle.square.top, state.content.top);
           expect(overlapX <= 4.6 || overlapY <= 4.6, `${id} ${handle.name} covers content`).toBe(true);
         }
-        // Nothing in the page overlay carries text but the readout; announcements use komo's live region.
+        // Nothing in the page overlay carries text but the readout; announcements use Palette's live region.
         expect(await page.locator(".design-geometry").evaluate(node => [...node.querySelectorAll("*")]
           .filter(child => !child.matches(".design-geometry__readout") && child.textContent).length)).toBe(0);
       }
@@ -265,7 +265,7 @@ describe.skipIf(!chrome)("Figma-style geometry handles", () => {
       expect(target - await bottomOf(page, "card")).toBeCloseTo(3, 0);
       await inspector(page, "Reset").click();
       expect(await card.getAttribute("style")).toBe(baseline);
-      await page.evaluate(() => (window as any).komo.destroy());
+      await page.evaluate(() => (window as any).palette.destroy());
       expect(await card.getAttribute("style")).toBe(baseline);
       expect(errors).toEqual([]);
     } finally { await page.close(); }

@@ -471,7 +471,7 @@ function morph(sections: DesignSection[], resolve: (selector?: string) => Elemen
     morphing.style.remove();
   }
   const style = document.createElement("style");
-  // Komo's own UI lives in a shadow root, so this only reaches the page.
+  // Palette's own UI lives in a shadow root, so this only reaches the page.
   style.textContent = `*, *::before, *::after { transition-property: ${[...properties].join(", ")} !important; transition-duration: 420ms !important; transition-timing-function: ${EASE} !important; transition-delay: 0s !important; }`;
   (previewTarget().document.head ?? previewTarget().root).append(style);
   // Leave the rule in place for the whole transition, then restore the page's own.
@@ -620,7 +620,7 @@ export interface DesignCommentOptions {
   sourceHref?: SourceHref;
   /** The app's design system: its token adapter previews page token rows. */
   design?: DesignSystem;
-  /** Give a node komo's tooltip, which reads its aria-label. */
+  /** Give a node Palette's tooltip, which reads its aria-label. */
   tip?(node: HTMLElement): void;
   /** Why After can't be shown right now, such as pending Design mode edits; checked on each switch. */
   blocked?(): string | undefined;
@@ -812,7 +812,7 @@ function flip(event: KeyboardEvent) {
   next.click();
 }
 function listenForShortcut(root: Node) {
-  // komo's shadow root sees keys from its own fields, which never reach the document.
+  // Palette's shadow root sees keys from its own fields, which never reach the document.
   if (root instanceof ShadowRoot && !boundRoots.has(root)) {
     boundRoots.add(root);
     root.addEventListener("keydown", flip as EventListener);

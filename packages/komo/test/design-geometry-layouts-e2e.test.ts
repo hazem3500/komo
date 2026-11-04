@@ -48,7 +48,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-geometry-layouts-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+':layouts';
       localStorage.setItem(key,'synthetic-session');
@@ -56,7 +56,7 @@ beforeAll(async () => {
       window.fetch=async input=>{const path=new URL(input instanceof Request?input.url:String(input),location.origin).pathname;return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads:[]}:{});};
       const frame=location.search.includes('frame');
       if(!frame)document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'layouts',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:location.search.includes('scaled')},design:{experimentalGeometry:true},restoreOpen:false,pollInterval:60000});
+      window.palette=initPalette({endpoint:location.origin,project:'layouts',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:location.search.includes('scaled')},design:{experimentalGeometry:true},restoreOpen:false,pollInterval:60000});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -90,7 +90,7 @@ async function open(mode: string) {
   page.on("pageerror", error => errors.push(error.message));
   page.setDefaultTimeout(5000);
   await page.goto(`${origin}/?${mode}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await openDesign(page);
   return { page, errors };
 }
@@ -154,7 +154,7 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
         await inspector(page, "Reset").click();
         expect(await target.getAttribute("style"), `${id} reset in ${mode}`).toBe(baseline);
       }
-      await page.evaluate(() => (window as any).komo.destroy());
+      await page.evaluate(() => (window as any).palette.destroy());
       for (const { id } of eligible) expect(await page.locator(`#${id}`).getAttribute("style")).toBe(id === "contents" ? "display:contents" : null);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
@@ -189,7 +189,7 @@ describe.skipIf(!chrome)("geometry across layouts", () => {
       for (const [id, attribute] of Object.entries(attributes)) expect(await page.locator(`#${id}`).getAttribute("style"), `${id} suspended`).toBe(attribute);
       await openDesign(page);
       expect(await page.locator("#cell").getAttribute("style")).not.toBe(attributes.cell);
-      await page.evaluate(() => (window as any).komo.destroy());
+      await page.evaluate(() => (window as any).palette.destroy());
       for (const [id, attribute] of Object.entries(attributes)) expect(await page.locator(`#${id}`).getAttribute("style"), `${id} destroy`).toBe(attribute);
       expect(errors).toEqual([]);
     } finally { await page.close(); }

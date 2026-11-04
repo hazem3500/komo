@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STILL, holdHostMotion, stillPreview } from "../src/host-motion.js";
 
-// jsdom has no constructable sheets or animations; a stand-in records what komo adopts.
+// jsdom has no constructable sheets or animations; a stand-in records what Palette adopts.
 class Sheet { text = ""; replaceSync(text: string) { this.text = text; } }
 const animation = (endTime: number) => ({ effect: { getComputedTiming: () => ({ endTime }) }, finish: vi.fn() });
 const frames = (count = 2) => { for (let i = 0; i < count; i++) vi.advanceTimersToNextFrame(); };
@@ -29,7 +29,7 @@ const mount = () => {
   return document.getElementById("button")!;
 };
 
-describe("host motion during komo previews", () => {
+describe("host motion during Palette previews", () => {
   it("turns transitions off in the previewed subtree and restores the element exactly", () => {
     const element = mount();
     const host = new Sheet();

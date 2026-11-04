@@ -37,7 +37,7 @@ beforeAll(async () => {
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { discoverCssTokens } from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       const tokens=new URLSearchParams(location.search).has('tokens');
       const user={id:'reviewer',name:'Example reviewer',verified:true};
@@ -51,7 +51,7 @@ beforeAll(async () => {
         const path=new URL(input instanceof URL?input.href:typeof input==='string'?input:input.url).pathname;
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads}:{});
       };
-      window.komo=initKomo({endpoint:location.origin,project:'preview',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,design:{selectionColor:'#e5484d',...(tokens?{tokens:discoverCssTokens()}:{})}});
+      window.palette=initPalette({endpoint:location.origin,project:'preview',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,design:{selectionColor:'#e5484d',...(tokens?{tokens:discoverCssTokens()}:{})}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -100,7 +100,7 @@ describe.skipIf(!chrome)("Before/After on posted design proposals", () => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/?tokens`);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     const card = page.locator("#card");
     const look = () => card.evaluate(node => { const css = getComputedStyle(node); return [css.color, css.height, css.paddingTop, css.borderTopLeftRadius, css.fontSize, css.width]; });
     const original = await look();

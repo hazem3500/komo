@@ -1,4 +1,4 @@
-// Loaded on demand so group tags add nothing to komo's initial bundle.
+// Loaded on demand so group tags add nothing to Palette's initial bundle.
 
 export const MAX_TAGS = 12;
 const TAG = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,31}$/u;
@@ -14,7 +14,7 @@ export interface TagEditorOptions {
 }
 
 // Matches the dialog's own fields: muted fill, hairline inset, no accent ring.
-// The option menu is attached to komo's root so no container can clip it. In
+// The option menu is attached to Palette's root so no container can clip it. In
 // the composer the tag row grows when the picker opens, instead of spilling over
 // the text above it.
 // Comments stay out of the string: they would ship in the bundle.
@@ -94,7 +94,7 @@ export function tagEditor(slot: HTMLElement, options: TagEditorOptions): void {
     swapping = false;
   };
   const listId = `komo-tags-${Math.random().toString(36).slice(2)}`;
-  // The open menu lives at komo's root, outside the slot, and follows the input.
+  // The open menu lives at Palette's root, outside the slot, and follows the input.
   let floating: HTMLElement | null = null;
   let follow = 0;
   const closeMenu = () => {

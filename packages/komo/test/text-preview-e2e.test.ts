@@ -23,8 +23,8 @@ beforeAll(async () => {
       stdin: { contents: `
         import React from 'react';
         import {createRoot} from 'react-dom/client';
-        import {useKomoInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
-        import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+        import {usePaletteInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
+        import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
         import {renderDraftProposal,resetDesignPreviews} from ${JSON.stringify(resolve("src/design-comment.ts"))};
         import {startInlineTextEditor} from ${JSON.stringify(resolve("src/inline-text-editor.ts"))};
         const qa=window.textQA={actions:0};
@@ -32,7 +32,7 @@ beforeAll(async () => {
         const definition={id:'heading',name:'Heading',textProp:'title',props:[{name:'title',kind:'string',required:true,typeLabel:'string'}]};
         function Bridge(){
           const[props,setProps]=React.useState({title:'Original title'});
-          const inspect=useKomoInspectable({enabled:true,component:definition,props,onChange:setProps});
+          const inspect=usePaletteInspectable({enabled:true,component:definition,props,onChange:setProps});
           qa.props=props;
           return React.createElement('p',{...inspect,id:'bridge',style:{whiteSpace:'pre-wrap'}},props.title);
         }
@@ -62,7 +62,7 @@ beforeAll(async () => {
         window.fetch=async (input,init)=>{const path=new URL(input instanceof Request?input.url:String(input)).pathname;if(init?.method==="POST"&&path.endsWith("/threads"))qa.post=JSON.parse(init.body);return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads:[]}:{});};
         const mode=new URLSearchParams(location.search).get('mode');
         if(mode==='floating')document.body.append(document.createElement('aside'));
-        window.komo=initKomo({endpoint:location.origin,project:'text-preview',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false});
+        window.palette=initPalette({endpoint:location.origin,project:'text-preview',repo:'example/review',branch:'fixture',pageRoot:mode==='floating'?undefined:document.querySelector('main'),sidebar:mode==='floating'?'edge':'background',frame:{scale:mode==='scaled'},restoreOpen:false});
       `, resolveDir: process.cwd(), loader: "ts" },
       alias: { react: dirname(require.resolve("react/package.json")), "react-dom": dirname(require.resolve("react-dom/package.json")) },
       outdir: join(directory, String(version)), entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
@@ -118,7 +118,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.locator('#native-button').click();
     await page.keyboard.press('Tab');
     expect(await page.locator('.design-inspector__target').textContent()).toContain('#native-link');
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 
@@ -140,7 +140,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.locator('#early-button').focus();
     await page.keyboard.press('Space');
     expect(await page.locator('.design-inspector__target').textContent()).toContain('#early-button');
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 
@@ -164,7 +164,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       await page.locator('#target').focus();
       await page.keyboard.press('Space');
       expect(await page.locator('.design-inspector__target').textContent()).toContain('#target');
-      await page.evaluate(() => (window as any).komo.destroy());
+      await page.evaluate(() => (window as any).palette.destroy());
     } finally {
       release();
       await page.close();
@@ -221,7 +221,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => getComputedStyle(document.querySelector('#target')!).whiteSpace === 'normal');
     expect(await geometry()).toEqual(baseline);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 
@@ -244,7 +244,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
     await page.waitForFunction(() => (window as any).textQA.props.title === 'Original title');
     expect(await target.textContent()).toBe('Original title');
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 
@@ -271,7 +271,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     expect(await page.locator('.design-inspector__target').textContent()).toBe('a#target');
     expect(await page.evaluate(() => (window as any).textQA.actions)).toBe(0);
     expect(new URL(page.url()).hash).toBe('');
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 
@@ -297,7 +297,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     expect(JSON.stringify(posted)).toContain('Please update');
     expect(posted.body).toContain(JSON.stringify('Original title\nproposal'));
     expect(await page.evaluate(() => (window as any).textQA.actions)).toBe(0);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 
@@ -328,7 +328,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       (window as any).textQA.finishText(true);
     });
     expect(await page.locator("#target").getAttribute("style")).toBe("color: rgb(1, 2, 3) !important;");
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 
@@ -340,7 +340,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       page.on("pageerror", error => errors.push(error.message));
       await page.goto(`${origin}/?react=${version}&mode=${mode}`);
       await page.locator("#target").waitFor();
-      await page.waitForFunction(() => !!(window as any).komo);
+      await page.waitForFunction(() => !!(window as any).palette);
       if (mode !== "floating") {
         await page.keyboard.press("l");
         await page.waitForFunction(() => Math.abs(document.querySelector("main")!.getBoundingClientRect().width - 852) < 1);
@@ -380,7 +380,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
       await page.waitForFunction(() => document.querySelector("#target strong")?.textContent === "Host rerender");
       expect(await page.evaluate(() => ({ text: (window as any).textQA.text.data, actions: (window as any).textQA.actions }))).toEqual({ text: "Detached host update", actions: 0 });
       expect(new URL(page.url()).hash).toBe("");
-      await page.evaluate(() => (window as any).komo.destroy());
+      await page.evaluate(() => (window as any).palette.destroy());
       expect(errors).toEqual([]);
       await page.close();
     }
@@ -394,7 +394,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.goto(`${origin}/?react=${version}&mode=${mode}`);
     const target = page.locator("#target");
     await target.waitFor();
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     const original = await target.evaluate(node => {
       const qa = (window as any).textQA;
       qa.owner = node;
@@ -488,7 +488,7 @@ describe.skipIf(!chrome).each([18, 19])("text DOM previews in React %s", version
     await page.waitForTimeout(400);
     expect(await target.evaluate(node => ({ html: node.innerHTML, attributes: [...node.attributes].map(attr => [attr.name, attr.value]) }))).toEqual(original);
     expect(await same()).toBe(true);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     expect(await text()).toBe("Original title");
     expect(errors).toEqual([]);
     await page.close();

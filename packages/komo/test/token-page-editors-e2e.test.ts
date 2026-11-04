@@ -20,7 +20,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-token-editors-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       document.documentElement.setAttribute('data-mode',new URLSearchParams(location.search).get('theme')??'light');
       const tokens=tailwindTokens({tokens:[
@@ -32,7 +32,7 @@ beforeAll(async () => {
         ...Array.from({length:12},(_,index)=>({path:'space.s'+index,type:'dimension',class:'space-'+index,properties:['padding'],value:(index*2)+'px',label:'s'+index})),
       ]});
       window.fetch=async()=>Response.json({threads:[],guests:true});
-      window.komo=initKomo({endpoint:location.origin,project:'token-editors',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens}});
+      window.palette=initPalette({endpoint:location.origin,project:'token-editors',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -75,7 +75,7 @@ async function tokensView(zoom: string, viewport = { width: 1280, height: 860 })
   const errors: string[] = [];
   tab.on("pageerror", error => errors.push(error.message));
   await tab.goto(origin);
-  await tab.waitForFunction(() => !!(window as any).komo);
+  await tab.waitForFunction(() => !!(window as any).palette);
   await openDesign(tab);
   await settle(tab);
   if (await tab.locator(".frame-size-trigger").count()) { await frameZoom(tab, zoom); await settle(tab); }

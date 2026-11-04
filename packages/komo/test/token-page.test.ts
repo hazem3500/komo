@@ -199,7 +199,7 @@ describe("token proposals", () => {
       }
     });
 
-    it("names each token by its label, else the path's last part, with the full path and theme in komo's tooltip", () => {
+    it("names each token by its label, else the path's last part, with the full path and theme in Palette's tooltip", () => {
       const tipped: string[] = [];
       const adapter: TokenAdapter = { id: "fixture", list: () => tokens, resolve: () => ({}), previewValues: () => () => {} };
       const { container } = render({ tokens: adapter }, (node) => tipped.push(node.getAttribute("aria-label")!));
@@ -274,8 +274,8 @@ describe("Tokens view in Design mode", () => {
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   beforeEach(async () => {
-    document.body.innerHTML = '<main><button id="hero">Hello</button></main><div id="komo"></div>';
-    host = document.querySelector("#komo")!;
+    document.body.innerHTML = '<main><button id="hero">Hello</button></main><div id="palette"></div>';
+    host = document.querySelector("#palette")!;
     shadow = host.attachShadow({ mode: "open" });
     comments = [];
     active = null;

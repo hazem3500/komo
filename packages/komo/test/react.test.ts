@@ -3,14 +3,14 @@ import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { KomoConfig } from "../src/config";
+import type { PaletteConfig } from "../src/config";
 
 const init = vi.hoisted(() => vi.fn());
-vi.mock("../src/index.js", () => ({ initKomo: init }));
-import { useKomo } from "../src/react";
+vi.mock("../src/index.js", () => ({ initPalette: init }));
+import { usePalette } from "../src/react";
 
-function App({ config }: { config: KomoConfig }) {
-  useKomo(config);
+function App({ config }: { config: PaletteConfig }) {
+  usePalette(config);
   return null;
 }
 let root: Root;
@@ -38,10 +38,10 @@ afterEach(async () => {
   container.remove();
   expect(active).toBe(0);
 });
-const render = async (config: KomoConfig) => {
+const render = async (config: PaletteConfig) => {
   await act(async () => root.render(createElement(App, { config })));
 };
-describe("useKomo", () => {
+describe("usePalette", () => {
   it("preserves the instance across equivalent inline options", async () => {
     await render({ project: "test" });
     await render({ project: "test" });

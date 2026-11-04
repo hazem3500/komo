@@ -34,7 +34,7 @@ beforeAll(async () => {
     stdin: { contents: `
       import React from 'react';
       import {createRoot} from 'react-dom/client';
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       import {isShell} from ${JSON.stringify(resolve("src/shell.ts"))};
       const h=React.createElement;
       const params=new URLSearchParams(location.search);
@@ -48,7 +48,7 @@ beforeAll(async () => {
         React.useEffect(()=>{Object.assign(window.qa,{bump:()=>setCount(v=>v+1),remount:()=>setGeneration(v=>v+1)});},[]);
         return h(React.Fragment,null,
           h('div',{key:generation,id:'toolbar',className:'toolbar',role:'toolbar','aria-label':'Actions','data-c':'Primitive.div'},
-            // A commit that rewrites the moved button's display brings the original back unless komo re-hides it.
+            // A commit that rewrites the moved button's display brings the original back unless Palette re-hides it.
             h('button',{id:'new',type:'button','data-c':'Slot',style:{display:count%2?'inline-block':'inline-flex'}},'New goal'),
             h('button',{id:'edit',type:'button','data-c':'Slot'},'Edit'),
             h('button',{id:'share',type:'button','data-c':'Slot'},'Share')),
@@ -71,7 +71,7 @@ beforeAll(async () => {
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads:stored()}:{});
       };
       const components={identify(element){const host=element.closest('[data-c]');return host?{name:host.dataset.c,element:host}:null;}};
-      window.komo=initKomo({endpoint:location.origin,project,repo:'example/review',branch:'fixture',pageRoot:document.getElementById('root'),sidebar:'background',restoreOpen:false,pollInterval:60000,
+      window.palette=initPalette({endpoint:location.origin,project,repo:'example/review',branch:'fixture',pageRoot:document.getElementById('root'),sidebar:'background',restoreOpen:false,pollInterval:60000,
         design:{experimentalGeometry:true,components},
         frame:{mode:'iframe',shell:params.has('shell'),...(params.has('inplace')?{defaultMode:'transform'}:{})}});
     `, resolveDir: process.cwd(), loader: "ts" },
@@ -110,11 +110,11 @@ async function open(mode: Mode) {
   page.on("dialog", (dialog) => void dialog.accept());
   page.setDefaultTimeout(8000);
   await page.goto(`${origin}/?${mode}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await page.keyboard.press("l");
   if (mode === "shell") {
     await page.waitForURL(/komo-shell=[0-9a-f]{32}/);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
   }
   await page.locator(".frame-bar").waitFor();
   let app: Frame = page.mainFrame();

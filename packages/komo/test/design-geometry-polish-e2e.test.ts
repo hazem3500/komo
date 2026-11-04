@@ -44,7 +44,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-geometry-polish-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+':polish';
       localStorage.setItem(key,'synthetic-session');
@@ -53,7 +53,7 @@ beforeAll(async () => {
       const params=new URLSearchParams(location.search);
       const frame=params.has('frame');
       if(!frame)document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'polish',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:params.has('scaled')},design:{experimentalGeometry:true,selectionColor:params.get('color')||undefined},restoreOpen:false,pollInterval:60000,shortcuts:params.get('visibility')?{visibility:params.get('visibility')}:undefined});
+      window.palette=initPalette({endpoint:location.origin,project:'polish',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:params.has('scaled')},design:{experimentalGeometry:true,selectionColor:params.get('color')||undefined},restoreOpen:false,pollInterval:60000,shortcuts:params.get('visibility')?{visibility:params.get('visibility')}:undefined});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -87,7 +87,7 @@ async function open(query = "", viewport = { width: 1280, height: 900 }) {
   page.on("pageerror", error => errors.push(error.message));
   page.setDefaultTimeout(5000);
   await page.goto(`${origin}/?${query}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
   await openDesign(page);
   return { page, errors };
 }
@@ -177,7 +177,7 @@ describe.skipIf(!chrome)("geometry polish", () => {
       await pick(page, "blue");
       expect((await overlay(page)).color).toBe("rgb(229, 53, 155)");
       await page.goto(`${origin}/?color=rgb(255,100,0)`);
-      await page.waitForFunction(() => !!(window as any).komo);
+      await page.waitForFunction(() => !!(window as any).palette);
       await openDesign(page);
       await pick(page, "card");
       await page.locator("#card").hover();

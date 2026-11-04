@@ -1,4 +1,4 @@
-// While komo itself drives a preview (an option under the pointer or the arrow keys, a token
+// While Palette itself drives a preview (an option under the pointer or the arrow keys, a token
 // under the pointer, Before/After), the host's own transitions would otherwise run on every
 // step: the page jitters, panel reads land mid-transition and the geometry guard sees motion
 // the user never started. A hold marks the previewed element with one attribute; a stylesheet
@@ -6,7 +6,7 @@
 // finish. Its inline style is never touched. The mark goes two frames after the last release,
 // once the host has rendered the value it was handed, so restoring starts no transition either.
 
-/** Present on an element, and so its subtree, while komo previews it. */
+/** Present on an element, and so its subtree, while Palette previews it. */
 export const STILL = "data-komo-still";
 
 const css = `:is([${STILL}],[${STILL}] *),:is([${STILL}],[${STILL}] *)::before,:is([${STILL}],[${STILL}] *)::after{transition:none!important}`;

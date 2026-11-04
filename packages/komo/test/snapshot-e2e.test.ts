@@ -36,13 +36,13 @@ beforeAll(async () => {
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
       const params=new URLSearchParams(location.search);
       const user={id:'reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+'/api:snapshots';
       localStorage.setItem(key,'fixture-session');
       localStorage.setItem(key+':user',JSON.stringify({token:'fixture-session',user}));
-      window.komo=initKomo({endpoint:location.origin+'/api',project:'snapshots',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),
+      window.palette=initPalette({endpoint:location.origin+'/api',project:'snapshots',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),
         sidebar:'background',restoreOpen:false,pollInterval:60000,snapshots:{image:true,html:true,maxBytes:Number(params.get('max')||250000)},
         ...(params.has('frame')?{frame:{mode:'iframe'}}:{})});
     `, resolveDir: process.cwd(), loader: "ts" },
@@ -119,7 +119,7 @@ async function mockApi(page: Page, failUploads = false) {
 async function open(page: Page, query = "") {
   page.setDefaultTimeout(8000);
   await page.goto(`${origin}/${query}`);
-  await page.waitForFunction(() => !!(window as any).komo);
+  await page.waitForFunction(() => !!(window as any).palette);
 }
 async function comment(page: Page, target: { x: number; y: number; width: number; height: number }, text: string) {
   await page.keyboard.press("c");
@@ -162,7 +162,7 @@ function inspect(page: Page, dataUrl: string, colors: Record<string, [number, nu
 const palette = { card: [124, 58, 237], logo: [0, 200, 0], magenta: [255, 0, 255] } as Record<string, [number, number, number]>;
 
 describe.skipIf(!chrome)("comment snapshots", () => {
-  it("uploads a WebP image of the element with padding, its trimmed HTML, and leaves komo's UI out", async () => {
+  it("uploads a WebP image of the element with padding, its trimmed HTML, and leaves Palette's UI out", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
@@ -196,23 +196,23 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     [248, 250, 252].forEach((value, i) => expect(Math.abs(pixels.corner[i]! - value)).toBeLessThanOrEqual(6));
     expect(pixels.counts.card).toBeGreaterThan(pixels.width * pixels.height * 0.3);
     expect(pixels.counts.logo).toBeGreaterThan(40 * 40 * 4 * 0.8);
-    // komo's Design mode stand-in, inside the card on the page, is never drawn.
+    // Palette's Design mode stand-in, inside the card on the page, is never drawn.
     expect(pixels.counts.magenta).toBe(0);
     const html = api.uploads.find((upload) => upload.kind === "html")!.data;
     expect(html).toContain("Plain card");
     expect(html).not.toMatch(/ada@example\.test|stand-in|Private notes|data-komo-move-clone/);
-    // Nothing of komo's own UI, its host or its sandbox is left on the page or in the snapshot.
+    // Nothing of Palette's own UI, its host or its sandbox is left on the page or in the snapshot.
     expect(await page.evaluate(() => document.querySelectorAll("[data-komo-snapshot-sandbox]").length)).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, 60_000);
 
-  it("never captures komo's own UI when the target contains it", async () => {
+  it("never captures Palette's own UI when the target contains it", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     const api = await mockApi(page);
     await open(page);
-    // The page body holds komo's host; a comment on it must still leave komo out.
-    await page.evaluate(() => (window as any).komo.comment(document.body));
+    // The page body holds Palette's host; a comment on it must still leave Palette out.
+    await page.evaluate(() => (window as any).palette.comment(document.body));
     await page.locator(".new-comment-composer textarea").waitFor();
     await page.keyboard.type("The whole page");
     await page.keyboard.press("Enter");
@@ -228,7 +228,7 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     const api = await mockApi(page);
     await open(page, "?max=12000");
     // The whole grid, not one of its cells.
-    await page.evaluate(() => (window as any).komo.comment(document.getElementById("busy")));
+    await page.evaluate(() => (window as any).palette.comment(document.getElementById("busy")));
     await page.locator(".new-comment-composer textarea").waitFor();
     await page.keyboard.type("Busy grid");
     await page.keyboard.press("Enter");
@@ -302,7 +302,7 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     await waitFor(() => api.uploads.length === 2);
     await page.waitForTimeout(300);
     expect(api.threads).toEqual([{ id: "thread-1", body: "Upload fails" }]);
-    expect(logs.filter((text) => text.startsWith("komo: the comment posted without its"))).toHaveLength(2);
+    expect(logs.filter((text) => text.startsWith("Palette: the comment posted without its"))).toHaveLength(2);
     // The thread stays posted: its pin is shown, and no save error appears.
     await page.locator('.pin[data-thread="thread-1"]').waitFor({ state: "attached" });
     expect(await page.evaluate(() => [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!.textContent)).not.toContain("Couldn't save");

@@ -30,7 +30,7 @@ export function designKeyboard(options: {
   signal?: AbortSignal;
 }) {
   const keys = options.keys ?? resolveDesignKeys();
-  // A closed select's type-ahead would pick an option on komo's own keys (B, ?, the review
+  // A closed select's type-ahead would pick an option on Palette's own keys (B, ?, the review
   // shortcuts); once every handler has run, those keys never reach it. Other letters still do.
   const guard = (event: KeyboardEvent) => {
     const target = event.composedPath()[0];

@@ -26,7 +26,7 @@ it("installs a repeatable default workflow without overwriting project instructi
   expect((await installAgentWorkflow(cwd)).changed).toBe(true);
   const content = await readFile(join(cwd, "AGENTS.md"), "utf8");
   expect(content).toContain("# Project\nKeep these instructions.");
-  expect(content).toContain("komo comments prompt");
+  expect(content).toContain("palette comments prompt");
   expect(content).toContain("90% or higher");
   expect(content).toContain("keep the thread open");
   expect((await installAgentWorkflow(cwd)).changed).toBe(false);

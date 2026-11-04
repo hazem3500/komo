@@ -67,7 +67,7 @@ describe("document and recent swatches", () => {
   beforeEach(() => localStorage.clear());
   afterEach(() => document.body.replaceChildren());
 
-  it("ranks the page's colors by use, without duplicates, transparent colors or komo itself", () => {
+  it("ranks the page's colors by use, without duplicates, transparent colors or Palette itself", () => {
     document.body.innerHTML = `<main style="color:rgb(10, 10, 10)"><p style="color:#0a0a0a">a</p><p style="color:rgb(10 10 10);background-color:#ff0000">b</p>
       <p style="background-color:rgba(0, 0, 0, 0)">c</p><p style="border:2px solid #00ff00">d</p><p style="border-top:0 solid #0000ff">e</p></main>
       <div data-branch-comments="example" style="color:#123456"></div>`;
@@ -215,11 +215,11 @@ describe("the color editor", () => {
     expect(editor.querySelectorAll(".komo-color__swatches small")).toHaveLength(0);
     editor.remove();
     localStorage.clear();
-    // An empty page: the editor sits in a shadow root, as komo's does, so only the page is sampled.
+    // An empty page: the editor sits in a shadow root, as Palette's does, so only the page is sampled.
     document.body.innerHTML = "";
-    const komo = document.body.appendChild(document.createElement("div"));
-    komo.setAttribute("data-branch-comments", "");
-    const shadow = komo.attachShadow({ mode: "open" });
+    const palette = document.body.appendChild(document.createElement("div"));
+    palette.setAttribute("data-branch-comments", "");
+    const shadow = palette.attachShadow({ mode: "open" });
     const empty = pickerEditor({ trigger: document.body, tokens, property: "color", onSelect() {}, custom: { value: "#000000", onPreview: () => () => {}, onSelect() {} } }, host);
     shadow.append(empty);
     await new Promise(resolve => setTimeout(resolve, 40));

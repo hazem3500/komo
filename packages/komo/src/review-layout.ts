@@ -81,7 +81,7 @@ type Edges = { left: number; top: number; right: number; bottom: number };
 /** The box a pin occupies around its point when there is no pin element to measure. */
 export const pinBox = ({ x, y }: { x: number; y: number }): Edges => ({ left: x - 4, top: y - 28, right: x + 12, bottom: y + 4 });
 /**
- * Place a komo card beside a pin's on-screen box, in window pixels: right, left,
+ * Place a Palette card beside a pin's on-screen box, in window pixels: right, left,
  * below, then above, the first that fits the review area; otherwise the roomiest, clamped.
  */
 export function placeCard(pin: Edges, width: number, height: number, area: Edges) {

@@ -23,7 +23,7 @@ beforeAll(async () => {
   await mkdir(shots, { recursive: true });
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { captureAnchor } from ${JSON.stringify(resolve("src/anchors.ts"))};
       import { discoverCssTokens } from ${JSON.stringify(resolve("src/adapters/css-variables.ts"))};
       const query=new URLSearchParams(location.search),layout=query.get('layout')??'floating';
@@ -44,7 +44,7 @@ beforeAll(async () => {
       };
       if(layout==='floating')document.body.append(document.createElement('aside'));
       const size=query.get('size');
-      window.komo=initKomo({endpoint:location.origin,project:'dots',repo:'example/review',branch:'fixture',
+      window.palette=initPalette({endpoint:location.origin,project:'dots',repo:'example/review',branch:'fixture',
         pageRoot:layout==='floating'?undefined:document.querySelector('main'),sidebar:layout==='floating'?'edge':'background',
         ...(layout==='scaled'?{frame:{scale:true}}:{}),restoreOpen:false,pollInterval:60000,shortcuts:{design:'Shift+D'},
         ...(size?{pins:{size}}:{}),...(query.get('tokens')?{design:{tokens:discoverCssTokens()}}:{})});
@@ -336,9 +336,9 @@ it.skipIf(!chrome)("captures dot and compact pin close-ups and the empty state o
   const files = readdirSync(shots).filter(file => file.endsWith(".png"));
   const names = [...new Set(files.map(file => file.replace(/^(before|after)-/, "")))].sort();
   const cell = (file: string) => files.includes(file) ? `<img src="${file}" alt="${file}">` : "<span>not captured</span>";
-  writeFileSync(join(shots, "index.html"), `<!doctype html><meta charset="utf-8"><title>komo dot pins and empty state</title>
+  writeFileSync(join(shots, "index.html"), `<!doctype html><meta charset="utf-8"><title>Palette dot pins and empty state</title>
 <style>body{margin:24px;font:13px system-ui;background:#f5f5f4;color:#1c1917}table{border-collapse:collapse}td,th{padding:8px;vertical-align:top;text-align:left;border-bottom:1px solid #e7e5e4}img{max-width:560px;border:1px solid #d6d3d1;background:#fff}th{font-weight:600}</style>
-<h1>komo · dot pins and Design empty state</h1><table><tr><th>View</th><th>Before</th><th>After</th></tr>
+<h1>Palette · dot pins and Design empty state</h1><table><tr><th>View</th><th>Before</th><th>After</th></tr>
 ${names.map(name => `<tr><td>${name.replace(/\.png$/, "")}</td><td>${cell(`before-${name}`)}</td><td>${cell(`after-${name}`)}</td></tr>`).join("\n")}
 </table>`);
   expect(existsSync(join(shots, `${tag}-dot-light.png`))).toBe(true);

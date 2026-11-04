@@ -88,7 +88,7 @@ describe("tailwindTokens", () => {
     const usage = adapter.resolve(element) as Record<string, unknown>;
     expect(usage.color).toEqual({ path: "color.text.primary" });
     expect(usage["background-color"]).toEqual({ offToken: "rgb(1, 2, 3)" });
-    // padding is partly tokenised by px-2, so komo is not told it is off-token.
+    // padding is partly tokenised by px-2, so Palette is not told it is off-token.
     expect(usage.padding).toBeUndefined();
   });
 

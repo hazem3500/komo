@@ -10,7 +10,7 @@ import { createServer } from "node:http";
 
 const cli = fileURLToPath(new URL("../cli/index.mjs", import.meta.url));
 const config = { endpoint: "https://api.example.com", project: "project-id" };
-describe("simple komo setup", () => {
+describe("simple Palette setup", () => {
   it("defaults to project scope and requires a branch only when requested", () => {
     expect(resolveConfig({ project: "project-id" }).endpoint).toBe(
       "https://komo.offbr.co"

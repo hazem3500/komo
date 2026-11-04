@@ -5,7 +5,7 @@
 // foreignObject with its computed styles inlined, drawn to a canvas and encoded as
 // WebP; the HTML is a trimmed, redacted outerHTML. Both read the page's own
 // document, which is Frame's viewport iframe when the page is framed.
-import type { KomoSnapshots } from "./types.js";
+import type { PaletteSnapshots } from "./types.js";
 
 /** Why the image was left out; the HTML snapshot then starts with a comment saying so. */
 export type SnapshotNote = "cross-origin" | "too-large" | "unsupported" | "failed";
@@ -19,7 +19,7 @@ export interface CapturedSnapshot {
 
 /** Hosts mark private regions with this attribute: a target inside one is never captured. */
 export const OPT_OUT = "data-komo-no-snapshot";
-/** komo's own UI on the page: its host, Design mode stand-ins, previews and Frame's viewport. */
+/** Palette's own UI on the page: its host, Design mode stand-ins, previews and Frame's viewport. */
 // Not data-komo-design-tokens: hosts that register tokens carry it on the document root.
 const OWN = "[data-branch-comments],[data-komo-move-clone],[data-komo-viewport],[data-komo-snapshot-sandbox]";
 export const PLACEHOLDER = "[redacted]";
@@ -37,10 +37,10 @@ export const TEXT_LIMIT = 500;
 const cap = (text: string, limit: number) => (text.length > limit ? `${text.slice(0, limit - 1)}…` : text);
 const bytes = (text: string) => new TextEncoder().encode(text).length;
 
-/** True when the element can't be captured: komo's UI, or inside a host's no-snapshot region. */
+/** True when the element can't be captured: Palette's UI, or inside a host's no-snapshot region. */
 export const skipped = (element: Element) => !!element.closest(`[${OPT_OUT}],${OWN}`);
 
-/** Copy an element's attributes onto its shallow clone, minus handlers, script URLs and komo's markers. */
+/** Copy an element's attributes onto its shallow clone, minus handlers, script URLs and Palette's markers. */
 function cleanAttributes(clone: Element, limit = Infinity) {
   for (const { name, value } of [...clone.attributes]) {
     if (
@@ -395,7 +395,7 @@ const encode = (canvas: HTMLCanvasElement, quality: number) =>
   });
 
 /** The element plus padding as WebP, at most 1200px wide and `maxBytes` in size. */
-export async function snapshotImage(element: Element, options: KomoSnapshots = {}): Promise<string> {
+export async function snapshotImage(element: Element, options: PaletteSnapshots = {}): Promise<string> {
   const limit = options.maxBytes ?? IMAGE_BYTES;
   const view = element.ownerDocument.defaultView ?? window;
   const width = (element as HTMLElement).offsetWidth || element.getBoundingClientRect().width;
@@ -444,13 +444,13 @@ export const noteComment = (note: SnapshotNote) => `<!-- komo: no image snapshot
 
 /**
  * Capture what the options ask for. Returns null when there is nothing to keep:
- * the target is gone, is komo's own UI, or sits in a no-snapshot region. An image
+ * the target is gone, is Palette's own UI, or sits in a no-snapshot region. An image
  * that can't be read (another origin's pixels) falls back to the HTML, which then
  * starts with a comment saying why.
  */
 export async function captureSnapshot(
   element: Element | null,
-  options: KomoSnapshots,
+  options: PaletteSnapshots,
   htmlLimit = HTML_LIMIT,
 ): Promise<CapturedSnapshot | null> {
   if (!element?.isConnected || skipped(element)) return null;
@@ -493,7 +493,7 @@ const captures = new WeakMap<object, Promise<CapturedSnapshot | null>>();
 export function snapshotFor<Anchor extends object>(
   anchor: Anchor,
   resolve: (anchor: Anchor) => Element | null,
-  options: KomoSnapshots,
+  options: PaletteSnapshots,
   limits: SnapshotLimits,
   post?: (kind: "image" | "html", body: Blob) => Promise<unknown>,
 ): Promise<CapturedSnapshot | null> {
@@ -511,7 +511,7 @@ export function snapshotFor<Anchor extends object>(
         if (shot?.[kind])
           await post(kind, kind === "image" ? dataBlob(shot.image!) : new Blob([shot.html!], { type: "text/html;charset=utf-8" })).catch(
             (reason: unknown) =>
-              console.info(`komo: the comment posted without its ${kind} snapshot.`, reason instanceof Error ? reason.message : reason),
+              console.info(`Palette: the comment posted without its ${kind} snapshot.`, reason instanceof Error ? reason.message : reason),
           );
     });
   return capture;

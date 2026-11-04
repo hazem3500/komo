@@ -47,7 +47,7 @@ export function changeRow(row: HTMLElement, kind: string, label: string, count: 
 
 /** Selection guidance and recovery controls load with the proposal helpers. */
 export function selectionViews(options: {
-  /** Opens komo's shortcut help, which lists every canvas key and gesture. */
+  /** Opens Palette's shortcut help, which lists every canvas key and gesture. */
   help?(): void;
   /** Select and reveal a changed element. */
   select(element: DesignTarget): void;
@@ -95,7 +95,7 @@ export function selectionViews(options: {
   const list = el("div", "design-rows design-pending__list");
   const actions = el("div", "design-pending__actions");
   pending.append(head, list, actions);
-  // Discard and its Undo are announced in komo's one polite live region.
+  // Discard and its Undo are announced in Palette's one polite live region.
   const say = (text: string) => options.mode?.root.dispatchEvent(new CustomEvent("komo-announce", { detail: text }));
   let items: PendingItem[] = [];
   let drawn: unknown[] = [];

@@ -105,7 +105,7 @@ it("defaults pins to full, applies the host size, and prefers the reviewer's sto
   expect(root.querySelector<HTMLElement>(".pins")!.dataset.size).toBe("compact");
   controller?.destroy();
   document.body.replaceChildren();
-  expect(() => initComments({ ...options, pins: { size: "huge" as "full" } })).toThrow('Invalid komo pins.size: "huge"');
+  expect(() => initComments({ ...options, pins: { size: "huge" as "full" } })).toThrow('Invalid Palette pins.size: "huge"');
   expect(document.body.children).toHaveLength(0);
 });
 

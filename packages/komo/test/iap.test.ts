@@ -6,7 +6,7 @@ import { startLocalApi } from "./wrangler-local";
 
 const origin = "http://localhost:4321";
 const audience = "/projects/123/global/backendServices/456";
-// komo served at /komo behind a proxy that strips it, with sign-in under the
+// Palette served at /komo behind a proxy that strips it, with sign-in under the
 // proxy-protected /backoffice prefix.
 const publicPath = "/komo";
 const prefix = "/backoffice";

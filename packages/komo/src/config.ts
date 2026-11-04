@@ -1,10 +1,10 @@
 import type { CommentsOptions } from "./types.js";
 
-export type KomoConfig = Omit<
+export type PaletteConfig = Omit<
   CommentsOptions,
   "repo" | "branch" | "endpoint"
 > & {
-  /** Defaults to the hosted komo service. */
+  /** Defaults to the hosted Palette service. */
   endpoint?: string;
   repo?: string;
   /** Shared feedback across deployments by default. */
@@ -13,11 +13,14 @@ export type KomoConfig = Omit<
   branch?: string;
 };
 
-export function resolveConfig(config: KomoConfig): CommentsOptions {
+/** @deprecated Use `PaletteConfig`. */
+export type KomoConfig = PaletteConfig;
+
+export function resolveConfig(config: PaletteConfig): CommentsOptions {
   const { scope = "project", ...options } = config;
   if (scope === "branch" && !config.branch?.trim())
     throw new Error(
-      "Branch scope needs a build-time branch. Run komo sync before your build or set branch explicitly."
+      "Branch scope needs a build-time branch. Run palette sync before your build or set branch explicitly."
     );
   return {
     ...options,

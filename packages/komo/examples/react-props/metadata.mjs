@@ -56,9 +56,9 @@ export function generateManifest(sourcePath, root) {
       ts.isFunctionDeclaration(node) &&
       node.name &&
       node.parameters[0] &&
-      tags.some((tag) => tag.tagName.text === "komoInspectable")
+      tags.some((tag) => tag.tagName.text === "paletteInspectable")
     ) {
-      const propsTag = tags.find((tag) => tag.tagName.text === "komoProps");
+      const propsTag = tags.find((tag) => tag.tagName.text === "paletteProps");
       const propsTypeName = String(propsTag?.comment ?? "").trim();
       const propsDeclaration = source.statements.find(
         (statement) =>
@@ -79,8 +79,8 @@ export function generateManifest(sourcePath, root) {
           required: !(symbol.flags & ts.SymbolFlags.Optional),
           typeLabel: displayType(type, declaration),
           ...(schema.kind === "string" && ts.getJSDocTags(declaration).some((tag) =>
-            tag.tagName.text === "komoStyle" && ["color", "background-color", "border-color", "font-family", "font-weight", "line-height", "font-size", "gap", "padding", "margin", "border-radius"].includes(String(tag.comment ?? "").trim()),
-          ) ? { styleProperty: String(ts.getJSDocTags(declaration).find((tag) => tag.tagName.text === "komoStyle")?.comment ?? "").trim() } : {}),
+            tag.tagName.text === "paletteStyle" && ["color", "background-color", "border-color", "font-family", "font-weight", "line-height", "font-size", "gap", "padding", "margin", "border-radius"].includes(String(tag.comment ?? "").trim()),
+          ) ? { styleProperty: String(ts.getJSDocTags(declaration).find((tag) => tag.tagName.text === "paletteStyle")?.comment ?? "").trim() } : {}),
         };
       });
       const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
@@ -95,7 +95,7 @@ export function generateManifest(sourcePath, root) {
     ts.forEachChild(node, visit);
   }
   visit(source);
-  if (!components.length) throw new Error("No exported @komoInspectable function components found.");
+  if (!components.length) throw new Error("No exported @paletteInspectable function components found.");
   const diagnostics = ts.getPreEmitDiagnostics(program);
   if (diagnostics.length) {
     throw new Error(ts.formatDiagnosticsWithColorAndContext(diagnostics, {

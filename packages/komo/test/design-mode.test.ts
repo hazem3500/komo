@@ -22,11 +22,11 @@ describe("design mode preview inspector", () => {
   }
 
   beforeEach(async () => {
-    document.body.innerHTML = '<main><button id="hero">Hello</button><span id="label">Selected text</span><div id="nested"><strong>Rich</strong> text</div><iframe title="Preview"></iframe></main><div id="komo"></div>';
+    document.body.innerHTML = '<main><button id="hero">Hello</button><span id="label">Selected text</span><div id="nested"><strong>Rich</strong> text</div><iframe title="Preview"></iframe></main><div id="palette"></div>';
     page = document.querySelector("main")!;
     button = document.querySelector("#hero")!;
     pointed = button;
-    host = document.querySelector("#komo")!;
+    host = document.querySelector("#palette")!;
     shadow = host.attachShadow({ mode: "open" });
     exited = 0;
     comments = [];

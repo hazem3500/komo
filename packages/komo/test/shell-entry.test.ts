@@ -30,7 +30,7 @@ describe("shell entry", () => {
   it("drops out of a minified production build behind import.meta.env.DEV", async () => {
     const production = await bundle(false);
     expect(production).toContain("app-branch");
-    for (const trace of ["shell-branch", "komo", "sessionStorage", "setTimeout", "location"])
+    for (const trace of ["shell-branch", "komo", "Palette", "sessionStorage", "setTimeout", "location"])
       expect(production, trace).not.toContain(trace);
     // Nothing left but the app's own branch.
     expect(production.trim()).toBe('console.log("app-branch");');

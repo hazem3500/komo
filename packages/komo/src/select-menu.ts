@@ -1,6 +1,6 @@
 import { popupStyles, previewStyle, watchPopup } from "./design-popup.js";
 import { stillPreview } from "./host-motion.js";
-// Komo-styled popups for the Design panel's native selects. The select stays the
+// Palette-styled popups for the Design panel's native selects. The select stays the
 // focusable trigger and the value store, so `.value`, `change`, `disabled` and
 // labels keep working; only its system popup is replaced by a listbox that lives
 // inside the panel, next to the field. One delegated set of listeners serves every
@@ -11,7 +11,7 @@ const css = `.design-field>select{appearance:none;padding-right:20px;cursor:poin
 
 const containers = new WeakSet<HTMLElement>();
 const targets = new WeakMap<HTMLElement, HTMLElement | SVGElement>();
-/** komo's review shortcuts per container; with B and ?, a focused select leaves them to their shortcut (design-keyboard.ts). */
+/** Palette's review shortcuts per container; with B and ?, a focused select leaves them to their shortcut (design-keyboard.ts). */
 const shortcuts = new WeakMap<HTMLElement, (event: KeyboardEvent) => boolean>();
 const styled = new WeakSet<Node>();
 let count = 0;
@@ -144,7 +144,7 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement, let
       restorePreview();
       const { value, selected } = items[index].option;
       // A style select previews on the element; any other (a component prop) hears komo-preview,
-      // its value while an option is active and null once it is not. komo drives each step, so
+      // its value while an option is active and null once it is not. Palette drives each step, so
       // the element's own transitions hold still until the host has rendered it.
       if (!selected) {
         const preview = (detail: string | null) => select.dispatchEvent(new CustomEvent("komo-preview", { detail }));
@@ -217,7 +217,7 @@ function open(select: HTMLSelectElement, element?: HTMLElement | SVGElement, let
     const path = event.composedPath();
     if (!path.includes(list) && !path.includes(select)) close();
   }, { capture: true, signal });
-  // Scroll events stay inside komo's shadow root, so the panel's own scrolling is heard there.
+  // Scroll events stay inside Palette's shadow root, so the panel's own scrolling is heard there.
   // Scrolling that moves the select closes its list. A scroll that brought the select into view
   // before the list opened (focusing it, or the panel keeping its place) arrives later; it is kept.
   let at: DOMRect | undefined;

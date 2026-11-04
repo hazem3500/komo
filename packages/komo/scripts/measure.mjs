@@ -179,7 +179,7 @@ await writeFile(
 // comment action menu. Styles stay in the shared sheet: in the chunk they cost ~1,000 more in total.
 // Measured locally: main 223,370 -> 225,680 (+2,310); main's 130 bytes of headroom are kept.
 // 223,500 -> 227,900: Frame's Viewport mode (frame.mode "iframe"). The iframe, its load checks, fallback
-// reasons and the frame geometry are their own chunk (below). Initial grows ~1,650: komo's page reads
+// reasons and the frame geometry are their own chunk (below). Initial grows ~1,650: Palette's page reads
 // reach the frame through frame-target.ts (cross-realm checks, a listener registry, identity geometry the
 // chunk replaces; ~620 in the shared core chunk) and Frame's layout keeps the viewport hooks (~1,000). The
 // size bar's Viewport / In place switch and reason note add ~420 to the frame-size chunk (227,768 measured on main with #156 and #158).
@@ -223,7 +223,7 @@ await writeFile(
 // 248,800 -> 249,100: Design mode asks a realm's build-time instrumented components (@hazem3500/komo/vite)
 // before the app's adapter, combining the two in the on-demand design chunks; 248,897 measured, plus CI margin.
 if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 249_100)
-  throw new Error("komo exceeds its core production consumer bundle budget.");
+  throw new Error("Palette exceeds its core production consumer bundle budget.");
 // The inline-text feature adds a small button/state bridge to the optional
 // Design mode entry. Its editor remains a separate on-demand chunk below.
 // Raised from 7,000 for double-click inline editing (37 bytes); the caret logic stays in the editor chunk.
@@ -237,7 +237,7 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 249_100)
 // maps its outlines and picks through it (+~124: 7,320 -> 7,445). The entry imports chunks by hashed
 // name, so a lazy chunk's new content can also move it a byte.
 // 7,700: redraws of the same selection keep focus on the same control (or the selection, never
-// Exit), and moves, Undo and applied tokens reach komo's one live region from here, not core
+// Exit), and moves, Undo and applied tokens reach Palette's one live region from here, not core
 // (+~228: 7,445 -> 7,673). The re-resolving itself lives in the keyboard chunk.
 // 7,700 -> 8,150: the Redo button and its stack (each undone entry with how to put it back, cleared by any
 // new edit), keyed tooltips, empty-canvas deselect (also on Frame's viewport backdrop) and the selection
@@ -246,11 +246,11 @@ if (report.initial.gzip > 102_500 || report.coreFeatures.gzip > 249_100)
 // 8,215 -> 8,300: the footer wraps under 420px (count and Before/After, then tools and Comment), so Comment is never clipped; CSS only (8,165 -> 8,255 on main ff2f416).
 // 8,300 -> 8,400: Design mode also opens the props panel for build-time instrumented components (@hazem3500/komo/vite), found on the element's own window (8,255 -> 8,324).
 if (report.optionalDesignMode.gzip > 8_400)
-  throw new Error("komo's optional design mode chunk exceeds its gzip budget.");
+  throw new Error("Palette's optional design mode chunk exceeds its gzip budget.");
 // Raised from 2,800 so text inside nested markup, links, and buttons can be edited in place.
 // 3,100: Before/After swaps edited text back, keeping nested markup (~80 bytes).
 if (report.optionalInlineTextEditing.gzip > 3_100)
-  throw new Error("komo's on-demand inline text editor chunk exceeds its gzip budget.");
+  throw new Error("Palette's on-demand inline text editor chunk exceeds its gzip budget.");
 // Design mode's property controls load as their own chunk when Design mode opens,
 // so the Figma-style panel does not grow the Design mode entry (7,007 -> 5,677 gzip).
 // New budget: 4,262 measured for scrubbing, inline token chips and section rules.
@@ -261,14 +261,14 @@ if (report.optionalInlineTextEditing.gzip > 3_100)
 // fields and the fetch of the field controls chunk below (4,591 -> 4,677), plus ~3%.
 // The field Escape that cancels and lets go of focus fits in the 4,800 above.
 if (report.optionalDesignPanel.gzip > 4_800)
-  throw new Error("komo's design panel chunk exceeds its gzip budget.");
+  throw new Error("Palette's design panel chunk exceeds its gzip budget.");
 // The Design panel's styled select popups (listbox, keyboard, flip and check marks)
 // load as their own chunk beside the panel, so neither the panel nor the entry grows.
 // 3,125: token selects (data-picker) are left to the token picker below (+11 bytes).
 // 3,250: a letter on a closed select opens the list on its first match (3,085 -> 3,154), plus ~3%.
 // 3,300: with the shared host-motion hold for previews (#151) alongside (3,260 measured).
 if (report.optionalSelectMenu.gzip > 3_300)
-  throw new Error("komo's select menu chunk exceeds its gzip budget.");
+  throw new Error("Palette's select menu chunk exceeds its gzip budget.");
 // The token picker (search, type previews, sticky groups, lazy rows, keyboard) loads the first
 // time a token field opens. 4,631 measured, plus ~3%. It now also hands its rows' previews and
 // styles to the Tokens view (4,770 measured).
@@ -282,7 +282,7 @@ if (report.optionalSelectMenu.gzip > 3_300)
 // the current value, Show all under the list, an active row's path and value instead of a tooltip,
 // and a viewport-capped height with one scroll area (5,458 -> 6,183 measured), plus ~3%.
 if (report.optionalTokenPicker.gzip > 6_375)
-  throw new Error("komo's token picker chunk exceeds its gzip budget.");
+  throw new Error("Palette's token picker chunk exceeds its gzip budget.");
 // The Tokens view (every token with nothing selected, per-theme edits, its footer and page
 // comment) loads only when "Edit tokens" is chosen. It reuses the picker, theme switcher and
 // footer chunks, so its own chunk is small. 4,730 measured, plus ~3%.
@@ -291,7 +291,7 @@ if (report.optionalTokenPicker.gzip > 6_375)
 // It also covers previews and theme reads that go to the reviewed page (Frame's viewport iframe when it shows one)
 // and Before/After keys with focus inside it (+~60; 5,085 measured with both).
 if (report.optionalTokenPage.gzip > 5_150)
-  throw new Error("komo's Tokens view chunk exceeds its gzip budget.");
+  throw new Error("Palette's Tokens view chunk exceeds its gzip budget.");
 // Experimental move/resize is default off and loads only with design.experimentalGeometry, after
 // Design mode opens; nothing else imports it. It was 3,375 gzip for normal-flow blocks only. Flex and
 // grid items (flex-basis/grow/shrink, stretch detection, numeric track spans), positioned and
@@ -308,26 +308,26 @@ if (report.optionalTokenPage.gzip > 5_150)
 // a configurable canvas selection color with a magenta fallback on matching backgrounds, handles shown
 // only near the pointer or with focus and stepping back for the panel, fields and previews, overlay
 // peek/toggle with the visibility key and an eye button, and the first-use move hint (12,191 -> 13,483), plus ~3%.
-// 14,200: komo previews hold host motion and a lasting animation shows as a dot by the Layout title (+302: 13,736 -> 14,038 measured).
+// 14,200: Palette previews hold host motion and a lasting animation shows as a dot by the Layout title (+302: 13,736 -> 14,038 measured).
 // 14,400: geometry also runs inside Frame's viewport iframe: page rects map through the frame, its keys,
 // scrolling and pointer reach the overlay, and moves adopt a sheet from the frame's realm (~+130 on top).
 if (report.optionalGeometry.gzip > 14_400)
-  throw new Error("komo's experimental geometry chunk exceeds its gzip budget.");
+  throw new Error("Palette's experimental geometry chunk exceeds its gzip budget.");
 // API tokens load only when "API tokens" is opened in the Account panel; nothing else imports
 // the chunk. 5,671 measured, plus ~3%.
 if (report.optionalAccountTokens.gzip > 5_850)
-  throw new Error("komo's API tokens chunk exceeds its gzip budget.");
+  throw new Error("Palette's API tokens chunk exceeds its gzip budget.");
 // Comment snapshots (SVG foreignObject image, trimmed HTML, raw-file uploads) load only when snapshots are on, the server supports them and a reviewer starts a comment. 4,561 measured, plus ~3%.
 if (report.optionalSnapshots.gzip > 4_700)
-  throw new Error("komo's comment snapshot chunk exceeds its gzip budget.");
+  throw new Error("Palette's comment snapshot chunk exceeds its gzip budget.");
 // Saved snapshots in the review UI (row thumbnails, the open card, the viewer, HTML as text) load the first time one is shown. 4,046 measured, plus ~3%.
 if (report.optionalSnapshotView.gzip > 4_200)
-  throw new Error("komo's snapshot view chunk exceeds its gzip budget.");
+  throw new Error("Palette's snapshot view chunk exceeds its gzip budget.");
 // Viewport mode loads only when Frame opens with frame.mode "iframe": the iframe, its stage, the
 // same-origin and fallback checks (X-Frame-Options, frame-ancestors, cross-origin redirects, timeout) and
-// the frame geometry komo's page reads switch to. 2,216 measured, plus ~3%.
+// the frame geometry Palette's page reads switch to. 2,216 measured, plus ~3%.
 if (report.optionalFrameViewport.gzip > 2_300)
-  throw new Error("komo's Viewport mode chunk exceeds its gzip budget.");
+  throw new Error("Palette's Viewport mode chunk exceeds its gzip budget.");
 // Color fields re-read the element once hover, focus, theme and transitions settle; fetched with the
 // panel as its own chunk. 704 measured, plus ~3%.
 // In-row field controls (icon segments for text alignment and border style, weight samples,
@@ -335,20 +335,20 @@ if (report.optionalFrameViewport.gzip > 2_300)
 // 2,100: the font size row keeps its value beside a bound token's chip and trims its popup to the token list (1,834 -> 2,024), plus ~3%.
 // 2,400: every single-value numeric field (line height, letter spacing, gap, border width, and padding, margin and radius with one value) gets that row, with a chip sized to its token's name (2,024 -> 2,351), plus ~2%.
 if (report.optionalFieldControls.gzip > 2_400)
-  throw new Error("komo's field controls chunk exceeds its gzip budget.");
+  throw new Error("Palette's field controls chunk exceeds its gzip budget.");
 if (report.optionalLiveColors.gzip > 725)
-  throw new Error("komo's live color field chunk exceeds its gzip budget.");
+  throw new Error("Palette's live color field chunk exceeds its gzip budget.");
 // The Custom color picker (area, sliders, eyedropper, value row with five formats, document and
 // recent swatches, token match) loads the first time a color field's Custom tab opens, instead of
 // the React color picker it replaces. 6,307 measured, plus ~3%.
 if (report.optionalColorEditor.gzip > 6_500)
-  throw new Error("komo's color editor chunk exceeds its gzip budget.");
+  throw new Error("Palette's color editor chunk exceeds its gzip budget.");
 // The typed Custom editors (lengths, spacing, radius, shadows, fonts: compact fields with inline
 // units, scrubbing, nudges and live apply) load the first time a non-color Custom tab opens.
 // 3,009 with the Apply form. The compact live fields, Figma-style shadow layer rows (Drop/Inner, swatch,
 // visibility, remove, a sample tile) and the structured typography editor measure 5,698, plus ~3%.
 if (report.optionalTypedEditor.gzip > 5_875)
-  throw new Error("komo's typed Custom editor chunk exceeds its gzip budget.");
+  throw new Error("Palette's typed Custom editor chunk exceeds its gzip budget.");
 // Design-system adapters are their own entry points (@hazem3500/komo/adapters/*). Core never
 // imports them, so they cost nothing unless an app opts in. Budgets cover the table-driven
 // class swapping, spacing helper and theme switching, with a little headroom.
@@ -357,24 +357,24 @@ if (report.optionalTypedEditor.gzip > 5_875)
 // 3,075 / 2,650: Tokens view previews (one injected stylesheet scoped per theme option, aliases
 // and raw-channel colors) add ~430 and ~750 bytes; measured 2,981 and 2,559, plus ~3%.
 // 3,450: onlyGenerated reports stylesheet changes through subscribe() (a MutationObserver
-// and <link> load/error listeners, only while komo is subscribed) and skips unreadable
+// and <link> load/error listeners, only while Palette is subscribed) and skips unreadable
 // sheets one by one, with a strict mode (+372 bytes); measured 3,353, plus ~3%.
 if (report.adapterTailwind.gzip > 3_450)
-  throw new Error("komo's Tailwind token adapter exceeds its gzip budget.");
+  throw new Error("Palette's Tailwind token adapter exceeds its gzip budget.");
 if (report.adapterCssVariables.gzip > 2_650)
-  throw new Error("komo's CSS variable token adapter exceeds its gzip budget.");
+  throw new Error("Palette's CSS variable token adapter exceeds its gzip budget.");
 // The React fiber adapter reads private React fields, serializes props safely and builds the
 // read-only panel rows itself, so none of that lives in core.
 if (report.adapterReactFiber.gzip > 2_800)
-  throw new Error("komo's React fiber component adapter exceeds its gzip budget.");
+  throw new Error("Palette's React fiber component adapter exceeds its gzip budget.");
 if (report.adapterReactPreview.gzip > 2_000)
-  throw new Error("komo's opt-in React preview bridge exceeds its gzip budget.");
+  throw new Error("Palette's opt-in React preview bridge exceeds its gzip budget.");
 if (report.adapterClassTheme.gzip > 1_000)
-  throw new Error("komo's class theme adapter exceeds its gzip budget.");
+  throw new Error("Palette's class theme adapter exceeds its gzip budget.");
 // The single-copy Viewport guard (@hazem3500/komo/shell) runs before the app mounts, and a
 // build-time guard drops it from production; 434 measured.
 if (report.shell.gzip > 500)
-  throw new Error("komo's shell guard exceeds its gzip budget.");
+  throw new Error("Palette's shell guard exceeds its gzip budget.");
 // Build-time component instrumentation's runtime (@hazem3500/komo/react-instrument): only preview
 // builds with the Vite plugin enabled load it. The wrapper, its state-backed editor and the fiber
 // lookup measure 1,990, plus ~5%.

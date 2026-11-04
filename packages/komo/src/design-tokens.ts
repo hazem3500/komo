@@ -3,29 +3,33 @@ import { counterpart, frameBridge, pageWindow, publishFrameBridge } from "./fram
 import type { DesignToken, TokenAdapter, TokenUsage } from "./design-system.js";
 
 /** Explicit bridge from a site's named CSS custom properties into Design mode. */
-export type KomoDesignTokenType =
+export type PaletteDesignTokenType =
   | "color"
   | "dimension"
   | "fontFamily"
   | "fontWeight"
   | "lineHeight";
 
-export interface KomoDesignToken {
+export interface PaletteDesignToken {
   /** Stable DTCG-style token path, e.g. "color.brand.primary". */
   path: string;
   /** Existing CSS custom property that supplies this token. */
   cssVariable: string;
   /** DTCG scalar type; composite types remain unsupported. */
-  type: KomoDesignTokenType;
+  type: PaletteDesignTokenType;
   /** Explicit CSS properties that may use this token on the selected element. */
   properties: string[];
   /** Explicit scope used only to estimate global theme impact. */
   impactSelector: string;
 }
+/** @deprecated Use `PaletteDesignToken`. */
+export type KomoDesignToken = PaletteDesignToken;
+/** @deprecated Use `PaletteDesignTokenType`. */
+export type KomoDesignTokenType = PaletteDesignTokenType;
 
 export interface RegisteredDesignTokenSource {
   root: HTMLElement;
-  tokens: KomoDesignToken[];
+  tokens: PaletteDesignToken[];
   themeEdits: Map<string, { before: string; after: string; inlineBefore: string }>;
   elementOriginals: Map<DesignTarget, Map<string, { value: string; priority: string }>>;
   elementBindings: Map<DesignTarget, Map<string, ElementTokenBinding>>;
@@ -38,26 +42,26 @@ export interface ElementTokenBinding {
   initialPriority: string;
   mode: "token" | "custom";
   customValue?: string;
-  /** Token the element used before Komo changed it, from its inline style or stylesheet. */
+  /** Token the element used before Palette changed it, from its inline style or stylesheet. */
   declaredPath?: string;
 }
 
 /** A token reference the page itself declares for one element property. */
 export interface DeclaredTokenReference {
-  token: KomoDesignToken;
+  token: PaletteDesignToken;
   origin: "inline" | "stylesheet";
 }
 
 type TokenEdit =
   | { kind: "element"; element: DesignTarget; property: string; before: string; priority: string; after: string }
-  | { kind: "theme"; source: RegisteredDesignTokenSource; token: KomoDesignToken; before: string; after: string; inlineBefore: string };
+  | { kind: "theme"; source: RegisteredDesignTokenSource; token: PaletteDesignToken; before: string; after: string; inlineBefore: string };
 
 const sources = new Set<RegisteredDesignTokenSource>();
 const byRoot = new WeakMap<HTMLElement, RegisteredDesignTokenSource>();
 const elementEdits = new WeakMap<DesignTarget, TokenEdit[]>();
 const history = new WeakMap<RegisteredDesignTokenSource, TokenEdit[]>();
 
-const propertiesByType: Record<KomoDesignTokenType, ReadonlySet<string>> = {
+const propertiesByType: Record<PaletteDesignTokenType, ReadonlySet<string>> = {
   color: new Set(["color", "background-color", "border-color"]),
   dimension: new Set(["gap", "padding", "margin", "border-radius", "font-size", "width", "height"]),
   fontFamily: new Set(["font-family"]),
@@ -65,7 +69,7 @@ const propertiesByType: Record<KomoDesignTokenType, ReadonlySet<string>> = {
   lineHeight: new Set(["line-height"]),
 };
 
-function safeToken(token: KomoDesignToken): boolean {
+function safeToken(token: PaletteDesignToken): boolean {
   return !!token && typeof token.path === "string" && token.path.length <= 160 &&
     /^--[a-zA-Z0-9_-]+$/.test(token.cssVariable) &&
     !!propertiesByType[token.type] && Array.isArray(token.properties) && token.properties.length > 0 &&
@@ -75,14 +79,14 @@ function safeToken(token: KomoDesignToken): boolean {
 
 export function registerDesignTokenSource(
   root: HTMLElement,
-  tokens: readonly KomoDesignToken[],
+  tokens: readonly PaletteDesignToken[],
 ): () => void {
   if (tokens.length > 100 || tokens.some((token) => !safeToken(token)))
-    throw new Error("Komo design tokens must use supported, explicit CSS-variable metadata");
+    throw new Error("Palette design tokens must use supported, explicit CSS-variable metadata");
   const paths = new Set(tokens.map((token) => token.path));
   const variables = new Set(tokens.map((token) => token.cssVariable));
   if (paths.size !== tokens.length || variables.size !== tokens.length)
-    throw new Error("Komo design token paths and CSS variables must be unique");
+    throw new Error("Palette design token paths and CSS variables must be unique");
   for (const token of tokens) root.querySelectorAll(token.impactSelector);
   const source: RegisteredDesignTokenSource = {
     root,
@@ -118,7 +122,7 @@ export function registerDesignTokenSource(
   };
 }
 
-/** Token sources for the page komo shows: those registered in Frame's viewport iframe when it bridges them. */
+/** Token sources for the page Palette shows: those registered in Frame's viewport iframe when it bridges them. */
 function pageSources(): Iterable<RegisteredDesignTokenSource> {
   const bridged = frameBridge(pageWindow())?.tokenSources;
   return bridged ? (bridged() as Iterable<RegisteredDesignTokenSource>) : sources;
@@ -138,17 +142,17 @@ export function tokenSourceFor(target: Element | null): RegisteredDesignTokenSou
   return match;
 }
 
-export function tokenValue(source: RegisteredDesignTokenSource, token: KomoDesignToken): string {
+export function tokenValue(source: RegisteredDesignTokenSource, token: PaletteDesignToken): string {
   return source.root.ownerDocument.defaultView?.getComputedStyle(source.root)
     .getPropertyValue(token.cssVariable).trim() ?? "";
 }
 
-export function tokenImpactCount(source: RegisteredDesignTokenSource, token: KomoDesignToken): number {
+export function tokenImpactCount(source: RegisteredDesignTokenSource, token: PaletteDesignToken): number {
   try { return source.root.querySelectorAll(token.impactSelector).length; }
   catch { return 0; }
 }
 
-function validTokenValue(source: RegisteredDesignTokenSource, token: KomoDesignToken, value: string): boolean {
+function validTokenValue(source: RegisteredDesignTokenSource, token: PaletteDesignToken, value: string): boolean {
   if (!value || value.length > 160 || /[{};]/.test(value) || /(?:url|expression)\s*\(/i.test(value)) return false;
   const view = source.root.ownerDocument.defaultView;
   const css = view?.CSS;
@@ -161,7 +165,7 @@ function validTokenValue(source: RegisteredDesignTokenSource, token: KomoDesignT
  */
 export function previewThemeToken(
   source: RegisteredDesignTokenSource,
-  token: KomoDesignToken,
+  token: PaletteDesignToken,
   value: string,
   merge = false,
 ): boolean {
@@ -197,7 +201,7 @@ export function showThemeBefore(on: boolean): void {
 }
 
 /** Return one shared token to the page's value; like Reset, it leaves no undo step. */
-export function resetThemeToken(source: RegisteredDesignTokenSource, token: KomoDesignToken): void {
+export function resetThemeToken(source: RegisteredDesignTokenSource, token: PaletteDesignToken): void {
   const edit = source.themeEdits.get(token.path);
   const steps = history.get(source) ?? [];
   const first = steps.find((item) => item.kind === "theme" && item.token.path === token.path);
@@ -212,7 +216,7 @@ export function resetThemeToken(source: RegisteredDesignTokenSource, token: Komo
 export function applyTokenToElement(
   source: RegisteredDesignTokenSource,
   element: DesignTarget,
-  token: KomoDesignToken,
+  token: PaletteDesignToken,
   property: string,
   options: { recordHistory?: boolean } = {},
 ): boolean {
@@ -321,7 +325,7 @@ function referencedToken(
   property: string,
   value: string,
   exact: boolean,
-): KomoDesignToken | undefined {
+): PaletteDesignToken | undefined {
   const names = [...value.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]);
   if (!names.length || (exact && !/^var\(\s*--[\w-]+\s*(?:,[^;{}]*)?\)$/.test(value.trim()))) return undefined;
   const matches = source.tokens.filter((token) => token.properties.includes(property) && names.includes(token.cssVariable));
@@ -408,7 +412,7 @@ export function declaredTokenFor(
   return token ? { token, origin: "stylesheet" } : null;
 }
 
-/** Drop Komo's element preview for one property and return to the page's own value. */
+/** Drop Palette's element preview for one property and return to the page's own value. */
 export function restoreElementProperty(
   source: RegisteredDesignTokenSource,
   element: DesignTarget,
@@ -426,7 +430,7 @@ export function restoreElementProperty(
 export function compatibleTokens(
   source: RegisteredDesignTokenSource,
   property: string,
-): KomoDesignToken[] {
+): PaletteDesignToken[] {
   return source.tokens.filter((token) => token.properties.includes(property));
 }
 
@@ -526,7 +530,7 @@ export function proposedDesignTokenChanges(element: DesignTarget): string | unde
 }
 
 /** A registered CSS-variable token in the adapter shape, valued for its own root. */
-function designTokenFor(source: RegisteredDesignTokenSource, token: KomoDesignToken): DesignToken {
+function designTokenFor(source: RegisteredDesignTokenSource, token: PaletteDesignToken): DesignToken {
   return {
     path: token.path,
     type: token.type,
@@ -540,7 +544,7 @@ function designTokenFor(source: RegisteredDesignTokenSource, token: KomoDesignTo
 
 /**
  * The built-in token adapter: CSS custom properties registered with
- * `useKomoDesignTokens`. Design mode uses it when `design.tokens` is not set.
+ * `usePaletteDesignTokens`. Design mode uses it when `design.tokens` is not set.
  * `resolve()` reports a token only when the winning declaration references its
  * variable, and an off-token value for the other allowlisted properties.
  */
@@ -601,5 +605,5 @@ export function cssVariableTokens(): TokenAdapter {
   };
 }
 
-// Inside Frame's viewport iframe, komo in the parent window reads this realm's token sources.
+// Inside Frame's viewport iframe, Palette in the parent window reads this realm's token sources.
 publishFrameBridge({ tokenSourceFor, tokenSources: () => sources });

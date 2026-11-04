@@ -55,7 +55,7 @@ it("normalizes modifiers and disables shortcuts set to false", () => {
 
 it("rejects invalid, reserved, and duplicate shortcuts", () => {
   for (const comment of ["", "Hyper+C", "Shift+Shift+C", "Escape", "Shift+Tab"])
-    expect(() => resolveShortcuts({ comment })).toThrow("Invalid komo shortcut");
+    expect(() => resolveShortcuts({ comment })).toThrow("Invalid Palette shortcut");
   expect(() => resolveShortcuts({ comment: "V" })).toThrow("both use V");
   expect(() => resolveShortcuts({ comment: "D" })).toThrow("both use D");
   expect(resolveShortcuts({ comment: "D", design: false }).comment?.label).toBe("D");

@@ -14,9 +14,9 @@ export async function installAgentWorkflow(cwd) {
     if (error.code !== "ENOENT") throw error;
   }
   const block = `${start}
-## komo comment workflow
+## Palette comment workflow
 
-Use the project-local komo CLI (for example, npx --no-install komo). Run komo login if a session is needed.
+Use the project-local palette CLI (for example, npx --no-install palette). Run palette login if a session is needed.
 
 ${agentWorkflow}
 ${end}`;
@@ -30,7 +30,7 @@ ${end}`;
         existing.indexOf(end, last + end.length) !== -1))
   )
     throw Error(
-      "AGENTS.md has an incomplete or duplicate komo workflow block. Repair its markers before retrying."
+      "AGENTS.md has an incomplete or duplicate Palette workflow block. Repair its markers before retrying."
     );
   const content =
     first === -1

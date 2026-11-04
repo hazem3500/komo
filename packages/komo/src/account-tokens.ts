@@ -136,7 +136,7 @@ export function accountTokens(api: CommentsApi, project: string, back: () => voi
     requestAnimationFrame(() => root.querySelector<HTMLElement>(`[data-focus-key="${key}"]`)?.focus());
   const message = (error: unknown) =>
     error instanceof ApiError && error.status === 404
-      ? "This komo server doesn’t support API tokens."
+      ? "This Palette server doesn’t support API tokens."
       : error instanceof Error
         ? error.message
         : "Something went wrong. Try again.";
@@ -151,7 +151,7 @@ export function accountTokens(api: CommentsApi, project: string, back: () => voi
     back();
   };
   root.addEventListener("keydown", (event) => {
-    // komo's host isolation already marks Escape handled, so only its target matters here.
+    // Palette's host isolation already marks Escape handled, so only its target matters here.
     if (event.key !== "Escape") return;
     event.stopPropagation();
     event.preventDefault();
@@ -483,7 +483,7 @@ export function accountTokens(api: CommentsApi, project: string, back: () => voi
     list.setAttribute("aria-label", "Your API tokens");
     list.append(...data.tokens.map(renderToken));
     const note = el("p", "api-tokens-note");
-    note.append(document.createTextNode("Use a token as "), el("code", "", "KOMO_TOKEN"), document.createTextNode(" with the komo CLI."));
+    note.append(document.createTextNode("Use a token as "), el("code", "", "KOMO_TOKEN"), document.createTextNode(" with the palette CLI."));
     body.replaceChildren(list, note);
   }
 

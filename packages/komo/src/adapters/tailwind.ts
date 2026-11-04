@@ -1,10 +1,10 @@
 // Token adapter for utility-class design systems such as Tailwind.
 //
 //   import { tailwindTokens, tailwindSpacing } from "@hazem3500/komo/adapters/tailwind";
-//   initKomo({ design: { tokens: tailwindTokens({ tokens: [...table, ...tailwindSpacing()] }) } });
+//   initPalette({ design: { tokens: tailwindTokens({ tokens: [...table, ...tailwindSpacing()] }) } });
 //
 // A token is a utility class. The app supplies the table (usually generated from
-// its design-system foundations); komo never parses the Tailwind config, and reads
+// its design-system foundations); Palette never parses the Tailwind config, and reads
 // the page's stylesheets only with `onlyGenerated`.
 // This module is a separate entry point and never enters the core bundle.
 import type { DesignToken, DesignTokenType, PreviewTarget, ThemeAxis, ThemeState, TokenAdapter, TokenUsage, TokenValueChange } from "../design-system.js";
@@ -19,7 +19,7 @@ export interface TailwindToken {
   type: DesignTokenType;
   /**
    * The utility class, e.g. "text-primary". With several, the first is the canonical
-   * class komo adds when previewing; the rest are recognised aliases (e.g. "rounded-md").
+   * class Palette adds when previewing; the rest are recognised aliases (e.g. "rounded-md").
    */
   class: string | string[];
   /**
@@ -64,7 +64,7 @@ export interface TailwindTokensOptions {
   offToken?: string[] | false;
   /**
    * List only tokens whose class has a rule in the page's stylesheets, so the picker
-   * skips classes Tailwind's JIT never generated. Sheets komo cannot read (cross-origin
+   * skips classes Tailwind's JIT never generated. Sheets Palette cannot read (cross-origin
    * without CORS, such as an imported font stylesheet) are assumed not to hold the
    * utilities and are skipped. Every token stays listed while a <link> stylesheet is
    * loading or failed, or when no readable sheet has a style rule. `{ strict: true }`
@@ -167,7 +167,7 @@ function watchSheets(onChange: () => void): () => void {
 }
 
 /**
- * Escaped class names with a rule in the document, or null when komo cannot tell:
+ * Escaped class names with a rule in the document, or null when Palette cannot tell:
  * a <link> stylesheet is still loading or failed, no readable sheet has a style rule,
  * or, with `strict`, any sheet (or @import) is unreadable.
  */
@@ -197,7 +197,7 @@ function generatedClasses(strict: boolean): Set<string> | null {
     };
     for (const sheet of sheets) walk(() => sheet.cssRules);
   }
-  // Unknown: komo cannot prove a class is missing, so nothing is hidden.
+  // Unknown: Palette cannot prove a class is missing, so nothing is hidden.
   return scan[3] || !scan[1] || (strict && scan[2]) ? null : scan[0];
 }
 
@@ -415,7 +415,7 @@ export function tailwindSpacing(options: TailwindSpacingOptions = {}): TailwindT
   const steps = options.steps ?? defaultSpacingSteps;
   return (options.prefix ?? Object.keys(spacingFamilies)).flatMap((prefix) => {
     const family = spacingFamilies[prefix];
-    if (!family) throw new Error(`komo: unknown spacing prefix "${prefix}"`);
+    if (!family) throw new Error(`Palette: unknown spacing prefix "${prefix}"`);
     return steps.map((step): TailwindToken => {
       const name = `${prefix}-${step}`;
       return { path: `spacing.${name}`, type: "dimension", class: name, properties: family[1], value: `${step * scale}px`, group: family[0], label: name };

@@ -12,7 +12,7 @@ import { openDesign } from "./design-e2e.js";
 // color prop option by option (pointer or arrow keys) renders each option at once: no host
 // transition runs, reads are final values, the panel never moves and no animation notice shows.
 // Committing or Escape hands the host its transitions back and leaves no attribute or style behind.
-// Host motion komo did not start is named only once it lasts, as a dot that takes no space.
+// Host motion Palette did not start is named only once it lasts, as a dot that takes no space.
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
 const shots = join(tmpdir(), "komo-prop-motion");
@@ -41,14 +41,14 @@ beforeAll(async () => {
     stdin: { contents: `
       import React from 'react';
       import {createRoot} from 'react-dom/client';
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
-      import {useKomoInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {usePaletteInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
       const h=React.createElement;
       const enumProp=(name,values,required=true)=>({name,kind:'enum',required,values,typeLabel:values.map(value=>JSON.stringify(value)).join(' | ')+(required?'':' | undefined')});
       const definition={id:'Button',name:'Button',source:'fixture/button.tsx',line:1,props:[
         enumProp('variant',['primary','secondary']),enumProp('color',${JSON.stringify(COLORS.slice(1))},false),enumProp('size',['sm','md','lg'])]};
       function Button({onPropsChange,...props}){
-        const inspect=useKomoInspectable({component:definition,props,onChange:onPropsChange,enabled:true});
+        const inspect=usePaletteInspectable({component:definition,props,onChange:onPropsChange,enabled:true});
         return h('button',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],type:'button',className:'fixture-button',
           'data-variant':props.variant,'data-color':props.color,'data-size':props.size},h('span',null,'Example button'));
       }
@@ -60,7 +60,7 @@ beforeAll(async () => {
       createRoot(document.querySelector('main')).render(h(App));
       window.fetch=async()=>Response.json({threads:[],guests:true});
       document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'prop-motion',repo:'example/review',branch:'fixture',sidebar:'edge',restoreOpen:false,design:{experimentalGeometry:true}});
+      window.palette=initPalette({endpoint:location.origin,project:'prop-motion',repo:'example/review',branch:'fixture',sidebar:'edge',restoreOpen:false,design:{experimentalGeometry:true}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -136,12 +136,12 @@ async function sample(page: Page) {
 const PAINTS = ["rgb(255, 255, 255)", "rgb(233, 231, 227)", "rgb(217, 45, 32)", "rgb(7, 148, 85)", "rgb(105, 65, 198)"];
 const residue = (page: Page) => page.evaluate(() => {
   const button = document.querySelector(".fixture-button")!;
-  // Other komo features adopt sheets of their own; only the hold's must be gone.
+  // Other Palette features adopt sheets of their own; only the hold's must be gone.
   const sheets = document.adoptedStyleSheets.filter(sheet => [...sheet.cssRules].some(rule => rule.cssText.includes("data-komo-still"))).length;
   return { still: button.hasAttribute("data-komo-still"), style: button.getAttribute("style"), sheets, duration: getComputedStyle(button).transitionDuration };
 });
 
-describe.skipIf(!chrome)("host motion while komo previews a component prop", () => {
+describe.skipIf(!chrome)("host motion while Palette previews a component prop", () => {
   it("previews five options by pointer and keys at once, with no notice or reflow, then commits and Escapes cleanly", async () => {
     const { page, context, errors } = await open(".fixture-button", !!process.env.KOMO_SHOT_PHASE);
     try { await previews(page, errors); } finally {
@@ -196,7 +196,7 @@ describe.skipIf(!chrome)("host motion while komo previews a component prop", () 
       expect.soft(new Set(frames.map(frame => frame.list).filter(Boolean)).size, `${name} list`).toBe(1);
     }
 
-    // Enter commits; the host gets its transitions back and nothing of komo's stays on the button.
+    // Enter commits; the host gets its transitions back and nothing of Palette's stays on the button.
     await page.keyboard.press("Enter");
     await page.locator(".komo-select").waitFor({ state: "detached" });
     expect(await page.locator(".design-inspector__count").textContent()).toBe("1 change");

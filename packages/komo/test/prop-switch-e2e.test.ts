@@ -26,8 +26,8 @@ beforeAll(async () => {
     stdin: { contents: `
       import React from 'react';
       import {createRoot} from 'react-dom/client';
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
-      import {useKomoInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {usePaletteInspectable} from ${JSON.stringify(resolve("src/react.ts"))};
       const h=React.createElement;
       const definition={id:'option',name:'Option',source:'fixture/option.tsx',line:1,props:[
         {name:'selected',kind:'boolean',required:true,typeLabel:'boolean'},
@@ -35,14 +35,14 @@ beforeAll(async () => {
         {name:'muted',kind:'boolean',required:true,typeLabel:'boolean'}]};
       function Option(initial){
         const[props,setProps]=React.useState(initial);
-        const inspect=useKomoInspectable({component:definition,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
+        const inspect=usePaletteInspectable({component:definition,props,onChange:next=>setProps(current=>({...current,...next})),enabled:true});
         return h('button',{ref:inspect.ref,'data-komo-inspectable':inspect['data-komo-inspectable'],type:'button',className:'fixture-option',
           'data-selected':String(props.selected),'data-loading':String(props.loading)},'Example option');
       }
       createRoot(document.querySelector('main')).render(h(Option,{selected:true,muted:false}));
       window.fetch=async()=>Response.json({threads:[],guests:true});
       document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'prop-switch',repo:'example/review',branch:'fixture',sidebar:'edge',restoreOpen:false});
+      window.palette=initPalette({endpoint:location.origin,project:'prop-switch',repo:'example/review',branch:'fixture',sidebar:'edge',restoreOpen:false});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });

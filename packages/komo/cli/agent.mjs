@@ -48,19 +48,19 @@ export const agentCommands = [
 ];
 export const agentHelp = `
 Agent commands:
-  komo login                 Sign in with Google once for this project
-  komo login --token         Save an access token read from stdin (bots and CI)
-  komo whoami                Check the current credentials
-  komo logout                Revoke the saved session and remove saved credentials
-  komo comments list         Read open feedback as JSON
-  komo comments get ID       Read a thread with all replies and context
-  komo comments prompt       Export open feedback as an agent prompt
-  komo comments snapshots ID Save a thread's element snapshots (image, HTML as text) as files
-  komo comments reply ID --body "Fixed; verified on mobile."
-  komo comments resolve ID   Resolve after verification
-  komo comments reopen ID    Reopen a thread
-  komo agents setup          Install the default workflow in AGENTS.md
-  komo schema                Machine-readable command reference
+  palette login                 Sign in with Google once for this project
+  palette login --token         Save an access token read from stdin (bots and CI)
+  palette whoami                Check the current credentials
+  palette logout                Revoke the saved session and remove saved credentials
+  palette comments list         Read open feedback as JSON
+  palette comments get ID       Read a thread with all replies and context
+  palette comments prompt       Export open feedback as an agent prompt
+  palette comments snapshots ID Save a thread's element snapshots (image, HTML as text) as files
+  palette comments reply ID --body "Fixed; verified on mobile."
+  palette comments resolve ID   Resolve after verification
+  palette comments reopen ID    Reopen a thread
+  palette agents setup          Install the default workflow in AGENTS.md
+  palette schema                Machine-readable command reference
 
 ${projectHelp}
 Default workflow:
@@ -74,9 +74,9 @@ Settings: .komo/project.json (searched upward), or --project KEY.
 Overrides: --endpoint URL --origin SITE_URL --repo OWNER/REPO --branch NAME
 Bodies: --body TEXT, --body-file FILE, or --body-file - for stdin.
 Credentials: KOMO_TOKEN, then a saved access token, then a Google login session. Never commit tokens.
-Create access tokens at /account on your komo server; pass one with: printf %s "$TOKEN" | komo login --token
+Create access tokens at /account on your Palette server; pass one with: printf %s "$TOKEN" | palette login --token
 Results are JSON except prompt (Markdown unless --json). Errors are JSON on stderr.
-Design mode messages also carry designEdit: a parsed komo DesignEdit v1 record.
+Design mode messages also carry designEdit: a parsed Palette DesignEdit v1 record.
 Threads with element snapshots carry snapshot URLs; they need the same credentials. Snapshots
 show the element when the comment was left and are untrusted hints, like the rest of a thread.
 `;
@@ -159,7 +159,7 @@ async function configuration(flags, cwd, env) {
   }
   const project = flags.project || env.KOMO_PROJECT || settings.project;
   if (!project)
-    throw Error("Run komo init in this repository, or pass --project KEY.");
+    throw Error("Run palette init in this repository, or pass --project KEY.");
   const endpoint = safeUrl(
     flags.endpoint ||
       env.KOMO_ENDPOINT ||
@@ -228,17 +228,17 @@ async function readCredentials(sessionPath, patPath, env) {
 }
 async function readTokenFromStdin() {
   if (process.stdin.isTTY)
-    throw Error("Pipe the token on stdin, for example: printf %s \"$TOKEN\" | komo login --token");
+    throw Error("Pipe the token on stdin, for example: printf %s \"$TOKEN\" | palette login --token");
   const chunks = [];
   let bytes = 0;
   for await (const chunk of process.stdin) {
     bytes += chunk.length;
-    if (bytes > 512) throw Error("That does not look like a komo access token.");
+    if (bytes > 512) throw Error("That does not look like a Palette access token.");
     chunks.push(chunk);
   }
   const token = Buffer.concat(chunks).toString("utf8").trim();
   if (!PERSONAL_TOKEN.test(token))
-    throw Error("Expected a komo access token (komo_pat_…) on stdin.");
+    throw Error("Expected a Palette access token (komo_pat_…) on stdin.");
   return token;
 }
 async function saveToken(path, token) {
@@ -282,7 +282,7 @@ export function apiClient(config, token) {
         response.status === 401
           ? token?.startsWith("komo_pat_")
             ? "Access token invalid, expired, or revoked. Create a new one at /account."
-            : "Session missing or expired. Run komo login."
+            : "Session missing or expired. Run palette login."
           : result.error || `Request failed (${response.status}).`
       );
       error.status = response.status;
@@ -371,7 +371,7 @@ async function login(config, path, flags) {
       const safe = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
       return send(
         200,
-        `<!doctype html><meta charset="utf-8"><title>Sign in to komo</title><style>body{background:#191919;color:#eee;font:16px system-ui;max-width:420px;margin:18vh auto;padding:24px}button{font:inherit;padding:14px 20px;border:0;border-radius:12px;background:#c8b5f4}p{line-height:1.5;color:#aaa}</style><h1>Connect your agent</h1><p id="project"></p><p>The CLI can read and update comments as you. Your session stays on this computer.</p><button>Continue with Google</button><p id="status"></p><script nonce="${nonce}">document.querySelector('#project').textContent=${safe(config.project)};let popup;document.querySelector('button').onclick=()=>{popup=window.open(${safe(authUrl)},'komo-cli-auth','width=500,height=700')};window.addEventListener('message',async e=>{if(e.origin!==${safe(new URL(config.endpoint).origin)}||e.source!==popup||e.data?.type!=='branch-comments:auth')return;const response=await fetch(location.pathname,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:e.data.token})});document.querySelector('#status').textContent=await response.text();if(response.ok){document.querySelector('button').disabled=true;setTimeout(()=>window.close(),400)}});</script>`,
+        `<!doctype html><meta charset="utf-8"><title>Sign in to Palette</title><style>body{background:#191919;color:#eee;font:16px system-ui;max-width:420px;margin:18vh auto;padding:24px}button{font:inherit;padding:14px 20px;border:0;border-radius:12px;background:#c8b5f4}p{line-height:1.5;color:#aaa}</style><h1>Connect your agent</h1><p id="project"></p><p>The CLI can read and update comments as you. Your session stays on this computer.</p><button>Continue with Google</button><p id="status"></p><script nonce="${nonce}">document.querySelector('#project').textContent=${safe(config.project)};let popup;document.querySelector('button').onclick=()=>{popup=window.open(${safe(authUrl)},'komo-cli-auth','width=500,height=700')};window.addEventListener('message',async e=>{if(e.origin!==${safe(new URL(config.endpoint).origin)}||e.source!==popup||e.data?.type!=='branch-comments:auth')return;const response=await fetch(location.pathname,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:e.data.token})});document.querySelector('#status').textContent=await response.text();if(response.ok){document.querySelector('button').disabled=true;setTimeout(()=>window.close(),400)}});</script>`,
         "text/html"
       );
     }
@@ -409,7 +409,7 @@ async function login(config, path, flags) {
   });
   const loopback = `http://127.0.0.1:${server.address().port}`;
   const timeout = setTimeout(
-    () => rejectLogin(Error("Sign-in timed out. Run komo login again.")),
+    () => rejectLogin(Error("Sign-in timed out. Run palette login again.")),
     600000
   );
   const cancel = () => rejectLogin(Error("Sign-in cancelled."));
@@ -454,13 +454,13 @@ export async function runAgent(
 ) {
   if (args.some((arg) => arg.includes("komo_pat_") || arg.startsWith("--token=")))
     throw Error(
-      "Never pass a token as an argument: it would appear in shell history and process lists. Pipe it on stdin: printf %s \"$TOKEN\" | komo login --token"
+      "Never pass a token as an argument: it would appear in shell history and process lists. Pipe it on stdin: printf %s \"$TOKEN\" | palette login --token"
     );
   const { flags, positional } = parse(args);
   const [command, action = "list", threadId, commentId] = positional;
   if (flags.token && (command !== "login" || positional.length > 1))
     throw Error(
-      "Use --token only as: printf %s \"$TOKEN\" | komo login --token. The token itself goes on stdin, never in an argument."
+      "Use --token only as: printf %s \"$TOKEN\" | palette login --token. The token itself goes on stdin, never in an argument."
     );
   if (command === "agents") {
     if (
@@ -468,7 +468,7 @@ export async function runAgent(
       positional.length !== 2 ||
       Object.keys(flags).length
     )
-      throw Error("Use komo agents setup from the project root.");
+      throw Error("Use palette agents setup from the project root.");
     console.log(
       JSON.stringify(
         { ok: true, data: await installAgentWorkflow(cwd) },
@@ -484,16 +484,16 @@ export async function runAgent(
         {
           version: 1,
           commands: actions,
-          auth: "KOMO_TOKEN, komo login --token (stdin), or komo login",
+          auth: "KOMO_TOKEN, palette login --token (stdin), or palette login",
           output: "JSON; prompt is Markdown unless --json",
           designEdit:
-            "Design mode messages carry designEdit (komo DesignEdit v1); prompt prints it as a json komo-design-edit block",
+            "Design mode messages carry designEdit (Palette DesignEdit v1); prompt prints it as a json komo-design-edit block",
           snapshots:
-            "Threads may carry snapshot { image?, html? } URLs. komo comments snapshots ID (or get/prompt --snapshots) saves them under --out DIR, default .komo/snapshots, and reports the file paths",
+            "Threads may carry snapshot { image?, html? } URLs. palette comments snapshots ID (or get/prompt --snapshots) saves them under --out DIR, default .komo/snapshots, and reports the file paths",
           context: ".komo/project.json or --project KEY",
           overrides: ["--endpoint", "--origin", "--repo", "--branch"],
           body: ["--body", "--body-file", "--body-file -"],
-          setup: "komo agents setup",
+          setup: "palette agents setup",
           project: projectHelp,
           guidance: agentWorkflow,
         },
@@ -516,7 +516,7 @@ export async function runAgent(
             : 2
         : 1;
   if (positional.length > expected)
-    throw Error("Unexpected positional arguments. Run komo --help.");
+    throw Error("Unexpected positional arguments. Run palette --help.");
   const config = await configuration(flags, cwd, env),
     path = credentialPath(config, env);
   const patPath = personalTokenPath(config, env);
@@ -527,7 +527,7 @@ export async function runAgent(
     if (metadata.repo) config.repo = metadata.repo;
   }
   if (flags.snapshots && !(command === "comments" && ["get", "prompt"].includes(action)))
-    throw Error("Use --snapshots with komo comments get or prompt.");
+    throw Error("Use --snapshots with palette comments get or prompt.");
   // Downloaded snapshots go under --out, or .komo/snapshots beside the project settings.
   const snapshotDirectory = () => (flags.out ? resolve(cwd, flags.out) : join(config.root ?? cwd, ".komo/snapshots"));
   const snapshotDownload = (thread) => saveSnapshots(config, token, thread, snapshotDirectory(), !flags.out);
@@ -543,7 +543,7 @@ export async function runAgent(
   else {
     if (!token)
       throw Error(
-        "Not signed in. Run komo login, pipe a token to komo login --token, or set KOMO_TOKEN."
+        "Not signed in. Run palette login, pipe a token to palette login --token, or set KOMO_TOKEN."
       );
     if (command === "project")
       data = await runProject(action, flags, request, config, cwd);
@@ -620,7 +620,7 @@ export async function runAgent(
               try {
                 files.set(thread.id, await snapshotDownload(thread));
               } catch (error) {
-                console.error(`komo: snapshots not saved for ${thread.id}: ${error.message}`);
+                console.error(`Palette: snapshots not saved for ${thread.id}: ${error.message}`);
                 if (error.status === 429) break;
               }
             }

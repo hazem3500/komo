@@ -24,7 +24,7 @@ beforeAll(async () => {
         import ${JSON.stringify(resolve("src/adapters/react-preview.ts"))};
         import React from 'react';
         import {createRoot} from 'react-dom/client';
-        import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+        import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
         import {discoverReactComponents} from ${JSON.stringify(resolve("src/adapters/react-fiber.ts"))};
         import {tailwindTokens} from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
         const Slot=React.forwardRef(function Slot(props,ref){return React.cloneElement(React.Children.only(props.children),{ref});});
@@ -50,7 +50,7 @@ beforeAll(async () => {
         const tokens=tailwindTokens({tokens:[{path:'color.primary',label:'Primary',type:'color',class:'text-primary',properties:['color'],value:'#b42318'},{path:'color.secondary',label:'Secondary',type:'color',class:'text-secondary',properties:['color'],value:'#2468ff'},...Array.from({length:8},(_,index)=>({path:'color.fixture'+index,label:'Supplemental '+index,type:'color',class:'text-fixture-'+index,properties:['color'],value:'#123456'}))]});
         // The reflow cases cover the unscaled in-place frame: the space beside the comments.
         if(reflow)localStorage.setItem('branch-comments:frame-size:nested-props:example/review',JSON.stringify({v:2,size:'available'}));
-        window.komo=initKomo({endpoint:location.origin,project:'nested-props',repo:'example/review',branch:'fixture',pageRoot:frame||reflow?document.querySelector('main'):undefined,sidebar:frame||reflow?'background':'edge',frame:{scale:frame},restoreOpen:false,design:{components:adapter,tokens}});
+        window.palette=initPalette({endpoint:location.origin,project:'nested-props',repo:'example/review',branch:'fixture',pageRoot:frame||reflow?document.querySelector('main'):undefined,sidebar:frame||reflow?'background':'edge',frame:{scale:frame},restoreOpen:false,design:{components:adapter,tokens}});
       `, resolveDir: process.cwd(), loader: "ts" },
       alias: { react: dirname(require.resolve("react/package.json")), "react-dom": dirname(require.resolve("react-dom/package.json")) },
       outdir: join(directory, String(version)), entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",

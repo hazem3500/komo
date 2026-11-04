@@ -1,13 +1,13 @@
 // Design-system adapters: how a site tells Design mode about its tokens,
-// themes, and components. komo never guesses from computed styles or reads
+// themes, and components. Palette never guesses from computed styles or reads
 // framework internals; the app answers through these adapters. The one
 // exception is opt-in: `@hazem3500/komo/adapters/react-fiber` is an adapter an app
 // can install to read React's private fields.
 //
-//   initKomo({ design: { tokens, themes, components } })
+//   initPalette({ design: { tokens, themes, components } })
 //
 // Every adapter is optional. Without `tokens`, Design mode keeps using the
-// CSS custom properties registered with `useKomoDesignTokens`.
+// CSS custom properties registered with `usePaletteDesignTokens`.
 
 /** DTCG-style token types. Composite types are listed but previewed only as a whole. */
 export type DesignTokenType =
@@ -105,7 +105,7 @@ export interface TokenAdapter {
   list(theme?: ThemeState): DesignToken[] | Promise<DesignToken[]>;
   /**
    * Which token each CSS property of `element` uses, or its off-token value.
-   * Return only properties the app can vouch for; komo shows nothing for the rest.
+   * Return only properties the app can vouch for; Palette shows nothing for the rest.
    * A path declares a semantic binding, including a token rendered as a concrete
    * inline value. Report custom literals as offToken, even when they match a token.
    */
@@ -113,7 +113,7 @@ export interface TokenAdapter {
   /**
    * Preview `token` for `property` on `element` until the returned undo runs,
    * e.g. by swapping a utility class or setting a CSS variable. Without it,
-   * komo previews by setting the token's resolved value inline.
+   * Palette previews by setting the token's resolved value inline.
    */
   preview?(element: Element, property: string, token: DesignToken): () => void;
   /**
@@ -123,7 +123,7 @@ export interface TokenAdapter {
   describe?(element: Element, property: string, from: TokenUsage, to: DesignToken): string;
   /**
    * Preview token values page-wide until the returned cleanup runs; the cleanup
-   * restores the page exactly. komo runs the previous cleanup, then passes the
+   * restores the page exactly. Palette runs the previous cleanup, then passes the
    * full current change set, on every edit and theme switch. It also cleans up
    * for Before, cancel, reset, closing Design mode and destroy. `theme` is the
    * current theme key: an adapter that cannot scope a value to its theme applies
@@ -133,7 +133,7 @@ export interface TokenAdapter {
   previewValues?(changes: TokenValueChange[], theme?: string, target?: PreviewTarget): () => void;
   /**
    * For token sets that change at runtime: call `onChange` when `list()` would
-   * return something different, and stop when the returned function runs. komo
+   * return something different, and stop when the returned function runs. Palette
    * subscribes once Design mode shows tokens; on each call it lists again and
    * refreshes chips, proposals and open pickers. Without it, `list()` runs once
    * per theme state.
@@ -158,9 +158,9 @@ export interface ThemeAxis {
   id: string;
   label?: string;
   options: ThemeOption[];
-  /** The option currently applied to the page; `target` is the page komo is reviewing. */
+  /** The option currently applied to the page; `target` is the page Palette is reviewing. */
   current(target?: PreviewTarget): string;
-  /** Switch the page to `optionId`. komo restores the original option when Design mode closes. */
+  /** Switch the page to `optionId`. Palette restores the original option when Design mode closes. */
   apply(optionId: string, target?: PreviewTarget): void;
   /** Notify when the host changes this axis outside the inspector, including state held outside the DOM. */
   subscribe?(listener: () => void): () => void;
@@ -207,8 +207,8 @@ export interface ComponentIdentity {
 export interface ComponentAdapter {
   /**
    * The nearest component for `element`, or null. Apps may use any strategy,
-   * including reading their framework's internals; komo's core never does.
-   * Works alongside `useKomoInspectable`, which still provides editable props
+   * including reading their framework's internals; Palette's core never does.
+   * Works alongside `usePaletteInspectable`, which still provides editable props
    * and always takes precedence over what an adapter identifies.
    */
   identify(element: Element): ComponentIdentity | null;
@@ -226,8 +226,8 @@ export interface DesignSystem {
   experimentalGeometry?: boolean;
   /**
    * Canvas selection color for Design mode's hover and selection outlines, resize handles and move
-   * feedback, e.g. "#0c93f5" (the default) or "rebeccapurple". The panel keeps komo's accent. It
-   * applies with `experimentalGeometry`; the `--komo-selection` custom property on komo's host
+   * feedback, e.g. "#0c93f5" (the default) or "rebeccapurple". The panel keeps Palette's accent. It
+   * applies with `experimentalGeometry`; the `--komo-selection` custom property on Palette's host
    * element sets it from CSS either way.
    */
   selectionColor?: string;
@@ -273,7 +273,7 @@ export type DesignEditChange =
    */
   | { kind: "token-value"; path: string; theme?: string; from: string; to: string }
   /**
-   * Change a component prop (from `useKomoInspectable` or the component adapter).
+   * Change a component prop (from `usePaletteInspectable` or the component adapter).
    * `token` is the style token path the new value binds, e.g. "color.brand"
    * for var(--color-brand); absent for custom values. Optional, so v1 edits
    * without it stay valid.

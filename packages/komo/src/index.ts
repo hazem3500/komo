@@ -5,8 +5,8 @@ import {
   resumeProject,
   setupSites,
 } from "./connect-project.js";
-import { resolveConfig, type KomoConfig } from "./config.js";
-export type { KomoConfig } from "./config.js";
+import { resolveConfig, type PaletteConfig } from "./config.js";
+export type { PaletteConfig, KomoConfig } from "./config.js";
 import { adaptivePolling } from "./polling.js";
 import { pinDirection } from "./pin-direction.js";
 import { byAge, collisions, hitArea, pinStacks, stackWidth } from "./pin-stacks.js";
@@ -18,7 +18,7 @@ import { SHELL_OFF_KEY, claimShell, shellNonce } from "./shell-session.js";
 import {
   clientPoint,
   counterpart,
-  framedByKomo,
+  framedByPalette,
   isElement,
   onFrame,
   pageDocument,
@@ -124,9 +124,12 @@ const instances = new WeakMap<
 >();
 
 /** Initialize from inline public project settings. */
-export function initKomo(config: KomoConfig): CommentsController {
+export function initPalette(config: PaletteConfig): CommentsController {
   return initComments(resolveConfig(config));
 }
+
+/** @deprecated Use `initPalette`. */
+export const initKomo = initPalette;
 
 /** Mount once on the client. The returned destroy() restores the host page. */
 export function initComments(options: CommentsOptions): CommentsController {
@@ -137,7 +140,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     comment() {},
     async refresh() {},
   };
-  if (typeof document === "undefined" || options.enabled === false || framedByKomo()) return noop;
+  if (typeof document === "undefined" || options.enabled === false || framedByPalette()) return noop;
   if (!options.endpoint || !options.repo || !options.branch || !options.project)
     throw new Error("Comments require endpoint, repo, branch, and project.");
   if (
@@ -164,7 +167,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   const designKeys = resolveDesignKeys(options.shortcuts);
   const hostPinSize = options.pins?.size ?? "full";
   if (!pinSizes.includes(hostPinSize))
-    throw new Error(`Invalid komo pins.size: "${hostPinSize}".`);
+    throw new Error(`Invalid Palette pins.size: "${hostPinSize}".`);
   const designEnabled = options.features?.designMode !== false;
   // The toolbar's latest commands, for shortcut help.
   let helpItems: ToolbarMenuItem[] = [];
@@ -180,7 +183,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   if (current) {
     if (current.scope !== scope)
       throw new Error(
-        "Destroy the current komo instance before changing projects or branches.",
+        "Destroy the current Palette instance before changing projects or branches.",
       );
     return current.controller;
   }
@@ -198,7 +201,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   const surface =
     getComputedStyle(root).display === "contents" ? document.body : root;
   const canFrame = surface !== document.body;
-  // Single-copy simulated viewport (frame.shell): this load is komo's shell when it carries the nonce komo
+  // Single-copy simulated viewport (frame.shell): this load is Palette's shell when it carries the nonce Palette
   // set in this tab, and the app runs only in the frame.
   const shellWanted = options.frame?.mode === "iframe" && options.frame.scale !== true && options.frame.shell === true;
   const shell = shellWanted ? shellNonce(options.project) : "";
@@ -750,7 +753,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     live,
   );
   document.body.append(host);
-  // Modal libraries hide every body sibling from assistive tech; komo stays
+  // Modal libraries hide every body sibling from assistive tech; Palette stays
   // reachable. A capped rate yields to a library that keeps re-applying.
   let unhidden = 0,
     unhiddenAt = 0;
@@ -790,7 +793,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   const viewportEnabled = options.frame?.mode === "iframe" && options.frame.scale !== true;
   let viewport: FrameViewport | undefined;
   let viewportOpening = false;
-  // The iframe shows a same-origin page and komo reads the page through it.
+  // The iframe shows a same-origin page and Palette reads the page through it.
   let viewportShown = false;
   // The last layout used the iframe, so this page was left untouched beneath it.
   let laidViewport = false;
@@ -3268,7 +3271,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     );
     if (density === "dot") breathe(visible);
     // Same-target threads share their persistent owner (the anchorTarget adapter's, else
-    // komo's); the page itself is no shared target.
+    // Palette's); the page itself is no shared target.
     const owners = new Map<string, Element>();
     const stacks = grouping
       ? pinStacks(visible, (thread) => {
@@ -4326,7 +4329,7 @@ export function initComments(options: CommentsOptions): CommentsController {
             button(
               "Turn on comments",
               () => {
-                // The owner approves this site on the komo service, where
+                // The owner approves this site on the Palette service, where
                 // sign-in isn't blocked; returning to this tab retries.
                 const setup = new URL(
                   "setup",
@@ -6551,7 +6554,7 @@ export function initComments(options: CommentsOptions): CommentsController {
     });
   }
   const onScroll = (event: Event) => {
-      // komo's own pan notice is for others; pins already moved with the frame.
+      // Palette's own pan notice is for others; pins already moved with the frame.
       if (panEvent) return;
       previewSuppressed = true;
       hidePreview();
@@ -6951,9 +6954,9 @@ export function initComments(options: CommentsOptions): CommentsController {
   host.addEventListener("keydown", () => polling?.wake(false), {
     signal: abort.signal,
   });
-  // Page listeners see komo's events retargeted to the host <div>. Stop them
-  // here so host shortcuts skip komo's fields and open modals don't treat komo
-  // as outside interaction; komo's own page handlers use onPage().
+  // Page listeners see Palette's events retargeted to the host <div>. Stop them
+  // here so host shortcuts skip Palette's fields and open modals don't treat Palette
+  // as outside interaction; Palette's own page handlers use onPage().
   if (options.isolateEvents !== false) {
     host.setAttribute("data-isolate", "");
     isolateEscape(host, abort.signal);
@@ -6963,7 +6966,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         (event) => isolated(event, shadow) && event.stopPropagation(),
         { passive: true, signal: abort.signal },
       );
-    // Moving focus into komo fires focusout on the page element, which focus
+    // Moving focus into Palette fires focusout on the page element, which focus
     // traps answer by refocusing. Stop it for document listeners added later.
     document.addEventListener(
       "focusout",
@@ -7119,7 +7122,7 @@ export function initComments(options: CommentsOptions): CommentsController {
         });
   }
   if (shell) {
-    // komo started in its shell: the guard's fallback stands down.
+    // Palette started in its shell: the guard's fallback stands down.
     claimShell(shell);
     shellReady = true;
     if (!canFrame) leaveShell("Single-copy mode needs the app's root element in the page's HTML.");

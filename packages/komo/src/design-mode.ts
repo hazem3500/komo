@@ -12,13 +12,13 @@ import type { DesignSystem } from "./design-system.js";
 
 export interface DesignModeOptions {
   root: ShadowRoot;
-  /** Shared Komo sidebar surface; the inspector rides its morph. Tests may omit it. */
+  /** Shared Palette sidebar surface; the inspector rides its morph. Tests may omit it. */
   panelRoot?: HTMLElement;
   host: HTMLElement;
   targetAt(x: number, y: number): Element | null;
   onComment(element: Element, proposal?: string): void;
   onExit(): void;
-  /** Opens komo's shortcut help; the empty state links to it and `?` opens it. */
+  /** Opens Palette's shortcut help; the empty state links to it and `?` opens it. */
   shortcutHelp?(): void;
   reservedKey?(event: KeyboardEvent): boolean;
   /** Move the floating panel to the other side when it covers the target. */
@@ -800,7 +800,7 @@ export function createDesignMode(options: DesignModeOptions) {
   const toAfter = () => showBefore(false);
   for (const node of [controls, actions, editText])
     for (const type of ["pointerdown", "focusin", "click", "input"]) node.addEventListener(type, toAfter, true);
-  // Moves, Undo and applied tokens announce in komo's one polite live region (index.ts).
+  // Moves, Undo and applied tokens announce in Palette's one polite live region (index.ts).
   options.root.addEventListener("komo-announce", event => {
     const live = options.root.querySelector(".sr-only[aria-live]");
     if (live) live.textContent = (event as CustomEvent<string>).detail;

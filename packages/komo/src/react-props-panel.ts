@@ -36,7 +36,7 @@ import {
   tokenSourceFor,
   tokenValue,
   undoDesignToken,
-  type KomoDesignToken,
+  type PaletteDesignToken,
   type RegisteredDesignTokenSource,
 } from "./design-tokens.js";
 import type { ComponentIdentity, DesignSystem, DesignToken, DesignTokenType, ThemeAxis, TokenAdapter, TokenUsage } from "./design-system.js";
@@ -271,7 +271,7 @@ export function proposedReactChanges(element: DesignTarget): string | undefined 
 
 /**
  * What the app's component adapter names for `element`. A component registered
- * with useKomoInspectable wins: on its root, and around any element inside it
+ * with usePaletteInspectable wins: on its root, and around any element inside it
  * unless the adapter names a component nested within the registered root.
  */
 function adapterIdentity(element: Element, design?: DesignSystem): ComponentIdentity | null {
@@ -504,7 +504,7 @@ function caption(select: HTMLSelectElement, property: string): HTMLElement {
   return state;
 }
 
-/** Deliberate announcements, such as an applied token, go to komo's one polite live region. */
+/** Deliberate announcements, such as an applied token, go to Palette's one polite live region. */
 function announce(from: Element, text: string): void {
   from.dispatchEvent(new CustomEvent("komo-announce", { detail: text, bubbles: true, composed: true }));
 }
@@ -552,7 +552,7 @@ export function createElementTokenControl(
     select.append(option);
   }
   const off = offTokenMarker();
-  const asToken = (token: KomoDesignToken): DesignToken => ({
+  const asToken = (token: PaletteDesignToken): DesignToken => ({
     path: token.path, type: token.type as DesignTokenType, value: tokenValue(source, token),
     properties: token.properties, group: token.path.split(".")[0], ref: token.cssVariable,
   });
@@ -913,7 +913,7 @@ export function createDesignThemePanel(
   note.textContent = "Changes every element using these tokens";
   group.append(summary, note);
   // Long lists group by the first path segment, e.g. color, spacing, radius.
-  const sets = new Map<string, KomoDesignToken[]>();
+  const sets = new Map<string, PaletteDesignToken[]>();
   for (const token of source.tokens) {
     const key = token.path.split(".")[0];
     sets.set(key, [...sets.get(key) ?? [], token]);
@@ -933,7 +933,7 @@ export function createDesignThemePanel(
 
 function themeRow(
   source: RegisteredDesignTokenSource,
-  token: KomoDesignToken,
+  token: PaletteDesignToken,
   panel: ThemeFields,
   onEdit: () => void,
   key: string,
@@ -1085,7 +1085,7 @@ const titled = (label: string | undefined, id: string) => label || id.charAt(0).
 const sun = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.75"/><path d="M8 1.75v1.5m0 9.5v1.5M1.75 8h1.5m9.5 0h1.5M3.6 3.6l1 1m6.8 6.8 1 1m-8.8 0 1-1m6.8-6.8 1-1"/></svg>';
 const moon = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.25 9.6A5.5 5.5 0 1 1 6.4 2.75a4.4 4.4 0 0 0 6.85 6.85Z"/></svg>';
 
-/** The header's komo tooltip, below the control: after a short hover, or at once on keyboard focus. */
+/** The header's Palette tooltip, below the control: after a short hover, or at once on keyboard focus. */
 function headerTip(control: HTMLElement, root: ShadowRoot | undefined, signal: AbortSignal): () => void {
   const tip = el("div", "morphing-menu__tooltip sidebar-tooltip");
   tip.setAttribute("aria-hidden", "true");
@@ -1202,7 +1202,7 @@ export function attachThemeSwitcher(
         options.forEach((option, index) => select.append(new Option(names[index], option.id)));
         select.value = current;
         select.addEventListener("change", () => choose(axis, current, select.value));
-        // The popup sits in the header, outside the panel's fields: it gets komo's listbox too.
+        // The popup sits in the header, outside the panel's fields: it gets Palette's listbox too.
         void import("./select-menu.js").then(menu => menu.attach(popup), () => {});
       } else {
         field = el("div", "design-theme-options");

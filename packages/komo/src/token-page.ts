@@ -214,7 +214,7 @@ function createPage(panel: HTMLElement, host: TokenPageHost, [picker, props, exp
   searchBar.append(search);
   const list = make("div", "design-token-page__list");
   view.append(note, searchBar, list);
-  // A row's details show in komo's tooltip beside the panel, or above a narrow sheet, so it never
+  // A row's details show in Palette's tooltip beside the panel, or above a narrow sheet, so it never
   // covers rows or group headings; only without room for either does it sit above the row.
   const besideRows = (tip: HTMLElement, row: HTMLElement) => {
     const box = row.getBoundingClientRect(), side = panel.getBoundingClientRect();

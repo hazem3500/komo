@@ -95,7 +95,7 @@ it("keeps a thread open in the sidebar when its anchor leaves", async () => {
   expect(shadow.querySelector(".panel .thread-pane")?.textContent).toContain("Modal thread");
 });
 
-it("keeps komo's host exposed when a modal hides the page's other content", async () => {
+it("keeps Palette's host exposed when a modal hides the page's other content", async () => {
   const { host } = await mount();
   host.setAttribute("aria-hidden", "true");
   host.setAttribute("inert", "");

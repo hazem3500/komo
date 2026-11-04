@@ -193,12 +193,12 @@ export function accountPage(env: Env, url: URL) {
     project,
   }).replace(/</g, "\\u003c");
   return new Response(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="robots" content="noindex"><title>Access tokens · komo</title><link rel="icon" href="data:,"><style nonce="${nonce}">${css}</style></head><body>
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="robots" content="noindex"><title>Access tokens · Palette</title><link rel="icon" href="data:,"><style nonce="${nonce}">${css}</style></head><body>
 <a class="skip" href="#main">Skip to content</a>
-<header><a class="brand" href="/">komo</a><div class="who" id="who"></div></header>
+<header><a class="brand" href="/">Palette</a><div class="who" id="who"></div></header>
 <main id="main">
 <div id="v-loading"><div class="skeleton"></div></div>
-<section id="v-signin" hidden><h1>Access tokens</h1><p class="lede">Sign in with Google to create tokens that let bots and CI use the komo CLI as you.</p><p><button class="btn primary" id="signin" type="button">Continue with Google</button></p><p class="error-text" id="signin-error" role="alert"></p></section>
+<section id="v-signin" hidden><h1>Access tokens</h1><p class="lede">Sign in with Google to create tokens that let bots and CI use the palette CLI as you.</p><p><button class="btn primary" id="signin" type="button">Continue with Google</button></p><p class="error-text" id="signin-error" role="alert"></p></section>
 <section id="v-guest" hidden><h1>Access tokens</h1><div class="panel notice"><strong>Sign in with Google to manage tokens</strong><span>Guest sessions can’t create access tokens, because a token would carry an identity that can’t be verified.</span></div><p><button class="btn" id="guest-out" type="button">Sign out</button></p></section>
 <section id="v-tokens" hidden>
 <div class="bar"><div><h1>Access tokens</h1><p class="lede">Use a token as <code class="mono">KOMO_TOKEN</code> so bots and CI can read or write comments as you. Treat tokens like passwords.</p></div><button class="btn primary" id="new" type="button">New token</button></div>

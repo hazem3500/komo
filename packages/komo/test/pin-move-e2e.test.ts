@@ -17,7 +17,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-pin-move-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { captureAnchor } from ${JSON.stringify(resolve("src/anchors.ts"))};
       const user={id:location.search.includes('guest')?'other':'reviewer',name:'Example reviewer',verified:!location.search.includes('guest')};
       const author={id:'reviewer',name:'Example reviewer',verified:true};
@@ -36,7 +36,7 @@ beforeAll(async () => {
         }
         return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads:[thread()]}:{});
       };
-      window.komo=initKomo({endpoint:location.origin,project:'pin-move',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',frame:{scale:true},restoreOpen:false,pollInterval:60000});
+      window.palette=initPalette({endpoint:location.origin,project:'pin-move',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',frame:{scale:true},restoreOpen:false,pollInterval:60000});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });

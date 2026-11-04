@@ -18,7 +18,7 @@ let server: Server, browser: Browser;
 // chips whose hit areas overlap, two pins 30px apart that only collide once Frame scales the
 // page down, and three on a card at the right edge.
 const fixture = `
-  import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+  import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
   import { captureAnchor } from ${JSON.stringify(resolve("src/anchors.ts"))};
   const query=new URLSearchParams(location.search),layout=query.get('layout')??'reflow';
   const user={id:'reviewer',name:'Example reviewer',verified:true};
@@ -43,7 +43,7 @@ const fixture = `
     return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads}:{});
   };
   const size=query.get('size'),cluster=query.get('cluster');
-  window.komo=initKomo({endpoint:location.origin,project:'stacks',repo:'example/review',branch:'fixture',
+  window.palette=initPalette({endpoint:location.origin,project:'stacks',repo:'example/review',branch:'fixture',
     pageRoot:layout==='floating'?undefined:document.querySelector('main'),sidebar:layout==='floating'?'edge':'background',
     ...(layout==='scaled'?{frame:{scale:true}}:{}),restoreOpen:false,pollInterval:60000,
     pins:{...(size?{size}:{}),...(cluster?{cluster:cluster!=='false'}:{})}});

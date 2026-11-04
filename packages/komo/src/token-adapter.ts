@@ -18,7 +18,7 @@ interface Swap {
   adapter: TokenAdapter;
   property: string;
   token: DesignToken;
-  /** What the property used before komo's first swap, and that token when it has one. */
+  /** What the property used before Palette's first swap, and that token when it has one. */
   from: TokenUsage;
   fromToken?: DesignToken;
   undo: () => void;
@@ -183,7 +183,7 @@ export function watchTokenList(adapter: TokenAdapter | undefined, update: () => 
   lists.delete(adapter);
   try {
     const stop = adapter.subscribe(() => {
-      // Only a list that changed refreshes, so a report caused by komo's own previews keeps open
+      // Only a list that changed refreshes, so a report caused by Palette's own previews keeps open
       // popups and rows. Every watcher of one report compares with the lists from before it.
       const before = reported.get(adapter) ?? lists.get(adapter);
       reported.set(adapter, before);
@@ -293,7 +293,7 @@ export function previewToken(adapter: TokenAdapter, element: Element, property: 
   }
 }
 
-/** The latest token komo previewed for a property, if any. */
+/** The latest token Palette previewed for a property, if any. */
 export function swappedToken(element: Element, property: string): DesignToken | undefined {
   if (customs.get(element)?.has(property)) return;
   return [...swaps.get(element) ?? []].reverse().find((swap) => swap.property === property)?.token;

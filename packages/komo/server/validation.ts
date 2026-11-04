@@ -10,7 +10,7 @@ export class HttpError extends Error {
     super(message);
   }
 }
-/** A server option is set to a value komo can't run with. */
+/** A server option is set to a value Palette can't run with. */
 export class ConfigError extends Error {}
 export function check(
   condition: unknown,

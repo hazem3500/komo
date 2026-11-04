@@ -6,14 +6,14 @@ import { chromium, type Browser, type BrowserContext, type LaunchOptions } from 
 // still reachable throws rather than sampling the screen.
 export const EYEDROPPER_STUB_HEX = "#ff0000";
 
-/** Page script: `globalThis.__komoEyeDropper = "abort"` makes the next pick cancel. */
+/** Page script: `globalThis.__paletteEyeDropper = "abort"` makes the next pick cancel. */
 export const eyeDropperStub = `(() => {
   const native = globalThis.EyeDropper;
   if (native) native.prototype.open = () => { throw new Error("Native EyeDropper reached in an automated test"); };
   class EyeDropper {
     open() {
-      globalThis.__komoEyeDropperCalls = (globalThis.__komoEyeDropperCalls ?? 0) + 1;
-      const next = globalThis.__komoEyeDropper ?? { sRGBHex: "${EYEDROPPER_STUB_HEX}" };
+      globalThis.__paletteEyeDropperCalls = (globalThis.__paletteEyeDropperCalls ?? 0) + 1;
+      const next = globalThis.__paletteEyeDropper ?? { sRGBHex: "${EYEDROPPER_STUB_HEX}" };
       return next === "abort"
         ? Promise.reject(new DOMException("The user canceled the selection.", "AbortError"))
         : Promise.resolve(next);

@@ -53,9 +53,9 @@ let label: HTMLElement;
 let controller: ReturnType<typeof createDesignMode> | undefined;
 
 async function open(design: DesignSystem) {
-  document.body.innerHTML = '<main><p id="label" class="text-secondary">Hello</p></main><div id="komo"></div>';
+  document.body.innerHTML = '<main><p id="label" class="text-secondary">Hello</p></main><div id="palette"></div>';
   label = document.querySelector("#label")!;
-  const host = document.querySelector<HTMLElement>("#komo")!;
+  const host = document.querySelector<HTMLElement>("#palette")!;
   shadow = host.attachShadow({ mode: "open" });
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
   vi.stubGlobal("cancelAnimationFrame", () => {});
@@ -199,7 +199,7 @@ describe("Design panel theme switcher", () => {
     };
     await open({ tokens: adapter(), themes: [unreadable, failing, mode] });
     await vi.waitFor(() => expect(switcher()).not.toBeNull());
-    // An axis komo can't read is left out; the others still work.
+    // An axis Palette can't read is left out; the others still work.
     expect([...switcher()!.querySelector(".design-theme-popup")!.children].map((row) => row.querySelector("span")!.textContent)).toEqual(["Density", "Mode"]);
     expect(() => themeButton("Compact").click()).not.toThrow();
     await vi.waitFor(() => expect(themeButton("Compact").getAttribute("aria-pressed")).toBe("true"));

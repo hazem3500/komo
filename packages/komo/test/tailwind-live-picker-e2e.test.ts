@@ -20,7 +20,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-tailwind-live-picker-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       const tokens = tailwindTokens({ tokens: [
         { path: "color.text.base", type: "color", class: "text-base", properties: ["color"], value: "#575456", label: "Text base" },
@@ -29,7 +29,7 @@ beforeAll(async () => {
         ...Array.from({ length: 30 }, (_, index) => ({ path: "color.text.extra" + index, type: "color", class: "text-extra-" + index, properties: ["color"], value: "#123456", label: "Text extra " + index })),
       ] }, { onlyGenerated: true });
       window.fetch = async () => Response.json({ threads: [], guests: true });
-      window.komo = initKomo({ endpoint: location.origin, project: "live-picker", repo: "example/review", branch: "fixture", pageRoot: document.querySelector("main"), sidebar: "background", restoreOpen: false, design: { tokens } });
+      window.palette = initPalette({ endpoint: location.origin, project: "live-picker", repo: "example/review", branch: "fixture", pageRoot: document.querySelector("main"), sidebar: "background", restoreOpen: false, design: { tokens } });
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -65,7 +65,7 @@ describe.skipIf(!chrome)("onlyGenerated Tailwind picker in Chrome", () => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(origin);
-    await page.waitForFunction(() => !!(window as any).komo);
+    await page.waitForFunction(() => !!(window as any).palette);
     const target = page.locator("#target");
     const color = () => target.evaluate(node => getComputedStyle(node).color);
     await openDesign(page);
@@ -105,7 +105,7 @@ describe.skipIf(!chrome)("onlyGenerated Tailwind picker in Chrome", () => {
     expect(await color()).toBe("rgb(11, 122, 92)");
     expect(await target.getAttribute("class")).toBe("text-accent");
     expect(errors).toEqual([]);
-    await page.evaluate(() => (window as any).komo.destroy());
+    await page.evaluate(() => (window as any).palette.destroy());
     await page.close();
   });
 });

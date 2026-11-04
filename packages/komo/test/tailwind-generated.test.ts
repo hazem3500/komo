@@ -64,7 +64,7 @@ describe("tailwindTokens onlyGenerated", () => {
     const tokens = [token("p-9"), token("p-11")];
     const adapter = tailwindTokens({ tokens }, { onlyGenerated: true });
     const list = () => (adapter.list({}) as DesignToken[]).map((item) => item.path);
-    // No style rule anywhere yet: komo cannot tell, so nothing is hidden.
+    // No style rule anywhere yet: Palette cannot tell, so nothing is hidden.
     expect(list()).toEqual(["t.p-9", "t.p-11"]);
     style(".app{margin:0}");
     expect(list()).toEqual([]);

@@ -1,7 +1,7 @@
 // Token adapter that discovers a page's CSS custom properties.
 //
 //   import { discoverCssTokens } from "@hazem3500/komo/adapters/css-variables";
-//   initKomo({ design: { tokens: discoverCssTokens() } });
+//   initPalette({ design: { tokens: discoverCssTokens() } });
 //
 // Reads `--*` declarations on :root / html from same-origin stylesheets, which
 // includes the variables Tailwind v4 emits for `@theme`. The type comes from the

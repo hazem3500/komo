@@ -9,7 +9,7 @@ export async function loadPostgres(): Promise<Pg> {
     const module = await import("pg");
     pg = ((module as unknown as { default?: Pg }).default ?? module) as Pg;
   } catch {
-    throw Error("The komo Node server needs the PostgreSQL client. Install it next to komo: npm install pg");
+    throw Error("The Palette Node server needs the PostgreSQL client. Install it next to Palette: npm install pg");
   }
   // API timestamps, counters, and revisions are JavaScript numbers.
   pg.types.setTypeParser(20, (value) => {

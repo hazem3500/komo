@@ -154,7 +154,7 @@ describe("Design mode preview cleanup", () => {
     restored(link("Timer"));
   });
 
-  it("restores the page when komo is dismissed or destroyed", async () => {
+  it("restores the page when Palette is dismissed or destroyed", async () => {
     const { shadow, edit } = await mount();
     await edit(link("Timer"));
     shadow.querySelector<HTMLButtonElement>('[data-menu-item="dismiss"]')!.click();

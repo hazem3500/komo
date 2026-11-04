@@ -68,9 +68,9 @@ describe("snapshot HTML", () => {
     expect(capped).not.toContain('data-row="1999"');
   });
 
-  it("leaves out komo's own UI and markers, and empties host no-snapshot regions inside the target", () => {
+  it("leaves out Palette's own UI and markers, and empties host no-snapshot regions inside the target", () => {
     const root = fixture(`<div data-komo-inspectable="1" data-komo-still=""><p>Page</p>
-      <div data-branch-comments="project">komo toolbar</div><div data-komo-move-clone>stand-in</div>
+      <div data-branch-comments="project">Palette toolbar</div><div data-komo-move-clone>stand-in</div>
       <div data-komo-no-snapshot><p>Private notes</p></div></div>`);
     const html = snapshotHtml(root);
     expect(html).not.toMatch(/komo toolbar|stand-in|Private notes|data-komo-inspectable|data-komo-still|data-branch-comments/);
@@ -80,7 +80,7 @@ describe("snapshot HTML", () => {
 });
 
 describe("snapshot capture", () => {
-  it("skips targets inside a data-komo-no-snapshot ancestor and komo's own UI", async () => {
+  it("skips targets inside a data-komo-no-snapshot ancestor and Palette's own UI", async () => {
     const root = fixture(`<div data-komo-no-snapshot><article><p id="private">Account</p></article></div><p id="public">Public</p>`);
     const host = document.createElement("div");
     host.dataset.branchComments = "fixture";
@@ -134,7 +134,7 @@ describe("snapshot capture", () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     const post = vi.fn((_kind: string, _body: Blob) => Promise.reject(new Error("Snapshot storage is full")));
     await snapshotFor({}, () => root.firstElementChild, { html: true }, limits, post);
-    await vi.waitFor(() => expect(info).toHaveBeenCalledWith("komo: the comment posted without its html snapshot.", "Snapshot storage is full"));
+    await vi.waitFor(() => expect(info).toHaveBeenCalledWith("Palette: the comment posted without its html snapshot.", "Snapshot storage is full"));
     const [kind, body] = post.mock.calls[0]!;
     expect(kind).toBe("html");
     expect(body.type).toBe("text/html;charset=utf-8");
@@ -252,7 +252,7 @@ describe("posting with snapshots", () => {
     failUploads = true;
     const uploads = await post({ html: true });
     expect(uploads).toHaveLength(1);
-    await vi.waitFor(() => expect(info).toHaveBeenCalledWith("komo: the comment posted without its html snapshot.", "Snapshot storage is full"));
+    await vi.waitFor(() => expect(info).toHaveBeenCalledWith("Palette: the comment posted without its html snapshot.", "Snapshot storage is full"));
     const shadow = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
     expect(shadow.textContent).not.toContain("Couldn't save");
   });

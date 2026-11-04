@@ -151,6 +151,7 @@
     "emoji-regex": "^10.6.0"
   },
   "bin": {
+    "palette": "cli/index.mjs",
     "komo": "cli/index.mjs"
   },
   "engines": {

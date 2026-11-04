@@ -7,7 +7,7 @@ import { ConfigError } from "./validation";
 /** The account a sign-in proxy vouches for. */
 export type ProxyIdentity = { id: string; email: string };
 
-/** A proxy in front of komo that authenticates each request it forwards. */
+/** A proxy in front of Palette that authenticates each request it forwards. */
 export interface ProxyAuthProvider {
   name: string;
   /** The OAuth provider whose sign-in route and account ids it takes over. */

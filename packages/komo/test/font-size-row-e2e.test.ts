@@ -10,7 +10,7 @@ import { openDesign } from "./design-e2e.js";
 
 // The font size row: a T icon and the name scrub, the value reads "14" with "px" inside the
 // field, a bound token shows as a chip with a caret beside the value, and the chip's popup is
-// the token list alone (Edit as CSS stays collapsed). Every select in the panel opens komo's
+// the token list alone (Edit as CSS stays collapsed). Every select in the panel opens Palette's
 // own listbox, from the mouse or the keyboard.
 const chrome = [process.env.KOMO_E2E_CHROME, "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
   .find((path): path is string => !!path && existsSync(path));
@@ -22,14 +22,14 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-font-size-row-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       import { tailwindTokens } from ${JSON.stringify(resolve("src/adapters/tailwind.ts"))};
       const tokens=tailwindTokens({tokens:[
         {path:'text.body',type:'dimension',class:'text-body',properties:['font-size'],value:'14px',label:'Body'},
         {path:'text.large',type:'dimension',class:'text-large',properties:['font-size'],value:'18px',label:'Large'},
       ]});
       window.fetch=async()=>Response.json({threads:[],guests:true});
-      window.komo=initKomo({endpoint:location.origin,project:'font-size-row',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens},shortcuts:location.search.includes('reserve-g')?{comments:'G'}:undefined});
+      window.palette=initPalette({endpoint:location.origin,project:'font-size-row',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,design:{tokens},shortcuts:location.search.includes('reserve-g')?{comments:'G'}:undefined});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -63,7 +63,7 @@ async function open(width: number, query = "") {
   const errors: string[] = [];
   tab.on("pageerror", error => errors.push(error.message));
   await tab.goto(origin + query);
-  await tab.waitForFunction(() => !!(window as any).komo);
+  await tab.waitForFunction(() => !!(window as any).palette);
   await openDesign(tab);
   await tab.locator("#card").click();
   await tab.mouse.move(2, 2);
@@ -149,7 +149,7 @@ describe.skipIf(!chrome).each([1280, 390])("the font size row at %ipx", width =>
     await tab.close();
   });
 
-  it("opens komo's listbox for every select, by click or by typing", async () => {
+  it("opens Palette's listbox for every select, by click or by typing", async () => {
     const { tab, errors } = await open(width);
     const selects = tab.locator(".design-inspector select:visible:not([data-picker])");
     const count = await selects.count();
@@ -176,7 +176,7 @@ describe.skipIf(!chrome).each([1280, 390])("the font size row at %ipx", width =>
     await tab.close();
   });
 
-  it("leaves komo's own shortcut keys to their shortcut on a focused select", async () => {
+  it("leaves Palette's own shortcut keys to their shortcut on a focused select", async () => {
     // The comments list is bound to G here: on a focused select, G opens the list of comments,
     // not the select's options; any other letter still types ahead.
     const { tab, errors } = await open(width, "?reserve-g");

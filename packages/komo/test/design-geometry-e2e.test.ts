@@ -20,7 +20,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-geometry-"));
   await build({
     stdin: { contents: `
-      import { initKomo } from ${JSON.stringify(resolve("src/index.ts"))};
+      import { initPalette } from ${JSON.stringify(resolve("src/index.ts"))};
       const user={id:'synthetic-reviewer',name:'Example reviewer',verified:true};
       const key='branch-comments:'+location.origin+':lifecycle';
       localStorage.setItem(key,'synthetic-session');
@@ -28,7 +28,7 @@ beforeAll(async () => {
       window.fetch=async input=>{const path=new URL(input instanceof Request?input.url:String(input),location.origin).pathname;return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true,guestResolve:true}:path.endsWith('/threads')?{threads:[]}:{});};
       const frame=location.search.includes('frame');
       if(!frame)document.body.append(document.createElement('aside'));
-      window.komo=initKomo({endpoint:location.origin,project:'lifecycle',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:location.search.includes('scaled')},design:{experimentalGeometry:!location.search.includes('off')},restoreOpen:false,pollInterval:60000});
+      window.palette=initPalette({endpoint:location.origin,project:'lifecycle',repo:'example/review',branch:'fixture',pageRoot:frame?document.querySelector('main'):undefined,sidebar:frame?'background':'edge',frame:{scale:location.search.includes('scaled')},design:{experimentalGeometry:!location.search.includes('off')},restoreOpen:false,pollInterval:60000});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -83,7 +83,7 @@ describe.skipIf(!chrome)('experimental geometry', () => {
     page.setDefaultTimeout(5000);
     try {
       await page.goto(`${origin}/?${mode}`);
-      await page.waitForFunction(() => !!(window as any).komo);
+      await page.waitForFunction(() => !!(window as any).palette);
       await openDesign(page);
       await page.locator('#target').click();
       await handle(page, 'se').waitFor({ state: 'visible' });
@@ -119,7 +119,7 @@ describe.skipIf(!chrome)('experimental geometry', () => {
       await page.screenshot({ path: join(directory, `geometry-${mode}.png`) });
       await page.getByRole('button', { name: 'Reset', exact: true }).click();
       expect(await target.getAttribute('style')).toBe(baseline);
-      await page.evaluate(() => (window as any).komo.destroy());
+      await page.evaluate(() => (window as any).palette.destroy());
       expect(await target.getAttribute('style')).toBe(baseline);
       expect(errors).toEqual([]);
     } finally { await page.close(); }
@@ -131,7 +131,7 @@ describe.skipIf(!chrome)('experimental geometry', () => {
     page.setDefaultTimeout(5000);
     try {
       await page.goto(`${origin}/?off`);
-      await page.waitForFunction(() => !!(window as any).komo);
+      await page.waitForFunction(() => !!(window as any).palette);
       await openDesign(page);
       await page.locator('#target').click();
       await page.locator('.design-inspector__target').waitFor();
@@ -148,7 +148,7 @@ describe.skipIf(!chrome)('geometry ownership and guards', () => {
     page.setDefaultTimeout(5000);
     try {
       await page.goto(origin);
-      await page.waitForFunction(() => !!(window as any).komo);
+      await page.waitForFunction(() => !!(window as any).palette);
       const target = page.locator('#target');
       await target.evaluate(node => node.setAttribute('style', 'transform:scale(1.2,1.1);translate:5% 8px !important;transition:opacity 2s linear !important'));
       const baseline = await target.getAttribute('style');
@@ -165,7 +165,7 @@ describe.skipIf(!chrome)('geometry ownership and guards', () => {
       expect(sized.height - rect.height).toBeCloseTo(23, 0);
       // Scrolling under a held handle keeps the dragged edge under the pointer.
       // The wheel resolves before Chrome scrolls; wait for the page's scroll event, which
-      // runs after komo's own scroll listener has moved the held edge.
+      // runs after Palette's own scroll listener has moved the held edge.
       await page.evaluate(() => { (window as any).wheeled = new Promise<void>(resolve => {
         const done = () => { if (scrollY < 40) return; removeEventListener('scroll', done, true); resolve(); };
         addEventListener('scroll', done, true);
@@ -185,7 +185,7 @@ describe.skipIf(!chrome)('geometry ownership and guards', () => {
       await page.waitForTimeout(60);
       expect(await page.locator('.design-inspector__target').textContent()).toBe('Select an element');
       expect(await target.getAttribute('style')).toBeNull();
-      await page.evaluate(() => (window as any).komo.destroy());
+      await page.evaluate(() => (window as any).palette.destroy());
       expect(await page.evaluate(() => (window as any).oldGeometryTarget.getAttribute('style'))).toBe(baseline);
       expect(await target.getAttribute('style')).toBeNull();
     } finally { await page.close(); }
@@ -194,7 +194,7 @@ describe.skipIf(!chrome)('geometry ownership and guards', () => {
     const page = await browser.newPage();
     page.setDefaultTimeout(5000);
     try {
-      await page.goto(origin); await page.waitForFunction(() => !!(window as any).komo);
+      await page.goto(origin); await page.waitForFunction(() => !!(window as any).palette);
       await page.locator('#target').evaluate((node, value) => (node as HTMLElement).style.transform = value, transform);
       const baseline = await page.locator('#target').getAttribute('style');
       await openDesign(page); await page.locator('#target').click();
@@ -214,7 +214,7 @@ describe.skipIf(!chrome)('geometry proposal handoff', () => {
     const page = await browser.newPage({ reducedMotion: 'reduce' });
     page.setDefaultTimeout(5000);
     try {
-      await page.goto(origin); await page.waitForFunction(() => !!(window as any).komo);
+      await page.goto(origin); await page.waitForFunction(() => !!(window as any).palette);
       await openDesign(page); await page.locator('#target').click();
       await keys(page, 'Control+ArrowRight', 'Control+ArrowDown');
       await page.locator('.design-inspector__actions').getByRole('button', { name: 'Comment', exact: true }).click();
@@ -224,7 +224,7 @@ describe.skipIf(!chrome)('geometry proposal handoff', () => {
       expect(proposal).not.toContain('translate');
       await page.keyboard.press('Escape');
       expect(await page.locator('#target').getAttribute('style')).toBeNull();
-      await page.evaluate(() => (window as any).komo.destroy());
+      await page.evaluate(() => (window as any).palette.destroy());
       expect(await page.locator('#target').getAttribute('style')).toBeNull();
     } finally { await page.close(); }
   });
@@ -235,7 +235,7 @@ describe.skipIf(!chrome)('geometry transaction boundaries', () => {
     const page = await browser.newPage({ reducedMotion: 'reduce' });
     page.setDefaultTimeout(5000);
     try {
-      await page.goto(origin); await page.waitForFunction(() => !!(window as any).komo);
+      await page.goto(origin); await page.waitForFunction(() => !!(window as any).palette);
       await openDesign(page); await page.locator('#target').click();
       const corner = handle(page, 'se');
       await corner.waitFor();

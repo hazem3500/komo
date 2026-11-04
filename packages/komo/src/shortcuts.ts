@@ -1,6 +1,6 @@
-import type { KomoShortcuts } from "./types.js";
+import type { PaletteShortcuts } from "./types.js";
 
-export type ShortcutAction = Exclude<keyof KomoShortcuts, "compare" | "select">;
+export type ShortcutAction = Exclude<keyof PaletteShortcuts, "compare" | "select">;
 
 export interface Shortcut {
   key: string;
@@ -35,11 +35,11 @@ function parse(action: string, value: string, tab = false): Shortcut {
   for (const part of parts) {
     const name = modifiers.find((m) => m.toLowerCase() === part.toLowerCase());
     if (!name || held.has(name))
-      throw new Error(`Invalid komo shortcut for ${action}: "${value}".`);
+      throw new Error(`Invalid Palette shortcut for ${action}: "${value}".`);
     held.add(name);
   }
   if (!key || reserved.has(key.toLowerCase()) && !(tab && key.toLowerCase() === "tab"))
-    throw new Error(`Invalid komo shortcut for ${action}: "${value}".`);
+    throw new Error(`Invalid Palette shortcut for ${action}: "${value}".`);
   const display = key.length === 1 ? key.toUpperCase() : key;
   return {
     key: key.toLowerCase(),
@@ -58,7 +58,7 @@ const designDefaults: Record<keyof DesignKeys, string | false> = {
 };
 
 /** Resolve `shortcuts.compare` and `shortcuts.select`; false disables one. Tab is allowed here. */
-export function resolveDesignKeys(config: KomoShortcuts = {}): DesignKeys {
+export function resolveDesignKeys(config: PaletteShortcuts = {}): DesignKeys {
   const given: Record<string, string | false | undefined> = { ...config.compare, ...config.select };
   const resolved = {} as DesignKeys;
   const seen = new Map<string, string>();
@@ -67,7 +67,7 @@ export function resolveDesignKeys(config: KomoShortcuts = {}): DesignKeys {
     if (value === false) { resolved[action] = null; continue; }
     const shortcut = parse(action, value, true);
     const other = seen.get(shortcut.label.toLowerCase());
-    if (other) throw new Error(`komo shortcuts for ${other} and ${action} both use ${shortcut.label}.`);
+    if (other) throw new Error(`Palette shortcuts for ${other} and ${action} both use ${shortcut.label}.`);
     seen.set(shortcut.label.toLowerCase(), action);
     resolved[action] = shortcut;
   }
@@ -76,7 +76,7 @@ export function resolveDesignKeys(config: KomoShortcuts = {}): DesignKeys {
 
 /** Resolve configured shortcuts; false disables one. Throws on invalid or duplicate keys. */
 export function resolveShortcuts(
-  config: KomoShortcuts = {},
+  config: PaletteShortcuts = {},
 ): Record<ShortcutAction, Shortcut | null> {
   const resolved = {} as Record<ShortcutAction, Shortcut | null>;
   const seen = new Map<string, ShortcutAction>();
@@ -87,7 +87,7 @@ export function resolveShortcuts(
       continue;
     }
     if (typeof value !== "string")
-      throw new Error(`Invalid komo shortcut for ${action}.`);
+      throw new Error(`Invalid Palette shortcut for ${action}.`);
     const shortcut = parse(action, value);
     const other = seen.get(shortcut.label.toLowerCase());
     if (other && config[action] === undefined && yielding.has(action)) {
@@ -96,7 +96,7 @@ export function resolveShortcuts(
     }
     if (other)
       throw new Error(
-        `komo shortcuts for ${other} and ${action} both use ${shortcut.label}.`,
+        `Palette shortcuts for ${other} and ${action} both use ${shortcut.label}.`,
       );
     seen.set(shortcut.label.toLowerCase(), action);
     resolved[action] = shortcut;

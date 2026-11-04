@@ -32,7 +32,7 @@ describe("single-copy shell", () => {
     expect(fallback).toHaveBeenCalledOnce();
   });
 
-  it("matches only komo's own nonce for this project and origin", () => {
+  it("matches only Palette's own nonce for this project and origin", () => {
     const nonce = "f".repeat(32);
     history.replaceState(null, "", shellUrl(location.href, nonce));
     expect(shellNonce("example-project")).toBe("");

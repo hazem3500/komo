@@ -18,7 +18,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "komo-router-preview-"));
   await build({
     stdin: { contents: `
-      import {initKomo} from ${JSON.stringify(resolve("src/index.ts"))};
+      import {initPalette} from ${JSON.stringify(resolve("src/index.ts"))};
 const user={id:'fixture',name:'Alex Morgan',verified:true};
 const anchor={selector:'#target',text:'',x:.5,y:.5,width:0,height:0,pageX:0,pageY:0,viewportWidth:1280};
 const comment=(id,body,name='Alex Morgan')=>({id,body,author:{...user,name},createdAt:Date.now()-600000,editedAt:null,reactions:{}});
@@ -32,8 +32,8 @@ Object.defineProperty(navigator,'clipboard',{value:{writeText:async value=>windo
 window.fetch=async(input,init)=>{const method=init?.method||'GET',path=new URL(String(input),location.origin).pathname;
 if(method!=='GET') { const body=JSON.parse(init.body);window.qa.writes.push({method,path,body});const t=threads.find(t=>path.includes('/threads/'+t.id));if(method==='PATCH')Object.assign(t,body);if(method==='POST'&&path.endsWith('/comments'))t.comments.push(comment('saved',body.body));return Response.json({id:'saved'}); }
 return Response.json(path.endsWith('/me')?{user}:path.endsWith('/config')?{guests:true}:path.endsWith('/threads')?{threads}:{});};
-window.komo=initKomo({endpoint:location.origin,project:'neutral-conversation',repo:'example/fixture',branch:'local',restoreOpen:false,sidebar:new URLSearchParams(location.search).get('mode')==='frame'?'background':'edge',pageRoot:document.querySelector('main'),pageLabel:new URLSearchParams(location.search).has('fallback')?undefined:url=>{const mode=new URLSearchParams(location.search).get('label');if(mode==='throw')throw Error('fixture');if(mode==='reject')return Promise.reject(Error('fixture'));if(mode==='empty')return ' ';if(mode==='undefined')return undefined;if(mode==='malicious')return '<img src=x onerror=alert(1)>';return url.pathname==='/reports/123/summary'&&new URLSearchParams(location.search).has('deferred')?new Promise(resolve=>window.qa.resolveLabel=resolve):url.pathname==='/reports/123/summary'?'Reports › Summary':undefined;},navigate:url=>{window.qa.navigation.push(url.href);if(new URLSearchParams(location.search).has('slow'))return new Promise(resolve=>window.qa.finishRoute=()=>{history.pushState({},'',url);window.dispatchEvent(new PopStateEvent('popstate'));resolve()});history.pushState({},'',url);window.dispatchEvent(new PopStateEvent('popstate'));}});
-window.komo.open();
+window.palette=initPalette({endpoint:location.origin,project:'neutral-conversation',repo:'example/fixture',branch:'local',restoreOpen:false,sidebar:new URLSearchParams(location.search).get('mode')==='frame'?'background':'edge',pageRoot:document.querySelector('main'),pageLabel:new URLSearchParams(location.search).has('fallback')?undefined:url=>{const mode=new URLSearchParams(location.search).get('label');if(mode==='throw')throw Error('fixture');if(mode==='reject')return Promise.reject(Error('fixture'));if(mode==='empty')return ' ';if(mode==='undefined')return undefined;if(mode==='malicious')return '<img src=x onerror=alert(1)>';return url.pathname==='/reports/123/summary'&&new URLSearchParams(location.search).has('deferred')?new Promise(resolve=>window.qa.resolveLabel=resolve):url.pathname==='/reports/123/summary'?'Reports › Summary':undefined;},navigate:url=>{window.qa.navigation.push(url.href);if(new URLSearchParams(location.search).has('slow'))return new Promise(resolve=>window.qa.finishRoute=()=>{history.pushState({},'',url);window.dispatchEvent(new PopStateEvent('popstate'));resolve()});history.pushState({},'',url);window.dispatchEvent(new PopStateEvent('popstate'));}});
+window.palette.open();
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
@@ -83,7 +83,7 @@ describe.skipIf(!chrome)("conversation polling", () => {
         w.qa.threads[0].comments.push({...w.qa.threads[0].comments[1], id: "incoming", body: "Incoming reply"});
         w.qa.threads[0].tags = ["new-tag"];
         w.qa.threads.forEach((t: any) => t.updatedAt++);
-        w.komo.refresh();
+        w.palette.refresh();
       });
       await page.getByText("Incoming other thread update", {exact:true}).waitFor();
       await page.getByText("Incoming reply", {exact:true}).waitFor();
@@ -157,7 +157,7 @@ it.skipIf(!chrome)("native actions, drafts, exact links and visual conversation 
   } finally { await page.close(); }
 });
 
-it.skipIf(!chrome).each(['floating-light','floating-dark','frame-light','frame-dark','floating-narrow','frame-narrow'])("renders full initKomo conversation states: %s", async variant => {
+it.skipIf(!chrome).each(['floating-light','floating-dark','frame-light','frame-dark','floating-narrow','frame-narrow'])("renders full initPalette conversation states: %s", async variant => {
   const narrow = variant.endsWith('narrow');
   const page = await browser.newPage({viewport:{width:narrow?1000:1280,height:1000},colorScheme:variant.endsWith('dark')?'dark':'light',reducedMotion:'reduce'});
   try {
