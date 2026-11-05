@@ -66,7 +66,7 @@ type Mock = {
   posts: Record<string, unknown>[];
   deletes: string[];
   supported: boolean;
-  policy?: { explicitProjects: boolean; maxLifetimeDays: number };
+  policy?: { explicitProjects: boolean; maxLifetimeDays: number; noExpiry?: boolean };
   listStatus?: number;
   failDelete?: string;
 };
@@ -179,6 +179,22 @@ describe.skipIf(!chrome).each(["light", "dark"] as const)("API tokens on a %s pa
       await page.getByRole("region", { name: "Copy “Preview reader”" }).waitFor();
       expect(mock.posts).toEqual([{ name: "Preview reader", projects: ["other"], expiresInDays: 7, scopes: ["comments:read"] }]);
       expect((page as any).errors).toEqual([]);
+    } finally { await page.close(); }
+  });
+
+  it("offers and submits all-project perpetual proxy grants when allowed", async () => {
+    const mock = mockApi({ policy: { explicitProjects: false, maxLifetimeDays: 365, noExpiry: true } });
+    const page = await open(scheme, google, mock);
+    try {
+      await page.getByRole("button", { name: "API tokens" }).click();
+      await page.getByRole("button", { name: "New token" }).click();
+      const form = page.getByRole("form", { name: "New token" });
+      await form.getByRole("textbox", { name: "Name" }).fill("Automation");
+      await form.getByRole("radio", { name: "All your projects", exact: true }).click();
+      await form.getByRole("radio", { name: "Never", exact: true }).click();
+      await form.getByRole("button", { name: "Create token" }).click();
+      await page.getByRole("region", { name: "Copy “Automation”" }).waitFor();
+      expect(mock.posts).toEqual([{ name: "Automation", projects: [], expiresInDays: null, scopes: ["comments:read"] }]);
     } finally { await page.close(); }
   });
 
