@@ -66,7 +66,7 @@ describe("webhook security", () => {
       repo: "owner/site", branch: "main", threadId: "t1", pageUrl: "https://example.com/", selector: "h1", author: "Reviewer", body: "Hi",
     };
     await dispatchWebhook(
-      { DB, PALETTE_WEBHOOK_KEYS: ring, PALETTE_WEBHOOK_SEND: async (_url, _body, headers) => void sent.push(headers) },
+      { DB: DB as unknown as D1Database, PALETTE_WEBHOOK_KEYS: ring, PALETTE_WEBHOOK_SEND: async (_url, _body, headers) => void sent.push(headers) },
       "project-a",
       event,
     );

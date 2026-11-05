@@ -602,7 +602,7 @@ export function initComments(options: CommentsOptions): CommentsController {
    * uploads it once the thread exists.
    */
   const snapshot = (anchor: Anchor, post?: (kind: string, body: Blob) => Promise<unknown>) =>
-    options.snapshots && snapshotLimits && api.user && (api.user.verified || snapshotLimits.guests)
+    (options.snapshots?.image || options.snapshots?.html) && snapshotLimits && api.user && (api.user.verified || snapshotLimits.guests)
       ? import("./snapshot.js").then((module) => module.snapshotFor(anchor, resolveAnchor, options.snapshots!, snapshotLimits!, post), () => null)
       : undefined;
   // Saved snapshots (thumbnails, the not-found fallback, the viewer, the draft preview)
@@ -5029,13 +5029,14 @@ export function initComments(options: CommentsOptions): CommentsController {
       await saveOptimistic(
         (items) => [...items, item],
         async () => {
+          const capture = !droppedSnapshots.has(anchor) && snapshot(anchor);
           const result = await api.request<{ id: string; commentId?: string }>(
             "threads",
             "POST",
-            { page: item.page, anchor, body: comment.body, ...(tags.length ? { tags } : {}), ...(scope && { scope }) },
+            { page: item.page, anchor, snapshotIntent: snapshotLimits?.readiness ? !!capture : undefined, body: comment.body, ...(tags.length ? { tags } : {}), ...(scope && { scope }) },
           );
           // Snapshots follow the saved thread and never hold up or fail the post.
-          if (!droppedSnapshots.has(anchor))
+          if (capture)
             void snapshot(anchor, (kind, body) => client.request(`threads/${result.id}/snapshot?kind=${kind}`, "POST", body, body.type));
           // The initial message ID is returned so queued edits target the persisted comment.
           const saved =

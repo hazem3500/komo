@@ -2208,8 +2208,78 @@ describe("element snapshots", () => {
     return rows;
   };
   const guestToken = async (name: string, project = "snapshots") =>
-    (await (await call("/auth/guest", "POST", { name }, undefined, project)).json())
-      .token as string;
+    (
+      await (
+        await call("/auth/guest", "POST", { name }, undefined, project)
+      ).json()
+    ).token as string;
+
+  it("reports explicit pending, skipped, failed and ready capture states", async () => {
+    const actor = await guestToken("Readiness");
+    const readiness = (path: string, method = "GET", data?: unknown) =>
+      call(path, method, data, actor);
+    const create = async () => {
+      const response = await readiness("/threads", "POST", {
+        page: "/snapshots",
+        anchor,
+        body: "Status",
+        snapshotIntent: true,
+      });
+      const data = await response.json();
+      expect(data, JSON.stringify(data)).toHaveProperty("id");
+      return data.id as string;
+    };
+    const status = async (id: string) => {
+      const response = await readiness(`/threads/${id}/snapshot`);
+      const data = await response.json();
+      expect(data, JSON.stringify(data)).toHaveProperty("status");
+      return data.status;
+    };
+    const id = await create();
+    expect(await status(id)).toBe("pending");
+    expect((await read(id, "image", actor)).status).toBe(404);
+    await readiness(`/threads/${id}/snapshot`, "POST", { status: "skipped" });
+    expect(await status(id)).toBe("skipped");
+    const failed = await create();
+    await readiness(`/threads/${failed}/snapshot`, "POST", {
+      status: "failed",
+    });
+    expect(await status(failed)).toBe("failed");
+    const expired = await create();
+    const legacy = await create();
+    const patch = join(directory, "capture-state.sql");
+    await writeFile(
+      patch,
+      `UPDATE threads SET created_at=0 WHERE id='${expired}'; UPDATE threads SET snapshot_status=NULL WHERE id='${legacy}';`,
+    );
+    await executeSql(
+      join(directory, "wrangler.json"),
+      join(directory, "state"),
+      patch,
+    );
+    expect(await status(expired)).toBe("failed");
+    expect(await status(legacy)).toBe("unknown");
+    const unspecified = await thread(actor);
+    expect(await status(unspecified)).toBe("unknown");
+    const skipped = (
+      await (
+        await readiness("/threads", "POST", {
+          page: "/snapshots",
+          anchor,
+          body: "No capture",
+          snapshotIntent: false,
+        })
+      ).json()
+    ).id;
+    expect(await status(skipped)).toBe("skipped");
+
+    expect((await upload(id, webp(100), "image/webp", actor)).status).toBe(201);
+    expect(await status(id)).toBe("ready");
+    await readiness(`/threads/${id}/snapshot`, "POST", { status: "failed" });
+    expect(await status(id)).toBe("ready");
+    await remove(id, "image", actor);
+    expect(await status(id)).toBe("skipped");
+  });
 
   it("uploads and serves each kind with private, inert responses", async () => {
     const guest = await guestToken("Snapper");
@@ -2370,6 +2440,7 @@ describe("element snapshots", () => {
       /Guests cannot attach snapshots/
     );
     expect((await (await request("/config")).json()).snapshots).toEqual({
+      readiness: true,
       guests: false,
       maxImageBytes: 262144,
       maxHtmlBytes: 32768,

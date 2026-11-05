@@ -191,3 +191,68 @@ grant are refused behind the proxy even after opt-in. Bounded, explicitly scoped
 existing tokens remain usable. Nonproxy token policy is unchanged. Snapshot GET
 requires `comments:read`, the granted project and an allowed Origin. No deployment
 is enabled by this configuration example.
+
+### Webhook delivery and snapshot readiness
+
+Apply PostgreSQL migration 008 (automatic at Node startup) or D1 migration
+0022 before running this version. Comment creation, replies and resolution
+commit their selected webhook into `webhook_outbox` in the same transaction as
+the mutation. No destination is configured by default. The outbox pins the URL,
+encrypted signing secret, event ID and exact JSON bytes at creation. Changing or
+disabling project webhook settings affects future events; queued events retain
+their destination. Keep old encryption keys available until those entries drain.
+
+Node drains every 10 seconds. Workers must configure a recurring Cron Trigger
+(for example every minute); the exported Worker `scheduled` handler drains the
+outbox. Custom runtimes can import `drainWebhooks` from the server export and
+call `await drainWebhooks(env)` periodically. Request `waitUntil` only accelerates
+these committed deliveries. Worker deployments must supply their existing
+`PALETTE_WEBHOOK_SEND` transport; it must reject non-2xx responses, reject within
+5 seconds, validate DNS against private addresses, pin the validated address,
+and never follow redirects. No unsafe fetch transport is installed implicitly.
+The built-in Node transport enforces public DNS/IP pinning and bounded DNS/send
+timeouts, and now rejects all non-2xx responses.
+
+Each drain claims at most 20 entries, one at a time, with an atomic conditional
+UPDATE and a 30-second lease. Six attempts maximum, including interrupted
+attempts; failed attempts wait 10, 20, 40, 80 and 160 seconds (plus scheduling
+latency). Expired claims can be recovered by another process. Completion uses
+the claim token so a stale worker cannot acknowledge a newer claim. The drain
+stops waiting for an attempt after 5 seconds. Custom transports must enforce
+that bound themselves: a Promise timeout cannot cancel their network effects.
+Delivery is at least once: a crash after remote acceptance can cause duplicates.
+Deduplicate by `X-Palette-Delivery` (legacy `X-Komo-Delivery` is identical).
+Each attempt signs the stored body with a fresh current Unix-second timestamp;
+header aliases and the `timestamp + "." + body` HMAC format are unchanged.
+
+Operators can inspect `id,project,attempts,state,next_attempt,claim_until` in
+`webhook_outbox`; attempt/lease times are Unix milliseconds.
+`delivered` and `exhausted` are retained; no automatic purge or
+external delivery-management endpoint is provided. After fixing a receiver,
+explicitly reset an exhausted entry's `attempts=0,state='pending',next_attempt=0,
+claim_until=0,claim_token=''` to replay its same ID/body. Do not reset an active
+lease. Purge retained entries using your database retention policy; bodies may
+contain comment content. Outbox rows are independent of thread deletion.
+
+`config.snapshots.readiness: true` advertises this protocol; clients omit new
+intent fields and terminal reports on older servers.
+`POST /threads` accepts optional boolean `snapshotIntent`. Its `comment.created`
+event gains `snapshotStatus: 'pending'` for true or `'skipped'` for false.
+Omitting intent leaves status unknown and preserves the existing event fields,
+so older clients can still upload later without claiming an intentional skip.
+Legacy intent is never inferred from an image 404. There is no new snapshot event.
+
+Authenticated `GET /threads/:id/snapshot` returns `{status,kinds}`. `status` is
+`pending`, `ready`, `skipped`, `failed`, or `unknown` (legacy/imported threads).
+`kinds` lists stored `image`/`html` captures. Any successfully stored kind means
+ready; it does not promise both kinds. The upload transaction sets ready.
+Pending capture older than ten minutes reads as failed, bounding abandoned
+client captures. A later successful upload can still make it ready.
+`POST /threads/:id/snapshot` with JSON `{status:'skipped'}` or `{status:'failed'}`
+terminates a pending capture; clients report intentional omissions and upload
+failures this way. A failed status report falls back to the ten-minute deadline.
+Deleting the final stored kind makes status skipped. Kind-specific GET routes
+retain their existing 404 semantics. Snapshot status reads use existing
+project/repo/branch authentication and PAT `comments:read`; writes retain guest
+consent and author/reviewer checks and PAT `comments:write`. No token enablement
+policy changes are included.

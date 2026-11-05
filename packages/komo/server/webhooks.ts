@@ -19,16 +19,11 @@ export type WebhookEvent = {
   selector: string;
   author: string;
   body: string | null;
+  snapshotStatus?: "pending" | "skipped";
 };
 
-type WebhookEnv = {
-  DB: {
-    prepare(sql: string): {
-      bind(...values: unknown[]): {
-        first<T>(): Promise<T | null>;
-      };
-    };
-  };
+export type WebhookEnv = {
+  DB: D1Database;
   PALETTE_WEBHOOK_KEYS?: string;
   PALETTE_WEBHOOK_SEND?: (
     url: string,
@@ -163,9 +158,11 @@ export async function signWebhook(secret: string, timestamp: number, body: strin
 export async function dispatchWebhook(
   env: WebhookEnv,
   project: string,
-  event: WebhookEvent
+  event: WebhookEvent,
+  destination?: { webhook_url: string; webhook_secret: string; webhook_events: string; webhook_enabled: number },
+  storedBody?: string
 ) {
-  const row = await env.DB.prepare(
+  const row = destination ?? await env.DB.prepare(
     "SELECT webhook_url,webhook_secret,webhook_events,webhook_enabled FROM project_settings WHERE project=?"
   )
     .bind(project)
@@ -179,8 +176,8 @@ export async function dispatchWebhook(
   const events = JSON.parse(row.webhook_events ?? "[]") as unknown;
   if (!Array.isArray(events) || !events.includes(event.event)) return;
   if (!env.PALETTE_WEBHOOK_SEND) return;
-  const body = JSON.stringify(event);
-  if (encoder.encode(body).length > 16 * 1024) return;
+  const body = storedBody ?? JSON.stringify(event);
+  if (encoder.encode(body).length > 16 * 1024) throw Error("Webhook payload exceeds delivery limit");
   const timestamp = Math.floor(Date.now() / 1000);
   const secret = await decryptWebhookSecret(
     env.PALETTE_WEBHOOK_KEYS,
@@ -188,7 +185,7 @@ export async function dispatchWebhook(
     row.webhook_secret
   );
   const signature = await signWebhook(secret, timestamp, body);
-  await env.PALETTE_WEBHOOK_SEND(row.webhook_url, body, {
+  await env.PALETTE_WEBHOOK_SEND(validateWebhookUrl(row.webhook_url), body, {
     "X-Palette-Delivery": event.id,
     "X-Palette-Event": event.event,
     "X-Palette-Signature": signature,
@@ -207,4 +204,92 @@ function toBase64(bytes: Uint8Array) {
 function fromBase64(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   return Uint8Array.from(atob(normalized), (char) => char.charCodeAt(0));
+}
+
+export function enqueueWebhook(
+  db: D1Database,
+  project: string,
+  event: WebhookEvent,
+  commentId: string,
+) {
+  return db
+    .prepare(
+      `INSERT INTO webhook_outbox(id,project,body,attempts,next_attempt,claim_until,claim_token,state,url,secret) SELECT ?,?,?,0,?,0,'','pending',webhook_url,webhook_secret FROM project_settings WHERE EXISTS (SELECT 1 FROM comments WHERE id=?) AND project=? AND webhook_enabled=1 AND webhook_url IS NOT NULL AND webhook_secret IS NOT NULL AND webhook_events LIKE ?`,
+    )
+    .bind(
+      event.id,
+      project,
+      JSON.stringify(event),
+      Date.now(),
+      commentId,
+      project,
+      `%"${event.event}"%`,
+    );
+}
+
+/** A bounded drain; run periodically even when no requests arrive. */
+export async function drainWebhooks(env: WebhookEnv) {
+  if (!env.PALETTE_WEBHOOK_SEND) return;
+  for (let count = 0; count < 20; count++) {
+    const now = Date.now();
+    const token = crypto.randomUUID();
+    const row = await env.DB.prepare(
+      `UPDATE webhook_outbox SET claim_token=?,claim_until=?,attempts=attempts+1 WHERE id=(SELECT id FROM webhook_outbox WHERE state='pending' AND next_attempt<=? AND claim_until<=? AND attempts<6 ORDER BY next_attempt,id LIMIT 1) AND state='pending' AND claim_until<=? AND attempts<6 RETURNING id,project,body,attempts,url,secret`,
+    )
+      .bind(token, now + 30000, now, now, now)
+      .first<{
+        id: string;
+        project: string;
+        body: string;
+        attempts: number;
+        url: string;
+        secret: string;
+      }>();
+    if (!row) break;
+    let state = "delivered";
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        dispatchWebhook(
+          env,
+          row.project,
+          JSON.parse(row.body) as WebhookEvent,
+          {
+            webhook_url: row.url,
+            webhook_secret: row.secret,
+            webhook_events: JSON.stringify([
+              (JSON.parse(row.body) as WebhookEvent).event,
+            ]),
+            webhook_enabled: 1,
+          },
+          row.body,
+        ),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(Error("Webhook send timed out")),
+            5000,
+          );
+        }),
+      ]);
+    } catch {
+      state = row.attempts >= 6 ? "exhausted" : "pending";
+    } finally {
+      clearTimeout(timer);
+    }
+    await env.DB.prepare(
+      `UPDATE webhook_outbox SET state=?,next_attempt=?,claim_until=0,claim_token='' WHERE id=? AND claim_token=?`,
+    )
+      .bind(
+        state,
+        Date.now() + 10000 * 2 ** (row.attempts - 1),
+        row.id,
+        token,
+      )
+      .run();
+  }
+  await env.DB.prepare(
+    `UPDATE webhook_outbox SET state='exhausted' WHERE state='pending' AND attempts>=6 AND claim_until<=?`,
+  )
+    .bind(Date.now())
+    .run();
 }
