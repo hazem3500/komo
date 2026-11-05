@@ -1073,7 +1073,7 @@ async function route(
         tokens: await listTokens(env, user.id),
         projects: await accountProjects(env, user.id),
         scopes: PAT_SCOPES,
-        ...(auth.proxy ? { policy: { explicitProjects: true, maxLifetimeDays: 365 } } : {}),
+        ...(auth.proxy ? { policy: { explicitProjects: !auth.proxyTokenAllProjects, maxLifetimeDays: 365, noExpiry: auth.proxyTokenNoExpiry } } : {}),
       });
     if (url.pathname === "/account/tokens" && request.method === "POST") {
       await limit(env, `pat:create:${user.id}`, 10, 3600);

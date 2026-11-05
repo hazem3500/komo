@@ -131,7 +131,11 @@ export async function startLocalApi({
       const health = await fetch(`http://localhost:${port}/health`, {
         signal: AbortSignal.timeout(500),
       });
-      if (health.ok) return { port, stop };
+      if (health.ok) return { port, stop, sql: async (sql: string) => {
+        const file = join(directory, "update.sql");
+        await writeFile(file, sql);
+        await executeSql(configPath, state, file);
+      } };
     } catch {
       /* Wait for workerd. */
     }

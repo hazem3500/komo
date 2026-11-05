@@ -203,3 +203,18 @@ it("uses explicit project identifiers and bounded expiry under proxy policy", as
   await settled();
   expect(api.request).toHaveBeenLastCalledWith("account/tokens", "POST", expect.objectContaining({ projects: ["this"], expiresInDays: 30 }));
 });
+
+it("submits real all-project and no-expiry grants when allowed", async () => {
+  const api = client();
+  vi.mocked(api.request).mockResolvedValueOnce({ ...list([]), policy: { explicitProjects: false, maxLifetimeDays: 365, noExpiry: true } });
+  const { view } = await mount(api);
+  buttonNamed(view, "New token").click();
+  const form = view.querySelector("form")!;
+  form.querySelector<HTMLInputElement>('input[name=projects][value=all]')!.click();
+  form.querySelector<HTMLInputElement>('input[name=expiry][value=null]')!.click();
+  form.querySelector<HTMLInputElement>('input[type=text]')!.value = "Automation";
+  vi.mocked(api.request).mockRejectedValueOnce(new ApiError(429, "Try later"));
+  form.requestSubmit();
+  await settled();
+  expect(api.request).toHaveBeenLastCalledWith("account/tokens", "POST", expect.objectContaining({ projects: [], expiresInDays: null }));
+});

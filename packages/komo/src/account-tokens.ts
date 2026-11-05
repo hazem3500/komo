@@ -14,7 +14,7 @@ export type ApiToken = {
   lastUsedAt: number | null;
   expired: boolean;
 };
-type TokenList = { tokens: ApiToken[]; projects: string[]; scopes: string[]; policy?: { explicitProjects: boolean; maxLifetimeDays: number } };
+type TokenList = { tokens: ApiToken[]; projects: string[]; scopes: string[]; policy?: { explicitProjects: boolean; maxLifetimeDays: number; noExpiry?: boolean } };
 
 const DAY = 864e5;
 const EXPIRY: [string, number | null][] = [["7 days", 7], ["30 days", 30], ["90 days", 90], ["1 year", 365], ["Never", null]];
@@ -342,7 +342,7 @@ export function accountTokens(api: CommentsApi, project: string, back: () => voi
       ? list.projects.map((id) => [id, id === project ? "This project" : id, id === (local ? project : list.projects[0])])
       : [...(local ? [["this", "This project", true] as [string, string, boolean]] : []), ["all", "All your projects", !local]];
     const projects = group("Projects", "radio", "projects", choices);
-    const expiry = group("Expires", "radio", "expiry", EXPIRY.filter(([, days]) => !list.policy || (days !== null && days <= list.policy.maxLifetimeDays)).map(([label, days]) => [String(days), label, days === 30]));
+    const expiry = group("Expires", "radio", "expiry", EXPIRY.filter(([, days]) => !list.policy || (days ? days <= list.policy.maxLifetimeDays : list.policy.noExpiry)).map(([label, days]) => [String(days), label, days === 30]));
     const error = el("p", "api-tokens-error");
     error.setAttribute("role", "alert");
     const actions = el("div", "api-tokens-actions");

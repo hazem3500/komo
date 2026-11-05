@@ -177,17 +177,17 @@ and your existing `PALETTE_AUTH_PATH_PREFIX` (for example `/backoffice`); additi
 Preserve your existing public path and proxy routing configuration.
 
 Mint, list and revoke require a verified Google account's valid project session
-issued through the proxy. A PAT cannot manage tokens. Mint requests must supply
+issued through the proxy. A PAT cannot manage tokens. By default, mint requests must supply
 `projects` as a nonempty explicit grant, `expiresInDays` from 1 to 365, and at
 least one of `comments:read` / `comments:write`. The account UI offers these
 constraints; the list response adds `policy: { explicitProjects: true,
-maxLifetimeDays: 365 }`. `config.tokens` advertises the opt-in.
+maxLifetimeDays: 365, noExpiry: false }`. `config.tokens` advertises the opt-in.
 
 The operator opts into credentials that remain usable independently of IAP access
 until they expire or are revoked; removing IAP access alone does not revoke a PAT.
 
-Existing tokens with no expiry, a lifetime over 365 days, or no explicit project
-grant are refused behind the proxy even after opt-in. Bounded, explicitly scoped
+Without the separate allowances below, existing tokens with no expiry or no explicit
+project grant are refused behind the proxy. Finite lifetimes over 365 days are always refused. Bounded, explicitly scoped
 existing tokens remain usable. Nonproxy token policy is unchanged. Snapshot GET
 requires `comments:read`, the granted project and an allowed Origin. No deployment
 is enabled by this configuration example.
@@ -256,3 +256,5 @@ retain their existing 404 semantics. Snapshot status reads use existing
 project/repo/branch authentication and PAT `comments:read`; writes retain guest
 consent and author/reviewer checks and PAT `comments:write`. No token enablement
 policy changes are included.
+
+Proxy token operator allowances: `PALETTE_PROXY_TOKEN_ALL_PROJECTS=true` enables All your projects; `PALETTE_PROXY_TOKEN_NO_EXPIRY=true` enables Never expires. Both default to false and require `PALETTE_PROXY_ACCESS_TOKENS=true`. Their `KOMO_` aliases apply when the corresponding `PALETTE_` value is unset. Finite expiry remains capped at 365 days. All-project grants include current and future projects the account owns or has joined, checked on every use; removing membership removes access unless another ownership or membership grant remains. Disable an allowance to reject existing tokens using it, or revoke individual tokens when offboarding. Non-proxy token policy is unchanged.

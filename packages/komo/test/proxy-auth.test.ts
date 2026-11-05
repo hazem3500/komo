@@ -19,6 +19,8 @@ describe("sign-in options", () => {
     expect(authOptions({})).toEqual({
       proxy: undefined,
       proxyAccessTokens: false,
+      proxyTokenAllProjects: false,
+      proxyTokenNoExpiry: false,
       signInPrefix: "",
       requireSessionForReads: false,
       allowGuests: true,
@@ -327,7 +329,7 @@ describe("settings named before the rename", () => {
       KOMO_REQUIRE_SESSION_FOR_READS: "true",
       KOMO_ALLOW_GUESTS: "false",
       KOMO_SESSION_MAX_AGE_DAYS: "30",
-    })).toEqual({ proxy: undefined, proxyAccessTokens: false, signInPrefix: "", requireSessionForReads: true, allowGuests: false, sessionMaxAge: 30 * 86400000 });
+    })).toEqual({ proxy: undefined, proxyAccessTokens: false, proxyTokenAllProjects: false, proxyTokenNoExpiry: false, signInPrefix: "", requireSessionForReads: true, allowGuests: false, sessionMaxAge: 30 * 86400000 });
     const proxied = authOptions({ KOMO_PROXY_AUTH: "gcp-iap", KOMO_PROXY_AUDIENCE: audience, KOMO_AUTH_PATH_PREFIX: "/backoffice" });
     expect(proxied).toMatchObject({ signInPrefix: "/backoffice", requireSessionForReads: true, allowGuests: false });
     expect(proxied.proxy?.name).toBe("gcp-iap");
@@ -458,4 +460,11 @@ describe("site patterns", () => {
     expect(() => checkProjects(JSON.stringify({ review: { origins: [] } }))).toThrow("PROJECTS.review needs a repo");
     expect(() => checkProjects("{")).toThrow("PROJECTS must be JSON");
   });
+});
+
+it.each(["ALL_PROJECTS", "NO_EXPIRY"])("parses proxy token allowance %s and its legacy alias", (suffix) => {
+  const key = suffix === "ALL_PROJECTS" ? "proxyTokenAllProjects" : "proxyTokenNoExpiry";
+  expect(authOptions({ [`KOMO_PROXY_TOKEN_${suffix}`]: "true" })[key]).toBe(true);
+  expect(authOptions({ [`KOMO_PROXY_TOKEN_${suffix}`]: "true", [`PALETTE_PROXY_TOKEN_${suffix}`]: "false" })[key]).toBe(false);
+  expect(() => authOptions({ [`PALETTE_PROXY_TOKEN_${suffix}`]: "yes" })).toThrow("must be true or false");
 });

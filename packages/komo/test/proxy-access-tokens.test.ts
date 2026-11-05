@@ -81,6 +81,8 @@ function request(
 }
 const sha = (value: string) => createHash("sha256").update(value).digest("hex");
 
+describe.each([false, true])("all-project allowance %s", (allProjects) => {
+describe.each([false, true])("no-expiry allowance %s", (noExpiry) => {
 beforeAll(async () => {
   iapKey = (await crypto.subtle.generateKey(
     { name: "ECDSA", namedCurve: "P-256" },
@@ -117,11 +119,14 @@ beforeAll(async () => {
     `,
     vars: {
       PROJECTS: JSON.stringify({
+        outsider: { repo: "owner/site", origins: [origin] },
         other: { repo: "owner/site", origins: [origin] },
         test: { repo: "owner/site", origins: [origin], allowGuestSnapshots: true },
       }),
       KOMO_PROXY_AUTH: "gcp-iap",
       PALETTE_PROXY_ACCESS_TOKENS: "true",
+      KOMO_PROXY_TOKEN_ALL_PROJECTS: String(allProjects),
+      PALETTE_PROXY_TOKEN_NO_EXPIRY: String(noExpiry),
       KOMO_PROXY_AUDIENCE: audience,
       KOMO_AUTH_PATH_PREFIX: prefix,
       KOMO_PUBLIC_PATH: publicPath,
@@ -165,9 +170,9 @@ describe("opted-in proxy access tokens on D1", () => {
       method: "POST", headers: { "x-goog-iap-jwt-assertion": await iapJwt() },
     });
     expect(exchanged.status).toBe(201);
-    const { token: session } = await exchanged.json();
+    let { token: session } = await exchanged.json();
     const grant = { name: "Snapshot reader", scopes: ["comments:read"], projects: ["test"], expiresInDays: 7 };
-    for (const data of [{ ...grant, projects: null }, { ...grant, projects: [] }, { ...grant, expiresInDays: null }, { ...grant, expiresInDays: 366 }])
+    for (const data of [...(allProjects ? [] : [{ ...grant, projects: null }, { ...grant, projects: [] }]), ...(noExpiry ? [] : [{ ...grant, expiresInDays: null }]), { ...grant, expiresInDays: 366 }])
       expect((await request("account/tokens", "POST", { token: session, data })).status).toBe(400);
     const mint = async (data: unknown) => {
       const response = await request("account/tokens", "POST", { token: session, data });
@@ -176,7 +181,7 @@ describe("opted-in proxy access tokens on D1", () => {
     };
     const reader = await mint(grant);
     const listed = await (await request("account/tokens", "GET", { token: session })).json();
-    expect(listed.policy).toEqual({ explicitProjects: true, maxLifetimeDays: 365 });
+    expect(listed.policy).toEqual({ explicitProjects: !allProjects, maxLifetimeDays: 365, noExpiry: noExpiry });
     expect(listed.tokens.map((t: { id: string }) => t.id)).toContain(reader.item.id);
     for (const method of ["GET", "POST", "DELETE"])
       expect((await request(method === "DELETE" ? `account/tokens/${reader.item.id}` : "account/tokens", method, { token: reader.token, ...(method === "POST" ? { data: grant } : {}) })).status).toBe(403);
@@ -184,8 +189,42 @@ describe("opted-in proxy access tokens on D1", () => {
     const snapshot = await request(path, "GET", { token: reader.token });
     expect(snapshot.status).toBe(200);
     expect(await snapshot.text()).toBe("<p>fixture</p>");
-    for (const [id, status] of [["expiredtoken", 401], ["perpetualtok", 403], ["unscopedtokn", 403], ["overlongtokn", 403]] as const)
+    for (const [id, status] of [["expiredtoken", 401], ["perpetualtok", noExpiry ? 200 : 403], ["unscopedtokn", allProjects ? 200 : 403], ["overlongtokn", 403]] as const)
       expect((await request(path, "GET", { token: `palette_pat_${id}_${"a".repeat(43)}` })).status, id).toBe(status);
+    if (allProjects && noExpiry) {
+      const unlimited = await mint({ ...grant, projects: null, expiresInDays: null, scopes: ["comments:read", "comments:write"] });
+      expect((await request("threads", "POST", { token: unlimited.token, data: { page: "/", anchor, body: "Automation feedback" } })).status).toBe(201);
+      expect(unlimited.item.projects).toBeNull();
+      expect(unlimited.item.expiresAt).toBeNull();
+      expect((await request(path, "GET", { token: unlimited.token })).status).toBe(200);
+      const outsider = new URL(path, `http://localhost:${port}`);
+      outsider.searchParams.set("project", "outsider");
+      outsider.searchParams.set("repo", "owner/site");
+      outsider.searchParams.set("branch", "pr-1");
+      expect((await fetch(outsider, { headers: { Origin: origin, Authorization: `Bearer ${unlimited.token}` } })).status).toBe(403);
+      await api.sql("INSERT INTO users(id,name,verified) VALUES('google:9876543210','Manager',1); UPDATE project_owners SET user_id='google:9876543210' WHERE project='test'; INSERT INTO project_access(project,user_id) VALUES('test','google:1234567890');");
+      const managerExchange = await fetch(`http://localhost:${port}${prefix}/auth/proxy/session?project=test`, {
+        method: "POST", headers: { "x-goog-iap-jwt-assertion": await iapJwt({sub: "accounts.google.com:9876543210", email: "manager@example.com"}) },
+      });
+      expect(managerExchange.status).toBe(201);
+      const {token: manager} = await managerExchange.json();
+      expect((await request(path, "GET", {token: unlimited.token})).status).toBe(200);
+      expect((await request("project/members", "DELETE", {token: manager, data: {user: "google:1234567890"}})).status).toBe(200);
+      expect((await request(path, "GET", {token: unlimited.token})).status).toBe(403);
+      const renewed = await fetch(`http://localhost:${port}${prefix}/auth/proxy/session?project=test`, {
+        method: "POST", headers: { "x-goog-iap-jwt-assertion": await iapJwt() },
+      });
+      session = (await renewed.json()).token;
+      expect((await request(path, "GET", {token: unlimited.token})).status).toBe(403);
+      const invitation = await request("project/invites", "POST", {token: manager, data: {email: "reviewer@example.com"}});
+      expect(invitation.status).toBe(201);
+      const {invite} = await invitation.json();
+      expect((await request("project/join", "POST", {token: session, data: {invite}})).status).toBe(200);
+      expect((await request(path, "GET", {token: unlimited.token})).status).toBe(200);
+      await api.sql("UPDATE project_owners SET user_id='google:1234567890' WHERE project='test';");
+      expect((await request(`account/tokens/${unlimited.item.id}`, "DELETE", { token: session })).status).toBe(200);
+      expect((await request(path, "GET", { token: unlimited.token })).status).toBe(401);
+    }
     const writer = await mint({ ...grant, scopes: ["comments:write"] });
     expect((await request(path, "GET", { token: writer.token })).status).toBe(403);
     const other = await mint({ ...grant, projects: ["other"] });
@@ -193,4 +232,7 @@ describe("opted-in proxy access tokens on D1", () => {
     expect((await request(`account/tokens/${reader.item.id}`, "DELETE", { token: session })).status).toBe(200);
     expect((await request(path, "GET", { token: reader.token })).status).toBe(401);
   });
+});
+
+});
 });

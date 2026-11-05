@@ -99,9 +99,9 @@ export const pruneAudit = (db: D1Database, now: number) =>
   db.prepare("DELETE FROM audit_log WHERE at<?").bind(now - AUDIT_RETENTION);
 
 /** Projects an account holder may limit a token to: owned or joined. */
-export async function accountProjects(env: Env, userId: string) {
+export async function accountProjects(env: Env, userId: string, activeMembership = false) {
   const rows = await env.DB.prepare(
-    "SELECT id AS project FROM workspaces WHERE owner_id=? UNION SELECT project FROM project_members WHERE user_id=? UNION SELECT project FROM project_owners WHERE user_id=?"
+    `SELECT id AS project FROM workspaces WHERE owner_id=? UNION SELECT project FROM ${activeMembership ? "project_access" : "project_members"} WHERE user_id=? UNION SELECT project FROM project_owners WHERE user_id=?`
   )
     .bind(userId, userId, userId)
     .all<{ project: string }>();
@@ -137,9 +137,10 @@ export async function createToken(
   userId: string,
   data: Record<string, unknown>
 ) {
-  if (authOptions(env).proxy) {
-    check(data.expiresInDays !== undefined && data.expiresInDays !== null, 400, "Choose an expiry between 1 and 365 days.");
-    check(Array.isArray(data.projects) && data.projects.length > 0, 400, "Choose explicit projects for this token.");
+  const auth = authOptions(env);
+  if (auth.proxy) {
+    check(auth.proxyTokenNoExpiry || (data.expiresInDays !== undefined && data.expiresInDays !== null), 400, "Choose an expiry between 1 and 365 days.");
+    check(auth.proxyTokenAllProjects || (Array.isArray(data.projects) && data.projects.length > 0), 400, "Choose explicit projects for this token.");
   }
   const name = string(data.name, 60, "token name").trim();
   check(name.length > 0, 400, "Name your token.");
@@ -290,13 +291,14 @@ export async function authenticateToken(
     row.revoked_at === null &&
     (row.expires_at === null || row.expires_at > now);
   check(valid, 401, "This access token is invalid, expired, or revoked.");
-  if (authOptions(env).proxy) {
+  const auth = authOptions(env);
+  if (auth.proxy) {
     check(
-      row.expires_at !== null && row.expires_at > row.created_at &&
-        row.expires_at - row.created_at <= MAX_LIFETIME_DAYS * 86400000 &&
-        (list(row.projects)?.length ?? 0) > 0,
+      (row.expires_at === null ? auth.proxyTokenNoExpiry :
+        row.expires_at > row.created_at && row.expires_at - row.created_at <= MAX_LIFETIME_DAYS * 86400000) &&
+        (list(row.projects) === null ? auth.proxyTokenAllProjects : (list(row.projects)?.length ?? 0) > 0),
       403,
-      "Proxy access tokens require explicit projects and a lifetime of 1–365 days."
+      "This access token exceeds the proxy token policy."
     );
   }
   const user = await env.DB.prepare("SELECT * FROM users WHERE id=?")
@@ -321,7 +323,7 @@ export async function authenticateToken(
   );
   const projects = list(row.projects);
   check(
-    !projects || projects.includes(project),
+    projects ? projects.includes(project) : !auth.proxy || (await accountProjects(env, row.user_id, true)).includes(project),
     403,
     "This token is not allowed for this project."
   );

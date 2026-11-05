@@ -28,6 +28,8 @@ export type AuthOptions = {
   requireSessionForReads: boolean;
   allowGuests: boolean;
   proxyAccessTokens: boolean;
+  proxyTokenAllProjects: boolean;
+  proxyTokenNoExpiry: boolean;
   /** Session lifetime cap in milliseconds; undefined keeps the default. */
   sessionMaxAge?: number;
 };
@@ -91,12 +93,14 @@ function resolve(env: OptionEnv): AuthOptions {
   if (days !== undefined && !(/^\d{1,5}$/.test(days) && +days >= 1 && +days <= 36500))
     throw new ConfigError("PALETTE_SESSION_MAX_AGE_DAYS must be a whole number of days from 1 to 36500.");
 
-  // Parse both flags even when a proxy overrides them, so typos still fail.
+  // Parse flags even when a proxy overrides them, so typos still fail.
   const requireSessionForReads = flag(env, "PALETTE_REQUIRE_SESSION_FOR_READS", false);
   const allowGuests = flag(env, "PALETTE_ALLOW_GUESTS", true);
   return {
     proxy,
     proxyAccessTokens: flag(env, "PALETTE_PROXY_ACCESS_TOKENS", false),
+    proxyTokenAllProjects: flag(env, "PALETTE_PROXY_TOKEN_ALL_PROJECTS", false),
+    proxyTokenNoExpiry: flag(env, "PALETTE_PROXY_TOKEN_NO_EXPIRY", false),
     signInPrefix,
     requireSessionForReads: !!proxy || requireSessionForReads,
     allowGuests: !proxy && allowGuests,
