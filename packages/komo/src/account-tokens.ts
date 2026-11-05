@@ -14,7 +14,7 @@ export type ApiToken = {
   lastUsedAt: number | null;
   expired: boolean;
 };
-type TokenList = { tokens: ApiToken[]; projects: string[]; scopes: string[] };
+type TokenList = { tokens: ApiToken[]; projects: string[]; scopes: string[]; policy?: { explicitProjects: boolean; maxLifetimeDays: number } };
 
 const DAY = 864e5;
 const EXPIRY: [string, number | null][] = [["7 days", 7], ["30 days", 30], ["90 days", 90], ["1 year", 365], ["Never", null]];
@@ -338,11 +338,11 @@ export function accountTokens(api: CommentsApi, project: string, back: () => voi
     };
     const scopes = group("Access", "checkbox", "scope", list.scopes.map((scope) => [scope, SCOPE_LABEL[scope] ? `${SCOPE_LABEL[scope]} comments` : scope, scope === "comments:read"]));
     const local = list.projects.includes(project);
-    const projects = group("Projects", "radio", "projects", [
-      ...(local ? ([["this", "This project", true]] as [string, string, boolean][]) : []),
-      ["all", "All your projects", !local],
-    ]);
-    const expiry = group("Expires", "radio", "expiry", EXPIRY.map(([label, days]) => [String(days), label, days === 30]));
+    const choices: [string, string, boolean][] = list.policy?.explicitProjects
+      ? list.projects.map((id) => [id, id === project ? "This project" : id, id === (local ? project : list.projects[0])])
+      : [...(local ? [["this", "This project", true] as [string, string, boolean]] : []), ["all", "All your projects", !local]];
+    const projects = group("Projects", "radio", "projects", choices);
+    const expiry = group("Expires", "radio", "expiry", EXPIRY.filter(([, days]) => !list.policy || (days !== null && days <= list.policy.maxLifetimeDays)).map(([label, days]) => [String(days), label, days === 30]));
     const error = el("p", "api-tokens-error");
     error.setAttribute("role", "alert");
     const actions = el("div", "api-tokens-actions");
@@ -372,7 +372,9 @@ export function accountTokens(api: CommentsApi, project: string, back: () => voi
           name: name.value.trim(),
           scopes: chosen,
           expiresInDays: days && days !== "null" ? Number(days) : null,
-          projects: form.querySelector<HTMLInputElement>("input[name=projects]:checked")?.value === "this" ? [project] : [],
+          projects: list.policy?.explicitProjects
+            ? [form.querySelector<HTMLInputElement>("input[name=projects]:checked")?.value].filter((id): id is string => !!id)
+            : form.querySelector<HTMLInputElement>("input[name=projects]:checked")?.value === "this" ? [project] : [],
         });
         if (data !== list) return;
         list.tokens.unshift(created.item);
@@ -494,7 +496,7 @@ export function accountTokens(api: CommentsApi, project: string, back: () => voi
     try {
       const result = await api.request<TokenList>("account/tokens");
       if (!Array.isArray(result.tokens) || !Array.isArray(result.projects)) throw new ApiError(0, "Couldn’t read your tokens. Try again.");
-      data = { tokens: result.tokens, projects: result.projects, scopes: Array.isArray(result.scopes) ? result.scopes : ["comments:read", "comments:write"] };
+      data = { ...result, scopes: Array.isArray(result.scopes) ? result.scopes : ["comments:read", "comments:write"] };
     } catch (error) {
       failure = error instanceof Error ? error : new Error(String(error));
     }

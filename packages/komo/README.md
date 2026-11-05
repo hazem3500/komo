@@ -924,3 +924,28 @@ To: #side > nav · index 0 · inside · component SideNav
 The hidden original's `display` is not proposed as a style change. The CLI reads these lines into `geometry` DesignEdit changes with `mode` (`size`, `flex-basis` or `span`), the values, `layout` and `effects`, and moves into `move` changes (`target`, `label`, `from` and `to` with `parent`, `index`, `position` and any `component`), telling agents to move the element's markup in source. Earlier proposals with `Move (translate)` or `Move (offset)` lines still parse and render as `translate`/`offset` changes; the current UI no longer produces free-form moves.
 
 Supported targets are HTML boxes and SVG roots in normal flow, flex or grid, or relatively, absolutely, fixed or sticky positioned, through positive axis-aligned 2D scale chains and normal, reflow or explicitly scaled Frames. Pointer deltas are converted to local CSS pixels, and scroll during pointer capture is accounted for. Only boxes that can't be previewed are excluded, each with its own reason in the panel and a **Select parent** action that picks the nearest resizable ancestor: inline text boxes, SVG shapes inside an SVG, `display: contents` or unrendered elements, table cells and rows, boxes split across lines or columns, rotated/skewed/3D/mirrored chains, and geometry animations in progress. A running animation only counts when it moves or sizes the box and Palette did not start it; it is named after 400ms, as a dot by the Layout title, so brief host transitions never show and the panel never reflows. This is deliberately not a universal layout editor.
+
+### Proxy access tokens (operator opt-in)
+
+Proxy access tokens are off by default. To enable management and use, keep
+`PALETTE_PROXY_AUTH=gcp-iap`, `PALETTE_PROXY_AUDIENCE` set to your IAP audience,
+and your existing `PALETTE_AUTH_PATH_PREFIX` (for example `/backoffice`); additionally set
+`PALETTE_PROXY_ACCESS_TOKENS=true` (Worker vars or Node environment). The legacy
+`KOMO_PROXY_ACCESS_TOKENS` alias works when the Palette setting is unset.
+Preserve your existing public path and proxy routing configuration.
+
+Mint, list and revoke require a verified Google account's valid project session
+issued through the proxy. A PAT cannot manage tokens. Mint requests must supply
+`projects` as a nonempty explicit grant, `expiresInDays` from 1 to 365, and at
+least one of `comments:read` / `comments:write`. The account UI offers these
+constraints; the list response adds `policy: { explicitProjects: true,
+maxLifetimeDays: 365 }`. `config.tokens` advertises the opt-in.
+
+The operator opts into credentials that remain usable independently of IAP access
+until they expire or are revoked; removing IAP access alone does not revoke a PAT.
+
+Existing tokens with no expiry, a lifetime over 365 days, or no explicit project
+grant are refused behind the proxy even after opt-in. Bounded, explicitly scoped
+existing tokens remain usable. Nonproxy token policy is unchanged. Snapshot GET
+requires `comments:read`, the granted project and an allowed Origin. No deployment
+is enabled by this configuration example.

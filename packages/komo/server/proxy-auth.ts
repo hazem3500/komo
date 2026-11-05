@@ -27,6 +27,7 @@ export type AuthOptions = {
   signInPrefix: string;
   requireSessionForReads: boolean;
   allowGuests: boolean;
+  proxyAccessTokens: boolean;
   /** Session lifetime cap in milliseconds; undefined keeps the default. */
   sessionMaxAge?: number;
 };
@@ -95,6 +96,7 @@ function resolve(env: OptionEnv): AuthOptions {
   const allowGuests = flag(env, "PALETTE_ALLOW_GUESTS", true);
   return {
     proxy,
+    proxyAccessTokens: flag(env, "PALETTE_PROXY_ACCESS_TOKENS", false),
     signInPrefix,
     requireSessionForReads: !!proxy || requireSessionForReads,
     allowGuests: !proxy && allowGuests,
