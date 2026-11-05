@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
-import { branchName, clientModule, gitValue, projectLayout, repository, setting } from "./config.mjs";
+import { branchName, clientModule, gitValue, projectLayout, repository, setting, packageName } from "./config.mjs";
 
 import { installAgentWorkflow } from "./workflow.mjs";
 import { agentCommands, agentHelp, runAgent } from "./agent.mjs";
@@ -315,10 +315,10 @@ async function init() {
       return;
     } else {
       if (
-        !(await exists(resolve(cwd, "node_modules/@hazem3500/palette/package.json")))
+        !(await exists(resolve(cwd, `node_modules/${packageName()}/package.json`)))
       )
         throw Error(
-          "Install Palette in this project before self-hosting: npm install @hazem3500/palette (or install the preview tarball before publication)."
+          `Install Palette in this project before self-hosting: npm install ${packageName()} (or install the preview tarball before publication).`
         );
       await protectLocalFiles();
       const name = `komo-${basename(cwd)
@@ -337,7 +337,7 @@ async function init() {
       );
       await writeFile(
         join(dir, "index.ts"),
-        'export { default } from "@hazem3500/palette/server";\n'
+        `export { default } from "${packageName()}/server";\n`
       );
       const wrangler = {
         name,
@@ -376,16 +376,17 @@ async function init() {
     await installAgentWorkflow(cwd);
     console.log("Added the Palette comment workflow to AGENTS.md");
     console.log(
-      `\nMount after the page loads:\n\nimport { initPalette } from '@hazem3500/palette';\ninitPalette(${JSON.stringify({ ...config, origin: undefined, ...(config.scope === "branch" ? { branch: branchName(process.env, cwd) } : {}) }, null, 2)});\n\nFor automatic branch detection, use the generated ${layout.module} helper and run palette sync before your build.\n`
+      `\nMount after the page loads:\n\nimport { initPalette } from '${packageName()}';\ninitPalette(${JSON.stringify({ ...config, origin: undefined, ...(config.scope === "branch" ? { branch: branchName(process.env, cwd) } : {}) }, null, 2)});\n\nFor automatic branch detection, use the generated ${layout.module} helper and run palette sync before your build.\n`
     );
   } finally {
     rl.close();
   }
 }
 try {
+  packageName();
   if (args.includes("--help") || !command)
     console.log(
-      `Palette\n\n  palette init --endpoint API_URL  Connect to an existing Palette server\n  palette init --self-host  Deploy your own Worker and D1 database\n  palette init --node       Prepare a Node/PostgreSQL project\n  palette deploy        Resume self-hosted deployment\n  palette sync          Regenerate client settings; detect the current branch\n\nOptions: --origin URL --endpoint API_URL --repo OWNER/REPO --branch-scope\nSelf-host: --google-client-id ID; Node: --preview-origin HTTPS_WILDCARD\n\nComments are shared across deployments unless --branch-scope is set.${
+      `Palette\n\n  palette init --endpoint API_URL  Connect to an existing Palette server\n  palette init --self-host  Deploy your own Worker and D1 database\n  palette init --node       Prepare a Node/PostgreSQL project\n  palette deploy        Resume self-hosted deployment\n  palette sync          Regenerate client settings; detect the current branch\n\nOptions: --origin URL --endpoint API_URL --repo OWNER/REPO --branch-scope\nSelf-host: --google-client-id ID; Node: --preview-origin HTTPS_WILDCARD\nWrappers: PALETTE_PACKAGE_NAME changes generated imports (default @hazem3500/palette).\n\nComments are shared across deployments unless --branch-scope is set.${
         agentHelp
       }`
     );
