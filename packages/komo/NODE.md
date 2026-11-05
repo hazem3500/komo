@@ -166,3 +166,28 @@ To roll back, restore the backup. Redeploying the old image is not enough: the u
 The API's storage contract is `prepare().bind().first()/all()/run()` plus atomic `batch()`. `server/postgres.ts` implements it with a PostgreSQL pool, parameterized statements, and one transaction per batch. `server/postgres/001_initial.sql` mirrors the SQLite schema and its quota, revision, retention, and deletion triggers; later numbered files, such as `005_snapshots.sql` for element snapshots (`bytea`), mirror later D1 migrations. Add a numbered PostgreSQL migration whenever the D1 schema changes. Existing D1 migrations and the Worker entry point stay separate. The Node server runs the same request handler; transport and storage are the only new adapters.
 
 The Node process runs retention cleanup after requests, as the self-hosted Worker does. It handles `SIGTERM` by closing its HTTP listener and database pool. Database connection failures prevent startup; request errors return the existing API error format. Rate limits use the direct socket IP by default, and never trust a client's `X-Forwarded-For`. Behind trusted reverse proxies, set `PALETTE_TRUSTED_PROXY_HOPS` (older name `PALETTE_PROXY_HOPS`, 0 to 8) to the number of `X-Forwarded-For` entries those proxies append before the app. Most proxies append one; Google Cloud's external Application Load Balancer appends two (see [Deploy behind Google Cloud IAP](#deploy-behind-google-cloud-iap)). The client address is then that many entries from the right; entries further left are ignored. If the header has fewer entries, or that entry isn't an IP address, the socket IP is used. Check your load balancer’s forwarding behavior for the correct value, and only set it when requests can't bypass those proxies. Client-supplied `CF-Connecting-IP` is ignored. The Cloudflare Worker uses Cloudflare's `CF-Connecting-IP`.
+
+### Proxy access tokens (operator opt-in)
+
+Proxy access tokens are off by default. To enable management and use, keep
+`PALETTE_PROXY_AUTH=gcp-iap`, `PALETTE_PROXY_AUDIENCE` set to your IAP audience,
+and your existing `PALETTE_AUTH_PATH_PREFIX` (for example `/backoffice`); additionally set
+`PALETTE_PROXY_ACCESS_TOKENS=true` (Worker vars or Node environment). The legacy
+`KOMO_PROXY_ACCESS_TOKENS` alias works when the Palette setting is unset.
+Preserve your existing public path and proxy routing configuration.
+
+Mint, list and revoke require a verified Google account's valid project session
+issued through the proxy. A PAT cannot manage tokens. Mint requests must supply
+`projects` as a nonempty explicit grant, `expiresInDays` from 1 to 365, and at
+least one of `comments:read` / `comments:write`. The account UI offers these
+constraints; the list response adds `policy: { explicitProjects: true,
+maxLifetimeDays: 365 }`. `config.tokens` advertises the opt-in.
+
+The operator opts into credentials that remain usable independently of IAP access
+until they expire or are revoked; removing IAP access alone does not revoke a PAT.
+
+Existing tokens with no expiry, a lifetime over 365 days, or no explicit project
+grant are refused behind the proxy even after opt-in. Bounded, explicitly scoped
+existing tokens remain usable. Nonproxy token policy is unchanged. Snapshot GET
+requires `comments:read`, the granted project and an allowed Origin. No deployment
+is enabled by this configuration example.

@@ -8,9 +8,17 @@ const audience = "/projects/123/global/backendServices/456";
 const KEYS_URL = "https://www.gstatic.com/iap/verify/public_key-jwk";
 
 describe("sign-in options", () => {
+  it("requires an explicit proxy-token opt-in and reads both setting names", () => {
+    expect(authOptions({ PALETTE_PROXY_ACCESS_TOKENS: "true" }).proxyAccessTokens).toBe(true);
+    expect(authOptions({ KOMO_PROXY_ACCESS_TOKENS: "true" }).proxyAccessTokens).toBe(true);
+    expect(authOptions({ PALETTE_PROXY_ACCESS_TOKENS: "false", KOMO_PROXY_ACCESS_TOKENS: "true" }).proxyAccessTokens).toBe(false);
+    expect(() => authOptions({ PALETTE_PROXY_ACCESS_TOKENS: "yes" })).toThrow("must be true or false");
+  });
+
   it("keeps every option off by default", () => {
     expect(authOptions({})).toEqual({
       proxy: undefined,
+      proxyAccessTokens: false,
       signInPrefix: "",
       requireSessionForReads: false,
       allowGuests: true,
@@ -319,7 +327,7 @@ describe("settings named before the rename", () => {
       KOMO_REQUIRE_SESSION_FOR_READS: "true",
       KOMO_ALLOW_GUESTS: "false",
       KOMO_SESSION_MAX_AGE_DAYS: "30",
-    })).toEqual({ proxy: undefined, signInPrefix: "", requireSessionForReads: true, allowGuests: false, sessionMaxAge: 30 * 86400000 });
+    })).toEqual({ proxy: undefined, proxyAccessTokens: false, signInPrefix: "", requireSessionForReads: true, allowGuests: false, sessionMaxAge: 30 * 86400000 });
     const proxied = authOptions({ KOMO_PROXY_AUTH: "gcp-iap", KOMO_PROXY_AUDIENCE: audience, KOMO_AUTH_PATH_PREFIX: "/backoffice" });
     expect(proxied).toMatchObject({ signInPrefix: "/backoffice", requireSessionForReads: true, allowGuests: false });
     expect(proxied.proxy?.name).toBe("gcp-iap");

@@ -286,12 +286,10 @@ async function authenticate(
     .get("Authorization")
     ?.match(/^Bearer (.{1,200})$/)?.[1];
   check(bearer, 401, "Enter your name to comment.");
-  const { proxy, sessionMaxAge, allowGuests } = authOptions(env);
+  const { proxy, proxyAccessTokens, sessionMaxAge, allowGuests } = authOptions(env);
   if (isPersonalToken(bearer)) {
-    // A token would outlive the proxy's own sign-in checks; agents exchange
-    // their proxy identity for a session instead.
     check(
-      !proxy,
+      !proxy || proxyAccessTokens,
       403,
       "Access tokens are off behind the sign-in proxy. Use /auth/proxy/session."
     );
@@ -1055,7 +1053,7 @@ async function route(
   }
   if (accountRoute) {
     check(
-      !auth.proxy,
+      !auth.proxy || auth.proxyAccessTokens,
       403,
       "Access tokens are off behind the sign-in proxy. Use /auth/proxy/session."
     );
@@ -1072,6 +1070,7 @@ async function route(
         tokens: await listTokens(env, user.id),
         projects: await accountProjects(env, user.id),
         scopes: PAT_SCOPES,
+        ...(auth.proxy ? { policy: { explicitProjects: true, maxLifetimeDays: 365 } } : {}),
       });
     if (url.pathname === "/account/tokens" && request.method === "POST") {
       await limit(env, `pat:create:${user.id}`, 10, 3600);
@@ -1147,9 +1146,7 @@ async function route(
         !(await privateAccess(env, project)),
       private: await privateAccess(env, project),
       guestResolve: config.allowGuestResolve !== false,
-      // Signed-in Google accounts can manage personal access tokens here,
-      // except behind a sign-in proxy.
-      tokens: !auth.proxy,
+      tokens: !auth.proxy || auth.proxyAccessTokens,
       // Element snapshots are opt-in on the client; guests need project consent.
       snapshots: {
         guests: auth.allowGuests && config.allowGuestSnapshots === true,

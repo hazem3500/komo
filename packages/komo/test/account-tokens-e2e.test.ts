@@ -50,7 +50,7 @@ beforeAll(async () => {
   });
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  browser = await chromium.launch({ executablePath: chrome, args: ["--no-sandbox"] });
+  browser = await chromium.launch({ executablePath: chrome, args: ["--no-sandbox", "--disable-blink-features=EyeDropperAPI"] });
 });
 
 afterAll(async () => {
@@ -66,6 +66,7 @@ type Mock = {
   posts: Record<string, unknown>[];
   deletes: string[];
   supported: boolean;
+  policy?: { explicitProjects: boolean; maxLifetimeDays: number };
   listStatus?: number;
   failDelete?: string;
 };
@@ -96,7 +97,7 @@ async function open(scheme: "light" | "dark", user: object | null, mock: Mock): 
     if (path === "usage") return json({ hosted: true, comments: { used: 4, limit: 250 }, projects: { used: 1, limit: 3 } });
     if (path === "account/tokens" && method === "GET") {
       if (mock.listStatus) return json({ error: "Not found." }, mock.listStatus);
-      return json({ tokens: mock.tokens, projects: ["other", "tokens"], scopes: ["comments:read", "comments:write"] });
+      return json({ policy: mock.policy, tokens: mock.tokens, projects: ["other", "tokens"], scopes: ["comments:read", "comments:write"] });
     }
     if (path === "account/tokens" && method === "POST") {
       const body = request.postDataJSON();
@@ -157,6 +158,26 @@ describe.skipIf(!chrome).each(["light", "dark"] as const)("API tokens on a %s pa
       await entry.waitFor();
       await expect.poll(() => page.evaluate(() => document.querySelector("[data-branch-comments]")!.shadowRoot!.activeElement?.textContent)).toBe("API tokens");
       expect(await page.locator(".sidebar-tooltip[data-open]").count()).toBe(0);
+      expect((page as any).errors).toEqual([]);
+    } finally { await page.close(); }
+  });
+
+  it("offers explicit project and expiry grants for opted-in proxy tokens", async () => {
+    const mock = mockApi({ policy: { explicitProjects: true, maxLifetimeDays: 365 } });
+    const page = await open(scheme, google, mock);
+    try {
+      await page.getByRole("button", { name: "API tokens" }).click();
+      await page.getByRole("button", { name: "New token" }).click();
+      const form = page.getByRole("form", { name: "New token" });
+      expect(await form.getByRole("radio", { name: "Never", exact: true }).count()).toBe(0);
+      expect(await form.getByRole("radio", { name: "All your projects", exact: true }).count()).toBe(0);
+      await form.getByRole("textbox", { name: "Name" }).fill("Preview reader");
+      await form.getByRole("radio", { name: "other", exact: true }).click();
+      await form.getByRole("radio", { name: "7 days", exact: true }).click();
+      await shot(page, `proxy-grants-${scheme}`);
+      await form.getByRole("button", { name: "Create token" }).click();
+      await page.getByRole("region", { name: "Copy “Preview reader”" }).waitFor();
+      expect(mock.posts).toEqual([{ name: "Preview reader", projects: ["other"], expiresInDays: 7, scopes: ["comments:read"] }]);
       expect((page as any).errors).toEqual([]);
     } finally { await page.close(); }
   });

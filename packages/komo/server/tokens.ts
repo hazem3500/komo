@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { authOptions } from "./proxy-auth";
 import { check, string } from "./validation";
 
 // Personal access tokens let a bot act as its owner with a narrower grant.
@@ -136,6 +137,10 @@ export async function createToken(
   userId: string,
   data: Record<string, unknown>
 ) {
+  if (authOptions(env).proxy) {
+    check(data.expiresInDays !== undefined && data.expiresInDays !== null, 400, "Choose an expiry between 1 and 365 days.");
+    check(Array.isArray(data.projects) && data.projects.length > 0, 400, "Choose explicit projects for this token.");
+  }
   const name = string(data.name, 60, "token name").trim();
   check(name.length > 0, 400, "Name your token.");
   let expiresAt: number | null = null;
@@ -285,6 +290,15 @@ export async function authenticateToken(
     row.revoked_at === null &&
     (row.expires_at === null || row.expires_at > now);
   check(valid, 401, "This access token is invalid, expired, or revoked.");
+  if (authOptions(env).proxy) {
+    check(
+      row.expires_at !== null && row.expires_at > row.created_at &&
+        row.expires_at - row.created_at <= MAX_LIFETIME_DAYS * 86400000 &&
+        (list(row.projects)?.length ?? 0) > 0,
+      403,
+      "Proxy access tokens require explicit projects and a lifetime of 1–365 days."
+    );
+  }
   const user = await env.DB.prepare("SELECT * FROM users WHERE id=?")
     .bind(row.user_id)
     .first<TokenUser>();

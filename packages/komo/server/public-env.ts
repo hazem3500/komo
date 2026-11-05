@@ -20,6 +20,8 @@ export interface ServerEnv {
   PALETTE_PAUSED?: string;
   /** Trusted identity proxy that signs reviewers in, e.g. "gcp-iap". Off unless set. */
   PALETTE_PROXY_AUTH?: string;
+  /** Explicitly allow bounded, project-scoped access tokens behind a proxy. */
+  PALETTE_PROXY_ACCESS_TOKENS?: string;
   /** The audience the proxy signs its assertions for. */
   PALETTE_PROXY_AUDIENCE?: string;
   /** Older name: setting it alone turns on "gcp-iap" with this audience. */
@@ -53,6 +55,8 @@ export interface ServerEnv {
   KOMO_PAUSED?: string;
   /** @deprecated Read when PALETTE_PROXY_AUTH is unset. */
   KOMO_PROXY_AUTH?: string;
+  /** @deprecated Read when PALETTE_PROXY_ACCESS_TOKENS is unset. */
+  KOMO_PROXY_ACCESS_TOKENS?: string;
   /** @deprecated Read when PALETTE_PROXY_AUDIENCE is unset. */
   KOMO_PROXY_AUDIENCE?: string;
   /** @deprecated Read when PALETTE_IAP_AUDIENCE is unset. */

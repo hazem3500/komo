@@ -186,3 +186,20 @@ it("revokes after an inline confirm, optimistically, with rollback on failure", 
   expect([...view.querySelectorAll("li strong")].map((node) => node.textContent)).toEqual(["First", "Second"]);
   expect(view.querySelector("[aria-live=polite]")!.textContent).toBe("Revoked Third.");
 });
+
+
+it("uses explicit project identifiers and bounded expiry under proxy policy", async () => {
+  const api = client();
+  vi.mocked(api.request).mockResolvedValueOnce({ ...list([]), projects: ["site", "this"], policy: { explicitProjects: true, maxLifetimeDays: 365 } });
+  const { view } = await mount(api);
+  buttonNamed(view, "New token").click();
+  const form = view.querySelector("form")!;
+  expect([...form.querySelectorAll<HTMLInputElement>("input[name=projects]")].map((input) => input.value)).toEqual(["site", "this"]);
+  expect(form.querySelector('input[name=expiry][value=null]')).toBeNull();
+  form.querySelector<HTMLInputElement>('input[name=projects][value=this]')!.click();
+  form.querySelector<HTMLInputElement>('input[type=text]')!.value = "Reader";
+  vi.mocked(api.request).mockRejectedValueOnce(new ApiError(429, "Try later"));
+  form.requestSubmit();
+  await settled();
+  expect(api.request).toHaveBeenLastCalledWith("account/tokens", "POST", expect.objectContaining({ projects: ["this"], expiresInDays: 30 }));
+});
