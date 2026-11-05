@@ -45,6 +45,13 @@ export function branchName(env, cwd) {
     gitValue(["symbolic-ref", "--short", "HEAD"], cwd)
   );
 }
-export function clientModule(config) {
-  return `import { definePalette } from '@hazem3500/palette/setup';\n\nexport const initPalette = definePalette(${JSON.stringify(config, null, 2)});\n\n/** @deprecated Use initPalette. */\nexport const initKomo = initPalette;\n`;
+export function packageName(env = process.env) {
+  const name = env.PALETTE_PACKAGE_NAME ?? "@hazem3500/palette";
+  if (typeof name !== "string" || name.length > 214 || !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(name))
+    throw Error("PALETTE_PACKAGE_NAME must be an npm package name, such as @scope/palette.");
+  return name;
+}
+
+export function clientModule(config, env = process.env) {
+  return `import { definePalette } from '${packageName(env)}/setup';\n\nexport const initPalette = definePalette(${JSON.stringify(config, null, 2)});\n\n/** @deprecated Use initPalette. */\nexport const initKomo = initPalette;\n`;
 }

@@ -28,7 +28,7 @@ describe("simple Palette setup", () => {
       "build-time branch"
     );
   });
-  it("generates a secret-free two-line integration and refreshes branch metadata", async () => {
+  it.each([undefined, "@toggl/palette"])("generates a secret-free integration for %s and refreshes branch metadata", async (namespace) => {
     const dir = await mkdtemp(join(tmpdir(), "komo-cli-"));
     let generatedBeforeSignIn = "";
     let privateSetup = "";
@@ -77,6 +77,7 @@ describe("simple Palette setup", () => {
           cwd: dir,
           env: {
             ...process.env,
+            PALETTE_PACKAGE_NAME: namespace,
             CF_PAGES_URL: "https://site.example.com",
             PALETTE_BRANCH: "preview/one",
           },
@@ -93,17 +94,17 @@ describe("simple Palette setup", () => {
       await expect(
         readFile(join(dir, ".palette/setup.json"), "utf8")
       ).rejects.toThrow();
-      expect(initialized.stdout).toContain("from '@hazem3500/palette'");
+      expect(initialized.stdout).toContain(`from '${namespace ?? "@hazem3500/palette"}'`);
       expect(initialized.stdout).not.toContain("fixture-poll-secret");
       const generated = await readFile(join(dir, "palette.config.js"), "utf8");
-      expect(generated).toContain("from '@hazem3500/palette/setup'");
+      expect(generated).toContain(`from '${namespace ?? "@hazem3500/palette"}/setup'`);
       expect(generated).toContain("preview/one");
       expect(generated).not.toContain("onboarding");
       expect(generated).not.toContain("fixture-poll-secret");
       await promisify(execFile)(process.execPath, [cli, "sync"], {
         cwd: dir,
         // The older name still works.
-        env: { ...process.env, KOMO_BRANCH: "preview/two" },
+        env: { ...process.env, PALETTE_PACKAGE_NAME: namespace, KOMO_BRANCH: "preview/two" },
       });
       expect(await readFile(join(dir, "palette.config.js"), "utf8")).toContain(
         "preview/two"
