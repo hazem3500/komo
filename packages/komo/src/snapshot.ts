@@ -430,6 +430,7 @@ export async function snapshotImage(element: Element, options: PaletteSnapshots 
 
 /** The server's snapshot support, from `/config`. */
 export interface SnapshotLimits {
+  readiness?: boolean;
   /** Whether guest sessions may attach snapshots. */
   guests: boolean;
   maxImageBytes: number;
@@ -475,7 +476,7 @@ export async function captureSnapshot(
       if (result.html) result.html = noteComment(result.note) + result.html;
     }
   }
-  return result.image || result.html ? result : null;
+  return result;
 }
 
 /** A data URL's bytes, without fetch (which a host's connect-src may block). */
@@ -498,24 +499,29 @@ export function snapshotFor<Anchor extends object>(
   resolve: (anchor: Anchor) => Element | null,
   options: PaletteSnapshots,
   limits: SnapshotLimits,
-  post?: (kind: "image" | "html", body: Blob) => Promise<unknown>,
+  post?: (kind: "image" | "html" | "status", body: Blob) => Promise<unknown>,
 ): Promise<CapturedSnapshot | null> {
   let capture = captures.get(anchor);
   if (!capture) {
     const shot = { ...options, maxBytes: Math.min(options.maxBytes ?? IMAGE_BYTES, limits.maxImageBytes || Infinity) };
     capture = options.image || options.html
-      ? captureSnapshot(resolve(anchor), shot, Math.min(HTML_LIMIT, limits.maxHtmlBytes || Infinity)).catch(() => null)
+      ? captureSnapshot(resolve(anchor), shot, Math.min(HTML_LIMIT, limits.maxHtmlBytes || Infinity)).catch(() => ({ note: "failed" as const }))
       : Promise.resolve(null);
     captures.set(anchor, capture);
   }
   if (post)
     void capture.then(async (shot) => {
+      let failed = shot?.note === "failed";
       for (const kind of ["image", "html"] as const)
         if (shot?.[kind])
           await post(kind, kind === "image" ? dataBlob(shot.image!) : new Blob([shot.html!], { type: "text/html;charset=utf-8" })).catch(
-            (reason: unknown) =>
-              console.info(`Palette: the comment posted without its ${kind} snapshot.`, reason instanceof Error ? reason.message : reason),
+            (reason: unknown) => {
+              failed = true;
+              console.info(`Palette: the comment posted without its ${kind} snapshot.`, reason instanceof Error ? reason.message : reason);
+            },
           );
+      if (limits.readiness && (failed || (!shot?.image && !shot?.html)))
+        await post("status", new Blob([`{"status":"${failed ? "failed" : "skipped"}"}`], { type: "application/json" })).catch(() => {});
     });
   return capture;
 }

@@ -116,7 +116,7 @@ describe("snapshot capture", () => {
     }
   });
 
-  const limits = { guests: false, maxImageBytes: 262_144, maxHtmlBytes: 32_768 };
+  const limits = { readiness: true, guests: false, maxImageBytes: 262_144, maxHtmlBytes: 32_768 };
   it("captures nothing when no kind is turned on, and once per anchor", async () => {
     const root = fixture(`<p>Hello</p>`);
     const resolve = vi.fn(() => root.firstElementChild);
@@ -167,7 +167,7 @@ describe("posting with snapshots", () => {
     vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     requests = [];
     failUploads = false;
-    server = { github: false, guests: true, guestResolve: false, snapshots: { guests: false, maxImageBytes: 262_144, maxHtmlBytes: 32_768 } };
+    server = { github: false, guests: true, guestResolve: false, snapshots: { readiness: true, guests: false, maxImageBytes: 262_144, maxHtmlBytes: 32_768 } };
     // Config loads (post() answers /me); other reads stay pending; writes succeed.
     vi.stubGlobal("fetch", vi.fn(async (url: URL, init?: RequestInit) => {
       const method = init?.method ?? "GET";
@@ -249,19 +249,30 @@ describe("posting with snapshots", () => {
     controller = undefined;
     document.body.replaceChildren();
     requests = [];
-    server.snapshots = { guests: true, maxImageBytes: 262_144, maxHtmlBytes: 32_768 };
+    server.snapshots = { readiness: true, guests: true, maxImageBytes: 262_144, maxHtmlBytes: 32_768 };
     expect((await post({ html: true }, false)).map((request) => request.path)).toEqual(["/threads/thread-1/snapshot?kind=html"]);
   });
 
   it("skips a target inside data-palette-no-snapshot", async () => {
-    expect(await post({ html: true }, true, `<div data-palette-no-snapshot><div data-slot></div></div>`)).toEqual([]);
+    expect(await post({ html: true }, true, `<div data-palette-no-snapshot><div data-slot></div></div>`)).toEqual([expect.objectContaining({ type: "application/json", body: '{"status":"skipped"}' })]);
+  });
+
+  it("preserves older servers' request shapes when readiness is not advertised", async () => {
+    delete (server.snapshots as Record<string, unknown>).readiness;
+    failUploads = true;
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const uploads = await post({ html: true });
+    expect(uploads).toHaveLength(1);
+    expect(JSON.parse(requests.find(request => request.path === "/threads" && request.method === "POST")!.body!)).not.toHaveProperty("snapshotIntent");
+    await vi.waitFor(() => expect(info).toHaveBeenCalled());
   });
 
   it("still posts the comment when the upload fails", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     failUploads = true;
     const uploads = await post({ html: true });
-    expect(uploads).toHaveLength(1);
+    expect(uploads).toHaveLength(2);
+    expect(uploads[1]).toMatchObject({ type: "application/json", body: '{"status":"failed"}' });
     await vi.waitFor(() => expect(info).toHaveBeenCalledWith("Palette: the comment posted without its html snapshot.", "Snapshot storage is full"));
     const shadow = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
     expect(shadow.textContent).not.toContain("Couldn't save");

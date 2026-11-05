@@ -20,7 +20,8 @@ import { authOptions, type ProxyAuthProvider, type ProxyIdentity } from "./proxy
 import { paletteEnv } from "./public-env";
 import setupClient from "./setup-client.txt";
 import {
-  dispatchWebhook,
+  enqueueWebhook,
+  drainWebhooks,
   type WebhookEvent,
 } from "./webhooks";
 import {
@@ -202,14 +203,16 @@ async function body(request: Request): Promise<Record<string, unknown>> {
                       : path === "/me"
                         ? ["name", "avatarUrl", "accentColor"]
                         : path === "/threads"
-                          ? ["body", "page", "anchor", "tags", "scope"]
+                          ? ["body", "page", "anchor", "tags", "scope", "snapshotIntent"]
                           : path.endsWith("/comments")
                             ? ["body"]
                             : path.includes("/comments/")
                               ? ["body"]
-                              : path.startsWith("/threads/")
-                                ? ["anchor", "resolved", "tag", "untag", "scope"]
-                                : [];
+                              : path.endsWith("/snapshot")
+                                ? ["status"]
+                                : path.startsWith("/threads/")
+                                  ? ["anchor", "resolved", "tag", "untag", "scope"]
+                                  : [];
     check(
       Object.keys(result).every((key) => allowed.includes(key)),
       400,
@@ -1149,6 +1152,7 @@ async function route(
       tokens: !auth.proxy || auth.proxyAccessTokens,
       // Element snapshots are opt-in on the client; guests need project consent.
       snapshots: {
+        readiness: true,
         guests: auth.allowGuests && config.allowGuestSnapshots === true,
         maxImageBytes: SNAPSHOT_LIMITS.image,
         maxHtmlBytes: SNAPSHOT_LIMITS.html,
@@ -1537,6 +1541,8 @@ async function route(
     }
     const id = crypto.randomUUID();
     const firstCommentId = crypto.randomUUID();
+    check(data.snapshotIntent === undefined || typeof data.snapshotIntent === "boolean", 400, "Invalid snapshot intent.");
+    const snapshotStatus = data.snapshotIntent === undefined ? null : data.snapshotIntent ? "pending" : "skipped";
     await env.DB.batch([
       // Page-only threads rely on the column default, as before the scope column existed.
       scope === "all"
@@ -1549,18 +1555,8 @@ async function route(
       env.DB.prepare(
         "INSERT INTO comments(id,thread_id,user_id,body,created_at) VALUES(?,?,?,?,?)"
       ).bind(firstCommentId, id, user.id, text, now),
-      ...retainReviewerComments(
-        env.DB,
-        project,
-        user.id,
-        config.retainedCommentsPerUser
-      ),
-    ]);
-    ctx.waitUntil(
-      dispatchWebhook(
-        env,
-        project,
-        webhookEvent(
+      env.DB.prepare("UPDATE threads SET snapshot_status=? WHERE id=?").bind(snapshotStatus, id),
+      enqueueWebhook(env.DB, project, { ...webhookEvent(
           "comment.created",
           project,
           repo,
@@ -1571,9 +1567,15 @@ async function route(
           user.name,
           text,
           origin || url.origin
-        )
-      ).catch(() => {})
-    );
+        ), ...(snapshotStatus ? { snapshotStatus } : {}) }, firstCommentId),
+      ...retainReviewerComments(
+        env.DB,
+        project,
+        user.id,
+        config.retainedCommentsPerUser
+      ),
+    ]);
+    ctx.waitUntil(drainWebhooks(env));
     return json({ id, commentId: firstCommentId }, 201);
   }
   const snapshotRoute = url.pathname.match(
@@ -1582,12 +1584,18 @@ async function route(
   if (snapshotRoute) {
     const [, threadId, pathKind] = snapshotRoute;
     const thread = await env.DB.prepare(
-      "SELECT id FROM threads WHERE id=? AND project=? AND repo=? AND branch=?"
+      "SELECT id,snapshot_status,created_at FROM threads WHERE id=? AND project=? AND repo=? AND branch=?"
     )
       .bind(threadId, project, repo, branch)
-      .first<{ id: string }>();
+      .first<{ id: string; snapshot_status: string | null; created_at: number }>();
     check(thread, 404, "Thread not found on this branch.");
     if (request.method === "GET") {
+      if (!pathKind) {
+        const rows = await env.DB.prepare("SELECT kind FROM snapshots WHERE thread_id=?").bind(threadId).all<{kind:string}>();
+        let status = rows.results.length ? "ready" : thread.snapshot_status ?? "unknown";
+        if (status === "pending" && now - thread.created_at > 600000) status = "failed";
+        return json({ status, kinds: rows.results.map(row => row.kind) });
+      }
       const kind = snapshotKind(pathKind);
       const row = await env.DB.prepare(
         "SELECT mime,bytes FROM snapshots WHERE thread_id=? AND kind=?"
@@ -1635,12 +1643,19 @@ async function route(
           threadId,
           kind
         ),
-        env.DB.prepare("UPDATE threads SET updated_at=? WHERE id=?").bind(
+        env.DB.prepare("UPDATE threads SET snapshot_status=CASE WHEN EXISTS (SELECT 1 FROM snapshots WHERE thread_id=?) THEN 'ready' ELSE 'skipped' END,updated_at=? WHERE id=?").bind(
+          threadId,
           now,
           threadId
         ),
       ]);
       return json({ ok: true, deleted: deleted.meta.changes });
+    }
+    if (!pathKind && request.headers.get("Content-Type")?.startsWith("application/json")) {
+      const data = await body(request);
+      check(data.status === "skipped" || data.status === "failed", 400, "Report skipped or failed capture.");
+      await env.DB.prepare("UPDATE threads SET snapshot_status=?,updated_at=? WHERE id=? AND snapshot_status='pending'").bind(data.status, now, threadId).run();
+      return json({ ok: true });
     }
     await limit(env, `${project}:snapshot:${user.id}`, 60, 600);
     const snapshot = await readSnapshot(
@@ -1657,8 +1672,9 @@ async function route(
         snapshotCap(config.maxSnapshotBytes),
         true
       ),
-      env.DB.prepare("UPDATE threads SET updated_at=? WHERE id=?").bind(
+      env.DB.prepare("UPDATE threads SET snapshot_status='ready',updated_at=? WHERE id=? AND EXISTS (SELECT 1 FROM snapshots WHERE thread_id=?)").bind(
         now,
+        threadId,
         threadId
       ),
     ]);
@@ -1774,35 +1790,20 @@ async function route(
     );
     check(typeof data.resolved === "boolean", 400, "Invalid resolved state.");
     const becameResolved = !thread.resolved && data.resolved;
-    await env.DB.prepare(
-      "UPDATE threads SET resolved=?,resolved_by=?,updated_at=? WHERE id=?"
-    )
-      .bind(
-        Number(data.resolved),
-        data.resolved ? user.id : null,
-        now,
-        threadId
-      )
-      .run();
-    if (becameResolved)
-      ctx.waitUntil(
-        dispatchWebhook(
-          env,
-          project,
-          webhookEvent(
-            "comment.resolved",
-            project,
-            repo,
-            branch,
-            threadId,
-            thread.page,
-            thread.anchor,
-            user.name,
-            null,
-            origin || url.origin
-          )
-        ).catch(() => {})
-      );
+    const firstComment = becameResolved
+      ? await env.DB.prepare("SELECT id FROM comments WHERE thread_id=? ORDER BY created_at,id LIMIT 1")
+          .bind(threadId).first<{ id: string }>()
+      : null;
+    await env.DB.batch([
+      env.DB.prepare(
+        "UPDATE threads SET resolved=?,resolved_by=?,updated_at=? WHERE id=?"
+      ).bind(Number(data.resolved), data.resolved ? user.id : null, now, threadId),
+      ...(firstComment ? [enqueueWebhook(env.DB, project, webhookEvent(
+        "comment.resolved", project, repo, branch, threadId, thread.page,
+        thread.anchor, user.name, null, origin || url.origin
+      ), firstComment.id)] : []),
+    ]);
+    ctx.waitUntil(drainWebhooks(env));
     return json({ ok: true });
   }
   if (
@@ -1820,6 +1821,18 @@ async function route(
         now,
         threadId
       ),
+      enqueueWebhook(env.DB, project, webhookEvent(
+          "comment.replied",
+          project,
+          repo,
+          branch,
+          threadId,
+          thread.page,
+          thread.anchor,
+          user.name,
+          text,
+          origin || url.origin
+        ), replyId),
       ...retainReviewerComments(
         env.DB,
         project,
@@ -1832,24 +1845,7 @@ async function route(
       409,
       "This thread has reached 200 comments. Start another thread."
     );
-    ctx.waitUntil(
-      dispatchWebhook(
-        env,
-        project,
-        webhookEvent(
-          "comment.replied",
-          project,
-          repo,
-          branch,
-          threadId,
-          thread.page,
-          thread.anchor,
-          user.name,
-          text,
-          origin || url.origin
-        )
-      ).catch(() => {})
-    );
+    ctx.waitUntil(drainWebhooks(env));
     return json({ ok: true, id: replyId }, 201);
   }
   check(commentId, 405, "Method not allowed.");
@@ -1954,6 +1950,7 @@ const settingsFor = new WeakMap<Env, Env>();
 export default {
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(maintain(env.DB, true));
+    ctx.waitUntil(drainWebhooks(paletteEnv(env)));
   },
   async fetch(request, settings, ctx) {
     // Deployments configured before the rename set KOMO_ names. One copy per
@@ -2044,3 +2041,5 @@ export default {
     return new Response(response.body, { status: response.status, headers });
   },
 } satisfies ExportedHandler<Env>;
+
+export { drainWebhooks } from "./webhooks";

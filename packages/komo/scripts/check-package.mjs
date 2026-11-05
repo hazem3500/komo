@@ -90,12 +90,13 @@ try {
     join(root, "smoke.mjs"),
     `
     import assert from 'node:assert/strict';
-    import server from '@hazem3500/palette/server';
+    import server, { drainWebhooks } from '@hazem3500/palette/server';
     import metadata from '@hazem3500/palette/package.json' with { type: 'json' };
     assert.equal(metadata.name, '@hazem3500/palette');
     assert.ok(import.meta.resolve('@hazem3500/palette/server').endsWith('/dist/server.js'));
     assert.ok(import.meta.resolve('@hazem3500/palette/package.json').endsWith('/palette/package.json'));
     assert.equal(typeof server.scheduled, 'function');
+    assert.equal(typeof drainWebhooks, 'function');
     const health = await server.fetch(new Request('https://example.test/health'), {}, { waitUntil() {} });
     assert.equal(health.status, 200);
     assert.deepEqual(await health.json(), { ok: true });
@@ -143,11 +144,12 @@ try {
   await writeFile(
     join(root, "consumer.ts"),
     `
-    import server, { type ServerEnv } from '@hazem3500/palette/server';
+    import server, { drainWebhooks, type ServerEnv } from '@hazem3500/palette/server';
     declare const env: ServerEnv;
     declare const request: Parameters<typeof server.fetch>[0];
     declare const context: Parameters<typeof server.fetch>[2];
     server.fetch(request, env, context);
+    drainWebhooks(env);
     import { initPalette, type PaletteConfig } from '@hazem3500/palette';
     import { definePalette } from '@hazem3500/palette/setup';
     import { usePalette } from '@hazem3500/palette/react';

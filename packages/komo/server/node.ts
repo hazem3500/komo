@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { Readable } from "node:stream";
 import { loadPostgres, postgresDatabase } from "./postgres";
 import worker from "./index";
+import { drainWebhooks } from "./webhooks";
 import { sendWebhookPinned } from "./node-webhooks";
 import { authOptions, publicLocation } from "./proxy-auth";
 import { checkProjects, clientAddress, nodeSetting, trustedProxyHops } from "./node-config";
@@ -42,6 +43,7 @@ const env = {
 // Fail at startup, before touching the database, on an invalid sign-in option.
 authOptions(env);
 await db.migrate();
+setInterval(() => void drainWebhooks(env).catch(() => console.warn("Palette: webhook drain failed")), 10000).unref();
 const port = Number(process.env.PORT ?? 8080);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw Error("Invalid PORT");

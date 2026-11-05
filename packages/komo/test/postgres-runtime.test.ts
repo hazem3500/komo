@@ -447,3 +447,140 @@ run(
     expect(await scopes()).toEqual({ [everywhere.data.id]: undefined, [legacy.data.id]: "all" });
   },
 );
+
+run(
+  "PostgreSQL outbox rolls back with mutations and leases concurrent drainers",
+  async () => {
+    const { enqueueWebhook, drainWebhooks, encryptWebhookSecret } =
+      await import("../server/webhooks");
+    const ring = JSON.stringify({
+      current: "fixture",
+      keys: { fixture: Buffer.alloc(32, 7).toString("base64") },
+    });
+    const comment = await db
+      .prepare("SELECT id,thread_id FROM comments LIMIT 1")
+      .first<{ id: string; thread_id: string }>();
+    expect(comment).not.toBeNull();
+    await db
+      .prepare(
+        "INSERT INTO project_settings(project,webhook_url,webhook_secret,webhook_events,webhook_enabled) VALUES(?,?,?,?,?)",
+      )
+      .bind(
+        "review",
+        "https://hooks.example.com",
+        await encryptWebhookSecret(ring, "review", "s".repeat(40)),
+        '["comment.created"]',
+        1,
+      )
+      .run();
+    const event = {
+      id: "pg-delivery",
+      event: "comment.created" as const,
+      occurredAt: "2026-01-01T00:00:00Z",
+      projectKey: "review",
+      repo: "team/site",
+      branch: "pr-42",
+      threadId: comment!.thread_id,
+      pageUrl: "https://example.com",
+      selector: "h1",
+      author: "A",
+      body: "Hi",
+    };
+    await expect(
+      db.batch([
+        enqueueWebhook(
+          db as unknown as D1Database,
+          "review",
+          event,
+          comment!.id,
+        ) as unknown as ReturnType<typeof db.prepare>,
+        db.prepare("SELECT * FROM deliberately_missing_outbox_table"),
+      ]),
+    ).rejects.toThrow();
+    expect(
+      await db.prepare("SELECT COUNT(*) AS n FROM webhook_outbox").first(),
+    ).toEqual({ n: 0 });
+    await enqueueWebhook(
+      db as unknown as D1Database,
+      "review",
+      event,
+      comment!.id,
+    ).run();
+    const sent: string[] = [];
+    let fail = true;
+    const deliveryEnv = {
+      DB: db as unknown as D1Database,
+      PALETTE_WEBHOOK_KEYS: ring,
+      PALETTE_WEBHOOK_SEND: async (_: string, body: string) => {
+        sent.push(body);
+        if (fail) throw Error("offline");
+      },
+    };
+    await Promise.all([drainWebhooks(deliveryEnv), drainWebhooks(deliveryEnv)]);
+    expect(sent).toHaveLength(1);
+    expect(
+      await db.prepare("SELECT state,attempts FROM webhook_outbox").first(),
+    ).toEqual({ state: "pending", attempts: 1 });
+    fail = false;
+    await db.prepare("UPDATE webhook_outbox SET next_attempt=0").run();
+    await Promise.all([drainWebhooks(deliveryEnv), drainWebhooks(deliveryEnv)]);
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toBe(sent[1]);
+    expect(
+      await db.prepare("SELECT state,attempts FROM webhook_outbox").first(),
+    ).toEqual({ state: "delivered", attempts: 2 });
+    const call = (path: string, data: unknown, token?: string) =>
+      worker.fetch(
+        new Request(
+          `http://localhost:8080${path}?project=review&repo=team%2Fsite&branch=pr-42`,
+          {
+            method: "POST",
+            headers: {
+              Origin: "http://localhost:3000",
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify(data),
+          },
+        ) as unknown as Parameters<typeof worker.fetch>[0],
+        env,
+        { waitUntil() {} } as unknown as ExecutionContext,
+      );
+    const guest = (await (
+      await call("/auth/guest", { name: "Outbox reviewer" })
+    ).json()) as { token: string };
+    const created = await call(
+      "/threads",
+      {
+        page: "/preview",
+        body: "Queued before capture",
+        snapshotIntent: true,
+        anchor: {
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+          pageX: 0,
+          pageY: 0,
+          viewportWidth: 1200,
+          selector: "h1",
+          text: "Title",
+        },
+      },
+      guest.token,
+    );
+    expect(created.status).toBe(201);
+    const saved = (await created.json()) as { id: string };
+    const queued = await db
+      .prepare("SELECT body,state,attempts FROM webhook_outbox WHERE id!=?")
+      .bind(event.id)
+      .first<{ body: string; state: string; attempts: number }>();
+    expect(queued).toMatchObject({ state: "pending", attempts: 0 });
+    expect(JSON.parse(queued!.body)).toMatchObject({
+      event: "comment.created",
+      threadId: saved.id,
+      snapshotStatus: "pending",
+      body: "Queued before capture",
+    });
+  },
+);

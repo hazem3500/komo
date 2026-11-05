@@ -101,6 +101,11 @@ export async function sendWebhookPinned(
           lookup: pinnedLookup(address),
         },
         (response) => {
+          if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
+            response.destroy();
+            finish(new Error("Webhook returned a non-success status."));
+            return;
+          }
           // Read and discard a bounded amount. Never follow redirects or log bodies.
           let read = 0;
           response.on("data", (chunk: Buffer) => {

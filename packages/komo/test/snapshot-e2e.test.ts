@@ -85,6 +85,7 @@ async function mockApi(page: Page, failUploads = false) {
   const threads: { id: string; body: string }[] = [];
   const saved: object[] = [];
   const uploads: Upload[] = [];
+  const statuses: string[] = [];
   const user = { id: "reviewer", name: "Example reviewer", verified: true };
   await page.route(`${origin}/api/**`, async (route) => {
     const request = route.request();
@@ -93,6 +94,10 @@ async function mockApi(page: Page, failUploads = false) {
     const snapshot = path.match(/^\/threads\/([^/]+)\/snapshot$/);
     if (snapshot && method === "POST") {
       const kind = new URL(request.url()).searchParams.get("kind") as Upload["kind"];
+      if ((kind as string) === "status") {
+        statuses.push(request.postDataJSON().status);
+        return route.fulfill({ json: { ok: true } });
+      }
       const type = request.headers()["content-type"] ?? "";
       const body = request.postDataBuffer() ?? Buffer.alloc(0);
       uploads.push({ thread: snapshot[1]!, kind, type, data: kind === "image" ? `data:${type};base64,${body.toString("base64")}` : body.toString("utf8") });
@@ -109,11 +114,11 @@ async function mockApi(page: Page, failUploads = false) {
       return route.fulfill({ json: { id, commentId: `${id}-comment` } });
     }
     if (path === "/me") return route.fulfill({ json: { user } });
-    if (path === "/config") return route.fulfill({ json: { guests: true, guestResolve: true, snapshots: { guests: false, maxImageBytes: 262_144, maxHtmlBytes: 32_768 } } });
+    if (path === "/config") return route.fulfill({ json: { guests: true, guestResolve: true, snapshots: { readiness: true, guests: false, maxImageBytes: 262_144, maxHtmlBytes: 32_768 } } });
     if (path === "/threads") return route.fulfill({ json: { threads: saved } });
     return route.fulfill({ json: {} });
   });
-  return { threads, uploads };
+  return { threads, uploads, statuses };
 }
 
 async function open(page: Page, query = "") {
@@ -299,7 +304,7 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     const api = await mockApi(page, true);
     await open(page);
     await comment(page, (await page.locator("#plain").boundingBox())!, "Upload fails");
-    await waitFor(() => api.uploads.length === 2);
+    await waitFor(() => api.uploads.length === 2 && api.statuses.includes("failed"));
     await page.waitForTimeout(300);
     expect(api.threads).toEqual([{ id: "thread-1", body: "Upload fails" }]);
     expect(logs.filter((text) => text.startsWith("Palette: the comment posted without its"))).toHaveLength(2);
