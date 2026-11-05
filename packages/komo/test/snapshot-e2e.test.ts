@@ -259,7 +259,7 @@ describe.skipIf(!chrome)("comment snapshots", () => {
     await page.waitForTimeout(300);
     expect(api.uploads).toEqual([{ thread: "thread-1", kind: "html", type: "text/html;charset=utf-8", data: expect.stringContaining("Foreign image") }]);
     // The HTML says why there is no image.
-    expect(api.uploads[0]!.data).toMatch(/^<!-- palette: no image snapshot, the element shows images from another origin\. -->/);
+    expect(api.uploads[0]!.data).toMatch(/^<!-- palette: no image snapshot, cross-origin images\. -->/);
     await page.close();
   }, 60_000);
 
@@ -299,15 +299,13 @@ describe.skipIf(!chrome)("comment snapshots", () => {
 
   it("still posts the comment when the upload fails", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-    const logs: string[] = [];
-    page.on("console", (message) => logs.push(message.text()));
     const api = await mockApi(page, true);
     await open(page);
     await comment(page, (await page.locator("#plain").boundingBox())!, "Upload fails");
     await waitFor(() => api.uploads.length === 2 && api.statuses.includes("failed"));
     await page.waitForTimeout(300);
     expect(api.threads).toEqual([{ id: "thread-1", body: "Upload fails" }]);
-    expect(logs.filter((text) => text.startsWith("Palette: the comment posted without its"))).toHaveLength(2);
+    expect(api.statuses).toContain("failed");
     // The thread stays posted: its pin is shown, and no save error appears.
     await page.locator('.pin[data-thread="thread-1"]').waitFor({ state: "attached" });
     expect(await page.evaluate(() => [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!.textContent)).not.toContain("Couldn't save");

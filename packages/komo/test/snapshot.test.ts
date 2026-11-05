@@ -136,20 +136,19 @@ describe("snapshot capture", () => {
   });
 
   it("says why the image is missing at the top of the HTML", () => {
-    expect(noteComment("cross-origin")).toBe("<!-- palette: no image snapshot, the element shows images from another origin. -->");
+    expect(noteComment("cross-origin")).toBe("<!-- palette: no image snapshot, cross-origin images. -->");
   });
 
-  it("uploads each kind as its raw file after capture, and logs a failed upload quietly", async () => {
+  it("uploads raw captures and reports a failed upload without rejecting", async () => {
     const root = fixture(`<p>Héllo</p>`);
-    const info = vi.spyOn(console, "info").mockImplementation(() => {});
     const post = vi.fn((_kind: string, _body: Blob) => Promise.reject(new Error("Snapshot storage is full")));
     await snapshotFor({}, () => root.firstElementChild, { html: true }, limits, post);
-    await vi.waitFor(() => expect(info).toHaveBeenCalledWith("Palette: the comment posted without its html snapshot.", "Snapshot storage is full"));
+    await vi.waitFor(() => expect(post).toHaveBeenCalledWith("status", expect.any(Blob)));
+    expect(await post.mock.calls[1]![1].text()).toBe('{"status":"failed"}');
     const [kind, body] = post.mock.calls[0]!;
     expect(kind).toBe("html");
     expect(body.type).toBe("text/html;charset=utf-8");
     expect(await body.text()).toBe("<p>Héllo</p>");
-    info.mockRestore();
   });
 });
 
@@ -260,20 +259,16 @@ describe("posting with snapshots", () => {
   it("preserves older servers' request shapes when readiness is not advertised", async () => {
     delete (server.snapshots as Record<string, unknown>).readiness;
     failUploads = true;
-    const info = vi.spyOn(console, "info").mockImplementation(() => {});
     const uploads = await post({ html: true });
     expect(uploads).toHaveLength(1);
     expect(JSON.parse(requests.find(request => request.path === "/threads" && request.method === "POST")!.body!)).not.toHaveProperty("snapshotIntent");
-    await vi.waitFor(() => expect(info).toHaveBeenCalled());
   });
 
   it("still posts the comment when the upload fails", async () => {
-    const info = vi.spyOn(console, "info").mockImplementation(() => {});
     failUploads = true;
     const uploads = await post({ html: true });
     expect(uploads).toHaveLength(2);
     expect(uploads[1]).toMatchObject({ type: "application/json", body: '{"status":"failed"}' });
-    await vi.waitFor(() => expect(info).toHaveBeenCalledWith("Palette: the comment posted without its html snapshot.", "Snapshot storage is full"));
     const shadow = [...document.body.children].find((node) => node.shadowRoot)!.shadowRoot!;
     expect(shadow.textContent).not.toContain("Couldn't save");
   });

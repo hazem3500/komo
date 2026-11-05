@@ -439,7 +439,7 @@ export interface SnapshotLimits {
 
 /** Why the image is missing, kept at the top of the HTML snapshot for readers and agents. */
 const NOTES: Record<SnapshotNote, string> = {
-  "cross-origin": "the element shows images from another origin",
+  "cross-origin": "cross-origin images",
   "too-large": "the element is too large to draw",
   unsupported: "this browser can't encode WebP",
   failed: "it couldn't be drawn",
@@ -482,17 +482,15 @@ export async function captureSnapshot(
 /** A data URL's bytes, without fetch (which a host's connect-src may block). */
 const dataBlob = (url: string) => {
   const [head, data] = url.split(",") as [string, string];
-  const binary = atob(data);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: head.slice(5, head.indexOf(";")) });
+  const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
+  return new Blob([bytes], { type: head.slice("data:".length, -";base64".length) });
 };
 
 const captures = new WeakMap<object, Promise<CapturedSnapshot | null>>();
 /**
  * The snapshot of a draft's target, captured once per anchor: the composer reads it
  * for a preview, and posting passes `post` to upload each kind as its raw file after
- * the thread is saved. Never rejects; a failed upload is logged and the comment stays posted.
+ * the thread is saved. Never rejects; failed uploads are reported when supported and the comment stays posted.
  */
 export function snapshotFor<Anchor extends object>(
   anchor: Anchor,
@@ -512,16 +510,15 @@ export function snapshotFor<Anchor extends object>(
   if (post)
     void capture.then(async (shot) => {
       let failed = shot?.note === "failed";
-      for (const kind of ["image", "html"] as const)
-        if (shot?.[kind])
-          await post(kind, kind === "image" ? dataBlob(shot.image!) : new Blob([shot.html!], { type: "text/html;charset=utf-8" })).catch(
-            (reason: unknown) => {
-              failed = true;
-              console.info(`Palette: the comment posted without its ${kind} snapshot.`, reason instanceof Error ? reason.message : reason);
-            },
+      for (const kind of ["image", "html"] as const) {
+        const value = shot?.[kind];
+        if (value)
+          await post(kind, kind === "image" ? dataBlob(value) : new Blob([value], { type: "text/html;charset=utf-8" })).catch(
+            () => (failed = true),
           );
-      if (limits.readiness && (failed || (!shot?.image && !shot?.html)))
-        await post("status", new Blob([`{"status":"${failed ? "failed" : "skipped"}"}`], { type: "application/json" })).catch(() => {});
+      }
+      if (limits.readiness && (failed || !(shot?.image || shot?.html)))
+        return post("status", new Blob([`{"status":"${failed ? "failed" : "skipped"}"}`], { type: "application/json" })).catch(() => {});
     });
   return capture;
 }
