@@ -11,7 +11,7 @@ export const SHELL_PARAM = "palette-shell";
 export const LEGACY_SHELL_PARAM = "komo-shell";
 /** sessionStorage: the shell Palette started in this tab, `{ v, project, nonce, origin }`. */
 export const SHELL_KEY = "palette:shell";
-/** sessionStorage: why the last shell ended early. This tab then keeps two copies, without reloading. */
+/** sessionStorage: why the last shell ended early. This tab stays on the normal page until an explicit retry. */
 export const SHELL_OFF_KEY = "palette:shell-off";
 
 /** The page's shell nonce, when Palette started a shell for `project` in this tab; else "". */

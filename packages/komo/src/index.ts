@@ -819,27 +819,20 @@ export function initComments(options: CommentsOptions): CommentsController {
   // The shell page leaves for the normal page once it can't show the viewport (after it opens).
   let shellReady = false;
   let shellMoving = false;
-  // Two copies for this tab: the last shell ended early, the reviewer kept two, or a reload didn't happen.
-  let shellSkipped = false;
-  try {
-    shellSkipped = !!sessionStorage.getItem(SHELL_OFF_KEY);
-  } catch {
-    shellSkipped = true;
-  }
   let shellModule: Promise<typeof import("./shell-mode.js")> | undefined;
   const shellMode = () => (shellModule ??= import("./shell-mode.js"));
-  function enterShell() {
+  function enterShell(ask = !restoring) {
     if (shellMoving) return;
     shellMoving = true;
     frameControls?.status({ active: false, loading: true });
     // A remembered Frame reopening on load has nothing to lose yet; otherwise ask first.
-    const ask = !restoring;
     void shellMode().then(({ enterShell }) =>
-      !destroyed && enterShell(options.project, ask, !!designController?.edited, () => {
-        // Two copies after all: the reviewer kept them, or the page stayed.
+      !destroyed && enterShell(options.project, ask, !!designController?.edited, (reason) => {
+        if (destroyed) return;
         shellMoving = false;
-        shellSkipped = true;
-        if (!destroyed) relayout();
+        viewportFailed = reason;
+        frameControls?.status({ active: false, reason });
+        relayout();
       }),
     );
   }
@@ -944,11 +937,10 @@ export function initComments(options: CommentsOptions): CommentsController {
         // Turning Simulate real viewport on again retries one that couldn't load, and asks for a single copy again.
         if (toggled) {
           viewportFailed = "";
-          shellSkipped = false;
           try {
             forget(sessionStorage, SHELL_OFF_KEY);
           } catch {
-            /* The tab keeps two copies. */
+            /* The retry remains in memory. */
           }
         }
         appliedViewport = "";
@@ -2188,7 +2180,7 @@ export function initComments(options: CommentsOptions): CommentsController {
       ? { ...box, scale: 1, pan: false }
       : (frameControls?.view(box, windowSize) ?? frameView(box, windowSize, false));
     if (useFrame && !scaled && wantsViewport()) {
-      if (shellWanted && !shell && !shellSkipped) enterShell();
+      if (shellWanted && !shell) enterShell();
       else openViewport();
     } else if (shell && shellReady) return leaveShell();
     else if (viewport) closeViewport();

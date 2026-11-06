@@ -29,21 +29,22 @@ export function leaveShellPage(href: string, reason = "") {
 
 /**
  * Reloads this page as the shell. `ask` confirms first; `fallback` runs when the
- * reviewer keeps two copies, storage is blocked, or the page didn't unload (the
+ * reviewer cancels, storage is blocked, or the page didn't unload (the
  * app's own unsaved-changes guard can keep it).
  */
-export function enterShell(project: string, ask: boolean, edited: boolean, fallback: () => void) {
-  const lost = edited ? ", and so are design changes you haven't posted" : "";
-  if (ask && !confirm(`Reload so the app runs once, in the frame?\n\nUnsaved changes in the app are lost${lost}. Cancel keeps a second copy instead.`))
-    return fallback();
+export function enterShell(project: string, ask: boolean, edited: boolean, fallback: (reason: string) => void) {
   try {
+    const reason = sessionStorage.getItem("palette:shell-off");
+    if (reason) return fallback(reason);
+    if (ask && !confirm(`Reload in Frame?\n\nUnsaved app changes${edited ? " and unposted Design changes" : ""} will be lost.`))
+      return fallback("Reload cancelled.");
     const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
     sessionStorage.setItem(KEY, JSON.stringify({ v: 1, project, nonce, origin: location.origin }));
     location.replace(shellUrl(location.href, nonce));
   } catch {
-    return fallback();
+    return fallback("Storage blocked.");
   }
-  setTimeout(fallback, 3000);
+  setTimeout(fallback, 3000, "Reload cancelled.");
 }
 
 /** The shell's URL follows the frame's route, so reloading or sharing it keeps the page. */
