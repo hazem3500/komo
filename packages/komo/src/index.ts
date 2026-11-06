@@ -6806,12 +6806,7 @@ export function initComments(options: CommentsOptions): CommentsController {
   /** A host router owns redirect/rejection decisions; never override them with a reload. */
   async function go(url: URL) {
     const framed = pageFrame()?.contentWindow;
-    if (framed && url.origin === location.origin) {
-      url.searchParams.delete("comment");
-      url.searchParams.delete("comment-view");
-      return framed.location.assign(url);
-    }
-    if (!options.navigate || url.origin !== location.origin)
+    if ((!framed && !options.navigate) || url.origin !== location.origin)
       return location.assign(url);
     const id = url.searchParams.get("comment");
     if (!id) return;
@@ -6821,7 +6816,14 @@ export function initComments(options: CommentsOptions): CommentsController {
     threadRequest = request;
     if (selected === id) renderDialog();
     try {
-      await options.navigate(url);
+      if (framed) {
+        const resolve = options.frame?.resolveUrl;
+        const destination = resolve ? resolve(url, framed.location) : url;
+        if (destination?.origin !== location.origin) throw new Error();
+        destination.searchParams.delete("comment");
+        destination.searchParams.delete("comment-view");
+        framed.location.assign(destination.href);
+      } else await options.navigate!(url);
     } catch {
       request.rejected = true;
     }

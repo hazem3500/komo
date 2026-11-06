@@ -281,6 +281,8 @@ export interface CommentsOptions {
      */
     defaultMode?: "iframe" | "transform";
     iframeUrl?(location: Location): string;
+    /** Resolve a comment destination before same-origin iframe navigation. Null cancels; current is the live framed page, not the shell. */
+    resolveUrl?(destination: URL, current: Location): URL | null;
     /**
      * Single-copy simulated viewport (with mode "iframe"): turning it on reloads this page as a
      * shell for Palette, so the app runs once, in the frame. Requires the app's entry
