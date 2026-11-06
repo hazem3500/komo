@@ -5,31 +5,32 @@ import { shellNonce } from "../src/shell-session";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   sessionStorage.clear();
 });
 
 describe("single-copy shell", () => {
-  it("asks first, names unposted design changes, and keeps two copies when the reviewer cancels", () => {
+  it("asks first, names unposted design changes, and keeps the current page when the reviewer cancels", () => {
     const ask = vi.spyOn(window, "confirm").mockReturnValue(false);
     const fallback = vi.fn();
     enterShell("example-project", true, true, fallback);
-    expect(ask.mock.calls[0][0]).toContain("Unsaved changes in the app are lost, and so are design changes you haven't posted.");
-    expect(fallback).toHaveBeenCalledOnce();
+    expect(ask.mock.calls[0][0]).toContain("Unsaved app changes and unposted Design changes will be lost.");
+    expect(fallback).toHaveBeenCalledWith("Reload cancelled.");
     expect(sessionStorage.getItem("palette:shell")).toBeNull();
     enterShell("example-project", true, false, fallback);
-    expect(ask.mock.calls[1][0]).not.toContain("design changes");
+    expect(ask.mock.calls[1][0]).not.toContain("Design changes");
   });
 
-  it("keeps two copies when sessionStorage is blocked", () => {
+  it("reports blocked sessionStorage without loading a second app", () => {
     const ask = vi.spyOn(window, "confirm");
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    vi.stubGlobal("sessionStorage", { setItem() {
       throw new DOMException("blocked", "SecurityError");
-    });
+    } });
     const fallback = vi.fn();
     // A remembered Frame reopening on load doesn't ask.
     enterShell("example-project", false, false, fallback);
     expect(ask).not.toHaveBeenCalled();
-    expect(fallback).toHaveBeenCalledOnce();
+    expect(fallback).toHaveBeenCalledWith("Storage blocked.");
   });
 
   it("matches only Palette's own nonce for this project and origin", () => {
