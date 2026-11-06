@@ -236,7 +236,7 @@ export function mountFrameSize(
   const info = element("button", "frame-info", { type: "button" });
   const tip = element("span", "frame-tip", { role: "tooltip", "aria-hidden": "true" });
   // The second sentence points at the Simulate real viewport row, so only when the menu has it.
-  const windowTip = `Layout follows your browser window, not this size.${viewport ? " Turn on Simulate real viewport in this menu for real breakpoints." : ""}`;
+  const windowTip = `Uses window size.${viewport ? " Use Simulate real viewport." : ""}`;
   // While the simulated viewport loads, a short word stands in for the icon.
   const loading = element("span", "frame-loading", { role: "status" });
   note.append(loading, info, tip);
@@ -718,8 +718,8 @@ export function mountFrameSize(
       simulate.setAttribute("aria-checked", String(separate));
       // The page itself because the simulated viewport can't load: the icon says why, in place of the breakpoint note.
       const failed = separate && !state.active && !state.loading && !!state.reason;
-      tip.textContent = failed ? `Simulated viewport unavailable. ${state.reason} Showing the page itself.` : windowTip;
-      info.setAttribute("aria-label", failed ? "Why the simulated viewport is unavailable" : "Why the layout follows your browser window");
+      tip.textContent = failed ? `${state.reason} Using current page.` : windowTip;
+      info.setAttribute("aria-label", failed ? "Why the simulated viewport is unavailable" : "Viewport layout");
       info.setAttribute("aria-description", tip.textContent);
       note.toggleAttribute("data-reason", failed);
       loading.textContent = state.loading ? "Loading…" : "";

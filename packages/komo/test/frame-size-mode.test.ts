@@ -79,10 +79,10 @@ describe("Frame's simulated viewport choice", () => {
       expect(info.getAttribute("aria-description")).toBe(frame.root.querySelector(".frame-tip")!.textContent);
       return info.getAttribute("aria-description");
     };
-    expect(tip(mount(false))).toBe("Layout follows your browser window, not this size.");
+    expect(tip(mount(false))).toBe("Uses window size.");
     mounted.splice(0).forEach((controls) => controls.destroy());
     document.body.replaceChildren();
-    expect(tip(mount("transform"))).toBe("Layout follows your browser window, not this size. Turn on Simulate real viewport in this menu for real breakpoints.");
+    expect(tip(mount("transform"))).toBe("Uses window size. Use Simulate real viewport.");
   });
 
   it("starts checked by default with mode iframe", () => {

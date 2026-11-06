@@ -215,11 +215,11 @@ describe.skipIf(!chrome)("Frame size controls", () => {
       await page.screenshot({ path: join(shots, `preset-${name.toLowerCase()}-fit.png`) });
     }
     // On the page itself, a narrower viewport cannot change media queries; the bar says why.
-    await page.getByRole("button", { name: "Why the layout follows your browser window" }).hover();
+    await page.getByRole("button", { name: "Viewport layout" }).hover();
     await page.waitForTimeout(200);
     const tip = page.locator(".frame-tip");
     expect(await tip.isVisible()).toBe(true);
-    expect(await tip.textContent()).toBe("Layout follows your browser window, not this size.");
+    expect(await tip.textContent()).toBe("Uses window size.");
     await page.screenshot({ path: join(shots, "preset-mobile-note.png") });
     await page.mouse.move(10, 10);
     await page.locator(".frame-size-trigger").click();

@@ -58,13 +58,25 @@ beforeAll(async () => {
       const params=new URLSearchParams(location.search);
       window.palette=initPalette({endpoint:location.origin,project:'frame-iframe',repo:'example/review',branch:'fixture',pageRoot:document.querySelector('main'),sidebar:'background',restoreOpen:false,pollInterval:60000,
         ...(params.has('keys')?{shortcuts:{visibility:'Shift+1'}}:{}),
+        ...(params.has('routes')?{page:current=>(current||location).pathname.replace(new RegExp('^/scope/[^/]+'),''),navigate:()=>{qa.outerNavigations=(qa.outerNavigations||0)+1;}}:{}),
         design:{tokens:discoverCssTokens(),experimentalGeometry:params.has('geometry')},
-        frame:{...(params.has('nomode')?{}:{mode:params.has('transform')?'transform':'iframe'}),...(params.has('inplace')?{defaultMode:'transform'}:{}),...(params.get('url')?{iframeUrl:()=>params.get('url')}:{})}});
+        frame:{...(params.has('routes')?{resolveUrl:(destination,current)=>{
+          qa.resolutions=(qa.resolutions||[]).concat([[destination.pathname,current.pathname]]);
+          if(params.get('routes')==='cancel')return null;
+          if(params.get('routes')==='throw')throw Error('route unavailable');
+          if(params.get('routes')==='cross')return new URL('https://example.invalid/other');
+          destination.pathname=current.pathname.match(new RegExp('^/scope/[^/]+'))[0]+(params.get('routes')==='redirect'?'/blocked':destination.pathname);
+          destination.search='?filter=active';destination.hash='#card-1';return destination;
+        }}:{}),...(params.has('nomode')?{}:{mode:params.has('transform')?'transform':'iframe'}),...(params.has('inplace')?{defaultMode:'transform'}:{}),...(params.get('url')?{iframeUrl:()=>params.get('url')}:{})}});
     `, resolveDir: process.cwd(), loader: "ts" },
     outdir: directory, entryNames: "entry", bundle: true, splitting: true, format: "esm", platform: "browser", target: "es2022",
   });
   server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
+    if (url.pathname === "/scope/one/blocked") {
+      response.writeHead(302, { location: "/scope/one/default" });
+      return response.end();
+    }
     if (url.pathname === "/deny") {
       response.setHeader("x-frame-options", "DENY");
       response.setHeader("content-type", "text/html");
@@ -149,6 +161,38 @@ const inside = (frame: Frame) => frame.evaluate(() => ({
 }));
 
 describe.skipIf(!chrome)("Frame viewport mode", () => {
+  it.each(["resolve", "cancel", "throw", "cross", "redirect"])("resolves normalized destinations against the framed route: %s", async scenario => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    page.setDefaultTimeout(6000);
+    await page.addInitScript(() => localStorage.setItem("qa-threads", JSON.stringify([{
+      id: "route", page: "/other", anchor: { selector: "#card-1", text: "One", x: 0.5, y: 0.5, width: 0, height: 0, pageX: 400, pageY: 300, viewportWidth: 1280 },
+      resolved: false, resolvedBy: null, createdAt: 1, updatedAt: 1, tags: [],
+      comments: [{ id: "route-comment", author: { id: "reviewer", name: "Example reviewer", verified: true }, body: "Route review", createdAt: 1, editedAt: null, reactions: {} }],
+    }])));
+    await page.goto(`${origin}/scope/one/home?routes=${scenario}`);
+    await page.waitForFunction(() => !!(window as any).palette);
+    await page.keyboard.press("l");
+    const frame = await viewportFrame(page);
+    const opening = frame.url();
+    await page.locator(".thread-card").filter({ hasText: "Route review" }).click();
+    await page.locator(".thread-title").filter({ hasText: "Route review" }).waitFor();
+    if (scenario === "resolve") {
+      await expect.poll(() => frame.url()).toBe(`${origin}/scope/one/other?filter=active#card-1`);
+      await expect.poll(() => page.locator(".thread-navigation").count()).toBe(0);
+    } else if (scenario === "redirect") {
+      await expect.poll(() => frame.url()).toBe(`${origin}/scope/one/default#card-1`);
+      expect(await page.locator(".thread-navigation").textContent()).toContain("different page");
+    } else {
+      expect(frame.url()).toBe(opening);
+      expect(await page.locator(".thread-navigation").textContent()).toContain("Navigation could not be completed");
+    }
+    expect(await page.evaluate(() => (window as any).qa.resolutions)).toEqual([["/other", "/scope/one/home"]]);
+    expect(await page.evaluate(() => (window as any).qa.outerNavigations || 0)).toBe(0);
+    expect(new URL(page.url()).pathname).toBe("/scope/one/home");
+    expect(await page.locator(".thread-title").textContent()).toBe("Route review");
+    await page.close();
+  });
+
   it("renders the page in a same-origin iframe whose media queries, matchMedia, innerWidth and resize events follow the chosen size", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     const errors: string[] = [];
@@ -540,10 +584,10 @@ describe.skipIf(!chrome)("Frame viewport mode", () => {
     const why = page.getByRole("button", { name: "Why the simulated viewport is unavailable" });
     await why.waitFor();
     expect(await page.locator(".frame-note").getAttribute("data-reason")).toBe("");
-    expect(await page.locator(".frame-tip").textContent()).toContain("Simulated viewport unavailable.");
+    expect(await page.locator(".frame-info").getAttribute("aria-label")).toBe("Why the simulated viewport is unavailable");
     expect(await page.locator(".frame-tip").textContent()).toContain(reason);
     expect(await why.getAttribute("aria-description")).toBe(await page.locator(".frame-tip").textContent());
-    expect(await page.locator(".frame-tip").textContent()).toContain("Showing the page itself.");
+    expect(await page.locator(".frame-tip").textContent()).toContain("Using current page.");
     expect(await page.locator("iframe[data-palette-viewport]").count()).toBe(0);
     // The page itself is framed and scaled to Fit.
     expect(await page.locator("main").evaluate((node) => getComputedStyle(node).transform)).not.toBe("none");
@@ -632,8 +676,8 @@ describe.skipIf(!chrome)("Frame's Simulate real viewport row", () => {
     // The page itself is framed, scaled to Fit, with no loading or fallback note.
     expect(await page.locator("main").evaluate((node) => getComputedStyle(node).transform)).not.toBe("none");
     // Without the row, the tip doesn't point at it.
-    expect(await page.locator(".frame-tip").textContent()).toBe("Layout follows your browser window, not this size.");
-    expect(await page.locator(".frame-info").getAttribute("aria-description")).toBe("Layout follows your browser window, not this size.");
+    expect(await page.locator(".frame-tip").textContent()).toBe("Uses window size.");
+    expect(await page.locator(".frame-info").getAttribute("aria-description")).toBe("Uses window size.");
     // The size menu doesn't offer it.
     await page.locator(".frame-size-trigger").click();
     await page.getByRole("menuitemradio").first().waitFor();
@@ -751,9 +795,9 @@ describe.skipIf(!chrome)("Frame's compact bar", () => {
     expect(await page.locator(".frame-note").isVisible()).toBe(false);
     await choose(page, "Tablet");
     expect(await frameLabel(page)).toMatch(/^Tablet 768 × 1024 · \d+%$/);
-    const info = page.getByRole("button", { name: "Why the layout follows your browser window" });
+    const info = page.getByRole("button", { name: "Viewport layout" });
     expect(await info.isVisible()).toBe(true);
-    const sentence = "Layout follows your browser window, not this size. Turn on Simulate real viewport in this menu for real breakpoints.";
+    const sentence = "Uses window size. Use Simulate real viewport.";
     expect(await page.locator(".frame-tip").textContent()).toBe(sentence);
     expect(await info.getAttribute("aria-description")).toBe(sentence);
     await info.hover();
