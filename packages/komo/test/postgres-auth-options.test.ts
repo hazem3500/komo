@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
 import { loadPostgres, postgresDatabase } from "../server/postgres";
 import worker from "../server/index";
+import { accountProjects } from "../server/tokens";
 
 vi.mock("../server/setup-client.txt", () => ({ default: "" }));
 const connection = process.env.KOMO_TEST_POSTGRES_URL;
@@ -117,6 +118,21 @@ afterAll(async () => {
   await db.close();
   await admin.query(`DROP SCHEMA ${schema} CASCADE`);
   await admin.end();
+});
+
+run("all-project grants include public joins and current private grants, not stale private membership", async () => {
+  const user = "google:membership";
+  await db.prepare("INSERT INTO users(id,name,verified) VALUES(?,?,1)").bind(user, "Reviewer").run();
+  for (const project of ["public-joined", "private-joined", "default-public"])
+    await db.prepare("INSERT INTO project_members(project,user_id) VALUES(?,?)").bind(project, user).run();
+  await db.prepare("INSERT INTO project_settings(project,access) VALUES('public-joined','public'),('private-joined','private'),('private-invited','private')").run();
+  await db.prepare("INSERT INTO project_access(project,user_id) VALUES('private-invited',?)").bind(user).run();
+  await db.prepare("INSERT INTO project_owners(project,user_id) VALUES('owned',?)").bind(user).run();
+  expect(await accountProjects(environment(), user, true)).toEqual(["default-public", "owned", "private-invited", "public-joined"]);
+  expect(await accountProjects(environment(), user)).toEqual(["default-public", "owned", "private-joined", "public-joined"]);
+  await db.prepare("UPDATE project_settings SET access='private' WHERE project='public-joined'").run();
+  await db.prepare("DELETE FROM project_access WHERE project='private-invited'").run();
+  expect(await accountProjects(environment(), user, true)).toEqual(["default-public", "owned"]);
 });
 
 describe("auth options on PostgreSQL", () => {
