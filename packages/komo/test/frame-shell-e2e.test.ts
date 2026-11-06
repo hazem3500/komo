@@ -140,8 +140,8 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     const { message, frame } = await enter(page);
-    expect(message).toContain("Reload so the app runs once, in the frame?");
-    expect(message).toContain("Unsaved changes in the app are lost");
+    expect(message).toContain("Reload in Frame?");
+    expect(message).toContain("Unsaved app changes will be lost.");
     const now = await state(page);
     expect(now).toMatchObject({ shell: true, mounts: ["frame"], appOnTop: false });
     const nonce = new URL(now.url).searchParams.get("palette-shell");
@@ -206,6 +206,7 @@ describe.skipIf(!chrome)("Frame single-copy shell", () => {
     expect(await state(page)).toMatchObject({ shell: false, mounts: ["top"], flag: null });
     expect(page.url()).toBe(`${origin}/`);
     await page.locator(".frame-size-trigger").click();
+    await page.getByRole("menuitemcheckbox", { name: "Simulate real viewport" }).click();
     page.once("dialog", dialog => void dialog.accept());
     await page.getByRole("menuitemcheckbox", { name: "Simulate real viewport" }).click();
     await page.waitForURL(/palette-shell=/);

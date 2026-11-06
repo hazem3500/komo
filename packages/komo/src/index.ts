@@ -821,13 +821,13 @@ export function initComments(options: CommentsOptions): CommentsController {
   let shellMoving = false;
   let shellModule: Promise<typeof import("./shell-mode.js")> | undefined;
   const shellMode = () => (shellModule ??= import("./shell-mode.js"));
-  function enterShell() {
+  function enterShell(ask = !restoring) {
     if (shellMoving) return;
     shellMoving = true;
     frameControls?.status({ active: false, loading: true });
     // A remembered Frame reopening on load has nothing to lose yet; otherwise ask first.
     void shellMode().then(({ enterShell }) =>
-      !destroyed && enterShell(options.project, !restoring, !!designController?.edited, (reason) => {
+      !destroyed && enterShell(options.project, ask, !!designController?.edited, (reason) => {
         if (destroyed) return;
         shellMoving = false;
         viewportFailed = reason;
