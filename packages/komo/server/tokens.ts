@@ -101,9 +101,9 @@ export const pruneAudit = (db: D1Database, now: number) =>
 /** Projects an account holder may limit a token to: owned or joined. */
 export async function accountProjects(env: Env, userId: string, activeMembership = false) {
   const rows = await env.DB.prepare(
-    `SELECT id AS project FROM workspaces WHERE owner_id=? UNION SELECT project FROM ${activeMembership ? "project_access" : "project_members"} WHERE user_id=? UNION SELECT project FROM project_owners WHERE user_id=?`
+    `SELECT id AS project FROM workspaces WHERE owner_id=? UNION SELECT project FROM ${activeMembership ? "project_access" : "project_members"} WHERE user_id=? UNION SELECT project FROM project_owners WHERE user_id=?${activeMembership ? " UNION SELECT m.project FROM project_members m WHERE m.user_id=? AND NOT EXISTS(SELECT 1 FROM project_settings s WHERE s.project=m.project AND s.access='private')" : ""}`
   )
-    .bind(userId, userId, userId)
+    .bind(userId, userId, userId, ...(activeMembership ? [userId] : []))
     .all<{ project: string }>();
   return rows.results.map((row) => row.project).sort();
 }

@@ -202,25 +202,51 @@ describe("opted-in proxy access tokens on D1", () => {
       outsider.searchParams.set("repo", "owner/site");
       outsider.searchParams.set("branch", "pr-1");
       expect((await fetch(outsider, { headers: { Origin: origin, Authorization: `Bearer ${unlimited.token}` } })).status).toBe(403);
-      await api.sql("INSERT INTO users(id,name,verified) VALUES('google:9876543210','Manager',1); UPDATE project_owners SET user_id='google:9876543210' WHERE project='test'; INSERT INTO project_access(project,user_id) VALUES('test','google:1234567890');");
+      await api.sql("INSERT INTO users(id,name,verified) VALUES('google:9876543210','Manager',1); UPDATE project_owners SET user_id='google:9876543210' WHERE project='test';");
       const managerExchange = await fetch(`http://localhost:${port}${prefix}/auth/proxy/session?project=test`, {
         method: "POST", headers: { "x-goog-iap-jwt-assertion": await iapJwt({sub: "accounts.google.com:9876543210", email: "manager@example.com"}) },
       });
       expect(managerExchange.status).toBe(201);
       const {token: manager} = await managerExchange.json();
+      const publicSession = await fetch(`http://localhost:${port}${prefix}/auth/proxy/session?project=test`, {
+        method: "POST", headers: { "x-goog-iap-jwt-assertion": await iapJwt() },
+      });
+      expect(publicSession.status).toBe(201);
+      session = (await publicSession.json()).token;
+      const joined = await (await request("account/tokens", "GET", {token: session})).json();
+      expect(joined.projects).toContain("test");
+      expect((await request(path, "GET", {token: reader.token})).status).toBe(200);
       expect((await request(path, "GET", {token: unlimited.token})).status).toBe(200);
+      expect((await request("threads", "POST", { token: unlimited.token, data: { page: "/", anchor, body: "Public joined project" } })).status).toBe(201);
+      const deniedOrigin = new URL("threads", `http://localhost:${port}`);
+      deniedOrigin.searchParams.set("project", "test");
+      deniedOrigin.searchParams.set("repo", "owner/site");
+      deniedOrigin.searchParams.set("branch", "pr-1");
+      expect((await fetch(deniedOrigin, {headers: {Origin: "https://outside.example", Authorization: `Bearer ${unlimited.token}`}})).status).toBe(403);
+      expect((await request("project", "PATCH", {token: manager, data: {access: "private"}})).status).toBe(200);
+      expect((await request(path, "GET", {token: unlimited.token})).status).toBe(403);
+      expect((await request("threads", "POST", { token: unlimited.token, data: { page: "/", anchor, body: "No private grant" } })).status).toBe(403);
+      const firstInvitation = await request("project/invites", "POST", {token: manager, data: {email: "reviewer@example.com"}});
+      expect(firstInvitation.status).toBe(201);
+      const firstInvite = (await firstInvitation.json()).invite;
+      expect((await request("project/join", "POST", {token: session, data: {invite: firstInvite}})).status).toBe(200);
+      expect((await request(path, "GET", {token: unlimited.token})).status).toBe(200);
+      expect((await request("threads", "POST", { token: unlimited.token, data: { page: "/", anchor, body: "Private invited project" } })).status).toBe(201);
       expect((await request("project/members", "DELETE", {token: manager, data: {user: "google:1234567890"}})).status).toBe(200);
       expect((await request(path, "GET", {token: unlimited.token})).status).toBe(403);
       const renewed = await fetch(`http://localhost:${port}${prefix}/auth/proxy/session?project=test`, {
         method: "POST", headers: { "x-goog-iap-jwt-assertion": await iapJwt() },
       });
+      expect(renewed.status).toBe(201);
       session = (await renewed.json()).token;
       expect((await request(path, "GET", {token: unlimited.token})).status).toBe(403);
+      expect((await request("threads", "POST", { token: unlimited.token, data: { page: "/", anchor, body: "Removed private member" } })).status).toBe(403);
       const invitation = await request("project/invites", "POST", {token: manager, data: {email: "reviewer@example.com"}});
       expect(invitation.status).toBe(201);
       const {invite} = await invitation.json();
       expect((await request("project/join", "POST", {token: session, data: {invite}})).status).toBe(200);
       expect((await request(path, "GET", {token: unlimited.token})).status).toBe(200);
+      expect((await request("threads", "POST", { token: unlimited.token, data: { page: "/", anchor, body: "Rejoined private project" } })).status).toBe(201);
       await api.sql("UPDATE project_owners SET user_id='google:1234567890' WHERE project='test';");
       expect((await request(`account/tokens/${unlimited.item.id}`, "DELETE", { token: session })).status).toBe(200);
       expect((await request(path, "GET", { token: unlimited.token })).status).toBe(401);
